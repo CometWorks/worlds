@@ -135,6 +135,72 @@ def belt_asteroids(world):
     return procedural, ice
 
 
+def vector(node):
+    return np.array([float(node.get(k)) for k in "xyz"])
+
+
+def storage_size(path):
+    data = gzip.open(path).read()
+    return struct.unpack_from("<4i", data, data.index(b"\x01\x01\x11") + 3)[1]
+
+
+def voxel_center(entity, world):
+    """A voxel map's position is its storage's min corner, rotated with it"""
+    po = entity.find("PositionAndOrientation")
+    forward, up = vector(po.find("Forward")), vector(po.find("Up"))
+    half = storage_size(world / f"{entity.findtext('StorageName')}.vx2") / 2
+    return vector(po.find("Position")) + (np.cross(forward, up) + up - forward) * half
+
+
+SEGMENT = 15
+STATIONS = ("Alpha Station", "Beta Station", "Gamma Station", "Delta Station")
+
+
+def segments(world, sector):
+    """Asteroids per SEGMENT degrees of the ring, counted from Alpha Station around the
+    ring's axis, and the stations and ice asteroids found in each segment"""
+    objects = list(sector.find("SectorObjects"))
+    earth = next(
+        e for e in objects if (e.findtext("StorageName") or "").startswith("EarthLike")
+    )
+    po = earth.find("PositionAndOrientation")
+    north = vector(po.find("Up"))
+    center = voxel_center(earth, world)
+    rocks = {
+        e.findtext("StorageName"): voxel_center(e, world) - center
+        for e in objects
+        if (e.findtext("StorageName") or "").startswith("Octahedron-")
+    }
+    stations = {
+        e.findtext("DisplayName"): vector(e.find("PositionAndOrientation/Position"))
+        - center
+        for e in objects
+        if e.findtext("DisplayName") in STATIONS
+    }
+    # The ring's axis: the normal of the plane that fits the asteroids best
+    axis = np.linalg.svd(np.array(list(rocks.values())))[2][2]
+    axis *= np.sign(axis @ north)
+    first = stations["Alpha Station"] - axis * (stations["Alpha Station"] @ axis)
+    first /= np.linalg.norm(first)
+    second = np.cross(axis, first)
+
+    def segment(point):
+        angle = np.degrees(np.arctan2(point @ second, point @ first)) % 360
+        return int(angle // SEGMENT)
+
+    counts = [Counter() for _ in range(360 // SEGMENT)]
+    landmarks = [[] for _ in range(360 // SEGMENT)]
+    for name, point in rocks.items():
+        if "-Ice-" in name:
+            landmarks[segment(point)].append(name.replace("Octahedron-", ""))
+        else:
+            counts[segment(point)][storage_size(world / f"{name}.vx2")] += 1
+    for name, point in stations.items():
+        landmarks[segment(point)].append(name)
+    tilt = np.degrees(np.arccos(axis @ north))
+    return counts, landmarks, tilt
+
+
 def material_lists(materials, rng):
     """Samples the deposit material lists generator 4 gives asteroids (MyCompositeShapes ctor).
     None stands for the 1% that become whole ice asteroids."""
@@ -251,6 +317,28 @@ def main():
     procedural, ice = belt_asteroids(args.world)
     asteroids, whole_ice = belt(procedural, settings, materials, volumes, harvest)
 
+    counts, landmarks, tilt = segments(args.world, sector)
+    segment_rows = [
+        "| Segment | Asteroids | 256 m | 512 m | 1024 m | Here |",
+        "|---|---:|---:|---:|---:|---|",
+    ]
+    for i, (count, here) in enumerate(zip(counts, landmarks)):
+        segment_rows.append(
+            f"| {i * SEGMENT}°-{(i + 1) * SEGMENT}° | {sum(count.values())} | {count[256]} | {count[512]} | {count[1024]} | {', '.join(here)} |"
+        )
+    segment_chart = "\n".join(
+        [
+            "```mermaid",
+            "xychart-beta",
+            f'    title "Asteroids per {SEGMENT} degrees, from Alpha Station"',
+            "    x-axis ["
+            + ", ".join(f'"{i * SEGMENT}"' for i in range(len(counts)))
+            + "]",
+            '    y-axis "Asteroids"',
+            "    bar [" + ", ".join(str(sum(c.values())) for c in counts) + "]",
+            "```",
+        ]
+    )
     sizes = ", ".join(
         f"{n} of {size} m" for size, n in sorted(Counter(procedural).items())
     )
@@ -313,6 +401,18 @@ refining. Ore rock is the volume of the ore-bearing voxels.
 {table(asteroids)}
 
 {chart("Asteroid belt (expected)", asteroids)}
+
+## Asteroids around the ring
+
+The procedural asteroids per {SEGMENT}° of the ring, counted from Alpha Station
+counterclockwise as seen from above EarthLike's magnetic north pole. The ring's
+plane is fitted to the asteroids; it is tilted {tilt:.0f}° from the equator.
+Storage sizes: the rock inside is smaller. "Here" lists the equatorial stations
+and the 4 placed ice asteroids by their direction from EarthLike's center.
+
+{chr(10).join(segment_rows)}
+
+{segment_chart}
 """,
         encoding="utf-8",
     )

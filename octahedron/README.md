@@ -56,14 +56,18 @@ downloaded.
 - Places two parallel Trade Lanes along each of the 12 edges and between the
   Moon station and its nearest station. Every endpoint is a one-block grid with
   a Trade Lane Computer in a 100 m safe zone, 1000 m from its station.
-- Places 400 asteroids in a ring 120 km from EarthLike's center, and 4 ice
-  asteroids on the ring halfway between the equatorial stations. The ring is
-  perpendicular to EarthLike's magnetic axis as the Aurora plugin (se-aurora)
-  draws it when the sun is where the world starts it: the north pole tilted
-  25 degrees (the plugin's default `MagneticAxisTilt`) away from the sun. So
-  the ring is tilted against the equator: Alpha and Gamma Station are about
-  19 km from it, Beta and Delta about 59 km. The plugin's axis follows the sun
-  as it moves, the ring doesn't.
+- Places 3,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
+  135 km from its center) and 1 km thick, evenly over its area, and 4 ice
+  asteroids 120 km out, halfway between the equatorial stations. The band stays
+  out of EarthLike's gravity (it ends about 103 km from the center), clear of
+  Alpha and Gamma Station at 140 km, and every asteroid stays 1 km from the
+  Trade Lanes. Its plane is perpendicular to EarthLike's magnetic axis as the
+  Aurora plugin (se-aurora) draws it when the sun is where the world starts it:
+  the north pole tilted 25 degrees (the plugin's default `MagneticAxisTilt`)
+  away from the sun. So the band is tilted against the equator: its nearest
+  asteroids are 6 to 9 km from Alpha and Gamma Station, but about 58 km from
+  Beta and Delta. The plugin's axis follows the sun as it moves, the band doesn't.
+  `ORES.md` counts the asteroids per 15 degrees around it.
 - The asteroids are the game's own procedural ones, saved as seed and size only
   (a `.vx2` of about 100 bytes each), so the game generates their shape and
   ores. The ice ones are a vanilla prefab shape filled with ice. The game's own

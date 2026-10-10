@@ -28,6 +28,7 @@ import re
 import shutil
 import struct
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from pathlib import Path
 
 STEAM = Path.home() / ".steam/steam/steamapps"
@@ -45,10 +46,16 @@ KEEP_PLANETS = ("EarthLike", "Moon")
 # Altitudes are from the planet's 60 km (EarthLike) or 9.5 km (Moon) radius
 STATION_DISTANCE = 140_000.0
 MOON_STATION_DISTANCE = 39_500.0
+# The ring is a flat band 45 to 75 km above EarthLike: whole asteroids stay out of its
+# gravity (it ends about 103 km from the center) and clear of Alpha and Gamma at 140 km
+RING_INNER = 105_000.0
+RING_OUTER = 135_000.0
+RING_THICKNESS = 1_000.0
+RING_ASTEROIDS = 3000
+# The 4 ice asteroids sit in the middle of the band
 RING_RADIUS = 120_000.0
-RING_WIDTH = 4_000.0
-RING_HEIGHT_SIGMA = 300.0
-RING_ASTEROIDS = 400
+# Surface to surface, between asteroids
+ASTEROID_GAP = 200.0
 # The se-aurora plugin's default MagneticAxisTilt: its magnetic axis is the planet's
 # north tilted this far away from the sun (AuroraRenderer.ComputeMagneticAxis)
 AURORA_TILT_DEGREES = 25.0
@@ -394,6 +401,8 @@ def station(template, ids, name, center, forward, up, owner):
         ):
             set_child(block, "CustomName", f"Medical Room - {name}")
             set_child(block, "SpawnName", name)
+        if kind == "RadioAntenna":
+            set_child(block, "HudText", name)
     return as_sector_object(grid)
 
 
@@ -613,20 +622,38 @@ def asteroid_ring(rng, earth, axis, places, lane_list):
         )
         taken.append((center, size / 2))
 
+    # Asteroid centers by 2 km cell, so the overlap check looks only nearby
+    cell = 2_000.0
+    grid = defaultdict(list)
+
+    def key(point):
+        return tuple(int(math.floor(c / cell)) for c in point)
+
+    def free(center, size):
+        x, y, z = key(center)
+        return not any(
+            dist(center, c) < r + size / 2 + ASTEROID_GAP
+            for dx in (-1, 0, 1)
+            for dy in (-1, 0, 1)
+            for dz in (-1, 0, 1)
+            for c, r in grid[(x + dx, y + dy, z + dz)]
+        )
+
+    for center, radius in taken:
+        grid[key(center)].append((center, radius))
+
+    u = perpendicular(axis)
+    v = cross(axis, u)
     sizes, weights = zip(*ASTEROID_SIZES)
     while len(asteroids) < RING_ASTEROIDS + len(equator):
         size = rng.choices(sizes, weights)[0]
         angle = rng.uniform(0, 2 * math.pi)
-        radius = RING_RADIUS + rng.uniform(-RING_WIDTH / 2, RING_WIDTH / 2)
-        height = max(
-            -3 * RING_HEIGHT_SIGMA,
-            min(3 * RING_HEIGHT_SIGMA, rng.gauss(0, RING_HEIGHT_SIGMA)),
-        )
-        u = perpendicular(axis)
-        v = cross(axis, u)
+        # Uniform over the band's area
+        radius = math.sqrt(rng.uniform(RING_INNER**2, RING_OUTER**2))
+        height = rng.uniform(-RING_THICKNESS / 2, RING_THICKNESS / 2)
         radial = add(mul(u, math.cos(angle)), mul(v, math.sin(angle)))
         center = add(earth.center, add(mul(radial, radius), mul(axis, height)))
-        if any(dist(center, c) < r + size / 2 + 200 for c, r in taken):
+        if not free(center, size):
             continue
         if any(
             segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
@@ -634,7 +661,7 @@ def asteroid_ring(rng, earth, axis, places, lane_list):
         ):
             continue
         seed = rng.getrandbits(31)
-        storage = f"Octahedron-Asteroid-{len(asteroids) - len(equator) + 1:03d}"
+        storage = f"Octahedron-Asteroid-{len(asteroids) - len(equator) + 1:04d}"
         asteroids.append(
             (
                 storage,
@@ -643,7 +670,7 @@ def asteroid_ring(rng, earth, axis, places, lane_list):
                 procedural_asteroid(seed, rng.getrandbits(31), size),
             )
         )
-        taken.append((center, size / 2))
+        grid[key(center)].append((center, size / 2))
     return asteroids
 
 
