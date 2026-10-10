@@ -3,8 +3,9 @@
 
     build_world.py <output folder> [--seed N] [--ore-mod ID]
 
-Keeps EarthLike and the Moon, applies the world settings and mods, and places
-the 7 stations, the Trade Lanes endpoints, the safe zones and the asteroid ring.
+Keeps EarthLike and the Moon, applies the world settings and mods, places the
+7 stations, the Trade Lanes endpoints, the safe zones and the asteroid ring, and
+makes the stations the NPC faction's trade stations.
 The asteroids are vanilla procedural ones saved as seed and size only, so the
 game generates their shape and ores. The ring lies around EarthLike's magnetic
 axis as the Aurora plugin draws it at the world's start: the north pole tilted

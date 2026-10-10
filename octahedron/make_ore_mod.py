@@ -39,7 +39,14 @@ ORE_CHANNEL = 2
 NO_ORE = 255
 
 # Moon ore map value -> (start depth, deposit depth) of the uranium replacing its gold
-MOON_URANIUM = {168: (50, 6), 172: (55, 8), 176: (60, 10), 180: (70, 10), 184: (80, 12), 188: (88, 12)}
+MOON_URANIUM = {
+    168: (50, 6),
+    172: (55, 8),
+    176: (60, 10),
+    180: (70, 10),
+    184: (80, 12),
+    188: (88, 12),
+}
 MOON_REMOVED = {"Silver_01", "Platinum_01"}
 NOT_IN_ASTEROIDS = ("Gold_01", "Silver_01", "Uraninite_01")
 
@@ -51,7 +58,9 @@ ET.register_namespace("xsd", "http://www.w3.org/2001/XMLSchema")
 def write(root, path):
     ET.indent(root, "  ")
     text = ET.tostring(root, encoding="unicode")
-    text = text.replace("<Definitions", '<Definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema"', 1)
+    text = text.replace(
+        "<Definitions", '<Definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema"', 1
+    )
     if "xmlns:xsi=" not in text[:300]:
         text = text.replace("<Definitions", f'<Definitions xmlns:xsi="{XSI}"', 1)
     path.write_text('<?xml version="1.0"?>\n' + text + "\n", encoding="utf-8")
@@ -78,7 +87,9 @@ def planets():
             ore.set("Type", "Uraninite_01")
             ore.set("Start", str(start))
             ore.set("Depth", str(depth))
-    assert not any(ore.get("Type") in ("Gold_01", "Silver_01", "Platinum_01") for ore in mappings)
+    assert not any(
+        ore.get("Type") in ("Gold_01", "Silver_01", "Platinum_01") for ore in mappings
+    )
     return root
 
 
@@ -135,15 +146,28 @@ def ore_maps(out, rng):
             before = np.unique(pixels[:, :, ORE_CHANNEL], return_counts=True)
             pixels[:, :, ORE_CHANNEL] = scatter(pixels[:, :, ORE_CHANNEL], rng)
             after = np.unique(pixels[:, :, ORE_CHANNEL], return_counts=True)
-            assert all((a == b).all() for a, b in zip(before, after)), f"{planet} {face}: ore pixels changed"
-            Image.fromarray(pixels, image.mode).save(folder / f"{face}_mat.png", optimize=True)
+            assert all(
+                (a == b).all() for a, b in zip(before, after)
+            ), f"{planet} {face}: ore pixels changed"
+            Image.fromarray(pixels, image.mode).save(
+                folder / f"{face}_mat.png", optimize=True
+            )
             print(f"{planet} {face}_mat.png")
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("output", type=Path, nargs="?", default=Path(__file__).with_name("OctahedronOres"))
-    parser.add_argument("--seed", type=int, default=42, help="ore map seed, the same as the world's")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "output",
+        type=Path,
+        nargs="?",
+        default=Path(__file__).with_name("OctahedronOres"),
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="ore map seed, the same as the world's"
+    )
     args = parser.parse_args()
 
     out = args.output
