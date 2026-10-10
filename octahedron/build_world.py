@@ -70,6 +70,9 @@ VOXEL_GENERATOR = 4
 
 STATION_SAFE_ZONE_RADIUS = 200.0
 LANE_ENDPOINT_DISTANCE = 1_000.0
+# The Earth end of a Moon lane, farther out, so its rings stay clear of the station's other
+# lane ends (they touched the North lane's at Delta Station)
+MOON_LANE_ENDPOINT_DISTANCE = 1_500.0
 LANE_SPEED = 10_000
 LANE_RING_INTERVAL = 10_000
 # Asteroid surfaces stay this far from a lane's straight line
@@ -644,7 +647,14 @@ def lanes(places, edges):
     for a, b in edges:
         pa, pb = places[a][0], places[b][0]
         direction = norm(sub(pb, pa))
-        start = add(pa, mul(direction, LANE_ENDPOINT_DISTANCE))
+        moon = b == "Moon Station"
+        start = add(
+            pa,
+            mul(
+                direction,
+                MOON_LANE_ENDPOINT_DISTANCE if moon else LANE_ENDPOINT_DISTANCE,
+            ),
+        )
         end = sub(pb, mul(direction, LANE_ENDPOINT_DISTANCE))
         result.append((f"{len(result) + 1:02d}", a, b, start, end))
     return result

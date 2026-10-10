@@ -243113,9 +243113,9 @@ RingInterval:10000</Value>
     <MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_CubeGrid">
       <SubtypeName />
       <PositionAndOrientation>
-        <Position x="125.48716349768362" y="139860.2947007391" z="-982.2094487204483" />
-        <Forward x="0.12548716349768363" y="-0.13970529926090244" z="-0.9822094487204485" />
-        <Up x="0.017704850949221137" y="0.9901931273031649" z="-0.13857889050805744" />
+        <Position x="188.23074524652543" y="139790.44205110864" z="-1473.3141730806726" />
+        <Forward x="0.12548716349768363" y="-0.1397052992609024" z="-0.9822094487204484" />
+        <Up x="0.01770485094922113" y="0.9901931273031649" z="-0.13857889050805736" />
       </PositionAndOrientation>
       <EntityId>126970047165161150</EntityId>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
@@ -243161,8 +243161,8 @@ RingInterval:10000</Value>
       <SubtypeName />
       <PositionAndOrientation>
         <Position x="13176.637220307815" y="125330.40356634223" z="-103135.78870867363" />
-        <Forward x="-0.12548716349768363" y="0.13970529926090244" z="0.9822094487204485" />
-        <Up x="0.017704850949221137" y="0.9901931273031649" z="-0.13857889050805744" />
+        <Forward x="-0.12548716349768363" y="0.1397052992609024" z="0.9822094487204484" />
+        <Up x="0.01770485094922113" y="0.9901931273031649" z="-0.13857889050805736" />
       </PositionAndOrientation>
       <EntityId>84819514151982683</EntityId>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
@@ -243207,9 +243207,9 @@ RingInterval:10000</Value>
     <MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_CubeGrid">
       <SubtypeName />
       <PositionAndOrientation>
-        <Position x="101.61349338155276" y="956.3182408128081" z="-139725.90125820885" />
-        <Forward x="0.10161349338155276" y="0.9563182408128081" z="0.27409874179115273" />
-        <Up x="-0.33241759993045095" y="0.29232759412805326" z="-0.8966845136210297" />
+        <Position x="152.42024007232914" y="1434.4773612192123" z="-139588.85188731327" />
+        <Forward x="0.10161349338155275" y="0.9563182408128081" z="0.27409874179115273" />
+        <Up x="-0.3324175999304509" y="0.29232759412805326" z="-0.8966845136210297" />
       </PositionAndOrientation>
       <EntityId>113267964818289154</EntityId>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
@@ -243255,8 +243255,8 @@ RingInterval:10000</Value>
       <SubtypeName />
       <PositionAndOrientation>
         <Position x="13200.510890423948" y="124234.38002626851" z="-104392.09689918523" />
-        <Forward x="-0.10161349338155276" y="-0.9563182408128081" z="-0.27409874179115273" />
-        <Up x="-0.33241759993045095" y="0.29232759412805326" z="-0.8966845136210297" />
+        <Forward x="-0.10161349338155275" y="-0.9563182408128081" z="-0.27409874179115273" />
+        <Up x="-0.3324175999304509" y="0.29232759412805326" z="-0.8966845136210297" />
       </PositionAndOrientation>
       <EntityId>78354496180483665</EntityId>
       <PersistentFlags>CastShadows InScene</PersistentFlags>

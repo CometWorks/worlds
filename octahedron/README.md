@@ -67,7 +67,8 @@ downloaded.
 - Places one Trade Lane along each of the 12 edges and between the Moon
   station and each of the two nearest stations (North and Delta), 14 in all. A lane goes both ways: each end
   is an entry toward the other. Every end is a one-block grid with a Trade Lane
-  Computer, 1000 m from its station, indestructible and not editable. The ends
+  Computer, 1000 m from its station (1500 m at North and Delta Station for the
+  Moon lanes, clear of their other lane ends), indestructible and not editable. The ends
   have no safe zone; the lane's rings have no physics. The two rings of a
   tunnel sit side by side, level with the stations' horizontal plane on the
   Moon lanes and between the equator stations, one above the other on the
