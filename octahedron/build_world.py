@@ -51,7 +51,7 @@ MOON_STATION_DISTANCE = 39_500.0
 RING_INNER = 105_000.0
 RING_OUTER = 135_000.0
 RING_THICKNESS = 1_000.0
-RING_ASTEROIDS = 3000
+RING_ASTEROIDS = 2000
 # The 4 ice asteroids sit in the middle of the band
 RING_RADIUS = 120_000.0
 # Surface to surface, between asteroids
@@ -66,11 +66,9 @@ ICE_SHAPE = "SuperRock_001"
 ICE_MATERIAL = "Ice_02"
 VOXEL_GENERATOR = 4
 
-STATION_SAFE_ZONE_RADIUS = 250.0
-LANE_SAFE_ZONE_RADIUS = 50.0
+STATION_SAFE_ZONE_RADIUS = 200.0
+LANE_SAFE_ZONE_RADIUS = 100.0
 LANE_ENDPOINT_DISTANCE = 1_000.0
-# Each edge has two parallel lanes this far apart, so their 100 m safe zones don't touch
-LANE_SPACING = 200.0
 LANE_SPEED = 10_000
 LANE_RING_INTERVAL = 10_000
 # Asteroid surfaces stay this far from a lane's straight line
@@ -552,26 +550,15 @@ def layout(earth, moon):
 
 
 def lanes(places, edges):
-    """(lane id, home, target, home endpoint, target endpoint), two parallel lanes per edge."""
+    """(lane id, home, target, home endpoint, target endpoint), one per edge. A Trade Lane
+    goes both ways: each of its computers is an entry toward the other one."""
     result = []
     for a, b in edges:
         pa, pb = places[a][0], places[b][0]
         direction = norm(sub(pb, pa))
-        side = norm(
-            cross(
-                direction,
-                (
-                    norm(add(pa, pb))
-                    if dist(add(pa, pb), (0, 0, 0)) > 1
-                    else perpendicular(direction)
-                ),
-            )
-        )
-        for offset in (-LANE_SPACING / 2, LANE_SPACING / 2):
-            shift = mul(side, offset)
-            start = add(add(pa, mul(direction, LANE_ENDPOINT_DISTANCE)), shift)
-            end = add(sub(pb, mul(direction, LANE_ENDPOINT_DISTANCE)), shift)
-            result.append((f"{len(result) + 1:02d}", a, b, start, end))
+        start = add(pa, mul(direction, LANE_ENDPOINT_DISTANCE))
+        end = sub(pb, mul(direction, LANE_ENDPOINT_DISTANCE))
+        result.append((f"{len(result) + 1:02d}", a, b, start, end))
     return result
 
 
