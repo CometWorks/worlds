@@ -509,6 +509,16 @@
       <PublishedFileId>2360788836</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
+    <ModItem FriendlyName="Enhanced Meteor Visuals">
+      <Name>3685862625.sbm</Name>
+      <PublishedFileId>3685862625</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Grass replacement for Earthlike Environment">
+      <Name>756153867.sbm</Name>
+      <PublishedFileId>756153867</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
     <ModItem FriendlyName="Modular Encounters Systems">
       <Name>1521905890.sbm</Name>
       <PublishedFileId>1521905890</PublishedFileId>

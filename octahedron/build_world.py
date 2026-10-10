@@ -197,6 +197,9 @@ MODS = [
     ),
     (2947081810, "Projector Highlighter"),
     (2360788836, "Welder Eyestrain Reduction"),
+    # Visuals: meteor effects, and the Grass voxel material's textures (not EarthLike's definition)
+    (3685862625, "Enhanced Meteor Visuals"),
+    (756153867, "Grass replacement for Earthlike Environment"),
 ]
 
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
