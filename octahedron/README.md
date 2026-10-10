@@ -68,7 +68,10 @@ downloaded.
   station and each of the two nearest stations (North and Delta), 14 in all. A lane goes both ways: each end
   is an entry toward the other. Every end is a one-block grid with a Trade Lane
   Computer, 1000 m from its station, indestructible and not editable. The ends
-  have no safe zone; the lane's rings have no physics.
+  have no safe zone; the lane's rings have no physics. The two rings of a
+  tunnel sit side by side, level with the stations' horizontal plane on the
+  Moon lanes and between the equator stations, one above the other on the
+  lanes to North and South Station, so pilots can tell the tunnels apart.
 - Places 2,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays

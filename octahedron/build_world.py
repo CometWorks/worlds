@@ -479,6 +479,19 @@ def station(template, ids, name, center, forward, up, owner, shared):
     return as_sector_object(grid)
 
 
+POLE_STATIONS = {"North Station", "South Station"}
+
+
+def lane_up(direction, home, target, north):
+    """Up of a lane's computers, the same at both ends. The Trade Lanes mod puts a lane's two
+    rings side by side along the computers' right axis: level with the stations' horizontal
+    plane on the Moon lanes and between the equator stations, one above the other on the lanes
+    to the pole stations, so a pilot can tell them apart."""
+    if "Moon Station" in (home, target) or not {home, target} & POLE_STATIONS:
+        return norm(sub(north, mul(direction, dot(north, direction))))
+    return norm(cross(direction, north))
+
+
 def lane_computer(ids, position, forward, up, lane_id, home, target):
     data = f"TLID:{lane_id}\nFrom:{home}\nTo:{target}\nSpeed:{LANE_SPEED}\nRingInterval:{LANE_RING_INTERVAL}"
     grid = ET.Element(
@@ -932,7 +945,7 @@ def main():
     lane_list = lanes(places, edges)
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
-        up = perpendicular(direction)
+        up = lane_up(direction, home, target, earth.up)
         for position, here, there, facing in (
             (start, home, target, direction),
             (end, target, home, mul(direction, -1)),
