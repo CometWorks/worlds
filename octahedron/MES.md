@@ -175,10 +175,9 @@ score = (block points + max power output in MW / 10 + block count / 100 (integer
 | fixed weapon / turret | 5 / 7.5, × (1 + fill) |
 | jump drive | 10 |
 | medical room, survival kit | 10 |
-| Nanobot Build and Repair (also counts as a welder) | 15 |
 | shield block | 15 |
 
-Modded blocks count double (weapons, turrets and gravity blocks four times). One large-grid Nanobot is worth about 60 threat on its own, one 300 MW large reactor about 50 through its power output alone.
+Modded blocks count double (weapons, turrets and gravity blocks four times). One 300 MW large reactor about 50 through its power output alone.
 
 ### Example scores (*estimate*)
 
@@ -188,8 +187,8 @@ Modded blocks count double (weapons, turrets and gravity blocks four times). One
 | new player's small-grid miner: 120 blocks, 8 thrusters, 2 drills, antenna, 2 small batteries | ~10 |
 | basic large-grid miner: 300 blocks, 12 thrusters, 3 drills, survival kit, antenna | ~90 |
 | armed large ship: 1500 blocks, 24 thrusters, 4 turrets, 2 guns, jump drive, 2 small reactors, 6 batteries | ~270 |
-| large static base: 6000 blocks, 10 turrets, 12 production blocks, 30 containers, 2 large reactors, 20 batteries, a Nanobot | ~560 |
-| that base plus three parked armed ships | ~1,370 |
+| large static base: 6000 blocks, 10 turrets, 12 production blocks, 30 containers, 2 large reactors, 20 batteries | ~500 |
+| that base plus three parked armed ships | ~1,310 |
 
 ### Who meets what
 
@@ -217,7 +216,7 @@ What this means for the theme:
 5. **Some installations are never removed.** 27 installation groups carry `IgnoreCleanupRules` (18 Abandoned Settlements, 9 Wasteland), and the settlement parts their behaviors spawn carry it too. They accumulate on EarthLike and the Moon for good. The powered/unpowered cleanup values also look swapped in MES (section 1).
 6. **High-threat spawns at hubs.** Bosses need 1500 within 15 km, which a few parked fleets at a station reach. Boss signals then go to every player within 25 km, new ones included.
 7. **Xenvakian Final Boss can end the mod early.** Once unlocked, any spot with threat ≥700 within 5 km in space can get it, and destroying it stops Xenvakian spawns for the world.
-8. **Suppressor blocks.** 18 Weyland-Yutani bases on EarthLike get MES drill suppressors. Of the Xenvakian groups, 36 get jetpack suppressors, 8 drill suppressors, and the Final Boss also a Nanobot suppressor. That cuts into practical planet mining and into the Nanobot Build and Repair mod near those NPCs.
+8. **Suppressor blocks.** 18 Weyland-Yutani bases on EarthLike get MES drill suppressors. Of the Xenvakian groups, 36 get jetpack suppressors, 8 drill suppressors, and the Final Boss also a Nanobot suppressor. That cuts into practical planet mining near those NPCs; the Nanobot suppressor does nothing, since the world has no Nanobot mod.
 9. **The asteroid ring holds back space spawns (*estimate*).** Random encounters need ≥3 km to every asteroid's center, which almost no point inside the 4 km wide band has, so they spawn above, below or beside it. Cargo paths whose line would cross any asteroid's bounding box within 20 km are rejected, so fewer cargo ships run along the ring. Not wrong, but the ring will be quieter than open space. Alpha and Gamma Station are ~19 km from the ring, so this also affects their surroundings.
 10. **Moon flyers.** The 15 skip-air cargo groups fly at 1.7–2.5 km over the Moon, just under its 2.8 km gravity edge. Correct for MES, but it contradicts the earlier note.
 11. **Imber's two space stations never spawn.** Delphos Supply Outpost and Perios Station use the condition group `MES-SpawnConditionsGroup-RandomEncounterStation`, which MES 2.74.05 does not define. Harmless.

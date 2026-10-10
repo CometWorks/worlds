@@ -73,12 +73,7 @@
     <EnableStructuralSimulation>false</EnableStructuralSimulation>
     <MaxActiveFracturePieces>50</MaxActiveFracturePieces>
     <BlockTypeLimits>
-      <dictionary>
-        <item>
-          <Key>SELtdNanobotBuildAndRepairSystem</Key>
-          <Value>1</Value>
-        </item>
-      </dictionary>
+      <dictionary />
     </BlockTypeLimits>
     <EnableScripterRole>false</EnableScripterRole>
     <ExperimentalMode>true</ExperimentalMode>
@@ -121,11 +116,6 @@
     <ModItem FriendlyName="Trade Lanes MP">
       <Name>3816175430.sbm</Name>
       <PublishedFileId>3816175430</PublishedFileId>
-      <PublishedServiceName>Steam</PublishedServiceName>
-    </ModItem>
-    <ModItem FriendlyName="Nanobot Build and Repair System (Maintained) - Original Resources">
-      <Name>3099489876.sbm</Name>
-      <PublishedFileId>3099489876</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
     <ModItem FriendlyName="OmniCorp The OmniArc Project: Adv Tools">

@@ -164,14 +164,13 @@ SETTINGS = {
 }
 
 # Per player, by block pair name; vanilla counts built blocks, not active ones
-BLOCK_LIMITS = {"SELtdNanobotBuildAndRepairSystem": 1}
+BLOCK_LIMITS = {}
 
 # (Workshop id, name), MES and its encounter mods come from mes-mods.xml
 MODS = [
     (3415912276, "Skybox: SE1 Alpha Release"),
     (1359618037, "Relative Top Speed"),
     (3816175430, "Trade Lanes MP"),
-    (3099489876, "Nanobot Build and Repair System (Maintained) - Original Resources"),
     (3412657089, "OmniCorp The OmniArc Project: Adv Tools"),
     # Quality of life, mostly client side; the HUD frameworks before the mods using them
     (1965654081, "Rich HUD Master"),
