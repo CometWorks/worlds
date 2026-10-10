@@ -94,11 +94,13 @@ SHARED_BLOCKS = PUBLIC_BLOCKS | {
 # plugin's StationLootContainerName (config/essentials.cfg). It stays with the faction on every
 # station, so the loot it gets each economy tick can't be farmed.
 LOOT_CONTAINER = "Station Loot"
-LOOT_CONTAINER_SUBTYPE = "LargeBlockCargoTerminal"
-# Every station's tools container, renamed and shared with everyone. The Essentials plugin keeps
-# 3 of each Elite tool in it, topped up every minute (RefillContainers in config/essentials.cfg).
+LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
+# The station's 4 toolboxes by its "Free tools!" signs, renamed, shared with everyone and shown in
+# inventory screens. The Essentials plugin keeps 3 of each Elite tool in each, topped up every
+# minute (RefillContainers in config/essentials.cfg).
 FREE_TOOLS = "Free Tools"
-FREE_TOOLS_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
+FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
+FREE_TOOLS_COUNT = 4
 # What a station starts with; every other inventory and production queue starts empty
 REACTOR_URANIUM = 10_000
 # The safe zone block's 5 L, times BlocksInventorySizeMultiplier, of 0.2 L zone chips
@@ -446,7 +448,7 @@ def station(template, ids, name, center, forward, up, owner, shared):
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
-    loot = free_tools = None
+    loot, free_tools = None, 0
     for block in grid.find("CubeBlocks"):
         if block.find("Owner") is None:
             continue
@@ -454,13 +456,14 @@ def station(template, ids, name, center, forward, up, owner, shared):
         kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
         public = SHARED_BLOCKS if shared else PUBLIC_BLOCKS
         block.find("ShareMode").text = "All" if kind in public else "Faction"
-        if loot is None and block.findtext("SubtypeName") == LOOT_CONTAINER_SUBTYPE:
+        if block.findtext("CustomName") == LOOT_CONTAINER_BLUEPRINT_NAME:
             loot = block
             set_child(block, "CustomName", LOOT_CONTAINER)
             block.find("ShareMode").text = "Faction"
         if block.findtext("CustomName") == FREE_TOOLS_BLUEPRINT_NAME:
-            free_tools = block
+            free_tools += 1
             set_child(block, "CustomName", FREE_TOOLS)
+            set_child(block, "ShowInInventory", "true")
             block.find("ShareMode").text = "All"
         stock(block, kind)
         if (
@@ -471,8 +474,8 @@ def station(template, ids, name, center, forward, up, owner, shared):
             set_child(block, "SpawnName", name)
         if kind == "RadioAntenna":
             set_child(block, "HudText", name)
-    assert loot is not None, f"no {LOOT_CONTAINER_SUBTYPE} for {LOOT_CONTAINER}"
-    assert free_tools is not None, f"no {FREE_TOOLS_BLUEPRINT_NAME} for {FREE_TOOLS}"
+    assert loot is not None, f"no {LOOT_CONTAINER_BLUEPRINT_NAME} for {LOOT_CONTAINER}"
+    assert free_tools == FREE_TOOLS_COUNT, f"{free_tools} {FREE_TOOLS_BLUEPRINT_NAME}"
     return as_sector_object(grid)
 
 

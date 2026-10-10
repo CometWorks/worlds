@@ -1839,7 +1839,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -1967,11 +1967,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Station Loot</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>3</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -2820,11 +2820,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>4</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -12483,11 +12483,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>2</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -12972,11 +12972,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>1</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -15980,7 +15980,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -15999,7 +15999,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Free Tools</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -36383,7 +36383,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -36511,11 +36511,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Station Loot</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>3</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -37236,7 +37236,7 @@ InvListX {GT:Cargo} +ingot</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -37364,11 +37364,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>4</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -46899,7 +46899,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -47027,11 +47027,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>2</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -47388,7 +47388,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -47516,11 +47516,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>1</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -50524,7 +50524,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -50543,7 +50543,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Free Tools</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -70927,7 +70927,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -71055,11 +71055,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Station Loot</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>3</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -71780,7 +71780,7 @@ InvListX {GT:Cargo} +ingot</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -71908,11 +71908,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>4</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -81443,7 +81443,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -81571,11 +81571,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>2</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -81932,7 +81932,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -82060,11 +82060,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>1</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -85068,7 +85068,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -85087,7 +85087,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Free Tools</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -105471,7 +105471,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -105599,11 +105599,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Station Loot</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>3</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -106324,7 +106324,7 @@ InvListX {GT:Cargo} +ingot</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -106452,11 +106452,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>4</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -115987,7 +115987,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -116115,11 +116115,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>2</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -116476,7 +116476,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -116604,11 +116604,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>1</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -119612,7 +119612,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -119631,7 +119631,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Free Tools</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -140015,7 +140015,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -140143,11 +140143,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Station Loot</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>3</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -140868,7 +140868,7 @@ InvListX {GT:Cargo} +ingot</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -140996,11 +140996,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>4</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -150531,7 +150531,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -150659,11 +150659,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>2</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -151020,7 +151020,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -151148,11 +151148,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>1</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -154156,7 +154156,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -154175,7 +154175,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Free Tools</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -174559,7 +174559,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -174687,11 +174687,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Station Loot</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>3</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -175412,7 +175412,7 @@ InvListX {GT:Cargo} +ingot</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -175540,11 +175540,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>4</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -185075,7 +185075,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -185203,11 +185203,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>2</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -185564,7 +185564,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -185692,11 +185692,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>1</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -188700,7 +188700,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -188719,7 +188719,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Free Tools</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -209103,7 +209103,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -209231,11 +209231,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Station Loot</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>3</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -209956,7 +209956,7 @@ InvListX {GT:Cargo} +ingot</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -210084,11 +210084,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>4</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -219619,7 +219619,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -219747,11 +219747,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>2</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -220108,7 +220108,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -220236,11 +220236,11 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
-          <ShowInInventory>false</ShowInInventory>
+          <ShowInInventory>true</ShowInInventory>
           <NumberInGrid>1</NumberInGrid>
         </MyObjectBuilder_CubeBlock>
         <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CubeBlock">
@@ -223244,7 +223244,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -223263,7 +223263,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Free Tools</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
