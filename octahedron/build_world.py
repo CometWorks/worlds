@@ -68,7 +68,6 @@ ICE_MATERIAL = "Ice_02"
 VOXEL_GENERATOR = 4
 
 STATION_SAFE_ZONE_RADIUS = 200.0
-LANE_SAFE_ZONE_RADIUS = 100.0
 LANE_ENDPOINT_DISTANCE = 1_000.0
 LANE_SPEED = 10_000
 LANE_RING_INTERVAL = 10_000
@@ -924,11 +923,9 @@ def main():
             (start, home, target, direction),
             (end, target, home, mul(direction, -1)),
         ):
+            # No safe zone: the computer can't be damaged and the lane's rings have no physics
             objects.append(
                 lane_computer(ids, position, facing, up, lane_id, here, there)
-            )
-            objects.append(
-                safe_zone(ids, position, LANE_SAFE_ZONE_RADIUS, f"TL {lane_id} {here}")
             )
 
     axis = magnetic_axis(earth, sun_direction(sector))

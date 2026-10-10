@@ -66,7 +66,8 @@ downloaded.
 - Places one Trade Lane along each of the 12 edges and between the Moon
   station and its nearest station, 13 in all. A lane goes both ways: each end
   is an entry toward the other. Every end is a one-block grid with a Trade Lane
-  Computer in a 100 m radius admin safe zone, 1000 m from its station.
+  Computer, 1000 m from its station, indestructible and not editable. The ends
+  have no safe zone; the lane's rings have no physics.
 - Places 2,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays
