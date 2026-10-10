@@ -46,7 +46,8 @@ KEEP_PLANETS = ("EarthLike", "Moon")
 
 # Altitudes are from the planet's 60 km (EarthLike) or 9.5 km (Moon) radius
 STATION_DISTANCE = 140_000.0
-MOON_STATION_DISTANCE = 39_500.0
+# The Moon's gravity ends 12,314 m from its center (9,785 m highest terrain x 5^(1/7))
+MOON_STATION_DISTANCE = 15_000.0
 # The ring is a flat band 45 to 75 km above EarthLike: whole asteroids stay out of its
 # gravity (it ends about 103 km from the center) and clear of Alpha and Gamma at 140 km
 RING_INNER = 105_000.0
@@ -577,7 +578,8 @@ def facing(planet, center):
 
 
 def layout(earth, moon):
-    """Station name -> (center, forward, up), and the lane edges. Directions are in EarthLike's frame."""
+    """Station name -> (center, forward, up), the lane edges, and the Earth station nearest the
+    Moon. Directions are in EarthLike's frame."""
     north, front = earth.up, earth.forward
     right = cross(front, north)
     stations = {
@@ -592,11 +594,11 @@ def layout(earth, moon):
     for name, direction in stations.items():
         center = add(earth.center, mul(direction, STATION_DISTANCE))
         places[f"{name} Station"] = (center, *facing(earth, center))
-    nearest = min(places, key=lambda name: dist(places[name][0], moon.center))
-    center = add(
-        moon.center,
-        mul(norm(sub(places[nearest][0], moon.center)), MOON_STATION_DISTANCE),
-    )
+    # Moon Station has a lane to each of the two Earth stations nearest the Moon. It sits
+    # halfway between their directions, so neither lane passes over the Moon.
+    near = sorted(places, key=lambda name: dist(places[name][0], moon.center))[:2]
+    toward = norm(add(*(norm(sub(places[name][0], moon.center)) for name in near)))
+    center = add(moon.center, mul(toward, MOON_STATION_DISTANCE))
     places["Moon Station"] = (center, *facing(moon, center))
     names = list(places)[:6]
     edges = [
@@ -606,8 +608,8 @@ def layout(earth, moon):
         if dist(places[a][0], places[b][0]) < 1.9 * STATION_DISTANCE
     ]
     assert len(edges) == 12, edges
-    edges.append((nearest, "Moon Station"))
-    return places, edges
+    edges += [(name, "Moon Station") for name in near]
+    return places, edges, near[0]
 
 
 def lanes(places, edges):
@@ -904,10 +906,10 @@ def main():
     rng = random.Random(args.seed)
     ids = Ids(rng)
     owner, faction = add_npc(checkpoint, ids)
-    places, edges = layout(earth, moon)
+    places, edges, nearest = layout(earth, moon)
     template = ET.parse(STATION_BLUEPRINT).getroot().find(".//CubeGrid")
-    # The Earth station of the Moon lane belongs to no one, so everyone can always spawn there
-    shared = edges[-1][0]
+    # The Earth station nearest the Moon belongs to no one, so everyone can always spawn there
+    shared = nearest
     trade_stations = {}
     for name, (center, forward, up) in places.items():
         grid = station(template, ids, name, center, forward, up, owner, name == shared)

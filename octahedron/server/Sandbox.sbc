@@ -266,7 +266,7 @@
         <FactionTypeString>Trader</FactionTypeString>
         <Stations>
           <MyObjectBuilder_Station>
-            <Id>867288576156791813</Id>
+            <Id>903047082892446518</Id>
             <Position x="0.0" y="140000.0" z="0.0" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="-0.0" y="-0.0" z="-1.0" />
@@ -281,7 +281,7 @@
             <Name>North Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>906178556277875881</Id>
+            <Id>879913659129436153</Id>
             <Position x="0.0" y="-140000.0" z="0.0" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="-0.0" y="-0.0" z="-1.0" />
@@ -296,7 +296,7 @@
             <Name>South Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>934119897374812846</Id>
+            <Id>886103346580618567</Id>
             <Position x="140000.0" y="0.0" z="0.0" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="-1.0" y="0.0" z="0.0" />
@@ -311,7 +311,7 @@
             <Name>Alpha Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>901991982617030023</Id>
+            <Id>933332584032114460</Id>
             <Position x="0.0" y="0.0" z="140000.0" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="0.0" y="0.0" z="-1.0" />
@@ -326,7 +326,7 @@
             <Name>Beta Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>901165343575842897</Id>
+            <Id>897102252784400106</Id>
             <Position x="-140000.0" y="0.0" z="0.0" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="1.0" y="0.0" z="0.0" />
@@ -341,7 +341,7 @@
             <Name>Gamma Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>889930068029848698</Id>
+            <Id>871849307866479329</Id>
             <Position x="0.0" y="0.0" z="-140000.0" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="0.0" y="0.0" z="1.0" />
@@ -356,10 +356,10 @@
             <Name>Delta Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>913633855526621364</Id>
-            <Position x="10749.013420934254" y="137627.65914733286" z="-74539.78935747474" />
+            <Id>919160980677612549</Id>
+            <Position x="13302.1243838055" y="125190.69826708132" z="-104117.99815739407" />
             <Up x="0.0" y="1.0" z="0.0" />
-            <Forward x="0.14272864963406623" y="0.0" z="-0.9897618564956097" />
+            <Forward x="0.3086354135870143" y="0.0" z="-0.9511804147899455" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
             <StationEntityId>118363774393739852</StationEntityId>

@@ -49,7 +49,8 @@ downloaded.
 - Applies the world settings and the mod list (`SETTINGS`, `BLOCK_LIMITS` and
   `MODS` in the script, MES and its encounter mods from `config/mes-mods.xml`).
 - Places the 6 stations of the octahedron 80 km above EarthLike, over the poles
-  and on the equator, and one 30 km above the Moon toward the nearest station.
+  and on the equator, and one 15 km from the Moon's center, just outside its
+  gravity (12.3 km), between the directions to the two nearest stations.
   Every station's up is its planet's north. Each sits in a 200 m admin safe
   zone, owned by the "Octahedron Authority" NPC faction, and players can't
   damage or edit it. The stations start empty, apart from 10,000 kg of
@@ -64,7 +65,7 @@ downloaded.
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
 - Places one Trade Lane along each of the 12 edges and between the Moon
-  station and its nearest station, 13 in all. A lane goes both ways: each end
+  station and each of the two nearest stations (North and Delta), 14 in all. A lane goes both ways: each end
   is an entry toward the other. Every end is a one-block grid with a Trade Lane
   Computer, 1000 m from its station, indestructible and not editable. The ends
   have no safe zone; the lane's rings have no physics.
