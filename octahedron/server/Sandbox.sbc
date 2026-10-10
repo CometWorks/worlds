@@ -539,6 +539,11 @@
       <PublishedFileId>3730092649</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
+    <ModItem FriendlyName="GV Inventory Sorter/Assembly Quota">
+      <Name>3082595868.sbm</Name>
+      <PublishedFileId>3082595868</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
     <ModItem FriendlyName="Modular Encounters Systems">
       <Name>1521905890.sbm</Name>
       <PublishedFileId>1521905890</PublishedFileId>

@@ -205,6 +205,8 @@ MODS = [
     (2756894170, "Definition Extension API"),
     (2687324923, "[QoL] Radio Spectrometry"),
     (3730092649, "Arthur's Lcd Mod"),
+    # Inventory sorting and assembler quotas, worked out on the client
+    (3082595868, "GV Inventory Sorter/Assembly Quota"),
 ]
 
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
