@@ -42,10 +42,25 @@ downloaded.
 The seed only changes the asteroid ring. The stations, lanes and every entity
 id other than the asteroids' come out the same for any seed.
 
-| World | Seed |
-|---|---|
-| Server | 1 |
-| Workshop copy | TBD, any other seed |
+## The built worlds
+
+| Folder | Seed | For |
+|---|---|---|
+| `server/` | 1 | the cluster, imported into Quasar |
+| `workshop/` | 48213 | the public Workshop copy, so players can't read the server's asteroids from it |
+
+Both are the script's output as is, never loaded in a game: the first load
+converts them to the binary format and creates the economy's NPC factions.
+They list OctahedronOres as a local mod for now. Once the mod is on the
+Workshop, rebuild both with `--ore-mod <id>` (the only change is that mod
+entry), because neither a server nor a Workshop world can use a local mod.
+
+```bash
+python3 build_world.py server --seed 1 --ore-mod <id>
+python3 build_world.py workshop --seed 48213 --ore-mod <id>
+```
+
+The `thumb.jpg` is still the Star System scenario's.
 
 ## OctahedronOres
 
@@ -65,6 +80,9 @@ mod (`--ore-mod 0`), which a multiplayer game refuses.
 
 ## Notes
 
-- The game forces `WorldSizeKm` to 0 for scenarios with planets, and its world
-  edge is a cube anyway. The 1000 km world radius needs a plugin.
+- `WorldSizeKm` is 0. The vanilla world edge is a cube that deletes whatever
+  crosses it, and while it is set, anything that drops out of a Havok physics
+  cluster's broadphase is killed or deleted. In the asteroid ring that happened
+  to characters on short teleports. The 1000 km world radius needs a plugin
+  (SE1-0119).
 - In-game scripts are off until the script whitelist exists.

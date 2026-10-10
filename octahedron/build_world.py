@@ -85,8 +85,10 @@ SETTINGS = {
     "EnableRespawnShips": "false",
     "EnableSpaceSuitRespawn": "false",
     "StartInRespawnScreen": "true",
-    # The game zeroes this for scenarios with planets; the world edge needs a plugin
-    "WorldSizeKm": 2000,
+    # No vanilla world edge: it is a cube that deletes what leaves it, and while it
+    # is on, a character or grid that drops out of a Havok cluster's broadphase is
+    # killed or deleted (MyPhysics.CreateHkWorld). The 1000 km edge is a plugin's.
+    "WorldSizeKm": 0,
     "BlockLimitsEnabled": "PER_PLAYER",
     "TotalPCU": 1_000_000,
     "MaxFactionsCount": 0,
@@ -324,7 +326,7 @@ def clone_grid(grid, ids):
         for node in grid.iter()
         if node.tag == "EntityId" and node.text and node.text != "0"
     }
-    mapping = {old: str(ids.new()) for old in old_ids}
+    mapping = {old: str(ids.new()) for old in sorted(old_ids)}
     for node in grid.iter():
         if len(node) == 0 and node.text in mapping:
             node.text = mapping[node.text]

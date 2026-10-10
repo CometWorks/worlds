@@ -1,0 +1,652 @@
+<?xml version='1.0' encoding='utf-8'?>
+<MyObjectBuilder_Checkpoint xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CurrentSector x="0" y="0" z="0" />
+  <ElapsedGameTime>2188320000</ElapsedGameTime>
+  <SessionName>Octahedron</SessionName>
+  <WorldId>b08f6368-8e1f-422a-855e-a42b99bfe336</WorldId>
+  <SpectatorPosition>
+    <Position x="57074.621628522182" y="54631.552364062372" z="79598.951669948132" />
+    <Forward x="-0.5272088" y="-0.5043053" z="-0.683905661" />
+    <Up x="0.8389715" y="-0.181225538" z="-0.513112" />
+    <Orientation>
+      <X>-0.397537351</X>
+      <Y>0.00334750651</Y>
+      <Z>-0.6577057</Z>
+      <W>0.639825</W>
+    </Orientation>
+  </SpectatorPosition>
+  <SpectatorIsLightOn>false</SpectatorIsLightOn>
+  <CameraController>Entity</CameraController>
+  <CameraEntity>0</CameraEntity>
+  <ControlledObject>0</ControlledObject>
+  <Password />
+  <Description>Octahedron public test cluster: EarthLike and its Moon, 7 stations linked by Trade Lanes, an asteroid ring.</Description>
+  <LastSaveTime>2016-12-19T15:07:23.1983593+01:00</LastSaveTime>
+  <SpectatorDistance>2.6</SpectatorDistance>
+  <CharacterToolbar>
+    <ToolbarType>Character</ToolbarType>
+    <SelectedSlot xsi:nil="true" />
+    <Slots>
+      <Slot>
+        <Index>0</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_CubeBlock" Subtype="LargeBlockArmorBlock" />
+        </Data>
+      </Slot>
+      <Slot>
+        <Index>1</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_CubeBlock" Subtype="LargeHeavyBlockArmorBlock" />
+        </Data>
+      </Slot>
+      <Slot>
+        <Index>2</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_Cockpit" Subtype="LargeBlockCockpitSeat" />
+        </Data>
+      </Slot>
+      <Slot>
+        <Index>3</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_Reactor" Subtype="LargeBlockSmallGenerator" />
+        </Data>
+      </Slot>
+      <Slot>
+        <Index>4</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_Thrust" Subtype="LargeBlockSmallThrust" />
+        </Data>
+      </Slot>
+      <Slot>
+        <Index>5</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_Thrust" Subtype="LargeBlockSmallAtmosphericThrust" />
+        </Data>
+      </Slot>
+      <Slot>
+        <Index>6</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_Gyro" Subtype="LargeBlockGyro" />
+        </Data>
+      </Slot>
+      <Slot>
+        <Index>7</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_MotorSuspension" Subtype="Suspension3x3" />
+        </Data>
+      </Slot>
+      <Slot>
+        <Index>8</Index>
+        <Item />
+        <Data xsi:type="MyObjectBuilder_ToolbarItemCubeBlock">
+          <DefinitionId Type="MyObjectBuilder_AirtightSlideDoor" Subtype="LargeBlockSlideDoor" />
+        </Data>
+      </Slot>
+    </Slots>
+  </CharacterToolbar>
+  <ControlledEntities>
+    <dictionary>
+            </dictionary>
+  </ControlledEntities>
+  <Settings xsi:type="MyObjectBuilder_SessionSettings">
+    <GameMode>Survival</GameMode>
+    <InventorySizeMultiplier>10</InventorySizeMultiplier>
+    <AssemblerSpeedMultiplier>3</AssemblerSpeedMultiplier>
+    <AssemblerEfficiencyMultiplier>3</AssemblerEfficiencyMultiplier>
+    <RefinerySpeedMultiplier>3</RefinerySpeedMultiplier>
+    <OnlineMode>PUBLIC</OnlineMode>
+    <MaxPlayers>4</MaxPlayers>
+    <MaxFloatingObjects>100</MaxFloatingObjects>
+    <MaxBackupSaves>5</MaxBackupSaves>
+    <MaxGridSize>0</MaxGridSize>
+    <MaxBlocksPerPlayer>0</MaxBlocksPerPlayer>
+    <TotalPCU>1000000</TotalPCU>
+    <MaxFactionsCount>0</MaxFactionsCount>
+    <BlockLimitsEnabled>PER_PLAYER</BlockLimitsEnabled>
+    <EnableRemoteBlockRemoval>true</EnableRemoteBlockRemoval>
+    <EnvironmentHostility>NORMAL</EnvironmentHostility>
+    <AutoHealing>true</AutoHealing>
+    <EnableCopyPaste>false</EnableCopyPaste>
+    <WeaponsEnabled>true</WeaponsEnabled>
+    <ShowPlayerNamesOnHud>true</ShowPlayerNamesOnHud>
+    <ThrusterDamage>true</ThrusterDamage>
+    <EnableSpectator>false</EnableSpectator>
+    <WorldSizeKm>0</WorldSizeKm>
+    <MinimumWorldSize>6000</MinimumWorldSize>
+    <RespawnShipDelete>false</RespawnShipDelete>
+    <ResetOwnership>false</ResetOwnership>
+    <WelderSpeedMultiplier>3</WelderSpeedMultiplier>
+    <GrinderSpeedMultiplier>3</GrinderSpeedMultiplier>
+    <RealisticSound>false</RealisticSound>
+    <HackSpeedMultiplier>0.33</HackSpeedMultiplier>
+    <PermanentDeath>false</PermanentDeath>
+    <AutoSaveInMinutes>5</AutoSaveInMinutes>
+    <SpawnShipTimeMultiplier>0</SpawnShipTimeMultiplier>
+    <ProceduralDensity>0</ProceduralDensity>
+    <RandomizeSeed>false</RandomizeSeed>
+    <ProceduralSeed>0</ProceduralSeed>
+    <DestructibleBlocks>true</DestructibleBlocks>
+    <EnableIngameScripts>false</EnableIngameScripts>
+    <ViewDistance>15000</ViewDistance>
+    <FloraDensity>20</FloraDensity>
+    <EnableToolShake>false</EnableToolShake>
+    <EnableOxygen>true</EnableOxygen>
+    <EnableResearch>true</EnableResearch>
+    <EnableOxygenPressurization>true</EnableOxygenPressurization>
+    <Enable3rdPersonView>true</Enable3rdPersonView>
+    <EnableFlora>true</EnableFlora>
+    <EnableConvertToStation>true</EnableConvertToStation>
+    <StationVoxelSupport>false</StationVoxelSupport>
+    <EnableSunRotation>true</EnableSunRotation>
+    <EnableRespawnShips>false</EnableRespawnShips>
+    <ScenarioEditMode>false</ScenarioEditMode>
+    <Scenario>false</Scenario>
+    <CanJoinRunning>false</CanJoinRunning>
+    <PhysicsIterations>8</PhysicsIterations>
+    <SunRotationIntervalMinutes>119.999992</SunRotationIntervalMinutes>
+    <EnableJetpack>true</EnableJetpack>
+    <SpawnWithTools>true</SpawnWithTools>
+    <StartInRespawnScreen>true</StartInRespawnScreen>
+    <EnableVoxelDestruction>true</EnableVoxelDestruction>
+    <MaxDrones>5</MaxDrones>
+    <EnableWolfs>false</EnableWolfs>
+    <EnableSpiders>false</EnableSpiders>
+    <FloraDensityMultiplier>1</FloraDensityMultiplier>
+    <EnableStructuralSimulation>false</EnableStructuralSimulation>
+    <MaxActiveFracturePieces>50</MaxActiveFracturePieces>
+    <BlockTypeLimits>
+      <dictionary>
+        <item>
+          <Key>SELtdNanobotBuildAndRepairSystem</Key>
+          <Value>1</Value>
+        </item>
+      </dictionary>
+    </BlockTypeLimits>
+    <EnableScripterRole>false</EnableScripterRole>
+    <ExperimentalMode>true</ExperimentalMode>
+    <EnableVoxelHand>true</EnableVoxelHand>
+    <HasPlanets>true</HasPlanets>
+    <EnableSpaceSuitRespawn>false</EnableSpaceSuitRespawn>
+    <EnableEconomy>true</EnableEconomy>
+    <DepositsCountCoefficient>1</DepositsCountCoefficient>
+    <DepositSizeDenominator>60</DepositSizeDenominator>
+    <HarvestRatioMultiplier>0.8</HarvestRatioMultiplier>
+    <TradeFactionsCount>10</TradeFactionsCount>
+    <ScrapEnabled>false</ScrapEnabled>
+    <EnableRadiation>false</EnableRadiation>
+    <SolarRadiationIntensity>0</SolarRadiationIntensity>
+    <FoodConsumptionRate>0</FoodConsumptionRate>
+    <EnableSurvivalBuffs>false</EnableSurvivalBuffs>
+    <EnableReducedStatsOnRespawn>false</EnableReducedStatsOnRespawn>
+    <BlocksInventorySizeMultiplier>3</BlocksInventorySizeMultiplier>
+    <WeatherSystem>true</WeatherSystem>
+    <SyncDistance>3000</SyncDistance>
+    <EnableAutorespawn>false</EnableAutorespawn>
+    <VoxelGeneratorVersion>4</VoxelGeneratorVersion>
+    <EnableEncounters>false</EnableEncounters>
+    <CargoShipsEnabled>false</CargoShipsEnabled>
+    <EnableDrones>false</EnableDrones>
+    <GlobalEncounterCap>0</GlobalEncounterCap>
+    <EnablePlanetaryEncounters>false</EnablePlanetaryEncounters>
+  </Settings>
+  <ScriptManagerData>
+    <variables>
+      <dictionary />
+    </variables>
+  </ScriptManagerData>
+  <AppVersion>1166003</AppVersion>
+  <Factions>
+    <Factions>
+      <MyObjectBuilder_Faction>
+        <FactionId>273060811546874192</FactionId>
+        <Tag>SPRT</Tag>
+        <Name>Space Pirates</Name>
+        <PrivateInfo />
+        <CustomColor x="0" y="0.00955" z="-0.0385" />
+        <IconColor x="0" y="-0.8" z="0.55" />
+        <FactionIcon>Textures\FactionLogo\PirateIcon.dds</FactionIcon>
+        <Members>
+          <MyObjectBuilder_FactionMember>
+            <PlayerId>144115188075855894</PlayerId>
+            <IsLeader>true</IsLeader>
+            <IsFounder>true</IsFounder>
+          </MyObjectBuilder_FactionMember>
+        </Members>
+        <JoinRequests />
+        <AutoAcceptMember>true</AutoAcceptMember>
+        <AutoAcceptPeace>false</AutoAcceptPeace>
+        <AcceptHumans>false</AcceptHumans>
+        <EnableFriendlyFire>false</EnableFriendlyFire>
+      </MyObjectBuilder_Faction>
+      <MyObjectBuilder_Faction>
+        <FactionId>270184222006364636</FactionId>
+        <Tag>SPID</Tag>
+        <Name>Space spiders</Name>
+        <PrivateInfo />
+        <Members>
+          <MyObjectBuilder_FactionMember>
+            <PlayerId>144115188075855896</PlayerId>
+            <IsLeader>true</IsLeader>
+            <IsFounder>true</IsFounder>
+          </MyObjectBuilder_FactionMember>
+        </Members>
+        <JoinRequests />
+        <AutoAcceptMember>true</AutoAcceptMember>
+        <AutoAcceptPeace>false</AutoAcceptPeace>
+        <AcceptHumans>false</AcceptHumans>
+        <EnableFriendlyFire>false</EnableFriendlyFire>
+      </MyObjectBuilder_Faction>
+      <MyObjectBuilder_Faction>
+        <FactionId>235869712423806600</FactionId>
+        <Tag>OCT</Tag>
+        <Name>Octahedron Authority</Name>
+        <Description>Keeps the Octahedron stations and Trade Lanes running.</Description>
+        <PrivateInfo />
+        <Members>
+          <MyObjectBuilder_FactionMember>
+            <PlayerId>147864213322693806</PlayerId>
+            <IsLeader>true</IsLeader>
+            <IsFounder>true</IsFounder>
+          </MyObjectBuilder_FactionMember>
+        </Members>
+        <JoinRequests />
+        <AutoAcceptMember>false</AutoAcceptMember>
+        <AutoAcceptPeace>true</AutoAcceptPeace>
+        <AcceptHumans>false</AcceptHumans>
+        <EnableFriendlyFire>false</EnableFriendlyFire>
+        <FactionType>None</FactionType>
+      </MyObjectBuilder_Faction>
+    </Factions>
+    <Players>
+      <dictionary>
+        <item>
+          <Key xsi:type="xsd:long">144115188075855894</Key>
+          <Value xsi:type="xsd:long">273060811546874192</Value>
+        </item>
+        <item>
+          <Key xsi:type="xsd:long">144115188075855896</Key>
+          <Value xsi:type="xsd:long">270184222006364636</Value>
+        </item>
+        <item>
+          <Key xsi:type="xsd:long">147864213322693806</Key>
+          <Value xsi:type="xsd:long">235869712423806600</Value>
+        </item>
+      </dictionary>
+    </Players>
+    <Relations>
+      <MyObjectBuilder_FactionRelation>
+        <FactionId1>270184222006364636</FactionId1>
+        <FactionId2>273060811546874192</FactionId2>
+        <Relation>Enemies</Relation>
+      </MyObjectBuilder_FactionRelation>
+    </Relations>
+    <Requests />
+  </Factions>
+  <Mods>
+    <ModItem FriendlyName="Skybox: SE1 Alpha Release">
+      <Name>3415912276.sbm</Name>
+      <PublishedFileId>3415912276</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Relative Top Speed">
+      <Name>1359618037.sbm</Name>
+      <PublishedFileId>1359618037</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Trade Lanes MP">
+      <Name>3816175430.sbm</Name>
+      <PublishedFileId>3816175430</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Nanobot Build and Repair System (Maintained) - Original Resources">
+      <Name>3099489876.sbm</Name>
+      <PublishedFileId>3099489876</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="OmniCorp The OmniArc Project: Adv Tools">
+      <Name>3412657089.sbm</Name>
+      <PublishedFileId>3412657089</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Modular Encounters Systems">
+      <Name>1521905890.sbm</Name>
+      <PublishedFileId>1521905890</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Wreckage">
+      <Name>2802625870.sbm</Name>
+      <PublishedFileId>2802625870</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Weyland-Yutani Corporation">
+      <Name>2390106048.sbm</Name>
+      <PublishedFileId>2390106048</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES The Xenvakian Empire">
+      <Name>2470950657.sbm</Name>
+      <PublishedFileId>2470950657</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Terran Heavy Industries Engineering">
+      <Name>2615864222.sbm</Name>
+      <PublishedFileId>2615864222</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Space Pirates Enhanced">
+      <Name>2609155402.sbm</Name>
+      <PublishedFileId>2609155402</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Suppress Vanilla Encounters">
+      <Name>888457381.sbm</Name>
+      <PublishedFileId>888457381</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Suppress Vanilla Cargo Ships">
+      <Name>888457124.sbm</Name>
+      <PublishedFileId>888457124</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Trade Operators Coalition">
+      <Name>2966429095.sbm</Name>
+      <PublishedFileId>2966429095</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Pravda Heavy Industries">
+      <Name>2852753555.sbm</Name>
+      <PublishedFileId>2852753555</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Parallax Concepts">
+      <Name>1135484957.sbm</Name>
+      <PublishedFileId>1135484957</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Independent Contractors">
+      <Name>445996030.sbm</Name>
+      <PublishedFileId>445996030</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Imber Corporation">
+      <Name>973526550.sbm</Name>
+      <PublishedFileId>973526550</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Abandoned Mining Facility">
+      <Name>2634554148.sbm</Name>
+      <PublishedFileId>2634554148</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Wasteland Encounters V2 Continued">
+      <Name>2539299261.sbm</Name>
+      <PublishedFileId>2539299261</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Abandoned Settlements [v2]">
+      <Name>2310821218.sbm</Name>
+      <PublishedFileId>2310821218</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="OctahedronOres">
+      <Name>OctahedronOres</Name>
+      <PublishedFileId>0</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+  </Mods>
+  <PromotedUsers>
+    <dictionary />
+  </PromotedUsers>
+  <Scenario Type="MyObjectBuilder_ScenarioDefinition" Subtype="StarSystem" />
+  <RespawnCooldowns>
+        </RespawnCooldowns>
+  <Identities>
+    <MyObjectBuilder_Identity>
+      <IdentityId>144115188075855894</IdentityId>
+      <DisplayName>Space Pirates</DisplayName>
+      <CharacterEntityId>0</CharacterEntityId>
+      <BlockLimitModifier>0</BlockLimitModifier>
+      <LastLoginTime>2016-12-19T15:05:03.4943903+01:00</LastLoginTime>
+    </MyObjectBuilder_Identity>
+    <MyObjectBuilder_Identity>
+      <IdentityId>144115188075855896</IdentityId>
+      <DisplayName>The Great Tarantula</DisplayName>
+      <CharacterEntityId>0</CharacterEntityId>
+      <BlockLimitModifier>0</BlockLimitModifier>
+      <LastLoginTime>2016-12-19T15:05:33.984439+01:00</LastLoginTime>
+    </MyObjectBuilder_Identity>
+    <MyObjectBuilder_Identity>
+      <IdentityId>147864213322693806</IdentityId>
+      <DisplayName>Octahedron Authority</DisplayName>
+      <CharacterEntityId>0</CharacterEntityId>
+    </MyObjectBuilder_Identity>
+  </Identities>
+  <PreviousEnvironmentHostility>SAFE</PreviousEnvironmentHostility>
+  <AllPlayersData>
+    <dictionary>
+        </dictionary>
+  </AllPlayersData>
+  <AllPlayersColors>
+    <dictionary>
+            </dictionary>
+  </AllPlayersColors>
+  <ChatHistory />
+  <FactionChatHistory />
+  <NonPlayerIdentities>
+    <long>144115188075855894</long>
+    <long>144115188075855896</long>
+    <long>147864213322693806</long>
+  </NonPlayerIdentities>
+  <Gps>
+    <dictionary />
+  </Gps>
+  <SessionComponents>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_LocalizationSessionComponent">
+      <AdditionalPaths />
+      <CampaignPaths />
+      <CampaignModFolderName />
+      <Language>English</Language>
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_SharedStorageComponent">
+      <ExistingFieldsAndStaticAttribute>
+        <dictionary />
+      </ExistingFieldsAndStaticAttribute>
+      <BoolStorage>
+        <dictionary />
+      </BoolStorage>
+      <IntStorage>
+        <dictionary />
+      </IntStorage>
+      <StringStorage>
+        <dictionary />
+      </StringStorage>
+      <FloatStorage>
+        <dictionary />
+      </FloatStorage>
+      <Vector3DStorage>
+        <dictionary />
+      </Vector3DStorage>
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_VisualScriptManagerSessionComponent">
+      <FirstRun>true</FirstRun>
+      <LevelScriptFiles xsi:nil="true" />
+      <StateMachines xsi:nil="true" />
+      <ScriptStateMachineManager>
+        <ActiveStateMachines />
+      </ScriptStateMachineManager>
+      <Questlog>
+        <LineData />
+        <Title>Prepare to Leave the Escape Pod</Title>
+      </Questlog>
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_SpaceFaunaComponent">
+      <SpawnInfos />
+      <TimeoutInfos />
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_AIComponent" />
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_CampaignSessionComponent">
+      <IsVanilla>false</IsVanilla>
+      <Mod />
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_EnvironmentBotSpawningSystem">
+      <TimeSinceLastEventInMs>1038</TimeSinceLastEventInMs>
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_CoordinateSystem">
+      <Definition Type="MyObjectBuilder_CoordinateSystemDefinition" Subtype="CoordinateSystem" />
+      <LastCoordSysId>2</LastCoordSysId>
+      <CoordSystems />
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_SectorWeatherComponent">
+      <BaseSunDirection x="0" y="0" z="1" />
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_SpacePlanetTrackComponent" />
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_CutsceneSessionComponent">
+      <Cutscenes />
+      <VoxelPrecachingWaypointNames />
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_AntennaSessionComponent" />
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_SessionComponentResearch">
+      <WhitelistMode>false</WhitelistMode>
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_Encounters">
+      <SavedEcounters />
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_WorldGenerator">
+      <MarkedAreas>
+        <EmptyArea>
+          <Position>
+            <X>0.5</X>
+            <Y>0.5</Y>
+            <Z>0.5</Z>
+          </Position>
+          <Radius>67200</Radius>
+        </EmptyArea>
+        <EmptyArea>
+          <Position>
+            <X>16384.5</X>
+            <Y>136384.5</Y>
+            <Z>-113615.5</Z>
+          </Position>
+          <Radius>9785</Radius>
+        </EmptyArea>
+        <EmptyArea>
+          <Position>
+            <X>131072.5</X>
+            <Y>131072.5</Y>
+            <Z>5731072.5</Z>
+          </Position>
+          <Radius>67200</Radius>
+        </EmptyArea>
+        <EmptyArea>
+          <Position>
+            <X>36384.5</X>
+            <Y>226384.5</Y>
+            <Z>5796384.5</Z>
+          </Position>
+          <Radius>9785</Radius>
+        </EmptyArea>
+        <EmptyArea>
+          <Position>
+            <X>1031072.5</X>
+            <Y>131072.5</Y>
+            <Z>1631072.5</Z>
+          </Position>
+          <Radius>67200</Radius>
+        </EmptyArea>
+        <EmptyArea>
+          <Position>
+            <X>916384.5</X>
+            <Y>16384.5</Y>
+            <Z>1616384.5</Z>
+          </Position>
+          <Radius>10070</Radius>
+        </EmptyArea>
+      </MarkedAreas>
+      <ExistingObjectsSeeds />
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_PirateAntennas">
+      <PiratesIdentity>144115188075855894</PiratesIdentity>
+      <Drones />
+    </MyObjectBuilder_SessionComponent>
+  </SessionComponents>
+  <GameDefinition Type="MyObjectBuilder_GameDefinition" Subtype="Default" />
+  <SessionComponentEnabled />
+  <SessionComponentDisabled />
+  <InGameTime>2081-01-01T07:00:00</InGameTime>
+  <MissionTriggers>
+    <Triggers>
+      <dictionary>
+        <item>
+          <Key xsi:type="pair">
+            <stm>76561197967630685</stm>
+            <ser>0</ser>
+          </Key>
+          <Value xsi:type="MyObjectBuilder_MissionTriggers">
+            <WinTriggers />
+            <LoseTriggers />
+            <Won>false</Won>
+            <Lost>false</Lost>
+          </Value>
+        </item>
+        <item>
+          <Key xsi:type="pair">
+            <stm>0</stm>
+            <ser>0</ser>
+          </Key>
+          <Value xsi:type="MyObjectBuilder_MissionTriggers">
+            <WinTriggers />
+            <LoseTriggers />
+            <Won>false</Won>
+            <Lost>false</Lost>
+          </Value>
+        </item>
+        <item>
+          <Key xsi:type="pair">
+            <stm>76561197967630685</stm>
+            <ser>1</ser>
+          </Key>
+          <Value xsi:type="MyObjectBuilder_MissionTriggers">
+            <WinTriggers />
+            <LoseTriggers />
+            <Won>false</Won>
+            <Lost>false</Lost>
+          </Value>
+        </item>
+        <item>
+          <Key xsi:type="pair">
+            <stm>76561197967630685</stm>
+            <ser>2</ser>
+          </Key>
+          <Value xsi:type="MyObjectBuilder_MissionTriggers">
+            <WinTriggers />
+            <LoseTriggers />
+            <Won>false</Won>
+            <Lost>false</Lost>
+          </Value>
+        </item>
+        <item>
+          <Key xsi:type="pair">
+            <stm>76561197967630685</stm>
+            <ser>3</ser>
+          </Key>
+          <Value xsi:type="MyObjectBuilder_MissionTriggers">
+            <WinTriggers />
+            <LoseTriggers />
+            <Won>false</Won>
+            <Lost>false</Lost>
+          </Value>
+        </item>
+      </dictionary>
+    </Triggers>
+  </MissionTriggers>
+  <CustomSkybox />
+  <RequiresDX>11</RequiresDX>
+</MyObjectBuilder_Checkpoint>
