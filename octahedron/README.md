@@ -102,8 +102,8 @@ game update that changes the planet or voxel material definitions or maps.
 - `WorldSizeKm` is 0. The vanilla world edge is a cube that deletes whatever
   crosses it, and while it is set, anything that drops out of a Havok physics
   cluster's broadphase is killed or deleted. In the asteroid ring that happened
-  to characters on short teleports. The 500 km world radius (braking from 450 km) needs a plugin
-  (SE1-0119).
+  to characters on short teleports. The 500 km world radius, braking from
+  450 km, needs a plugin (SE1-0119).
 - In-game scripts are off until the script whitelist exists.
 - The asteroid ore settings are vanilla's (DepositsCountCoefficient 2,
   DepositSizeDenominator 30, HarvestRatioMultiplier 1), not the Star System
