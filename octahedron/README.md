@@ -52,7 +52,11 @@ downloaded.
   and on the equator, and one 30 km above the Moon toward the nearest station.
   Every station's up is its planet's north. Each sits in a 200 m admin safe
   zone, owned by the "Octahedron Authority" NPC faction, and players can't
-  damage or edit it.
+  damage or edit it. The stations start empty, apart from 10,000 kg of
+  uranium ingots in each large reactor, a full safe zone block (75 zone chips)
+  and the gas in the tanks. North Station, the one with the lane to the Moon,
+  belongs to no faction's territory and shares its inventories and production
+  with everyone.
 - Places one Trade Lane along each of the 12 edges and between the Moon
   station and its nearest station, 13 in all. A lane goes both ways: each end
   is an entry toward the other. Every end is a one-block grid with a Trade Lane

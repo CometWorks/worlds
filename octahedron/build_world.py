@@ -81,6 +81,16 @@ PUBLIC_BLOCKS = {
     "MedicalRoom", "Projector", "StoreBlock", "ContractBlock", "VendingMachine", "Door",
     "AirtightSlideDoor", "ButtonPanel", "Cockpit", "ShipConnector",
 }  # fmt: skip
+# The shared station also opens its inventories and production to everyone. Power, safe zone,
+# antenna, timers, vents and the rest stay with the faction, so no one can switch them off.
+SHARED_BLOCKS = PUBLIC_BLOCKS | {
+    "CargoContainer", "Assembler", "Refinery", "OxygenGenerator", "OxygenTank",
+    "ConveyorSorter",
+}  # fmt: skip
+# What a station starts with; every other inventory and production queue starts empty
+REACTOR_URANIUM = 10_000
+# The safe zone block's 5 L, times BlocksInventorySizeMultiplier, of 0.2 L zone chips
+ZONE_CHIPS = 75
 
 SETTINGS = {
     "GameMode": "Survival",
@@ -379,7 +389,40 @@ def as_sector_object(grid):
     return grid
 
 
-def station(template, ids, name, center, forward, up, owner):
+def set_items(inventory, items):
+    """Replaces an inventory's items with (builder type, subtype, amount) tuples."""
+    stack = inventory.find("Items")
+    stack.clear()
+    for item_id, (kind, subtype, amount) in enumerate(items):
+        item = el(stack, "MyObjectBuilder_InventoryItem")
+        el(item, "Amount", amount)
+        content = el(item, "PhysicalContent")
+        content.set(XSI_TYPE, kind)
+        el(content, "SubtypeName", subtype)
+        el(item, "ItemId", item_id)
+    set_child(inventory, "nextItemId", str(len(items)))
+
+
+def stock(block, kind):
+    """Empties the block's inventories and production queue, then loads its starting items.
+    Gas tanks keep their gas: it isn't an item."""
+    items = []
+    if (
+        kind == "Reactor"
+        and block.findtext("SubtypeName") == "LargeBlockLargeGenerator"
+    ):
+        items = [("MyObjectBuilder_Ingot", "Uranium", REACTOR_URANIUM)]
+    if kind == "SafeZoneBlock":
+        items = [("MyObjectBuilder_Component", "ZoneChip", ZONE_CHIPS)]
+    for inventory in block.iter():
+        if inventory.get(XSI_TYPE) == "MyObjectBuilder_Inventory":
+            set_items(inventory, items)
+            items = []
+    if block.find("Queue") is not None:
+        block.find("Queue").clear()
+
+
+def station(template, ids, name, center, forward, up, owner, shared):
     grid = clone_grid(template, ids)
     place_grid(grid, center, forward, up)
     set_child(grid, "DisplayName", name)
@@ -393,7 +436,9 @@ def station(template, ids, name, center, forward, up, owner):
             continue
         block.find("Owner").text = str(owner)
         kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
-        block.find("ShareMode").text = "All" if kind in PUBLIC_BLOCKS else "Faction"
+        public = SHARED_BLOCKS if shared else PUBLIC_BLOCKS
+        block.find("ShareMode").text = "All" if kind in public else "Faction"
+        stock(block, kind)
         if (
             kind == "MedicalRoom"
             and block.findtext("SubtypeName") == "LargeMedicalRoom"
@@ -804,8 +849,12 @@ def main():
     owner = add_npc(checkpoint, ids)
     places, edges = layout(earth, moon)
     template = ET.parse(STATION_BLUEPRINT).getroot().find(".//CubeGrid")
+    # The Earth station of the Moon lane belongs to no one, so everyone can always spawn there
+    shared = edges[-1][0]
     for name, (center, forward, up) in places.items():
-        objects.append(station(template, ids, name, center, forward, up, owner))
+        objects.append(
+            station(template, ids, name, center, forward, up, owner, name == shared)
+        )
         objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
 
     lane_list = lanes(places, edges)
