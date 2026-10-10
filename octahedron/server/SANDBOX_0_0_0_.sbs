@@ -15999,7 +15999,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Cargo - Station - Tools Bottles Ammo (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -50524,7 +50524,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -50543,7 +50543,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Cargo - Station - Tools Bottles Ammo (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -85068,7 +85068,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -85087,7 +85087,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Cargo - Station - Tools Bottles Ammo (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -119612,7 +119612,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -119631,7 +119631,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Cargo - Station - Tools Bottles Ammo (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -154156,7 +154156,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -154175,7 +154175,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Cargo - Station - Tools Bottles Ammo (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -188700,7 +188700,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -188719,7 +188719,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Cargo - Station - Tools Bottles Ammo (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -223244,7 +223244,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>Faction</ShareMode>
+          <ShareMode>All</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -223263,7 +223263,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>Cargo - Station - Tools Bottles Ammo (shared)</CustomName>
+          <CustomName>Free Tools</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>

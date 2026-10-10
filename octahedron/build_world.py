@@ -95,6 +95,10 @@ SHARED_BLOCKS = PUBLIC_BLOCKS | {
 # station, so the loot it gets each economy tick can't be farmed.
 LOOT_CONTAINER = "Station Loot"
 LOOT_CONTAINER_SUBTYPE = "LargeBlockCargoTerminal"
+# Every station's tools container, renamed and shared with everyone. The Essentials plugin keeps
+# 3 of each Elite tool in it, topped up every minute (RefillContainers in config/essentials.cfg).
+FREE_TOOLS = "Free Tools"
+FREE_TOOLS_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 # What a station starts with; every other inventory and production queue starts empty
 REACTOR_URANIUM = 10_000
 # The safe zone block's 5 L, times BlocksInventorySizeMultiplier, of 0.2 L zone chips
@@ -442,7 +446,7 @@ def station(template, ids, name, center, forward, up, owner, shared):
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
-    loot = None
+    loot = free_tools = None
     for block in grid.find("CubeBlocks"):
         if block.find("Owner") is None:
             continue
@@ -454,6 +458,10 @@ def station(template, ids, name, center, forward, up, owner, shared):
             loot = block
             set_child(block, "CustomName", LOOT_CONTAINER)
             block.find("ShareMode").text = "Faction"
+        if block.findtext("CustomName") == FREE_TOOLS_BLUEPRINT_NAME:
+            free_tools = block
+            set_child(block, "CustomName", FREE_TOOLS)
+            block.find("ShareMode").text = "All"
         stock(block, kind)
         if (
             kind == "MedicalRoom"
@@ -464,6 +472,7 @@ def station(template, ids, name, center, forward, up, owner, shared):
         if kind == "RadioAntenna":
             set_child(block, "HudText", name)
     assert loot is not None, f"no {LOOT_CONTAINER_SUBTYPE} for {LOOT_CONTAINER}"
+    assert free_tools is not None, f"no {FREE_TOOLS_BLUEPRINT_NAME} for {FREE_TOOLS}"
     return as_sector_object(grid)
 
 
