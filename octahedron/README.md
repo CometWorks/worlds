@@ -10,7 +10,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
-| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config |
+| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the server's Essentials config |
 | `server/` | the server's world, seed 42 |
 | `ORES.md` | ore statistics of `server/` |
 | `MES.md` | the MES settings and what spawns where |
@@ -56,6 +56,13 @@ downloaded.
   uranium ingots in each large reactor, a full safe zone block (75 zone chips)
   and the gas in the tanks. North Station, the one with the lane to the Moon,
   shares its inventories and production with everyone.
+- Makes the stations the NPC faction's trade stations: the faction is a Trader
+  with a bank account, and each station grid has a station entry, so the
+  economy stocks its store and contract blocks. The game's own trade factions
+  and their procedural stations are off (`GenerateFactionsOnStart` false).
+  The entries name no safe zone (`SafeZoneEntityId` 0); with one, the economy
+  would delete the station grid when no player is near. That leaves the
+  Services Terminal's repair and salvage without grids to list.
 - Places one Trade Lane along each of the 12 edges and between the Moon
   station and its nearest station, 13 in all. A lane goes both ways: each end
   is an entry toward the other. Every end is a one-block grid with a Trade Lane
@@ -81,7 +88,7 @@ downloaded.
   (`config/relative-top-speed.xml`) and MES (`config/storage`).
 
 `server/` is the script's output as is, never loaded in a game: the first load
-converts it to the binary format and creates the economy's NPC factions. It
+converts it to the binary format and stocks the stores. It
 lists OctahedronOres as a local mod for now. Once the mod is on the Workshop,
 rebuild it with `--ore-mod <id>`; neither a server nor a Workshop world can use
 a local mod. The `thumb.jpg` is still the Star System scenario's.
@@ -114,6 +121,15 @@ game update that changes the planet or voxel material definitions or maps.
   to characters on short teleports. The 500 km world radius, braking from
   450 km, needs a plugin (SE1-0119).
 - In-game scripts are off until the script whitelist exists.
+- Radiation is on (planets, weather, blocks); solar radiation (`SolarRadiationIntensity`)
+  and hunger (`FoodConsumptionRate`) stay at 0.
+- Every economy tick the game refills each trade station: fuel, batteries,
+  gas, ice in the gas generators, and loot (credits included) in every empty
+  cargo container, which it then hides. On the server the Essentials plugin
+  replaces that with `config/essentials.cfg`: loot only into the one
+  faction-only "Station Loot" cargo terminal per station, and no ice, so
+  North Station's shared cargo and oxygen generators can't be farmed. A world
+  without the plugin, like the design world, has the game's refill.
 - The asteroid ore settings are vanilla's (DepositsCountCoefficient 2,
   DepositSizeDenominator 30, HarvestRatioMultiplier 1), not the Star System
   scenario's sparser 1, 60 and 0.8. See `ORES.md`.

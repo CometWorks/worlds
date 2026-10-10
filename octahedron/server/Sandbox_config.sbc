@@ -91,7 +91,7 @@
     <HarvestRatioMultiplier>1</HarvestRatioMultiplier>
     <TradeFactionsCount>10</TradeFactionsCount>
     <ScrapEnabled>false</ScrapEnabled>
-    <EnableRadiation>false</EnableRadiation>
+    <EnableRadiation>true</EnableRadiation>
     <SolarRadiationIntensity>0</SolarRadiationIntensity>
     <FoodConsumptionRate>0</FoodConsumptionRate>
     <EnableSurvivalBuffs>false</EnableSurvivalBuffs>

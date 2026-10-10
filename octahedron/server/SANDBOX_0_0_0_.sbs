@@ -1839,7 +1839,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -1967,7 +1967,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -36511,7 +36511,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -71055,7 +71055,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -105599,7 +105599,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -140143,7 +140143,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -174687,7 +174687,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>
@@ -209231,7 +209231,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               </ComponentData>
             </Components>
           </ComponentContainer>
-          <CustomName>* Toolbox - Station - Hidden Special (shared)</CustomName>
+          <CustomName>Station Loot</CustomName>
           <ShowOnHUD>false</ShowOnHUD>
           <ShowInTerminal>false</ShowInTerminal>
           <ShowInToolbarConfig>false</ShowInToolbarConfig>

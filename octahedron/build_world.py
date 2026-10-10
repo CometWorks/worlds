@@ -75,6 +75,8 @@ LANE_RING_INTERVAL = 10_000
 LANE_CLEARANCE = 1_000.0
 
 NPC_NAME = "Octahedron Authority"
+# Topped back up every economy tick; buying from a station needs nothing from its cargo
+NPC_BALANCE = 1_000_000_000
 NPC_TAG = "OCT"
 # Blocks players use on a station, shared with everyone; everything else stays with the owner's faction
 PUBLIC_BLOCKS = {
@@ -87,6 +89,11 @@ SHARED_BLOCKS = PUBLIC_BLOCKS | {
     "CargoContainer", "Assembler", "Refinery", "OxygenGenerator", "OxygenTank",
     "ConveyorSorter",
 }  # fmt: skip
+# The one container per station the economy's refill puts loot into, through the Essentials
+# plugin's StationLootContainerName (config/essentials.cfg). It stays with the faction on every
+# station, so the loot it gets each economy tick can't be farmed.
+LOOT_CONTAINER = "Station Loot"
+LOOT_CONTAINER_SUBTYPE = "LargeBlockCargoTerminal"
 # What a station starts with; every other inventory and production queue starts empty
 REACTOR_URANIUM = 10_000
 # The safe zone block's 5 L, times BlocksInventorySizeMultiplier, of 0.2 L zone chips
@@ -130,7 +137,10 @@ SETTINGS = {
     "EnableDrones": "false",
     "GlobalEncounterCap": 0,
     "EnablePlanetaryEncounters": "false",
-    "EnableRadiation": "false",
+    # Our stations trade; the game's own trade factions and their stations stay out
+    # (GenerateFactionsOnStart false in the economy component, see add_trade_stations)
+    "EnableEconomy": "true",
+    "EnableRadiation": "true",
     "FoodConsumptionRate": 0,
     "EnableSurvivalBuffs": "false",
     "EnableReducedStatsOnRespawn": "false",
@@ -431,6 +441,7 @@ def station(template, ids, name, center, forward, up, owner, shared):
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
+    loot = None
     for block in grid.find("CubeBlocks"):
         if block.find("Owner") is None:
             continue
@@ -438,6 +449,10 @@ def station(template, ids, name, center, forward, up, owner, shared):
         kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
         public = SHARED_BLOCKS if shared else PUBLIC_BLOCKS
         block.find("ShareMode").text = "All" if kind in public else "Faction"
+        if loot is None and block.findtext("SubtypeName") == LOOT_CONTAINER_SUBTYPE:
+            loot = block
+            set_child(block, "CustomName", LOOT_CONTAINER)
+            block.find("ShareMode").text = "Faction"
         stock(block, kind)
         if (
             kind == "MedicalRoom"
@@ -447,6 +462,7 @@ def station(template, ids, name, center, forward, up, owner, shared):
             set_child(block, "SpawnName", name)
         if kind == "RadioAntenna":
             set_child(block, "HudText", name)
+    assert loot is not None, f"no {LOOT_CONTAINER_SUBTYPE} for {LOOT_CONTAINER}"
     return as_sector_object(grid)
 
 
@@ -765,11 +781,52 @@ def add_npc(checkpoint, ids):
     el(faction, "AutoAcceptPeace", "true")
     el(faction, "AcceptHumans", "false")
     el(faction, "EnableFriendlyFire", "false")
-    el(faction, "FactionType", "None")
+    # A trade faction: the economy stocks its stations' stores and offers contracts there
+    el(faction, "FactionType", "Trader")
+    el(faction, "FactionTypeString", "Trader")
     item = el(factions.find("Players/dictionary"), "item")
     el(item, "Key", identity_id, **{XSI_TYPE: "xsd:long"})
     el(item, "Value", faction_id, **{XSI_TYPE: "xsd:long"})
-    return identity_id
+    return identity_id, faction
+
+
+def add_trade_stations(checkpoint, ids, faction, stations):
+    """Makes the station grids the faction's trade stations, with stations given as
+    name -> (grid entity id, center, forward, up), and gives the faction its money.
+
+    SafeZoneEntityId stays 0: with a live safe zone there, the economy closes the
+    station grid whenever no player is near and spawns its prefab on the next visit.
+    The cost is the Services Terminal's repair and salvage, which list grids in
+    that safe zone only, and the station bots."""
+    faction_id = faction.findtext("FactionId")
+    entries = el(faction, "Stations")
+    for name, (grid_id, center, forward, up) in stations.items():
+        entry = el(entries, "MyObjectBuilder_Station")
+        el(entry, "Id", ids.new(12))
+        vector(entry, "Position", center)
+        vector(entry, "Up", up)
+        vector(entry, "Forward", forward)
+        el(entry, "StationType", "SpaceStation")
+        el(entry, "IsDeepSpaceStation", "false")
+        el(entry, "StationEntityId", grid_id)
+        el(entry, "FactionId", faction_id)
+        el(entry, "PrefabName")
+        el(entry, "SafeZoneEntityId", 0)
+        el(entry, "StoreItems")
+        el(entry, "IsOnPlanetWithAtmosphere", "false")
+        el(entry, "Name", name)
+    components = checkpoint.find("SessionComponents")
+    bank = el(components, "MyObjectBuilder_SessionComponent")
+    bank.set(XSI_TYPE, "MyObjectBuilder_BankingSystem")
+    account = el(el(bank, "Accounts"), "MyObjectBuilder_AccountEntry")
+    el(account, "OwnerIdentifier", faction_id)
+    details = el(account, "Account")
+    el(details, "OwnerIdentifier", faction_id)
+    el(details, "Balance", NPC_BALANCE)
+    el(bank, "OverallBalance", NPC_BALANCE)
+    economy = el(components, "MyObjectBuilder_SessionComponent")
+    economy.set(XSI_TYPE, "MyObjectBuilder_SessionComponentEconomy")
+    el(economy, "GenerateFactionsOnStart", "false")
 
 
 def clean_checkpoint(checkpoint):
@@ -846,15 +903,16 @@ def main():
     # The one random generator of the world; every random choice below draws from it in order
     rng = random.Random(args.seed)
     ids = Ids(rng)
-    owner = add_npc(checkpoint, ids)
+    owner, faction = add_npc(checkpoint, ids)
     places, edges = layout(earth, moon)
     template = ET.parse(STATION_BLUEPRINT).getroot().find(".//CubeGrid")
     # The Earth station of the Moon lane belongs to no one, so everyone can always spawn there
     shared = edges[-1][0]
+    trade_stations = {}
     for name, (center, forward, up) in places.items():
-        objects.append(
-            station(template, ids, name, center, forward, up, owner, name == shared)
-        )
+        grid = station(template, ids, name, center, forward, up, owner, name == shared)
+        objects.append(grid)
+        trade_stations[name] = (grid.findtext("EntityId"), center, forward, up)
         objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
 
     lane_list = lanes(places, edges)
@@ -878,6 +936,8 @@ def main():
     ):
         (out / f"{storage}.vx2").write_bytes(data)
         objects.append(voxel_map(ids, storage, center, size, rng))
+    # Drawn last, so the economy's ids leave every id and asteroid above as they were
+    add_trade_stations(checkpoint, ids, faction, trade_stations)
 
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),

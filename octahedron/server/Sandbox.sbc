@@ -181,7 +181,7 @@
     <HarvestRatioMultiplier>1</HarvestRatioMultiplier>
     <TradeFactionsCount>10</TradeFactionsCount>
     <ScrapEnabled>false</ScrapEnabled>
-    <EnableRadiation>false</EnableRadiation>
+    <EnableRadiation>true</EnableRadiation>
     <SolarRadiationIntensity>0</SolarRadiationIntensity>
     <FoodConsumptionRate>0</FoodConsumptionRate>
     <EnableSurvivalBuffs>false</EnableSurvivalBuffs>
@@ -262,7 +262,115 @@
         <AutoAcceptPeace>true</AutoAcceptPeace>
         <AcceptHumans>false</AcceptHumans>
         <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
+        <FactionType>Trader</FactionType>
+        <FactionTypeString>Trader</FactionTypeString>
+        <Stations>
+          <MyObjectBuilder_Station>
+            <Id>908601865943045097</Id>
+            <Position x="0.0" y="140000.0" z="0.0" />
+            <Up x="0.0" y="1.0" z="0.0" />
+            <Forward x="-0.0" y="-0.0" z="-1.0" />
+            <StationType>SpaceStation</StationType>
+            <IsDeepSpaceStation>false</IsDeepSpaceStation>
+            <StationEntityId>101197766977030844</StationEntityId>
+            <FactionId>269607123185769169</FactionId>
+            <PrefabName />
+            <SafeZoneEntityId>0</SafeZoneEntityId>
+            <StoreItems />
+            <IsOnPlanetWithAtmosphere>false</IsOnPlanetWithAtmosphere>
+            <Name>North Station</Name>
+          </MyObjectBuilder_Station>
+          <MyObjectBuilder_Station>
+            <Id>876851909879970129</Id>
+            <Position x="0.0" y="-140000.0" z="0.0" />
+            <Up x="0.0" y="1.0" z="0.0" />
+            <Forward x="-0.0" y="-0.0" z="-1.0" />
+            <StationType>SpaceStation</StationType>
+            <IsDeepSpaceStation>false</IsDeepSpaceStation>
+            <StationEntityId>107125878253522413</StationEntityId>
+            <FactionId>269607123185769169</FactionId>
+            <PrefabName />
+            <SafeZoneEntityId>0</SafeZoneEntityId>
+            <StoreItems />
+            <IsOnPlanetWithAtmosphere>false</IsOnPlanetWithAtmosphere>
+            <Name>South Station</Name>
+          </MyObjectBuilder_Station>
+          <MyObjectBuilder_Station>
+            <Id>892661752119181647</Id>
+            <Position x="140000.0" y="0.0" z="0.0" />
+            <Up x="0.0" y="1.0" z="0.0" />
+            <Forward x="-1.0" y="0.0" z="0.0" />
+            <StationType>SpaceStation</StationType>
+            <IsDeepSpaceStation>false</IsDeepSpaceStation>
+            <StationEntityId>102605898965279832</StationEntityId>
+            <FactionId>269607123185769169</FactionId>
+            <PrefabName />
+            <SafeZoneEntityId>0</SafeZoneEntityId>
+            <StoreItems />
+            <IsOnPlanetWithAtmosphere>false</IsOnPlanetWithAtmosphere>
+            <Name>Alpha Station</Name>
+          </MyObjectBuilder_Station>
+          <MyObjectBuilder_Station>
+            <Id>896819027983665345</Id>
+            <Position x="0.0" y="0.0" z="140000.0" />
+            <Up x="0.0" y="1.0" z="0.0" />
+            <Forward x="0.0" y="0.0" z="-1.0" />
+            <StationType>SpaceStation</StationType>
+            <IsDeepSpaceStation>false</IsDeepSpaceStation>
+            <StationEntityId>101744925466580896</StationEntityId>
+            <FactionId>269607123185769169</FactionId>
+            <PrefabName />
+            <SafeZoneEntityId>0</SafeZoneEntityId>
+            <StoreItems />
+            <IsOnPlanetWithAtmosphere>false</IsOnPlanetWithAtmosphere>
+            <Name>Beta Station</Name>
+          </MyObjectBuilder_Station>
+          <MyObjectBuilder_Station>
+            <Id>871054687995665600</Id>
+            <Position x="-140000.0" y="0.0" z="0.0" />
+            <Up x="0.0" y="1.0" z="0.0" />
+            <Forward x="1.0" y="0.0" z="0.0" />
+            <StationType>SpaceStation</StationType>
+            <IsDeepSpaceStation>false</IsDeepSpaceStation>
+            <StationEntityId>118321372015532228</StationEntityId>
+            <FactionId>269607123185769169</FactionId>
+            <PrefabName />
+            <SafeZoneEntityId>0</SafeZoneEntityId>
+            <StoreItems />
+            <IsOnPlanetWithAtmosphere>false</IsOnPlanetWithAtmosphere>
+            <Name>Gamma Station</Name>
+          </MyObjectBuilder_Station>
+          <MyObjectBuilder_Station>
+            <Id>931867828482676617</Id>
+            <Position x="0.0" y="0.0" z="-140000.0" />
+            <Up x="0.0" y="1.0" z="0.0" />
+            <Forward x="0.0" y="0.0" z="1.0" />
+            <StationType>SpaceStation</StationType>
+            <IsDeepSpaceStation>false</IsDeepSpaceStation>
+            <StationEntityId>127920713868146153</StationEntityId>
+            <FactionId>269607123185769169</FactionId>
+            <PrefabName />
+            <SafeZoneEntityId>0</SafeZoneEntityId>
+            <StoreItems />
+            <IsOnPlanetWithAtmosphere>false</IsOnPlanetWithAtmosphere>
+            <Name>Delta Station</Name>
+          </MyObjectBuilder_Station>
+          <MyObjectBuilder_Station>
+            <Id>883227502714739105</Id>
+            <Position x="10749.013420934254" y="137627.65914733286" z="-74539.78935747474" />
+            <Up x="0.0" y="1.0" z="0.0" />
+            <Forward x="0.14272864963406623" y="0.0" z="-0.9897618564956097" />
+            <StationType>SpaceStation</StationType>
+            <IsDeepSpaceStation>false</IsDeepSpaceStation>
+            <StationEntityId>118363774393739852</StationEntityId>
+            <FactionId>269607123185769169</FactionId>
+            <PrefabName />
+            <SafeZoneEntityId>0</SafeZoneEntityId>
+            <StoreItems />
+            <IsOnPlanetWithAtmosphere>false</IsOnPlanetWithAtmosphere>
+            <Name>Moon Station</Name>
+          </MyObjectBuilder_Station>
+        </Stations>
       </MyObjectBuilder_Faction>
     </Factions>
     <Players>
@@ -575,6 +683,21 @@
     <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_PirateAntennas">
       <PiratesIdentity>144115188075855894</PiratesIdentity>
       <Drones />
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_BankingSystem">
+      <Accounts>
+        <MyObjectBuilder_AccountEntry>
+          <OwnerIdentifier>269607123185769169</OwnerIdentifier>
+          <Account>
+            <OwnerIdentifier>269607123185769169</OwnerIdentifier>
+            <Balance>1000000000</Balance>
+          </Account>
+        </MyObjectBuilder_AccountEntry>
+      </Accounts>
+      <OverallBalance>1000000000</OverallBalance>
+    </MyObjectBuilder_SessionComponent>
+    <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_SessionComponentEconomy">
+      <GenerateFactionsOnStart>false</GenerateFactionsOnStart>
     </MyObjectBuilder_SessionComponent>
   </SessionComponents>
   <GameDefinition Type="MyObjectBuilder_GameDefinition" Subtype="Default" />
