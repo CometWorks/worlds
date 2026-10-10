@@ -121,6 +121,10 @@ SETTINGS = {
     "EnableWolfs": "false",
     "EnableSpiders": "false",
     "EnableScripterRole": "false",
+    # Vanilla defaults; the Star System scenario has sparser asteroid ores (1, 60, 0.8)
+    "DepositsCountCoefficient": 2,
+    "DepositSizeDenominator": 30,
+    "HarvestRatioMultiplier": 1,
 }
 
 # Per player, by block pair name; vanilla counts built blocks, not active ones

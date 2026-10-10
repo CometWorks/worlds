@@ -176,9 +176,9 @@
     <HasPlanets>true</HasPlanets>
     <EnableSpaceSuitRespawn>false</EnableSpaceSuitRespawn>
     <EnableEconomy>true</EnableEconomy>
-    <DepositsCountCoefficient>1</DepositsCountCoefficient>
-    <DepositSizeDenominator>60</DepositSizeDenominator>
-    <HarvestRatioMultiplier>0.8</HarvestRatioMultiplier>
+    <DepositsCountCoefficient>2</DepositsCountCoefficient>
+    <DepositSizeDenominator>30</DepositSizeDenominator>
+    <HarvestRatioMultiplier>1</HarvestRatioMultiplier>
     <TradeFactionsCount>10</TradeFactionsCount>
     <ScrapEnabled>false</ScrapEnabled>
     <EnableRadiation>false</EnableRadiation>

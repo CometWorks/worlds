@@ -105,7 +105,6 @@ game update that changes the planet or voxel material definitions or maps.
   to characters on short teleports. The 1000 km world radius needs a plugin
   (SE1-0119).
 - In-game scripts are off until the script whitelist exists.
-- The asteroid settings come from the Star System scenario
-  (DepositsCountCoefficient 1, DepositSizeDenominator 60,
-  HarvestRatioMultiplier 0.8); a new vanilla world has 2, 30 and 1, which
-  gives the asteroids several times more ore. See `ORES.md`.
+- The asteroid ore settings are vanilla's (DepositsCountCoefficient 2,
+  DepositSizeDenominator 30, HarvestRatioMultiplier 1), not the Star System
+  scenario's sparser 1, 60 and 0.8. See `ORES.md`.
