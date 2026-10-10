@@ -96,7 +96,7 @@ SETTINGS = {
     "StartInRespawnScreen": "true",
     # No vanilla world edge: it is a cube that deletes what leaves it, and while it
     # is on, a character or grid that drops out of a Havok cluster's broadphase is
-    # killed or deleted (MyPhysics.CreateHkWorld). The 1000 km edge is a plugin's.
+    # killed or deleted (MyPhysics.CreateHkWorld). The 500 km edge is a plugin's.
     "WorldSizeKm": 0,
     "BlockLimitsEnabled": "PER_PLAYER",
     "TotalPCU": 1_000_000,
