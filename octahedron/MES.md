@@ -2,7 +2,7 @@
 
 How Modular Encounters Systems (MES) is set up on the Octahedron world, what it spawns where, how the spawns follow the players' threat score, and what looks risky. For the server admins.
 
-Worked out on Linux on 2026-10-10 from MES 2.74.05 (workshop 1521905890) and the spawn group definitions of the 15 mods in `config/mes-mods.xml`, as downloaded under `~/.steam/steam/steamapps/workshop/content/244850/`. Not tested in game. Figures marked *estimate* come from the MES rules and a simulation of its selection code, not from a running server.
+Worked out on Linux on 2026-10-10 from MES 2.74.05 (workshop 1521905890) and the spawn group definitions of the 14 mods in `config/mes-mods.xml`, as downloaded under `~/.steam/steam/steamapps/workshop/content/244850/`. Not tested in game. Figures marked *estimate* come from the MES rules and a simulation of its selection code, not from a running server.
 
 Source paths below are relative to the MES script folder, `1521905890/Data/Scripts/ModularEncountersSystems/`.
 
@@ -105,18 +105,17 @@ The cargo ship timers keep running in the wrong place: a space cargo attempt whi
 
 ### What spawns, by mod
 
-494 MES spawn groups in 14 mods, plus the vanilla planetary encounters. 330 can be picked by the timers above. The other 164 are spawned only by other NPCs (reinforcements, settlement parts and so on), are admin-only, or are never eligible. Shares are the chance that an attempt of that type at that location picks the mod. The first number is for threat ≈10 (a new player), the second for threat ≈800, both before the Xenvakian Empire is unlocked (*estimate*, simulated with the selection code; assumptions below).
+485 MES spawn groups in 13 mods, plus the vanilla planetary encounters. 321 can be picked by the timers above. The other 164 are spawned only by other NPCs (reinforcements, settlement parts and so on), are admin-only, or are never eligible. Shares are the chance that an attempt of that type at that location picks the mod. The first number is for threat ≈10 (a new player), the second for threat ≈800, both before the Xenvakian Empire is unlocked (*estimate*, simulated with the selection code; assumptions below). Pravda was removed from the mod list after the simulation; its 9 space cargo groups had 0 % at threat ≈10 and 9 % at ≈800, so the other space cargo shares at ≈800 are scaled up by 1/0.91.
 
 | Mod | Type, location | Groups | Threat gate | Share | Notes |
 |---|---|---|---|---|---|
-| Parallax | space cargo S | 13 | none | 23 → 18 % | hostile (`Enemies`) |
-| Imber | space cargo S | 12 | none | 22 → 18 % | hostile |
-| Independent Contractors | space cargo S | 18 | none | 22 → 18 % | hostile |
-| Terran Heavy Industries | space cargo S | 8 | none (Fafnir cruiser 1500+, 5 % chance) | 11 → 9 % | neutral traders and miners |
-| Trade Operators Coalition | space cargo S | 2 | none | 10 → 9 % | neutral; Wandering Merchant |
-| Xenvakian Empire | space cargo S | 1 at first, then 7 per reputation tier | none for the probe, 250–550 for warships | 11 → 10 % | progression, see below |
-| Pravda | space cargo S | 9 | 350 / 700 / 1000 within 10 km | 0 → 9 % | neutral warships |
-| Space Pirates Enhanced | space cargo S | 4 | 720–1500 | 0 → 9 % | hostile |
+| Parallax | space cargo S | 13 | none | 23 → 20 % | hostile (`Enemies`) |
+| Imber | space cargo S | 12 | none | 22 → 20 % | hostile |
+| Independent Contractors | space cargo S | 18 | none | 22 → 20 % | hostile |
+| Terran Heavy Industries | space cargo S | 8 | none (Fafnir cruiser 1500+, 5 % chance) | 11 → 10 % | neutral traders and miners |
+| Trade Operators Coalition | space cargo S | 2 | none | 10 → 10 % | neutral; Wandering Merchant |
+| Xenvakian Empire | space cargo S | 1 at first, then 7 per reputation tier | none for the probe, 250–550 for warships | 11 → 11 % | progression, see below |
+| Space Pirates Enhanced | space cargo S | 4 | 720–1500 | 0 → 10 % | hostile |
 | Weyland-Yutani | random encounter S | 24 | none | 41 → 36 % | hostile remote stations |
 | Terran Heavy Industries | random encounter S | 3 | Space Station 250+ | 15 → 13 % | |
 | Trade Operators Coalition | random encounter S | 5 | none; ≥100 km from another TOC station | 15 → 12 % | trade stations |
@@ -197,14 +196,14 @@ Modded blocks count double (weapons, turrets and gravity blocks four times). One
 | 0–5 | on foot, no grids within 5 km | all ungated cargo: Parallax, Imber, Incon, THI, TOC merchant, the Xenvakian probe; ungated encounters: WLYC remote stations, THI, TOC stations, Wreckage, Imber drones | AS2 band 0 (pods, respawn), vanilla outposts, Wreckage, Imber/Parallax/Incon outposts; Wasteland mediums; Incon/Imber/TOC large | Incon/Parallax/Imber gravity cargo | as EL without Weyland-Yutani, SPRT and THI; skip-air cargo |
 | 5–60 | new player's small ship, small outpost | same | AS2 band 1 (5–40), then band 2 (40+) | same | same |
 | 60–200 | basic large ship | same | AS2 band 3 (60+ within 10 km) | same | same |
-| 200–700 | armed large ship, mid-game base | + SPRT raiding outposts and stations (195–325), THI Space Station (250), Pravda Derzky/Mako/Moskit (350), Xenvakian warships (250–550, once unlocked) | + Weyland-Yutani bases (280–640), SPRT facilities (358–455), THI Mammoth and Buffalo (250) | + Xenvakian Cobra and Rakshi | unchanged |
-| 700–1500 | base with a few warships, or a busy hub | + Pravda Gaede/Nideggen (700) and Gnevny/Graf Spee/Prinz Eugen/Weser (1000), SPRT Drifting Pursuant (720), Xenvakian Final Boss (700 within 5 km) | + SPRT Drifting Pursuant (730), Weyland-Yutani large bases (960) | unchanged | unchanged |
+| 200–700 | armed large ship, mid-game base | + SPRT raiding outposts and stations (195–325), THI Space Station (250), Xenvakian warships (250–550, once unlocked) | + Weyland-Yutani bases (280–640), SPRT facilities (358–455), THI Mammoth and Buffalo (250) | + Xenvakian Cobra and Rakshi | unchanged |
+| 700–1500 | base with a few warships, or a busy hub | + SPRT Drifting Pursuant (720), Xenvakian Final Boss (700 within 5 km) | + SPRT Drifting Pursuant (730), Weyland-Yutani large bases (960) | unchanged | unchanged |
 | ≥1500 | end-game base with a fleet within 15 km | + boss signals (Parallax, Imber, Incon), SPRT Stinging Adversary (1400), Light and Heavy Raider (1440, 1500), THI Fafnir (5 %) | + Parallax and Imber bosses, Weyland-Yutani 1480/1500 bases, SPRT Stinging Adversary | + Parallax and Imber bosses | + Parallax and Imber bosses, Stinging Adversary |
 
 What this means for the theme:
 
 - A new player meets hostile warships from the start. In space about two thirds of the cargo ships (Parallax, Imber, Incon, all `Enemies`) are not gated by threat at all, and the Imber Drone Patrol is one random encounter in seven.
-- Difficulty barely grows with the player. At threat 1600 the gated Pravda and SPRT ships are still only ~18 % of space cargo ships; the rest is the same pool a new player gets. Most of the gated content is on EarthLike's surface (Weyland-Yutani, SPRT) and in the boss signals.
+- Difficulty barely grows with the player. At threat 1600 the gated SPRT ships are still only ~10 % of space cargo ships; the rest is the same pool a new player gets. Most of the gated content is on EarthLike's surface (Weyland-Yutani, SPRT) and in the boss signals.
 - The score belongs to the place, not the player. Everyone at a station shares the sum of all player grids parked within 5–15 km, so a new player at a busy hub gets the hub's threat. Players start on stations.
 
 ## 4. Things that look wrong or risky
@@ -226,7 +225,7 @@ Checked and fine: space spawns cannot start inside EarthLike's or the Moon's gra
 
 ## Appendix A: timer-spawned groups
 
-Codes: SC space cargo, RE random encounter, AC atmospheric cargo, GC gravity cargo, PI-S/M/L small/medium/large installation; locations S, EH, EL, M as in section 2. Threat is the minimum score (5 km range unless noted), "–" for no check. Weight is the group's `Frequency`. Groups with escort variants (Parallax, Imber, Incon, Pravda) spawn with escorts 20 % of the time.
+Codes: SC space cargo, RE random encounter, AC atmospheric cargo, GC gravity cargo, PI-S/M/L small/medium/large installation; locations S, EH, EL, M as in section 2. Threat is the minimum score (5 km range unless noted), "–" for no check. Weight is the group's `Frequency`. Groups with escort variants (Parallax, Imber, Incon) spawn with escorts 20 % of the time.
 
 ### Wreckage (WRECKS)
 
@@ -293,16 +292,6 @@ All installations need air (EarthLike only).
 | TOC-SpawnGroup-CargoShip | AC EL; SC S | 1 | only within 25 km of a TOC station |
 | TOC-SpawnGroup-BrazierDockTradeStation, -GSX5010ChronoStation, -NanyangStation, -OrbitalTradeStation, -PoseidonStation | RE S | 3 | no other TOC station within 100 km; set up their own safe zone |
 | TOC-SpawnGroup-PlanetaryLogisticsOutpost, -PlanetaryTradeStationMkI, -TheTower, -TheHangar, -LittleCity | PI-L EL/M | 5 | no other TOC station within 25 km |
-
-### Pravda (PRAVDA, neutral)
-
-All space cargo ships, threat within 10 km.
-
-| Group | Threat | Weight |
-|---|---|---|
-| Pravda-SpawnGroup-Mako, -Derzky, -Moskit | 350 | 5, 4, 4 |
-| Pravda-SpawnGroup-Gaede, -Nideggen | 700 | 3, 3 |
-| Pravda-SpawnGroup-GrafSpee, -PrinzEugen, -Gnevny, -Weser | 1000 | 2, 2, 1, 1 |
 
 ### Parallax (PARALLAX)
 
