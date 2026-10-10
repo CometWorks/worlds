@@ -6,8 +6,14 @@
 Keeps EarthLike and the Moon, applies the world settings and mods, and places
 the 7 stations, the Trade Lanes endpoints, the safe zones and the asteroid ring.
 The asteroids are vanilla procedural ones saved as seed and size only, so the
-game generates their shape and ores. --seed picks them: the server and the
-Workshop copy are built with different seeds.
+game generates their shape and ores. The ring lies around EarthLike's magnetic
+axis as the Aurora plugin draws it at the world's start: the north pole tilted
+25 degrees away from the sun.
+
+--seed (default 42) drives one random generator for everything random in the
+world: entity ids, the asteroids' places, sizes, rotations and seeds. The same
+seed gives the same world. Build the OctahedronOres mod with the same seed
+(make_ore_mod.py), so a world with another seed has its ores elsewhere.
 
 --ore-mod is the Workshop id of the OctahedronOres mod; 0 (default) lists it as
 a local mod, which needs the mod folder in the game's Mods folder.
@@ -43,6 +49,9 @@ RING_RADIUS = 120_000.0
 RING_WIDTH = 4_000.0
 RING_HEIGHT_SIGMA = 300.0
 RING_ASTEROIDS = 400
+# The se-aurora plugin's default MagneticAxisTilt: its magnetic axis is the planet's
+# north tilted this far away from the sun (AuroraRenderer.ComputeMagneticAxis)
+AURORA_TILT_DEGREES = 25.0
 # Vanilla generator 4 sizes, pow2 storages; the weights favor the smaller ones
 ASTEROID_SIZES = ((256, 5), (512, 4), (1024, 1))
 ICE_SHAPE = "Asteroid512-001"
@@ -552,8 +561,29 @@ def lanes(places, edges):
     return result
 
 
-def asteroid_ring(rng, earth, places, lane_list):
-    """(storage name, center, size, vx2 bytes) for the ring and its 4 ice asteroids."""
+def sun_direction(sector):
+    """Direction to the sun at the world's start (MySector, Vector3.CreateFromAzimuthAndElevation)."""
+    environment = sector.find("Environment")
+    azimuth = float(environment.findtext("SunAzimuth"))
+    elevation = float(environment.findtext("SunElevation"))
+    return (
+        -math.cos(elevation) * math.sin(azimuth),
+        math.sin(elevation),
+        -math.cos(elevation) * math.cos(azimuth),
+    )
+
+
+def magnetic_axis(planet, sun):
+    """The planet's north tilted away from the sun, as se-aurora computes it."""
+    away = sub(sun, mul(planet.up, dot(sun, planet.up)))
+    if dot(away, away) < 1e-6:
+        return planet.up
+    tilt = math.radians(AURORA_TILT_DEGREES)
+    return norm(sub(mul(planet.up, math.cos(tilt)), mul(norm(away), math.sin(tilt))))
+
+
+def asteroid_ring(rng, earth, axis, places, lane_list):
+    """(storage name, center, size, vx2 bytes) for the ring around axis and its 4 ice asteroids."""
     asteroids = []
     taken = []
     equator = [
@@ -562,9 +592,12 @@ def asteroid_ring(rng, earth, places, lane_list):
         if abs(dot(sub(center, earth.center), earth.up)) < 1
     ]
     for i, name in enumerate(equator):
+        # Halfway between two stations, brought into the ring's plane
         a = sub(places[name][0], earth.center)
         b = sub(places[equator[(i + 1) % len(equator)]][0], earth.center)
-        center = add(earth.center, mul(norm(add(a, b)), RING_RADIUS))
+        halfway = add(a, b)
+        in_plane = sub(halfway, mul(axis, dot(halfway, axis)))
+        center = add(earth.center, mul(norm(in_plane), RING_RADIUS))
         size = storage_size(SCENARIO.parents[1] / f"VoxelMaps/{ICE_SHAPE}.vx2")
         asteroids.append(
             (
@@ -585,9 +618,10 @@ def asteroid_ring(rng, earth, places, lane_list):
             -3 * RING_HEIGHT_SIGMA,
             min(3 * RING_HEIGHT_SIGMA, rng.gauss(0, RING_HEIGHT_SIGMA)),
         )
-        right = cross(earth.forward, earth.up)
-        radial = add(mul(right, math.cos(angle)), mul(earth.forward, math.sin(angle)))
-        center = add(earth.center, add(mul(radial, radius), mul(earth.up, height)))
+        u = perpendicular(axis)
+        v = cross(axis, u)
+        radial = add(mul(u, math.cos(angle)), mul(v, math.sin(angle)))
+        center = add(earth.center, add(mul(radial, radius), mul(axis, height)))
         if any(dist(center, c) < r + size / 2 + 200 for c, r in taken):
             continue
         if any(
@@ -710,7 +744,9 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("output", type=Path)
-    parser.add_argument("--seed", type=int, default=1, help="asteroid ring seed")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="seed of everything random in the world"
+    )
     parser.add_argument(
         "--ore-mod",
         type=int,
@@ -743,8 +779,9 @@ def main():
     apply_settings(checkpoint, args.ore_mod)
     apply_settings(config_tree.getroot(), args.ore_mod)
 
-    # Ids and stations don't depend on the seed, only the asteroids do
-    ids = Ids(random.Random("octahedron"))
+    # The one random generator of the world; every random choice below draws from it in order
+    rng = random.Random(args.seed)
+    ids = Ids(rng)
     owner = add_npc(checkpoint, ids)
     places, edges = layout(earth, moon)
     template = ET.parse(STATION_BLUEPRINT).getroot().find(".//CubeGrid")
@@ -767,8 +804,10 @@ def main():
                 safe_zone(ids, position, LANE_SAFE_ZONE_RADIUS, f"TL {lane_id} {here}")
             )
 
-    rng = random.Random(args.seed)
-    for storage, center, size, data in asteroid_ring(rng, earth, places, lane_list):
+    axis = magnetic_axis(earth, sun_direction(sector))
+    for storage, center, size, data in asteroid_ring(
+        rng, earth, axis, places, lane_list
+    ):
         (out / f"{storage}.vx2").write_bytes(data)
         objects.append(voxel_map(ids, storage, center, size, rng))
 

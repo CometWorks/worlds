@@ -245,14 +245,14 @@
         <EnableFriendlyFire>false</EnableFriendlyFire>
       </MyObjectBuilder_Faction>
       <MyObjectBuilder_Faction>
-        <FactionId>235869712423806600</FactionId>
+        <FactionId>269607123185769169</FactionId>
         <Tag>OCT</Tag>
         <Name>Octahedron Authority</Name>
         <Description>Keeps the Octahedron stations and Trade Lanes running.</Description>
         <PrivateInfo />
         <Members>
           <MyObjectBuilder_FactionMember>
-            <PlayerId>147864213322693806</PlayerId>
+            <PlayerId>152137438111824285</PlayerId>
             <IsLeader>true</IsLeader>
             <IsFounder>true</IsFounder>
           </MyObjectBuilder_FactionMember>
@@ -276,8 +276,8 @@
           <Value xsi:type="xsd:long">270184222006364636</Value>
         </item>
         <item>
-          <Key xsi:type="xsd:long">147864213322693806</Key>
-          <Value xsi:type="xsd:long">235869712423806600</Value>
+          <Key xsi:type="xsd:long">152137438111824285</Key>
+          <Value xsi:type="xsd:long">269607123185769169</Value>
         </item>
       </dictionary>
     </Players>
@@ -424,7 +424,7 @@
       <LastLoginTime>2016-12-19T15:05:33.984439+01:00</LastLoginTime>
     </MyObjectBuilder_Identity>
     <MyObjectBuilder_Identity>
-      <IdentityId>147864213322693806</IdentityId>
+      <IdentityId>152137438111824285</IdentityId>
       <DisplayName>Octahedron Authority</DisplayName>
       <CharacterEntityId>0</CharacterEntityId>
     </MyObjectBuilder_Identity>
@@ -443,7 +443,7 @@
   <NonPlayerIdentities>
     <long>144115188075855894</long>
     <long>144115188075855896</long>
-    <long>147864213322693806</long>
+    <long>152137438111824285</long>
   </NonPlayerIdentities>
   <Gps>
     <dictionary />
