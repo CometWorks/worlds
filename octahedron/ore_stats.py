@@ -188,12 +188,19 @@ def belt(procedural, settings, materials, volumes, harvest):
     return stats, ice_share * len(procedural)
 
 
+def approx(value):
+    """3 significant digits, the most these estimates are good for"""
+    return f"{float(f'{value:.3g}'):,.0f}"
+
+
 def table(stats):
     rows = ["| Ore | Deposits | Ore rock (m³) | Ore (t) |", "|---|---:|---:|---:|"]
     for ore, (deposits, rock, tonnes) in sorted(
         stats.items(), key=lambda item: -item[1][2]
     ):
-        rows.append(f"| {ore} | {deposits:,.0f} | {rock:,.0f} | {tonnes:,.0f} |")
+        rows.append(
+            f"| {ore} | {approx(deposits)} | {approx(rock)} | {approx(tonnes)} |"
+        )
     return "\n".join(rows)
 
 
@@ -257,7 +264,7 @@ def main():
     ]
     for ore in sorted(summary, key=lambda ore: -summary[ore]):
         cells = [
-            f"{stats[ore][2]:,.0f}" if ore in stats else "-"
+            approx(stats[ore][2]) if ore in stats else "-"
             for stats in (earth, moon, asteroids)
         ]
         overview.append(f"| {ore} | " + " | ".join(cells) + " |")
