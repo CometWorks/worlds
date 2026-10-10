@@ -228,6 +228,26 @@
       <PublishedFileId>756153867</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
+    <ModItem FriendlyName="SPY-InfoLCD">
+      <Name>2894286645.sbm</Name>
+      <PublishedFileId>2894286645</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Definition Extension API">
+      <Name>2756894170.sbm</Name>
+      <PublishedFileId>2756894170</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="[QoL] Radio Spectrometry">
+      <Name>2687324923.sbm</Name>
+      <PublishedFileId>2687324923</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Arthur's Lcd Mod">
+      <Name>3730092649.sbm</Name>
+      <PublishedFileId>3730092649</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
     <ModItem FriendlyName="Modular Encounters Systems">
       <Name>1521905890.sbm</Name>
       <PublishedFileId>1521905890</PublishedFileId>

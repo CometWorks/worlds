@@ -200,6 +200,11 @@ MODS = [
     # Visuals: meteor effects, and the Grass voxel material's textures (not EarthLike's definition)
     (3685862625, "Enhanced Meteor Visuals"),
     (756153867, "Grass replacement for Earthlike Environment"),
+    # LCD scripts; Radio Spectrometry needs the Definition Extension API before it
+    (2894286645, "SPY-InfoLCD"),
+    (2756894170, "Definition Extension API"),
+    (2687324923, "[QoL] Radio Spectrometry"),
+    (3730092649, "Arthur's Lcd Mod"),
 ]
 
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
