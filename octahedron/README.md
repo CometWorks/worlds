@@ -90,7 +90,8 @@ downloaded.
   (`SuperRock_001`, 1024 m) filled with ice. The game's own procedural
   asteroids are off (`ProceduralDensity` = 0).
 - Writes the mod configs into the world's `Storage` folder: Relative Top Speed
-  (`config/relative-top-speed.xml`) and MES (`config/storage`).
+  (`config/relative-top-speed.xml`) and MES (`config/storage`: no lunar cargo
+  ships, and no cleanup, so NPC grids stay; see `MES.md`).
 
 `server/` is the script's output as is, never loaded in a game: the first load
 converts it to the binary format and stocks the stores. It
@@ -107,6 +108,10 @@ maps and changes only these:
 - Moon: no gold, silver or platinum. The ore map values of its gold, which
   cover about as many pixels as its magnesium, become uranium 50 to 100 m deep.
 - Asteroids and meteorites: no gold, silver or uranium.
+- Platinum yields 3 times and uranium 5 times the ore per mined voxel
+  (`MinedOreRatio` 3 and 1.5). Platinum is only in asteroids and uranium only
+  on the Moon, so this triples the belt's platinum and quintuples the Moon's
+  uranium.
 - EarthLike keeps its ore rules; it already has gold and silver and no uranium
   or platinum.
 - EarthLike's and the Moon's ore maps (the blue channel of their `*_mat.png`)

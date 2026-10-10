@@ -2,4 +2,8 @@
 <ConfigSpaceCargoShips xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <!-- 0 turns lunar cargo ships off: they spawn just above the gravity edge, too close to the planets -->
   <MinLunarSpawnHeight>0</MinLunarSpawnHeight>
+  <!-- No cleanup: NPC grids stay, the cluster takes partitions without players offline -->
+  <UseCleanupSettings>false</UseCleanupSettings>
+  <!-- Legacy cargo ships at the end of their path despawn when the nearest player is farther than this, so never -->
+  <DespawnDistanceFromPlayer>1000000000</DespawnDistanceFromPlayer>
 </ConfigSpaceCargoShips>

@@ -49,6 +49,9 @@ MOON_URANIUM = {
 }
 MOON_REMOVED = {"Silver_01", "Platinum_01"}
 NOT_IN_ASTEROIDS = ("Gold_01", "Silver_01", "Uraninite_01")
+# Material -> multiplier of its MinedOreRatio, the ore a drill gets per voxel. Platinum is in
+# asteroids only, uranium on the Moon only, so this scales exactly those.
+MINED_ORE_MULTIPLIER = {"Platinum_01": 3, "Uraninite_01": 5}
 
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
 ET.register_namespace("xsi", XSI)
@@ -97,19 +100,28 @@ def asteroid_materials():
     vanilla = ET.parse(DATA / "VoxelMaterials_asteroids.sbc").getroot()
     root = ET.Element("Definitions")
     parent = ET.SubElement(root, "VoxelMaterials")
+    changed = set(NOT_IN_ASTEROIDS) | set(MINED_ORE_MULTIPLIER)
     for material in vanilla.iter("VoxelMaterial"):
-        if material.findtext("Id/SubtypeId") not in NOT_IN_ASTEROIDS:
+        subtype = material.findtext("Id/SubtypeId")
+        if subtype not in changed:
             continue
         material = copy.deepcopy(material)
-        for tag in ("SpawnsInAsteroids", "SpawnsFromMeteorites"):
-            node = material.find(tag)
-            if node is None:
-                node = ET.Element(tag)
-                # Right after IsRare, where vanilla puts them
-                material.insert(list(material).index(material.find("IsRare")) + 1, node)
-            node.text = "false"
+        if subtype in NOT_IN_ASTEROIDS:
+            for tag in ("SpawnsInAsteroids", "SpawnsFromMeteorites"):
+                node = material.find(tag)
+                if node is None:
+                    node = ET.Element(tag)
+                    # Right after IsRare, where vanilla puts them
+                    material.insert(
+                        list(material).index(material.find("IsRare")) + 1, node
+                    )
+                node.text = "false"
+        if subtype in MINED_ORE_MULTIPLIER:
+            node = material.find("MinedOreRatio")
+            ratio = float(node.text) * MINED_ORE_MULTIPLIER[subtype]
+            node.text = f"{ratio:g}"
         parent.append(material)
-    assert len(parent) == len(NOT_IN_ASTEROIDS)
+    assert len(parent) == len(changed)
     return root
 
 

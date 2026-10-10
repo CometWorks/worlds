@@ -15,14 +15,14 @@ MES keeps one XML file per area in the world's `Storage/1521905890.sbm_ModularEn
 | File | Class (`Configuration/`) | Controls | Ours |
 |---|---|---|---|
 | `Config-General.xml` | `ConfigGeneral` | mod weighting, global NPC cap, threat handicap, difficulty, global blacklists | default |
-| `Config-SpaceCargoShips.xml` | `ConfigSpaceCargoShips` | space and lunar cargo ships | `MinLunarSpawnHeight` = 0 |
-| `Config-RandomEncounters.xml` | `ConfigRandomEncounters` | space random encounters | default |
-| `Config-PlanetaryCargoShips.xml` | `ConfigPlanetaryCargoShips` | atmospheric and gravity cargo ships | default |
-| `Config-PlanetaryInstallations.xml` | `ConfigPlanetaryInstallations` | surface installations | default |
-| `Config-BossEncounters.xml` | `ConfigBossEncounters` | boss encounters | default |
-| `Config-ConfigDroneEncounters.xml` (MES's spelling) | `ConfigDroneEncounters` | drone encounters | default |
+| `Config-SpaceCargoShips.xml` | `ConfigSpaceCargoShips` | space and lunar cargo ships | `MinLunarSpawnHeight` = 0, cleanup off, `DespawnDistanceFromPlayer` = 10⁹ m |
+| `Config-RandomEncounters.xml` | `ConfigRandomEncounters` | space random encounters | cleanup off |
+| `Config-PlanetaryCargoShips.xml` | `ConfigPlanetaryCargoShips` | atmospheric and gravity cargo ships | cleanup off |
+| `Config-PlanetaryInstallations.xml` | `ConfigPlanetaryInstallations` | surface installations | cleanup off |
+| `Config-BossEncounters.xml` | `ConfigBossEncounters` | boss encounters | cleanup off |
+| `Config-ConfigDroneEncounters.xml` (MES's spelling) | `ConfigDroneEncounters` | drone encounters | cleanup off |
 | `Config-Creatures.xml` | `ConfigCreatures` | creature spawns | default |
-| `Config-OtherNPCs.xml` | `ConfigOtherNPCs` | cleanup of NPCs spawned by other NPCs (reinforcements) | default |
+| `Config-OtherNPCs.xml` | `ConfigOtherNPCs` | cleanup of NPCs spawned by other NPCs (reinforcements) | cleanup off |
 | `Config-Combat.xml` | `ConfigCombat` | combat/peace phases (off) | default |
 | `Config-Grids.xml`, `Config-CustomBlocks.xml`, `Config-Progression.xml` | | NPC grid tweaks, MES blocks, suit upgrades | default |
 
@@ -52,7 +52,7 @@ Installation size: MES first offers a small one and rolls for medium with a chan
 
 ### Caps and cleanup
 
-| Spawn type | Max of the type around the player | Timeout (spawns / radius / time since the last one) | Cleanup (default values) |
+| Spawn type | Max of the type around the player | Timeout (spawns / radius / time since the last one) | Cleanup (MES defaults, off in Octahedron) |
 |---|---|---|---|
 | Space cargo ship | 15 grids within 15 km | 4 / 10 km / 900 s | at the end of its path when nobody is within 1 km, or when the nearest player is >30 km away |
 | Random encounter | 10 grids within 25 km | 2 / 25 km / 900 s | after 3600 s in total with the nearest player >50 km away (the timer does not reset) |
@@ -60,7 +60,9 @@ Installation size: MES first offers a small one and rolls for medium with a chan
 | Planetary installation | 10 grids within 15 km | 2 / 25 km / 900 s | after 3600 s with the nearest player >50 km away; the timer resets when a player comes back |
 | Boss encounter | 6 grids within 25 km | none | when the nearest player is >50 km away |
 
-`CleanupUnpoweredOverride` is on for every type but random encounters. The code (`Watchers/Cleaning.cs`) applies the `CleanupUnpowered*` values (25 km / 900 s, or 20 km for space cargo ships) to powered grids and the normal ones to unpowered grids, which looks inverted. Cleanup only removes MES-spawned grids (`OnlyCleanNpcsFromMes`), so the stations are safe from it, and it skips groups tagged `IgnoreCleanupRules`.
+Octahedron turns this cleanup off: `UseCleanupSettings` is false for every spawn type, including the "other NPCs" that reinforcements and disowned spawns become, and `DespawnDistanceFromPlayer` of space cargo ships is 10⁹ m, so the legacy cargo ship watcher never despawns a ship at the end of its path (it does when the nearest player is farther than that). NPC grids stay in the world; on the cluster their partitions go offline when no player is near. Despawns written into the mods' AI behavior profiles still happen, since no MES setting reaches them: an AI cargo ship at the end of its path with no player within 1.2 km (`Behavior/CargoShip.cs`), retreating ships, and the profiles' own player-distance and no-target timers (`Behavior/Subsystems/DespawnSystem.cs`). Checked in an offline client: MES loads all 7 config files.
+
+The defaults, for reference: `CleanupUnpoweredOverride` is on for every type but random encounters. The code (`Watchers/Cleaning.cs`) applies the `CleanupUnpowered*` values (25 km / 900 s, or 20 km for space cargo ships) to powered grids and the normal ones to unpowered grids, which looks inverted. Cleanup only removes MES-spawned grids (`OnlyCleanNpcsFromMes`), so the stations are safe from it, and it skips groups tagged `IgnoreCleanupRules`.
 
 ### Global settings in `Config-General.xml`
 
