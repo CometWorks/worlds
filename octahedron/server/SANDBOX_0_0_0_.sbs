@@ -255007,7 +255007,7 @@ RingInterval:10000</Value>
     <MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_VoxelMap">
       <SubtypeName />
       <PositionAndOrientation>
-        <Position x="89193.88337027222" y="34011.1765723793" z="73377.35703383083" />
+        <Position x="89471.88992660421" y="33965.59300711052" z="73719.7639455803" />
         <Forward x="0.2379986176944434" y="-0.8663527446220948" z="0.43907810223387106" />
         <Up x="-0.9642760403177267" y="-0.2648994489785996" z="0.0" />
       </PositionAndOrientation>
@@ -255020,7 +255020,7 @@ RingInterval:10000</Value>
     <MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_VoxelMap">
       <SubtypeName />
       <PositionAndOrientation>
-        <Position x="-88903.04702296614" y="34319.964377071155" z="73391.55153204597" />
+        <Position x="-88890.21599428338" y="34583.175079350076" z="73748.15143517099" />
         <Forward x="0.8037326187914896" y="0.15525180907555505" z="0.5743785800927307" />
         <Up x="0.18965764133593585" y="-0.9818502834357636" z="0.0" />
       </PositionAndOrientation>
@@ -255033,7 +255033,7 @@ RingInterval:10000</Value>
     <MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_VoxelMap">
       <SubtypeName />
       <PositionAndOrientation>
-        <Position x="-89085.01274297741" y="-34263.26343189878" z="-72680.89161424355" />
+        <Position x="-89254.14867201462" y="-34469.76672614947" z="-72326.83310640573" />
         <Forward x="-0.7732123660725667" y="0.3261030992774936" z="0.543874439180659" />
         <Up x="0.3886035222727459" y="0.9214050697045331" z="-0.0" />
       </PositionAndOrientation>
@@ -255046,7 +255046,7 @@ RingInterval:10000</Value>
     <MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_VoxelMap">
       <SubtypeName />
       <PositionAndOrientation>
-        <Position x="88708.51327368859" y="-34367.671943992296" z="-72796.33545440821" />
+        <Position x="88501.14849572824" y="-34678.59021319236" z="-72557.71927989546" />
         <Forward x="-0.9720120167006316" y="-0.2255451203583467" z="-0.06574220921226913" />
         <Up x="-0.22603411331369463" y="0.9741193867378329" z="0.0" />
       </PositionAndOrientation>

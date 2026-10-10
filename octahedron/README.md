@@ -70,7 +70,7 @@ downloaded.
   `ORES.md` counts the asteroids per 15 degrees around it.
 - The asteroids are the game's own procedural ones, saved as seed and size only
   (a `.vx2` of about 100 bytes each), so the game generates their shape and
-  ores. The ice ones are a vanilla prefab shape filled with ice. The game's own
+  ores. The ice ones are a vanilla prefab shape filled with ice, the largest plain one (`SuperRock_001`, 1024 m). The game's own
   procedural asteroids are off (`ProceduralDensity` = 0).
 - Writes the mod configs into the world's `Storage` folder: Relative Top Speed
   (`config/relative-top-speed.xml`) and MES (`config/storage`).

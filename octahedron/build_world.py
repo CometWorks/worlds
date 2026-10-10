@@ -61,7 +61,8 @@ ASTEROID_GAP = 200.0
 AURORA_TILT_DEGREES = 25.0
 # Vanilla generator 4 sizes, pow2 storages; the weights favor the smaller ones
 ASTEROID_SIZES = ((256, 5), (512, 4), (1024, 1))
-ICE_SHAPE = "Asteroid512-001"
+# The largest plain vanilla asteroid shape (1024 m storage), filled with ice
+ICE_SHAPE = "SuperRock_001"
 ICE_MATERIAL = "Ice_02"
 VOXEL_GENERATOR = 4
 

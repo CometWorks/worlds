@@ -22,6 +22,7 @@ by the ore item's volume), before refining.
 import argparse
 import gzip
 import random
+import re
 import struct
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
@@ -126,12 +127,17 @@ def planet(name, radius, mod, materials, volumes, harvest):
 
 
 def belt_asteroids(world):
-    """Storage edge length of each procedural asteroid, and the ice ones"""
+    """Storage edge length of each procedural asteroid, and (prefab shape, size) of the ice ones"""
     procedural, ice = [], []
     for path in sorted(world.glob("Octahedron-*.vx2")):
         data = gzip.open(path).read()
         size = struct.unpack_from("<4i", data, data.index(b"\x01\x01\x11") + 3)[1]
-        (ice if "-Ice-" in path.name else procedural).append(size)
+        if "-Ice-" in path.name:
+            # MyPredefinedDataProvider: the prefab's name, then the material's
+            shape = re.findall(rb"[\x20-\x7e]{4,}", data)[1].decode()
+            ice.append((shape, size))
+        else:
+            procedural.append(size)
     return procedural, ice
 
 
@@ -377,7 +383,7 @@ refining. Ore rock is the volume of the ore-bearing voxels.
   DepositSizeDenominator {settings.findtext("DepositSizeDenominator")}. A deposit is a sphere, and
   part of it may stick out of the rock, so the belt's amounts are upper bounds.
 - Not counted: the stone around the deposits, the {len(ice)} placed ice asteroids
-  (whole `Asteroid512-001` shapes of ice) and about {whole_ice:.0f} procedural asteroids
+  (whole `{ice[0][0]}` shapes of ice, {ice[0][1]} m storages) and about {whole_ice:.0f} procedural asteroids
   the generator makes whole ice.
 
 ## Overview

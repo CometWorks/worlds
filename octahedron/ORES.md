@@ -17,7 +17,7 @@ refining. Ore rock is the volume of the ore-bearing voxels.
   DepositSizeDenominator 30. A deposit is a sphere, and
   part of it may stick out of the rock, so the belt's amounts are upper bounds.
 - Not counted: the stone around the deposits, the 4 placed ice asteroids
-  (whole `Asteroid512-001` shapes of ice) and about 30 procedural asteroids
+  (whole `SuperRock_001` shapes of ice, 1024 m storages) and about 30 procedural asteroids
   the generator makes whole ice.
 
 ## Overview
