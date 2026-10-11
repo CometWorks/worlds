@@ -154,7 +154,10 @@ game update that changes the planet or voxel material definitions or maps.
   cluster's broadphase is killed or deleted. In the asteroid ring that happened
   to characters on short teleports. The 500 km world radius, braking from
   450 km, needs a plugin (SE1-0119).
-- In-game scripts are off until the script whitelist exists.
+- In-game scripts are on with the Scripter role: only Scripters and above can
+  edit a programmable block's code, and grids pasted or projected by anyone
+  else lose their scripts. Anyone can still run the scripts already on a block.
+- Progression (research) is off: every block is available from the start.
 - Radiation is on (planets, weather, blocks); solar radiation (`SolarRadiationIntensity`)
   and hunger (`FoodConsumptionRate`) stay at 0.
 - Every economy tick the game refills each trade station: fuel, batteries,

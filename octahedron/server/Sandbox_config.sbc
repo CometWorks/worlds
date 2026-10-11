@@ -44,12 +44,12 @@
     <RandomizeSeed>false</RandomizeSeed>
     <ProceduralSeed>0</ProceduralSeed>
     <DestructibleBlocks>true</DestructibleBlocks>
-    <EnableIngameScripts>false</EnableIngameScripts>
+    <EnableIngameScripts>true</EnableIngameScripts>
     <ViewDistance>15000</ViewDistance>
     <FloraDensity>20</FloraDensity>
     <EnableToolShake>false</EnableToolShake>
     <EnableOxygen>true</EnableOxygen>
-    <EnableResearch>true</EnableResearch>
+    <EnableResearch>false</EnableResearch>
     <EnableOxygenPressurization>true</EnableOxygenPressurization>
     <Enable3rdPersonView>true</Enable3rdPersonView>
     <EnableFlora>true</EnableFlora>
@@ -75,7 +75,7 @@
     <BlockTypeLimits>
       <dictionary />
     </BlockTypeLimits>
-    <EnableScripterRole>false</EnableScripterRole>
+    <EnableScripterRole>true</EnableScripterRole>
     <ExperimentalMode>true</ExperimentalMode>
     <EnableVoxelHand>true</EnableVoxelHand>
     <HasPlanets>true</HasPlanets>

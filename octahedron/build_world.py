@@ -170,7 +170,12 @@ SETTINGS = {
     "MaxFactionsCount": 0,
     "EnableCopyPaste": "false",
     "EnableSpectator": "false",
-    "EnableIngameScripts": "false",
+    # Only Scripters and above can edit a programmable block's code; pasted and projected
+    # grids lose their scripts for everyone else (MySession.IsUserScripter)
+    "EnableIngameScripts": "true",
+    "EnableScripterRole": "true",
+    # The research progression: every block is unlocked from the start
+    "EnableResearch": "false",
     "ExperimentalMode": "true",
     "ProceduralDensity": 0,
     "ProceduralSeed": 0,
@@ -190,7 +195,6 @@ SETTINGS = {
     "EnableReducedStatsOnRespawn": "false",
     "EnableWolfs": "false",
     "EnableSpiders": "false",
-    "EnableScripterRole": "false",
     # Vanilla defaults; the Star System scenario has sparser asteroid ores (1, 60, 0.8)
     "DepositsCountCoefficient": 2,
     "DepositSizeDenominator": 30,
