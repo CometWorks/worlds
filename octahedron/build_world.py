@@ -118,11 +118,29 @@ SHIPYARD_LIFT = 50.0
 # 20 at -30, 12 unrolled; from the pressurized rooms 9 m up, 15 of 45 at either roll, the
 # station's own furniture blocking much of it.
 SHIPYARD_ROLL_DEGREES = 30.0
+# And turned about the station's up, so the welder wall's middle beam doesn't hide the
+# shipyard's center from the lobby. In game from Alpha Station's lobby, 10 spots 9 and 13 m
+# up: center clear from 8 at +17.5 and at -17.5 (the station's kitchen blocks the other 2),
+# from none unturned.
+SHIPYARD_YAW_DEGREES = 17.5
 # Its blocks are shared with everyone, but power: Essentials keeps the reactors at 1000
 # uranium ingots and the batteries charged (RefillContainers in config/essentials.cfg).
 SHIPYARD_SHARED = {
     "ConveyorSorter", "ShipConnector", "CargoContainer", "MedicalRoom", "ReflectorLight",
 }  # fmt: skip
+# Each station's color: its shipyard's red frame gets the skin and the color, the station's
+# red walls and furniture only the color. Skin None is the default, painted metal. Colors
+# are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1).
+BLUEPRINT_RED = (1.0, 0.2, 0.55)
+STATION_COLORS = {
+    "North Station": (None, (0.667, 0.2, 0.55)),  # blue
+    "South Station": (None, (0.0, 0.2, 0.55)),  # red
+    "Alpha Station": ("CarbonFibre_Armor", (0.0, -1.0, -0.8)),  # black
+    "Beta Station": (None, (0.083, 0.2, 0.55)),  # orange
+    "Gamma Station": ("CarbonFibre_Armor", (0.333, 0.2, -0.3)),  # dark green
+    "Delta Station": (None, (0.833, 0.2, 0.55)),  # magenta
+    "Moon Station": ("Concrete_Armor", (0.0, -1.0, -0.45)),  # dark gray
+}
 SHIPYARD_REACTOR = "Shipyard Reactor"
 SHIPYARD_BATTERY = "Shipyard Battery"
 # What a station starts with; every other inventory and production queue starts empty
@@ -485,6 +503,31 @@ def set_items(inventory, items):
     set_child(inventory, "nextItemId", str(len(items)))
 
 
+def recolor(block, color, skin=False):
+    """Paints a block of the blueprints' red: color is (skin, hsv) from STATION_COLORS; the
+    skin changes only when skin is true."""
+    mask = block.find("ColorMaskHSV")
+    if mask is None:
+        return
+    hsv = tuple(float(mask.get(k)) for k in "xyz")
+    if any(abs(hsv[i] - BLUEPRINT_RED[i]) > 0.01 for i in range(3)):
+        return
+    for k, v in zip("xyz", color[1]):
+        mask.set(k, repr(v))
+    if skin:
+        old = block.find("SkinSubtypeId")
+        if not color[0]:
+            if old is not None:
+                block.remove(old)
+        elif old is not None:
+            old.text = color[0]
+        else:
+            # Right after the color, where the game writes it
+            node = ET.Element("SkinSubtypeId")
+            node.text = color[0]
+            block.insert(list(block).index(mask) + 1, node)
+
+
 def stock(block, kind):
     """Empties the block's inventories and production queue, then loads its starting items.
     Gas tanks keep their gas: it isn't an item."""
@@ -515,6 +558,7 @@ def station(template, ids, name, center, forward, up, owner, shared):
     set_child(grid, "Editable", "false")
     loot, free_tools = None, 0
     for block in grid.find("CubeBlocks"):
+        recolor(block, STATION_COLORS[name])
         if block.find("Owner") is None:
             continue
         block.find("Owner").text = str(owner)
@@ -591,11 +635,18 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
     yard_up = add(mul(level, math.cos(roll)), mul(side, -math.sin(roll)))
     # The long axis, which the roll turns about
     yard_forward = cross(level, side)
+    # Then turned about the station's up
+    yaw = math.radians(SHIPYARD_YAW_DEGREES)
+    yard_right, yard_up, yard_forward = (
+        rotate(v, up, yaw) for v in (yard_right, yard_up, yard_forward)
+    )
     yard = shipyard_template()
     lo, hi = grid_bounds(yard)
-    half = (hi[0] - lo[0] + 1) * 1.25 * abs(dot(side, yard_right)) + (
-        hi[1] - lo[1] + 1
-    ) * 1.25 * abs(dot(side, yard_up))
+    # How far the shipyard's block bounds reach toward side from their center
+    half = sum(
+        (hi[i] - lo[i] + 1) * 1.25 * abs(dot(side, axis))
+        for i, axis in enumerate((yard_right, yard_up, mul(yard_forward, -1)))
+    )
 
     def place(gap):
         # Bounds from -extent to +extent along side, the station's end first
@@ -629,7 +680,7 @@ def shipyard_template():
     return ET.parse(SHIPYARD_BLUEPRINT).getroot().find(".//CubeGrid")
 
 
-def shipyard(template, ids, name, center, forward, up, owner):
+def shipyard(template, ids, name, center, forward, up, owner, color):
     grid = clone_grid(template, ids)
     place_grid(grid, center, forward, up)
     set_child(grid, "DisplayName", name)
@@ -638,6 +689,7 @@ def shipyard(template, ids, name, center, forward, up, owner):
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
     for block in grid.find("CubeBlocks"):
+        recolor(block, color, skin=True)
         if block.find("Owner") is None:
             continue
         block.find("Owner").text = str(owner)
@@ -764,6 +816,14 @@ def load_planets(sector):
         for entity in sector.find("SectorObjects")
         if entity.get(XSI_TYPE) == "MyObjectBuilder_Planet"
     }
+
+
+def rotate(v, axis, angle):
+    """v turned by angle (radians) about the unit vector axis, right-handed (Rodrigues)"""
+    return add(
+        add(mul(v, math.cos(angle)), mul(cross(axis, v), math.sin(angle))),
+        mul(axis, dot(axis, v) * (1 - math.cos(angle))),
+    )
 
 
 def perpendicular_part(v, axis):
@@ -1166,7 +1226,11 @@ def main():
 
     yard = shipyard_template()
     for name, placement in shipyards.items():
-        objects.append(shipyard(yard, ids, f"{name} Shipyard", *placement, owner))
+        objects.append(
+            shipyard(
+                yard, ids, f"{name} Shipyard", *placement, owner, STATION_COLORS[name]
+            )
+        )
 
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),

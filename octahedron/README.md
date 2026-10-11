@@ -65,9 +65,14 @@ downloaded.
   degrees about its long axis with its top toward the station, so more of the
   build volume shows past its near wall. The station and its shipyard are
   centered on the safe zone together, the shipyard lifted 50 m along the
-  station's up, and spread apart as far as their block bounds stay 10 m inside
-  the zone's edge: 139 m between them (81 m at the pole stations), the farthest
-  block 226 m from the zone's center. The lanes still start from the zone's
+  station's up and turned 17.5 degrees about it (so the welder wall's middle
+  beam doesn't hide its center from the lobby), and spread apart as far as their
+  block bounds stay 10 m inside the zone's edge: 100 m between them (63 m at the
+  pole stations), the farthest block 227 m from the zone's center. Each
+  station has its own color (`STATION_COLORS`): the shipyard's red frame gets
+  a skin and color, the station's red walls and furniture only the color.
+  North blue, South red, Beta orange and Delta magenta painted metal; Alpha
+  black and Gamma dark green carbon fiber; Moon dark gray concrete. The lanes still start from the zone's
   center. Its
   blocks are shared with everyone but its 4 large reactors and 72 batteries;
   on the server Essentials tops those up to 1000 uranium ingots and full charge
