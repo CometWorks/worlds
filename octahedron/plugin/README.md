@@ -124,7 +124,7 @@ config change.
 The server welds a projected block without checking the world's block limits.
 The game's welders check them before they ask; ToolCore's tools, the OmniArc
 welders among them, don't. An OmniArc welder could print a projection with more
-OmniArc tools than the world's `OmniArcTools` limit allows, or past the player's
+OmniArc tools than a tag limit like `OmniArcTools` allows, or past the player's
 PCU.
 
 With `ProjectionLimitsEnabled` on, the server checks every projected block before
