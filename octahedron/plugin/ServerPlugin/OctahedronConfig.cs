@@ -10,6 +10,7 @@ namespace ServerPlugin;
 [Section("refill", caption: "Refill Containers")]
 [Section("edge", caption: "World Edge")]
 [Section("starter", caption: "Starter Ship")]
+[Section("projections", caption: "Projections")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -272,6 +273,16 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 0.05;
+
+    [BoolOption(
+        "Check the world's block limits on the server when a projected block is welded, and refuse it over them. The game's welders check them themselves, mod tools like ToolCore's don't.",
+        Parent = "projections"
+    )]
+    public bool ProjectionLimitsEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
 }
 
 public struct RefillContainer
