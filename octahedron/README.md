@@ -64,8 +64,8 @@ downloaded.
   stations the other way. The shipyard's side faces the lobby, and it is 15 m
   from the station, so all of it is inside the safe zone (241 m at most). Its
   blocks are shared with everyone but its 4 large reactors and 72 batteries;
-  on the server Essentials keeps those at 1000 uranium ingots and full charge
-  (`config/essentials.cfg`). The stations start empty, apart from 10,000 kg of
+  on the server Essentials tops those up to 1000 uranium ingots and full charge
+  every 10 minutes (`config/essentials.cfg`). The stations start empty, apart from 10,000 kg of
   uranium ingots in each large reactor, a full safe zone block (75 zone chips)
   and the gas in the tanks. North Station, the one with the lane to the Moon,
   shares its inventories and production with everyone.
