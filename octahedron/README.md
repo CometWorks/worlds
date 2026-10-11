@@ -1,7 +1,7 @@
 # Octahedron
 
 The world of the first public test cluster. EarthLike and its Moon from the
-vanilla Star System scenario, 7 stations, Trade Lanes between them and an
+vanilla Star System scenario, 5 stations, Trade Lanes between them and an
 asteroid ring. The design and the reasons behind it are in the workspace note
 `se1/notes/public-test-cluster/NOTE.md`; the work is ticket SE1-0114.
 
@@ -48,10 +48,10 @@ downloaded.
 - Removes every planet but EarthLike and the Moon.
 - Applies the world settings and the mod list (`SETTINGS`, `BLOCK_LIMITS` and
   `MODS` in the script, MES and its encounter mods from `config/mes-mods.xml`).
-- Places the 6 stations of the octahedron 80 km above EarthLike, over the poles
-  and on the equator, and one 15 km from the Moon's center, just outside its
-  gravity (12.3 km), between the directions to the two nearest stations.
-  The 6 stations' up is EarthLike's north. Moon Station's up is square to the
+- Places 4 stations 80 km above EarthLike on the equator, the octahedron's
+  middle square (the pole stations were dropped), and one 15 km from the Moon's
+  center, just outside its gravity (12.3 km), between the directions to the
+  two nearest stations. The 4 stations' up is EarthLike's north. Moon Station's up is square to the
   line between EarthLike and the Moon, the one such direction nearest to Delta
   Station, and it faces away from the Moon. Each station sits in a 250 m admin
   safe zone, owned by the "Octahedron Authority" NPC faction, and players can't
@@ -61,8 +61,7 @@ downloaded.
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half: straight behind the equatorial stations,
-  away from EarthLike, 45 degrees between behind and away from EarthLike at
-  the pole stations, and on the Moon side of Moon Station. The lanes leave the
+  away from EarthLike, and on the Moon side of Moon Station. The lanes leave the
   stations the other way and still start from the zone's center.
   - The shipyard's side faces the lobby, rolled 30 degrees about its long axis
     with its top toward the station, lifted 50 m along the station's up and
@@ -70,8 +69,7 @@ downloaded.
     near wall and the wall's middle beam doesn't hide its center.
   - The station and its shipyard are centered on the safe zone together and
     spread apart as far as their block bounds stay 10 m inside the zone's edge:
-    100 m between them (63 m at the pole stations), the farthest block 227 m
-    from the zone's center.
+    100 m between them, the farthest block 227 m from the zone's center.
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries. Those start with 10 uranium ingots each and full charge, and on
     the server Essentials tops them back up every 10 minutes
@@ -79,7 +77,7 @@ downloaded.
     while renting the shipyard.
   - Each station has its own color (`STATION_COLORS`): the shipyard's red frame
     gets a skin and color, the station's red walls and furniture only the
-    color. North red, South blue, Beta orange and Delta dark magenta painted metal;
+    color. Beta orange and Delta dark magenta painted metal;
     Alpha black and Gamma dark green carbon fiber; Moon dark gray concrete.
 - Makes the stations the NPC faction's trade stations: the faction is a Trader
   with a bank account, and each station grid has a station entry, so the
@@ -88,16 +86,16 @@ downloaded.
   The entries name no safe zone (`SafeZoneEntityId` 0); with one, the economy
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
-- Places one Trade Lane along each of the 12 edges and between the Moon
-  station and each of the two nearest stations (North and Delta), 14 in all. A
+- Places one Trade Lane along each of the square's 4 edges and between the
+  Moon station and each of the two nearest stations (Delta and Alpha), 6 in
+  all. A lane to Beta would pass 62 km from EarthLike's center, 2 km above sea
+  level; the one to Alpha passes 113 km out, clear of EarthLike's gravity. A
   lane goes both ways: each end is an entry toward the other. Every end is a
   one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
-  North and Delta Station for the Moon lanes, clear of their other lane ends),
+  Delta and Alpha Station for the Moon lanes, clear of their other lane ends),
   indestructible and not editable. The ends have no safe zone; the lane's rings
-  have no physics. The two rings of a
-  tunnel sit side by side, level with the stations' horizontal plane on the
-  Moon lanes and between the equator stations, one above the other on the
-  lanes to North and South Station, so pilots can tell the tunnels apart.
+  have no physics. The two rings of a tunnel sit side by side, level with the
+  stations' horizontal plane.
 - Places 2,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays

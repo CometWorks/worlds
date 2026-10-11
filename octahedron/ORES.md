@@ -14,7 +14,7 @@ million.
 - The asteroid belt is an expectation, not a count: the game rolls each
   asteroid's ores from its seed with its own random generator. It applies
   generator 4's rules (MyCompositeShapes) to the belt's 2000 procedural asteroids
-  (1008 of 256 m, 798 of 512 m, 194 of 1024 m), with DepositsCountCoefficient 2 and
+  (995 of 256 m, 813 of 512 m, 192 of 1024 m), with DepositsCountCoefficient 2 and
   DepositSizeDenominator 30. A deposit is a sphere, and
   part of it may stick out of the rock, so the belt's amounts are upper bounds.
 - Not counted: the stone around the deposits, the 4 placed ice asteroids
@@ -25,15 +25,15 @@ million.
 
 | Ore | EarthLike (t) | Moon (t) | Asteroid belt (t) |
 |---|---:|---:|---:|
-| Iron | 132M | 1.76M | 10.1M |
-| Silicon | 135M | 744k | 3.65M |
-| Cobalt | 122M | 371k | 2.41M |
-| Magnesium | 76.2M | 384k | 2.47M |
-| Nickel | 65.5M | 1.48M | 3.64M |
-| Ice | 31.9M | 1.41M | 10.1M |
+| Iron | 132M | 1.76M | 10.2M |
+| Silicon | 135M | 744k | 3.68M |
+| Cobalt | 122M | 371k | 2.43M |
+| Magnesium | 76.2M | 384k | 2.49M |
+| Nickel | 65.5M | 1.48M | 3.67M |
+| Ice | 31.9M | 1.41M | 10.2M |
 | Silver | 20.6M | - | - |
 | Gold | 12.6M | - | - |
-| Platinum | - | - | 1.19M |
+| Platinum | - | - | 1.2M |
 | Uranium | - | 444k | - |
 
 ## EarthLike
@@ -81,20 +81,20 @@ xychart-beta
 
 | Ore | Deposits | Ore rock (m³) | Ore (t) |
 |---|---:|---:|---:|
-| Ice | 3.3k | 83.2M | 10.1M |
-| Iron | 3.29k | 83M | 10.1M |
-| Silicon | 1.98k | 50.1M | 3.65M |
-| Nickel | 1.98k | 49.9M | 3.64M |
-| Magnesium | 1.34k | 33.9M | 2.47M |
-| Cobalt | 1.31k | 33.1M | 2.41M |
-| Platinum | 647 | 16.3M | 1.19M |
+| Ice | 3.3k | 83.7M | 10.2M |
+| Iron | 3.3k | 83.6M | 10.2M |
+| Silicon | 1.99k | 50.4M | 3.68M |
+| Nickel | 1.98k | 50.2M | 3.67M |
+| Magnesium | 1.34k | 34.1M | 2.49M |
+| Cobalt | 1.31k | 33.3M | 2.43M |
+| Platinum | 648 | 16.4M | 1.2M |
 
 ```mermaid
 xychart-beta
     title "Asteroid belt (expected)"
     x-axis ["Ice", "Iron", "Silicon", "Nickel", "Magnesium", "Cobalt", "Platinum"]
     y-axis "Ore (kt)"
-    bar [10114.1, 10099.5, 3652.9, 3639.7, 2471.3, 2412.9, 1190.6]
+    bar [10185.4, 10170.7, 3678.7, 3665.4, 2488.8, 2429.9, 1199.0]
 ```
 
 ## Asteroids around the ring
@@ -107,35 +107,35 @@ and the 4 placed ice asteroids by their direction from EarthLike's center.
 
 | Segment | Asteroids | 256 m | 512 m | 1024 m | Here |
 |---|---:|---:|---:|---:|---|
-| 0°-15° | 87 | 42 | 38 | 7 | Alpha Station |
-| 15°-30° | 82 | 33 | 42 | 7 |  |
-| 30°-45° | 99 | 48 | 39 | 12 | Ice-4 |
-| 45°-60° | 108 | 60 | 35 | 13 |  |
-| 60°-75° | 79 | 38 | 32 | 9 |  |
-| 75°-90° | 81 | 44 | 30 | 7 |  |
-| 90°-105° | 76 | 40 | 30 | 6 | Delta Station |
-| 105°-120° | 72 | 43 | 22 | 7 |  |
-| 120°-135° | 80 | 43 | 27 | 10 |  |
-| 135°-150° | 77 | 39 | 32 | 6 | Ice-3 |
-| 150°-165° | 76 | 39 | 30 | 7 |  |
-| 165°-180° | 80 | 43 | 27 | 10 |  |
-| 180°-195° | 85 | 39 | 41 | 5 | Gamma Station |
-| 195°-210° | 92 | 38 | 44 | 10 |  |
-| 210°-225° | 88 | 48 | 29 | 11 | Ice-2 |
-| 225°-240° | 90 | 46 | 34 | 10 |  |
-| 240°-255° | 69 | 32 | 31 | 6 |  |
-| 255°-270° | 78 | 39 | 32 | 7 |  |
-| 270°-285° | 84 | 45 | 28 | 11 | Beta Station |
-| 285°-300° | 90 | 46 | 35 | 9 |  |
-| 300°-315° | 70 | 34 | 32 | 4 |  |
-| 315°-330° | 91 | 48 | 36 | 7 | Ice-1 |
-| 330°-345° | 78 | 33 | 36 | 9 |  |
-| 345°-360° | 88 | 48 | 36 | 4 |  |
+| 0°-15° | 78 | 45 | 28 | 5 | Alpha Station |
+| 15°-30° | 65 | 34 | 23 | 8 |  |
+| 30°-45° | 97 | 47 | 38 | 12 | Ice-4 |
+| 45°-60° | 85 | 47 | 34 | 4 |  |
+| 60°-75° | 81 | 42 | 34 | 5 |  |
+| 75°-90° | 71 | 30 | 31 | 10 | Delta Station |
+| 90°-105° | 78 | 44 | 29 | 5 |  |
+| 105°-120° | 86 | 49 | 32 | 5 |  |
+| 120°-135° | 74 | 31 | 33 | 10 |  |
+| 135°-150° | 90 | 37 | 44 | 9 | Ice-3 |
+| 150°-165° | 88 | 46 | 34 | 8 |  |
+| 165°-180° | 80 | 41 | 31 | 8 |  |
+| 180°-195° | 80 | 32 | 40 | 8 | Gamma Station |
+| 195°-210° | 97 | 46 | 37 | 14 |  |
+| 210°-225° | 92 | 44 | 35 | 13 | Ice-2 |
+| 225°-240° | 77 | 42 | 28 | 7 |  |
+| 240°-255° | 77 | 45 | 24 | 8 |  |
+| 255°-270° | 78 | 48 | 27 | 3 | Beta Station |
+| 270°-285° | 93 | 46 | 38 | 9 |  |
+| 285°-300° | 94 | 43 | 44 | 7 |  |
+| 300°-315° | 71 | 32 | 34 | 5 |  |
+| 315°-330° | 92 | 40 | 44 | 8 | Ice-1 |
+| 330°-345° | 89 | 43 | 34 | 12 |  |
+| 345°-360° | 87 | 41 | 37 | 9 |  |
 
 ```mermaid
 xychart-beta
     title "Asteroids per 15 degrees, from Alpha Station"
     x-axis ["0", "15", "30", "45", "60", "75", "90", "105", "120", "135", "150", "165", "180", "195", "210", "225", "240", "255", "270", "285", "300", "315", "330", "345"]
     y-axis "Asteroids"
-    bar [87, 82, 99, 108, 79, 81, 76, 72, 80, 77, 76, 80, 85, 92, 88, 90, 69, 78, 84, 90, 70, 91, 78, 88]
+    bar [78, 65, 97, 85, 81, 71, 78, 86, 74, 90, 88, 80, 80, 97, 92, 77, 77, 78, 93, 94, 71, 92, 89, 87]
 ```
