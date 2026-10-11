@@ -6,11 +6,11 @@ namespace ServerPlugin;
 [CommandRoot("oct", "Octahedron", "Octahedron world commands")]
 public sealed class Commands : CommandModule
 {
-    [Command("reload", "Reloads Octahedron.cfg from the instance folder")]
+    [Command("reload", "Rereads the plugin's config file")]
     [Permission(MyPromoteLevel.Admin)]
     public string Reload()
     {
         Plugin.LoadConfig();
-        return "Octahedron.cfg reloaded.";
+        return "Octahedron config reloaded.";
     }
 }

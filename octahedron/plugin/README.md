@@ -39,9 +39,9 @@ holding `Sources` and `Profiles`):
    </DevFolder>
    ```
 
-3. `../config/octahedron.cfg` is copied into the server's instance folder (the
+3. `../config/octahedron.cfg` goes into the server's instance folder (the
    Dedicated Server's `-path`, where `SpaceEngineers-Dedicated.cfg` is) as
-   `Octahedron.cfg`, by a copy or a symlink. The plugin only reads it; a
+   `Octahedron.cfg`, copied or symlinked. The plugin only reads it; a
    change made in Quasar's config editor lasts until the server restarts.
 
 Magnetar compiles the `.cs` files `git ls-files` lists in the folder (tracked
@@ -50,7 +50,7 @@ and untracked, not ignored) under the manifest's `SourceDirectories`. Without
 Updating the checkout and restarting the server deploys a new version: Magnetar
 recompiles when the sources change.
 
-`!oct reload` (admin) rereads `Octahedron.cfg` without a restart.
+`!oct reload` (admin) rereads the config without a restart.
 
 `OCTAHEDRON_CONFIG`, when set, names the config file instead, for example the
 checkout's `config/octahedron.cfg` on every node of a cluster.
@@ -76,8 +76,8 @@ CLUSTER_EXTRA_PLUGINS=node:/path/to/out/Octahedron python3 cli/cluster.py \
 ## Tests
 
 `tests/rig.py` runs an isolated Magnetar server with a copy of the world, the
-mods and asteroids left out, and this working copy as a dev folder, plus a
-headless client with the Remote plugin that joins it. Ports, ids and folders
+mods and asteroids left out, and this working copy as a dev folder (or a
+`package.sh` bundle as a local plugin), plus a headless client with the Remote plugin that joins it. Ports, ids and folders
 come from a test slot of the workspace (`se/notes/parallel-test-work`). See its
 docstring.
 

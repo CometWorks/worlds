@@ -11,9 +11,9 @@ game folders apart from copying their launchers and configs.
 The world copy leaves out the mods (a client without Steam can't download them)
 and the asteroids (faster loads); the stations, planets and lanes stay.
 
-    uv run --with httpx python tests/rig.py start      # server, then the client
-    uv run --with httpx python tests/rig.py chat '!oct edge'
-    uv run --with httpx python tests/rig.py stop
+    uv run --no-project --with httpx python tests/rig.py start      # server, then the client
+    uv run --no-project --with httpx python tests/rig.py chat '!oct edge'
+    uv run --no-project --with httpx python tests/rig.py stop
 """
 
 from __future__ import annotations
