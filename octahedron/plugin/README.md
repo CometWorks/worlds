@@ -185,6 +185,12 @@ mods and asteroids left out, and this working copy as a dev folder (or a
 come from a test slot of the workspace (`se/notes/parallel-test-work`). See its
 docstring.
 
+`tests/test_client.py` checks the rules with them: grids flying out of the
+world (`tests/edge_grids.py`) and the character on its jetpack, the starter
+ship from a blueprint loaded into the hologram tables, and its limits.
+`tests/check_save.py` then reads the saved world: where the edge grids ended up,
+the refilled blocks and the starter ships.
+
 ## Building locally
 
 Only needed for an IDE or to check that it compiles; servers compile it
