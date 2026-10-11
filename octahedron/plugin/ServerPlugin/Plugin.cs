@@ -2,10 +2,12 @@ using System;
 using System.IO;
 using System.Reflection;
 using HarmonyLib;
+using PluginSdk.Clustering;
 using PluginSdk.Commands;
 using PluginSdk.Config;
 using PluginSdk.Logging;
 using VRage.FileSystem;
+using VRage.Game.Entity;
 using VRage.Plugins;
 
 // Magnetar compiles the plugin from source and needs the version here
@@ -21,6 +23,7 @@ namespace ServerPlugin;
 public class Plugin : IPlugin
 {
     public const string Name = "Octahedron";
+    public const string Id = "F7FB710B-7B41-45D6-B05C-A01DDE0FEE3A";
     public static readonly Logger Log = Logger.Create(Name);
 
     // The live config; !oct reload replaces it
@@ -35,6 +38,7 @@ public class Plugin : IPlugin
         ?? Path.Combine(MyFileSystem.UserDataPath, $"{Name}.cfg");
 
     private readonly RefillContainers refillContainers = new();
+    private readonly WorldEdge worldEdge = new();
     private bool failed;
 
     public void Init(object gameInstance)
@@ -58,12 +62,27 @@ public class Plugin : IPlugin
         try
         {
             refillContainers.Update();
+            worldEdge.Update();
         }
         catch (Exception e)
         {
             Log.Critical("Update failed, the plugin stops", e);
             failed = true;
         }
+    }
+
+    private static readonly PluginClusterClient Cluster = PluginCluster.IsClusterProcess
+        ? PluginCluster.ForPlugin(Id)
+        : null;
+
+    // On a cluster only the node owning an entity's partition changes it. Unknown (a cluster
+    // without views) counts as owned.
+    public static bool Simulated(MyEntity entity)
+    {
+        if (Cluster == null)
+            return true;
+        var residence = Cluster.LocateEntity(entity.EntityId)?.Residence;
+        return residence is null or PluginEntityResidence.Local;
     }
 
     public void Dispose()

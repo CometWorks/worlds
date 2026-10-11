@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using PluginSdk.Config;
+using VRageMath;
 
 namespace ServerPlugin;
 
@@ -7,6 +8,7 @@ namespace ServerPlugin;
 // OCTAHEDRON_CONFIG names. The world's copy is worlds/octahedron/config/octahedron.cfg.
 [Section("stations", caption: "Economy Stations")]
 [Section("refill", caption: "Refill Containers")]
+[Section("edge", caption: "World Edge")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -101,6 +103,69 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = new();
+
+    [BoolOption(
+        "Brake grids and characters flying out of the world sphere below. Needs no WorldSizeKm, which should stay 0.",
+        Parent = "edge"
+    )]
+    public bool WorldEdgeEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [Vector3DOption("Center of the world sphere, in world coordinates (m).", Parent = "edge")]
+    public Vector3D WorldEdgeCenter
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [DoubleOption(
+        1,
+        description: "Radius of the world sphere (m). Nothing moves outward beyond it; what is beyond it drifts back.",
+        Parent = "edge"
+    )]
+    public double WorldEdgeRadius
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 500_000;
+
+    [DoubleOption(
+        0,
+        description: "Distance from the center where braking starts (m).",
+        Parent = "edge"
+    )]
+    public double WorldEdgeBrakingRadius
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 450_000;
+
+    [DoubleOption(
+        0,
+        description: "Outward speed allowed where braking starts (m/s). Set it to the top speed, so braking sets in gradually.",
+        Parent = "edge"
+    )]
+    public double WorldEdgeBrakingSpeed
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 360;
+
+    [DoubleOption(
+        0.01,
+        10,
+        "Shape of the braking curve: the outward speed allowed is the speed above times (distance left to the edge / braking zone width) to this power. "
+            + "0.5 brakes at a constant deceleration, 1 cuts the allowed speed linearly.",
+        Parent = "edge"
+    )]
+    public double WorldEdgeBrakingExponent
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 0.5;
 }
 
 public struct RefillContainer
