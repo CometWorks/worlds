@@ -13,8 +13,8 @@ using VRageMath;
 
 namespace ServerPlugin;
 
-// Fits the blueprint loaded into a station hologram table into a small cube over the table:
-// scaled to fit, centered, and turned so that its main grid's cockpit points the table's way.
+// Fits the blueprint loaded into a station hologram table into the free space above the
+// table's top, within the table's own block: scaled to fit, centered, and turned so that its main grid's cockpit points the table's way.
 // The game only scales a blueprint to fit the 2.5 m block and keeps the grid origin at the
 // block's center. Set through the projector's synced offset, rotation and scale, which the
 // server broadcasts to the clients.
@@ -100,21 +100,29 @@ internal static class TableHologram
             for (var i = 0; i < 8; i++)
                 bounds.Include(Vector3D.Transform(box.GetCorner(i), toFrame));
         }
-        var scale = Math.Min(1, config.StarterShipHologramSize / bounds.Size.Max());
 
         // The cockpit's forward and up become the table's
         var (forward, up) = StarterShip.CockpitFrame(main);
         var (rotation, turn) = TableRotation(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
 
+        // The free space is the table block's own cell above the table's top: the cell above
+        // may be taken (the stations have a column there). Scaled to fit it, margin included.
+        var cell = table.CubeGrid.GridSize;
+        var margin = config.StarterShipHologramMargin;
+        var top = config.StarterShipHologramTableTop;
+        var free = new Vector3D(cell - 2 * margin, cell / 2 - top - 2 * margin, cell - 2 * margin);
+        var size = Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, turn));
+        var scale = Math.Min(
+            1,
+            Math.Min(free.X / size.X, Math.Min(free.Y / size.Y, free.Z / size.Z))
+        );
+        var center = new Vector3D(0, (top + cell / 2) / 2, 0);
+
         // The game moves the main grid's origin by -offset * cube size * scale in the table's
-        // frame, so the offset that puts the blueprint's center at the hologram's center is
-        // (center turned - hologram center / scale) / cube size, in whole cubes
+        // frame, so the offset that puts the blueprint's center at the free space's center is
+        // (center turned - free space center / scale) / cube size, in whole cubes
         var cubeSize = MyDefinitionManager.Static.GetCubeSize(main.GridSizeEnum);
-        var cells =
-            (
-                Vector3D.TransformNormal(bounds.Center, turn)
-                - config.StarterShipHologramCenter / scale
-            ) / cubeSize;
+        var cells = (Vector3D.TransformNormal(bounds.Center, turn) - center / scale) / cubeSize;
         var offset = Vector3I.Clamp(Vector3I.Round(cells), new Vector3I(-50), new Vector3I(50));
 
         table.SendNewOffset(

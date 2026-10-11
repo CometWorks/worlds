@@ -29,7 +29,6 @@ public sealed class Commands : CommandModule
     public CommandReply Ship(params string[] table) =>
         StarterShip.Request(
             Context.Caller.IdentityId,
-            Context.Caller.SteamId,
             table.Length == 0 ? null : string.Join(" ", table)
         );
 

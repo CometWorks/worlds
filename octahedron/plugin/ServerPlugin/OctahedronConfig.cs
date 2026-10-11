@@ -208,14 +208,15 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "Most PCU the player may have with the new ship: built blocks on every cluster node and ships in Hangar.",
+        description: "Only players with less PCU than this get a starter ship; the others build at the station's shipyard. "
+            + "Counts the blocks the player built on every cluster node, not their ships in Hangar.",
         Parent = "starter"
     )]
-    public int StarterShipMaxPlayerPcu
+    public int StarterShipPlayerPcuLimit
     {
         get;
         set => SetField(ref field, value);
-    } = 20_000;
+    } = 30_000;
 
     [IntOption(
         0,
@@ -250,27 +251,27 @@ public class OctahedronConfig : PluginConfig
     } = true;
 
     [DoubleOption(
-        0.01,
-        2.5,
-        "Edge of the cube over a station hologram table that a loaded blueprint is scaled to fit (m).",
+        description: "Height of the hologram table's top above its block's center (m); negative below it. "
+            + "A loaded blueprint is fitted between this and the top of the table's block.",
         Parent = "starter"
     )]
-    public double StarterShipHologramSize
+    public double StarterShipHologramTableTop
     {
         get;
         set => SetField(ref field, value);
-    } = 0.5;
+    } = -0.33;
 
-    [Vector3DOption(
-        "Center of that cube in the table block's own frame (m): X right, Y up, Z back, from the block's center. "
-            + "The console's top is 0.33 m below its center, so the default cube sits just above it.",
+    [DoubleOption(
+        0,
+        1,
+        "Space kept free around a fitted hologram, on every side (m).",
         Parent = "starter"
     )]
-    public Vector3D StarterShipHologramCenter
+    public double StarterShipHologramMargin
     {
         get;
         set => SetField(ref field, value);
-    } = new(0, -0.05, 0);
+    } = 0.05;
 }
 
 public struct RefillContainer

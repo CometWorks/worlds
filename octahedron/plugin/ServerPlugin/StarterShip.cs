@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
@@ -9,6 +8,7 @@ using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Character;
+using Sandbox.Game.Screens.Helpers;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using VRage;
@@ -23,7 +23,7 @@ internal static class StarterShip
 {
     private static readonly Dictionary<long, DateTime> lastShip = new();
 
-    public static CommandReply Request(long identityId, ulong steamId, string tableName)
+    public static CommandReply Request(long identityId, string tableName)
     {
         var config = Plugin.Config;
         if (!config.StarterShipEnabled)
@@ -43,6 +43,13 @@ internal static class StarterShip
                     $"Your next starter ship is ready in {Math.Ceiling(wait.TotalMinutes)} min."
                 );
         }
+
+        var owned = PlayerPcu(identity);
+        if (owned >= config.StarterShipPlayerPcuLimit)
+            return CommandReply.Error(
+                $"You have {owned:N0} PCU. Starter ships are for players under "
+                    + $"{config.StarterShipPlayerPcuLimit:N0} PCU; build your ship at the station's shipyard."
+            );
 
         var table = FindTable(character, tableName, config);
         if (table == null)
@@ -72,13 +79,6 @@ internal static class StarterShip
             return CommandReply.Error(
                 $"The blueprint has {pcu:N0} PCU, a starter ship at most {config.StarterShipMaxShipPcu:N0}."
             );
-        var owned = PlayerPcu(identity, steamId);
-        if (owned + pcu > config.StarterShipMaxPlayerPcu)
-            return CommandReply.Error(
-                $"You have {owned:N0} PCU, with this ship you would have {owned + pcu:N0}. "
-                    + $"Starter ships are for players with at most {config.StarterShipMaxPlayerPcu:N0} PCU."
-            );
-
         if (!Place(grid, table, config))
             return CommandReply.Error(
                 "There is no free space for the ship outside the station, try again later."
@@ -93,13 +93,17 @@ internal static class StarterShip
         }
 
         lastShip[identityId] = now;
-        var gps = MyAPIGateway.Session.GPS.Create(
-            ship.DisplayName,
-            "Your starter ship",
-            ship.PositionComp.WorldAABB.Center,
-            true,
-            true
-        );
+        // A lasting, always shown cyan GPS for this player only, sent to their client
+        var gps = (MyGps)
+            MyAPIGateway.Session.GPS.Create(
+                ship.DisplayName,
+                "Your starter ship",
+                ship.PositionComp.WorldAABB.Center,
+                showOnHud: true,
+                temporary: false
+            );
+        gps.GPSColor = Color.Cyan;
+        gps.AlwaysVisible = true;
         MyAPIGateway.Session.GPS.AddGps(identityId, gps);
         Plugin.Log.Info(
             $"Starter ship '{ship.DisplayName}' ({pcu} PCU, {ship.EntityId}) for {identity.DisplayName} "
@@ -264,39 +268,18 @@ internal static class StarterShip
     }
 
     // The player's PCU in the world: built blocks on this node and, on a cluster, on the other
-    // nodes (the cluster plugin's ledger), plus the ships the player keeps in Hangar
-    private static int PlayerPcu(MyIdentity identity, ulong steamId)
+    // nodes (the cluster plugin's ledger). Ships in Hangar don't count.
+    private static int PlayerPcu(MyIdentity identity)
     {
         var pcu = identity.BlockLimits.PCUBuilt;
         if (RemoteUsage.Value != null)
             pcu += (
                 (ValueTuple<int, int>)RemoteUsage.Value.Invoke(null, [identity.IdentityId])
             ).Item1;
-        return pcu + HangarPcu(steamId);
+        return pcu;
     }
 
     private static readonly Lazy<MethodInfo> RemoteUsage = new(() =>
         AccessTools.TypeByName("ClusterPlugin.PcuLedgerService")?.GetMethod("RemoteUsage")
     );
-
-    // Hangar's public API, found by reflection so the plugin works without Hangar
-    private static int HangarPcu(ulong steamId)
-    {
-        var storageType = AccessTools.TypeByName("ServerPlugin.HangarStorage");
-        var plugin = storageType
-            ?.Assembly.GetType("ServerPlugin.Plugin")
-            ?.GetProperty("Instance")
-            ?.GetValue(null);
-        var storage = plugin?.GetType().GetProperty("Storage")?.GetValue(plugin);
-        if (
-            storage == null
-            || storageType.GetMethod("ListPlayerEntries")?.Invoke(storage, [steamId])
-                is not IEnumerable entries
-        )
-            return 0;
-        var pcu = 0;
-        foreach (var entry in entries)
-            pcu += (int)entry.GetType().GetProperty("Pcu").GetValue(entry);
-        return pcu;
-    }
 }

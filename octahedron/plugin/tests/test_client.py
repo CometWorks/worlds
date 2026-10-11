@@ -117,6 +117,16 @@ def stand_by(remote, table: dict) -> None:
     raise AssertionError("No free cell next to the table")
 
 
+# Color.Cyan packed as the game sends it, alpha in the high byte
+CYAN = 0xFFFFFF00
+
+
+def starter_gps(remote) -> dict | None:
+    """The GPS the plugin gave the player for its starter ship"""
+    entries = remote.list_gps().get("entries", [])
+    return next((e for e in entries if e["name"] == "Starter Test"), None)
+
+
 def ship_reply(remote, text: str = "!oct ship") -> str:
     lines = rig.chat(remote, text, 5)
     log(f"{text} -> {lines}")
@@ -152,13 +162,19 @@ def test_starter_ship(remote, home) -> None:
     log(
         f"ship at {math.dist(ship['position'], table['worldPosition']):.0f} m from the table, owners {ship.get('bigOwners')}"
     )
+    gps = starter_gps(remote)
+    log(f"GPS: {gps}")
+    assert (
+        gps and gps["showOnHud"] and gps["alwaysVisible"] and gps["color"] == CYAN
+    ), gps
     assert "ready in" in ship_reply(remote), "cooldown"
 
     with_config(remote, StarterShipCooldownMinutes=0, StarterShipMaxShipPcu=5)
     assert "at most 5" in ship_reply(remote)
-    with_config(remote, StarterShipCooldownMinutes=0, StarterShipMaxPlayerPcu=60)
-    assert "You have" in ship_reply(remote)
-    with_config(remote, StarterShipCooldownMinutes=0)
+    # The player has the first ship's 62 PCU: at the limit refused, under it allowed
+    with_config(remote, StarterShipCooldownMinutes=0, StarterShipPlayerPcuLimit=62)
+    assert "shipyard" in ship_reply(remote)
+    with_config(remote, StarterShipCooldownMinutes=0, StarterShipPlayerPcuLimit=63)
     assert "waits outside" in ship_reply(remote), "second ship without a cooldown"
     with_config(remote)
     remote.character_teleport(*home)
