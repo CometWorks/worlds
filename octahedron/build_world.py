@@ -109,7 +109,13 @@ FREE_TOOLS_COUNT = 4
 # pressurized back half: behind the station and away from the planet, which keeps it off the
 # lanes. This much space between the station's and the shipyard's block bounds keeps the
 # shipyard inside the station's safe zone.
-SHIPYARD_GAP = 15.0
+SHIPYARD_GAP = 10.0
+# Rolled about its long axis, its top leaning toward the station, so the view from the lobby
+# passes the near wall into the build volume. Raycast in game from Alpha Station, 5 spots by
+# 9 points between the welder walls: 13 m above the station's middle, 33 of 45 clear at +30,
+# 20 at -30, 12 unrolled; from the pressurized rooms 9 m up, 15 of 45 at either roll, the
+# station's own furniture blocking much of it.
+SHIPYARD_ROLL_DEGREES = 30.0
 # Its blocks are shared with everyone, but power: Essentials keeps the reactors at 1000
 # uranium ingots and the batteries charged (RefillContainers in config/essentials.cfg).
 SHIPYARD_SHARED = {
@@ -540,7 +546,8 @@ def shipyard_place(station_grid, center, forward, up, away):
     """(center, forward, up) of a station's shipyard. It goes between the station's back, where
     the lobby is, and away, the space side (the Moon side for Moon Station): straight behind
     the equatorial stations and Moon Station, 45 degrees off for the pole stations. The view
-    from the lobby falls on its side, along its local X, through its open frame."""
+    from the lobby falls on its side, along its local X, through its open frame, rolled by
+    SHIPYARD_ROLL_DEGREES."""
     backward = mul(forward, -1)
     side = norm(add(backward, away))
     right = cross(forward, up)
@@ -550,10 +557,16 @@ def shipyard_place(station_grid, center, forward, up, away):
         (hi[i] - lo[i] + 1) * 1.25 * abs(dot(side, axis))
         for i, axis in enumerate((right, up, backward))
     )
+    level = norm(perpendicular_part(up, side))
+    roll = math.radians(SHIPYARD_ROLL_DEGREES)
+    shipyard_right = add(mul(side, math.cos(roll)), mul(level, math.sin(roll)))
+    shipyard_up = add(mul(level, math.cos(roll)), mul(side, -math.sin(roll)))
+    # The long axis, which the roll turns about
+    shipyard_forward = cross(level, side)
     lo, hi = grid_bounds(shipyard_template())
-    half = (hi[0] - lo[0] + 1) * 1.25
-    shipyard_up = norm(perpendicular_part(up, side))
-    shipyard_forward = cross(shipyard_up, side)
+    half = (hi[0] - lo[0] + 1) * 1.25 * abs(dot(side, shipyard_right)) + (
+        hi[1] - lo[1] + 1
+    ) * 1.25 * abs(dot(side, shipyard_up))
     position = add(center, mul(side, reach + SHIPYARD_GAP + half))
     return position, shipyard_forward, shipyard_up
 

@@ -61,8 +61,10 @@ downloaded.
   lobby, its pressurized back half: straight behind the equatorial stations,
   away from EarthLike, 45 degrees between behind and away from EarthLike at
   the pole stations, and on the Moon side of Moon Station. The lanes leave the
-  stations the other way. The shipyard's side faces the lobby, and it is 15 m
-  from the station, so all of it is inside the safe zone (241 m at most). Its
+  stations the other way. The shipyard's side faces the lobby, rolled 30
+  degrees about its long axis with its top toward the station, so more of the
+  build volume shows past its near wall. It is 10 m from the station, so all of
+  it is inside the safe zone (249 m at most, at the pole stations). Its
   blocks are shared with everyone but its 4 large reactors and 72 batteries;
   on the server Essentials tops those up to 1000 uranium ingots and full charge
   every 10 minutes (`config/essentials.cfg`). The stations start empty, apart from 10,000 kg of
