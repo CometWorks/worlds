@@ -123,8 +123,9 @@ SHIPYARD_ROLL_DEGREES = 30.0
 # up: center clear from 8 at +17.5 and at -17.5 (the station's kitchen blocks the other 2),
 # from none unturned.
 SHIPYARD_YAW_DEGREES = 17.5
-# Its blocks are shared with everyone, but power: Essentials keeps the reactors at 1000
-# uranium ingots and the batteries charged (RefillContainers in config/essentials.cfg).
+# Its blocks are shared with everyone, but power: Essentials keeps the reactors at
+# SHIPYARD_REACTOR_URANIUM ingots and the batteries charged (RefillContainers in
+# config/essentials.cfg).
 SHIPYARD_SHARED = {
     "ConveyorSorter", "ShipConnector", "CargoContainer", "MedicalRoom", "ReflectorLight",
 }  # fmt: skip
@@ -145,6 +146,8 @@ SHIPYARD_REACTOR = "Shipyard Reactor"
 SHIPYARD_BATTERY = "Shipyard Battery"
 # What a station starts with; every other inventory and production queue starts empty
 REACTOR_URANIUM = 10_000
+# Players get at the shipyard's reactors while they rent it, so those hold only this much
+SHIPYARD_REACTOR_URANIUM = 10
 # The safe zone block's 5 L, times BlocksInventorySizeMultiplier, of 0.2 L zone chips
 ZONE_CHIPS = 75
 
@@ -528,7 +531,7 @@ def recolor(block, color, skin=False):
             block.insert(list(block).index(mask) + 1, node)
 
 
-def stock(block, kind):
+def stock(block, kind, uranium=REACTOR_URANIUM):
     """Empties the block's inventories and production queue, then loads its starting items.
     Gas tanks keep their gas: it isn't an item."""
     items = []
@@ -536,7 +539,7 @@ def stock(block, kind):
         kind == "Reactor"
         and block.findtext("SubtypeName") == "LargeBlockLargeGenerator"
     ):
-        items = [("MyObjectBuilder_Ingot", "Uranium", REACTOR_URANIUM)]
+        items = [("MyObjectBuilder_Ingot", "Uranium", uranium)]
     if kind == "SafeZoneBlock":
         items = [("MyObjectBuilder_Component", "ZoneChip", ZONE_CHIPS)]
     for inventory in block.iter():
@@ -699,7 +702,7 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
             set_child(block, "CustomName", SHIPYARD_REACTOR)
         if kind == "BatteryBlock":
             set_child(block, "CustomName", SHIPYARD_BATTERY)
-        stock(block, kind)
+        stock(block, kind, SHIPYARD_REACTOR_URANIUM)
     return as_sector_object(grid)
 
 

@@ -55,31 +55,33 @@ downloaded.
   line between EarthLike and the Moon, the one such direction nearest to Delta
   Station, and it faces away from the Moon. Each station sits in a 250 m admin
   safe zone, owned by the "Octahedron Authority" NPC faction, and players can't
-  damage or edit it.
+  damage or edit it. The stations start empty, apart from 10,000 kg of uranium
+  ingots in each large reactor, a full safe zone block (75 zone chips) and the
+  gas in the tanks. North Station, the one with the lane to the Moon, shares
+  its inventories and production with everyone.
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half: straight behind the equatorial stations,
   away from EarthLike, 45 degrees between behind and away from EarthLike at
   the pole stations, and on the Moon side of Moon Station. The lanes leave the
-  stations the other way. The shipyard's side faces the lobby, rolled 30
-  degrees about its long axis with its top toward the station, so more of the
-  build volume shows past its near wall. The station and its shipyard are
-  centered on the safe zone together, the shipyard lifted 50 m along the
-  station's up and turned 17.5 degrees about it (so the welder wall's middle
-  beam doesn't hide its center from the lobby), and spread apart as far as their
-  block bounds stay 10 m inside the zone's edge: 100 m between them (63 m at the
-  pole stations), the farthest block 227 m from the zone's center. Each
-  station has its own color (`STATION_COLORS`): the shipyard's red frame gets
-  a skin and color, the station's red walls and furniture only the color.
-  North blue, South red, Beta orange and Delta magenta painted metal; Alpha
-  black and Gamma dark green carbon fiber; Moon dark gray concrete. The lanes still start from the zone's
-  center. Its
-  blocks are shared with everyone but its 4 large reactors and 72 batteries;
-  on the server Essentials tops those up to 1000 uranium ingots and full charge
-  every 10 minutes (`config/essentials.cfg`). The stations start empty, apart from 10,000 kg of
-  uranium ingots in each large reactor, a full safe zone block (75 zone chips)
-  and the gas in the tanks. North Station, the one with the lane to the Moon,
-  shares its inventories and production with everyone.
+  stations the other way and still start from the zone's center.
+  - The shipyard's side faces the lobby, rolled 30 degrees about its long axis
+    with its top toward the station, lifted 50 m along the station's up and
+    turned 17.5 degrees about it, so more of the build volume shows past its
+    near wall and the wall's middle beam doesn't hide its center.
+  - The station and its shipyard are centered on the safe zone together and
+    spread apart as far as their block bounds stay 10 m inside the zone's edge:
+    100 m between them (63 m at the pole stations), the farthest block 227 m
+    from the zone's center.
+  - Its blocks are shared with everyone but its 4 large reactors and 72
+    batteries. Those start with 10 uranium ingots each and full charge, and on
+    the server Essentials tops them back up every 10 minutes
+    (`config/essentials.cfg`). Only 10 ingots, since players get at the reactors
+    while renting the shipyard.
+  - Each station has its own color (`STATION_COLORS`): the shipyard's red frame
+    gets a skin and color, the station's red walls and furniture only the
+    color. North blue, South red, Beta orange and Delta magenta painted metal;
+    Alpha black and Gamma dark green carbon fiber; Moon dark gray concrete.
 - Makes the stations the NPC faction's trade stations: the faction is a Trader
   with a bank account, and each station grid has a station entry, so the
   economy stocks its store and contract blocks. The game's own trade factions
@@ -88,11 +90,12 @@ downloaded.
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
 - Places one Trade Lane along each of the 12 edges and between the Moon
-  station and each of the two nearest stations (North and Delta), 14 in all. A lane goes both ways: each end
-  is an entry toward the other. Every end is a one-block grid with a Trade Lane
-  Computer, 1000 m from its station (1500 m at North and Delta Station for the
-  Moon lanes, clear of their other lane ends), indestructible and not editable. The ends
-  have no safe zone; the lane's rings have no physics. The two rings of a
+  station and each of the two nearest stations (North and Delta), 14 in all. A
+  lane goes both ways: each end is an entry toward the other. Every end is a
+  one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
+  North and Delta Station for the Moon lanes, clear of their other lane ends),
+  indestructible and not editable. The ends have no safe zone; the lane's rings
+  have no physics. The two rings of a
   tunnel sit side by side, level with the stations' horizontal plane on the
   Moon lanes and between the equator stations, one above the other on the
   lanes to North and South Station, so pilots can tell the tunnels apart.

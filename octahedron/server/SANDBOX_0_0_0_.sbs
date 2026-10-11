@@ -277245,7 +277245,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -277318,7 +277318,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -277391,7 +277391,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -277464,7 +277464,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -307026,7 +307026,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -307099,7 +307099,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -307172,7 +307172,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -307245,7 +307245,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -337703,7 +337703,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -337777,7 +337777,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -337851,7 +337851,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -337925,7 +337925,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -367914,7 +367914,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -367987,7 +367987,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -368060,7 +368060,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -368133,7 +368133,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -398591,7 +398591,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -398665,7 +398665,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -398739,7 +398739,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -398813,7 +398813,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -428802,7 +428802,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -428875,7 +428875,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -428948,7 +428948,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -429021,7 +429021,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -459479,7 +459479,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -459553,7 +459553,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -459627,7 +459627,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
@@ -459701,7 +459701,7 @@ RingInterval:10000</Value>
                   <CanPutItems>true</CanPutItems>
                   <Items>
                     <MyObjectBuilder_InventoryItem>
-                      <Amount>10000</Amount>
+                      <Amount>10</Amount>
                       <PhysicalContent xsi:type="MyObjectBuilder_Ingot">
                         <SubtypeName>Uranium</SubtypeName>
                       </PhysicalContent>
