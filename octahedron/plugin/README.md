@@ -87,8 +87,9 @@ holds no blueprint for the server.
   is loaded.
 - It appears past the station's safe zone, `StarterShipClearance` (50 m) beyond
   its edge, on the table's side of the station if there is room there, else
-  turned about the station's up. Its main cockpit (or any cockpit, or the grid's
-  forward) faces away from the station and its up is the station's up.
+  turned about the station's up. Its main cockpit (else any cockpit, control seat
+  or remote control, else the grid's forward) faces away from the station and its
+  up is the station's up.
 - It is built as a projector would build it: empty cargo, no fuel or gas,
   nobody seated, scripts as the table got them. With `StarterShipChargeBatteries`
   its batteries are full. The player owns every block and has built it, so it
@@ -99,6 +100,21 @@ holds no blueprint for the server.
 
 On a cluster the node that owns the station's partition builds the ship; that is
 the node the player is on while standing at the table.
+
+While starter ships are on, a blueprint loaded into a station table gets its
+hologram fitted to the table by the server. The game only scales a blueprint to
+fit the 2.5 m block and leaves its grid origin at the block's center. The plugin
+scales the whole blueprint, all its grids, to fit a cube of
+`StarterShipHologramSize` (0.5 m), centers it on `StarterShipHologramCenter` (in
+the table block's frame; by default 5 cm below the block's center, so the cube
+sits just above the table top), and turns it so that the up and forward of the
+main grid's main cockpit, or of any cockpit, control seat or remote control, point
+along the table's up and forward. A blueprint without one keeps its main grid's
+own up and forward. It sets the projector's offset, rotation and scale, which the
+server sends to every client. The offset moves in whole scaled cubes and the game
+keeps it within 50 of them, so a very large blueprint may sit a little off center.
+`!oct holograms` (admin) fits every station table again, for example after a
+config change.
 
 ## Loading it on a Magnetar server
 
@@ -191,7 +207,10 @@ docstring.
 world (`tests/edge_grids.py`) and the character on its jetpack, the starter
 ship from a blueprint loaded into the hologram tables, and its limits.
 `tests/check_save.py` then reads the saved world: where the edge grids ended up,
-the refilled blocks and the starter ships.
+the refilled blocks and the starter ships. `tests/test_hologram.py` takes
+screenshots of fitted holograms, a blueprint with a cockpit and one without, from
+the side, the front and above, on a bench of two tables in open space; it needs a
+rendering client.
 
 ## Building locally
 

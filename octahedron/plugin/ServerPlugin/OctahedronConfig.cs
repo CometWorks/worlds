@@ -248,6 +248,29 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = true;
+
+    [DoubleOption(
+        0.01,
+        2.5,
+        "Edge of the cube over a station hologram table that a loaded blueprint is scaled to fit (m).",
+        Parent = "starter"
+    )]
+    public double StarterShipHologramSize
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 0.5;
+
+    [Vector3DOption(
+        "Center of that cube in the table block's own frame (m): X right, Y up, Z back, from the block's center. "
+            + "The console's top is 0.33 m below its center, so the default cube sits just above it.",
+        Parent = "starter"
+    )]
+    public Vector3D StarterShipHologramCenter
+    {
+        get;
+        set => SetField(ref field, value);
+    } = new(0, -0.05, 0);
 }
 
 public struct RefillContainer

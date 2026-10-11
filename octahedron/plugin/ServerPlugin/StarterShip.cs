@@ -222,8 +222,9 @@ internal static class StarterShip
         return (sphere.Center, sphere.Radius);
     }
 
-    // The main cockpit's forward and up in grid coordinates, else any cockpit's, else the grid's
-    private static (Vector3D Forward, Vector3D Up) CockpitFrame(MyObjectBuilder_CubeGrid grid)
+    // The forward and up of the main cockpit, else of any cockpit, control seat or remote
+    // control, in grid coordinates; the grid's own without any
+    internal static (Vector3D Forward, Vector3D Up) CockpitFrame(MyObjectBuilder_CubeGrid grid)
     {
         MyObjectBuilder_CubeBlock found = null;
         foreach (var block in grid.CubeBlocks)
@@ -233,7 +234,7 @@ internal static class StarterShip
                 found = block;
                 break;
             }
-            if (found == null && block is MyObjectBuilder_Cockpit)
+            if (found == null && block is MyObjectBuilder_ShipController)
                 found = block;
         }
         if (found == null)

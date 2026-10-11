@@ -32,4 +32,8 @@ public sealed class Commands : CommandModule
             Context.Caller.SteamId,
             table.Length == 0 ? null : string.Join(" ", table)
         );
+
+    [Command("holograms", "Fits the blueprints in the station hologram tables to the tables again")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Holograms() => $"Fitted {TableHologram.FitAll()} hologram tables.";
 }

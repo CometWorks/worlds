@@ -7,7 +7,6 @@ and what the refill put into the stations' blocks.
 from __future__ import annotations
 
 import math
-import re
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter

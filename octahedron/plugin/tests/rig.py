@@ -57,8 +57,10 @@ from se_remote import RemoteAPI  # noqa: E402
 TASK = os.environ.get("OCT_TASK", "SE1-0133")
 TEST_ROOT = HOME / ".se-test"
 PLUGIN_ID = "F7FB710B-7B41-45D6-B05C-A01DDE0FEE3A"
-# Measured RSS (notes/parallel-test-work): a --no-render client; the server is a guess
+# Measured RSS (notes/parallel-test-work): a --no-render and a rendering client; the
+# server is a guess
 CLIENT_GIB = 3.7
+RENDER_GIB = 5.5
 SERVER_GIB = 4.0
 
 
@@ -105,11 +107,13 @@ def _vec(tag: str, v) -> str:
     return f'<{tag} x="{v[0]}" y="{v[1]}" z="{v[2]}" />'
 
 
-def block(xsi_type: str, subtype: str, pos, extra: str = "") -> str:
+def block(
+    xsi_type: str, subtype: str, pos, extra: str = "", forward="Forward", up="Up"
+) -> str:
     return (
         f'<MyObjectBuilder_CubeBlock xsi:type="{xsi_type}">'
         f"<SubtypeName>{subtype}</SubtypeName>{_vec('Min', pos)}"
-        f'<BlockOrientation Forward="Forward" Up="Up" />{extra}'
+        f'<BlockOrientation Forward="{forward}" Up="{up}" />{extra}'
         "</MyObjectBuilder_CubeBlock>"
     )
 
@@ -160,11 +164,14 @@ def grid(
 
 
 def prepare_world(
-    extra_grids=(), settings: dict | None = None, table_blueprint: str | None = None
+    extra_grids=(),
+    settings: dict | None = None,
+    table_blueprint: str | list[str] | None = None,
 ) -> None:
     """A fresh copy of the server world without mods and asteroids, with extra grids
-    (entity XML) added. table_blueprint (a grid builder XML) is loaded into every
-    station hologram table, as if a player had, and the tables are switched on."""
+    (entity XML) added. table_blueprint (a grid builder XML, or a list of them taken in
+    turn) is loaded into every station hologram table, as if a player had, and the tables
+    are switched on."""
     shutil.rmtree(WORLD, ignore_errors=True)
     shutil.copytree(
         WORLD_SOURCE, WORLD, ignore=shutil.ignore_patterns("Octahedron-Asteroid-*.vx2")
@@ -181,10 +188,15 @@ def prepare_world(
     )
     assert count > 1000, count
     if table_blueprint:
+        blueprints = (
+            [table_blueprint] if isinstance(table_blueprint, str) else table_blueprint
+        )
+        tables = iter(range(1_000_000))
         text, count = re.subn(
             r'(<MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_Projector">\s*'
             r"<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>false</Enabled>",
-            rf"\1<Enabled>true</Enabled><ProjectedGrids>{table_blueprint}</ProjectedGrids>",
+            lambda m: f"{m[1]}<Enabled>true</Enabled><ProjectedGrids>"
+            f"{blueprints[next(tables) % len(blueprints)]}</ProjectedGrids>",
             text,
             flags=re.S,
         )
@@ -469,9 +481,9 @@ def api() -> RemoteAPI:
     )
 
 
-def start_client(timeout: float = 2400.0) -> RemoteAPI:
+def start_client(timeout: float = 2400.0, render: bool = False) -> RemoteAPI:
     """Starts the client, which joins the server, and returns its API once a
-    character stands in the world"""
+    character stands in the world. render: draw frames at 1280x720, for screenshots"""
     if client_pid():
         raise RuntimeError("The test client is already running")
     prepare_client()
@@ -481,11 +493,12 @@ def start_client(timeout: float = 2400.0) -> RemoteAPI:
             "-multiInstance", "-lazySteam", "-noprompt", "-noupdate", "-nosplash", "-stablelogs",
             "--no-steam", "--client-id", str(CLIENT_ID), "--client-name", CLIENT_NAME,
             "-appdata", str(APPDATA),
-            "--quality", "minimal", "--resolution", "640x480", "--no-audio",
-            "--headless", "--no-render",
+            "--quality", "minimal", "--no-audio", "--headless",
+            *(["--resolution", "1280x720"] if render else ["--resolution", "640x480", "--no-render"]),
             "--connect", f"127.0.0.1:{SERVER_PORT}",
         ],
-        CLIENT_GIB, PULSAR, CLIENT_LOG, CLIENT_PID, {"PULSAR_NO_RENDER": "true"},
+        RENDER_GIB if render else CLIENT_GIB, PULSAR, CLIENT_LOG, CLIENT_PID,
+        {} if render else {"PULSAR_NO_RENDER": "true"},
     )  # fmt: skip
     remote = api()
     deadline = time.monotonic() + timeout
