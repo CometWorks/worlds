@@ -189,9 +189,9 @@ game update that changes the planet or voxel material definitions or maps.
 - Every station has 4 "Free Tools" cargo terminals (the blueprint's hidden
   toolboxes by its "Free tools!" signs, renamed and shown in inventory screens)
   shared with all players. On the server, the Octahedron plugin's
-  `RefillContainers` rule in `config/octahedron.cfg` tops each up every minute to 3 of each Elite tool
-  (welder, grinder, drill), 3 full oxygen and 3 full hydrogen bottles, and 3
-  suit battery packs (Powerkit). "Station Loot" is the blueprint's tools,
+  `RefillContainers` rule in `config/octahedron.cfg` tops each up every minute
+  to 3 of each Elite tool (welder, grinder, drill), 3 full oxygen and 3 full
+  hydrogen bottles, and 3 suit battery packs (Powerkit). "Station Loot" is the blueprint's tools,
   bottles and ammo container.
 - The asteroid ore settings are vanilla's (DepositsCountCoefficient 2,
   DepositSizeDenominator 30, HarvestRatioMultiplier 1), not the Star System
