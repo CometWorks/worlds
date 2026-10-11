@@ -36,6 +36,7 @@ STEAM = Path.home() / ".steam/steam/steamapps"
 SCENARIO = STEAM / "common/SpaceEngineers/Content/CustomWorlds/Star System"
 STATION_BLUEPRINT = STEAM / "workshop/content/244850/3816368704/bp.sbc"
 CONFIG = Path(__file__).parent / "config"
+SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/intellibeam-lasershipyard.sbc"
 MES_MODS = CONFIG / "mes-mods.xml"
 MES_STORAGE = CONFIG / "storage"
 RELATIVE_TOP_SPEED = CONFIG / "relative-top-speed.xml"
@@ -68,7 +69,7 @@ ICE_SHAPE = "SuperRock_001"
 ICE_MATERIAL = "Ice_02"
 VOXEL_GENERATOR = 4
 
-STATION_SAFE_ZONE_RADIUS = 200.0
+STATION_SAFE_ZONE_RADIUS = 250.0
 LANE_ENDPOINT_DISTANCE = 1_000.0
 # The Earth end of a Moon lane, farther out, so its rings stay clear of the station's other
 # lane ends (they touched the North lane's at Delta Station)
@@ -104,6 +105,18 @@ LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 FREE_TOOLS = "Free Tools"
 FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
+# Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
+# pressurized back half: behind the station and away from the planet, which keeps it off the
+# lanes. This much space between the station's and the shipyard's block bounds keeps the
+# shipyard inside the station's safe zone.
+SHIPYARD_GAP = 15.0
+# Its blocks are shared with everyone, but power: Essentials keeps the reactors at 1000
+# uranium ingots and the batteries charged (RefillContainers in config/essentials.cfg).
+SHIPYARD_SHARED = {
+    "ConveyorSorter", "ShipConnector", "CargoContainer", "MedicalRoom", "ReflectorLight",
+}  # fmt: skip
+SHIPYARD_REACTOR = "Shipyard Reactor"
+SHIPYARD_BATTERY = "Shipyard Battery"
 # What a station starts with; every other inventory and production queue starts empty
 REACTOR_URANIUM = 10_000
 # The safe zone block's 5 L, times BlocksInventorySizeMultiplier, of 0.2 L zone chips
@@ -417,8 +430,8 @@ def clone_grid(grid, ids):
     return grid
 
 
-def grid_center(grid):
-    """Local center of the grid's block bounds, in meters."""
+def grid_bounds(grid):
+    """Lowest and highest block Min of the grid, in cells."""
     mins = [
         tuple(int(b.find("Min").get(k)) for k in "xyz")
         for b in grid.find("CubeBlocks")
@@ -426,6 +439,12 @@ def grid_center(grid):
     ]
     lo = [min(m[i] for m in mins) for i in range(3)]
     hi = [max(m[i] for m in mins) for i in range(3)]
+    return lo, hi
+
+
+def grid_center(grid):
+    """Local center of the grid's block bounds, in meters."""
+    lo, hi = grid_bounds(grid)
     return tuple((lo[i] + hi[i]) / 2 * 2.5 for i in range(3))
 
 
@@ -514,6 +533,54 @@ def station(template, ids, name, center, forward, up, owner, shared):
             set_child(block, "HudText", name)
     assert loot is not None, f"no {LOOT_CONTAINER_BLUEPRINT_NAME} for {LOOT_CONTAINER}"
     assert free_tools == FREE_TOOLS_COUNT, f"{free_tools} {FREE_TOOLS_BLUEPRINT_NAME}"
+    return as_sector_object(grid)
+
+
+def shipyard_place(station_grid, center, forward, up, away):
+    """(center, forward, up) of a station's shipyard. It goes between the station's back, where
+    the lobby is, and away, the space side (the Moon side for Moon Station): straight behind
+    the equatorial stations and Moon Station, 45 degrees off for the pole stations. The view
+    from the lobby falls on its side, along its local X, through its open frame."""
+    backward = mul(forward, -1)
+    side = norm(add(backward, away))
+    right = cross(forward, up)
+    lo, hi = grid_bounds(station_grid)
+    # How far the station's block bounds reach toward side, and the shipyard's half width
+    reach = sum(
+        (hi[i] - lo[i] + 1) * 1.25 * abs(dot(side, axis))
+        for i, axis in enumerate((right, up, backward))
+    )
+    lo, hi = grid_bounds(shipyard_template())
+    half = (hi[0] - lo[0] + 1) * 1.25
+    shipyard_up = norm(perpendicular_part(up, side))
+    shipyard_forward = cross(shipyard_up, side)
+    position = add(center, mul(side, reach + SHIPYARD_GAP + half))
+    return position, shipyard_forward, shipyard_up
+
+
+def shipyard_template():
+    return ET.parse(SHIPYARD_BLUEPRINT).getroot().find(".//CubeGrid")
+
+
+def shipyard(template, ids, name, center, forward, up, owner):
+    grid = clone_grid(template, ids)
+    place_grid(grid, center, forward, up)
+    set_child(grid, "DisplayName", name)
+    set_child(grid, "IsStatic", "true")
+    set_child(grid, "CreatePhysics", "true")
+    set_child(grid, "DestructibleBlocks", "false")
+    set_child(grid, "Editable", "false")
+    for block in grid.find("CubeBlocks"):
+        if block.find("Owner") is None:
+            continue
+        block.find("Owner").text = str(owner)
+        kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
+        block.find("ShareMode").text = "All" if kind in SHIPYARD_SHARED else "Faction"
+        if kind == "Reactor":
+            set_child(block, "CustomName", SHIPYARD_REACTOR)
+        if kind == "BatteryBlock":
+            set_child(block, "CustomName", SHIPYARD_BATTERY)
+        stock(block, kind)
     return as_sector_object(grid)
 
 
@@ -668,10 +735,10 @@ def layout(earth, moon):
     toward = norm(add(*(norm(sub(places[name][0], moon.center)) for name in near)))
     center = add(moon.center, mul(toward, MOON_STATION_DISTANCE))
     # Its up is square to the Earth-Moon line, the one of those directions nearest to Delta
-    # Station; it faces the Moon
+    # Station; it faces away from the Moon, so its lobby and its shipyard are on the Moon side
     axis = norm(sub(moon.center, earth.center))
     up = norm(perpendicular_part(sub(places["Delta Station"][0], center), axis))
-    forward = norm(perpendicular_part(sub(moon.center, center), up))
+    forward = norm(perpendicular_part(sub(center, moon.center), up))
     places["Moon Station"] = (center, forward, up)
     names = list(places)[:6]
     edges = [
@@ -1018,6 +1085,22 @@ def main():
         objects.append(voxel_map(ids, storage, center, size, rng))
     # Drawn last, so the economy's ids leave every id and asteroid above as they were
     add_trade_stations(checkpoint, ids, faction, trade_stations)
+
+    yard = shipyard_template()
+    for name, (center, forward, up) in places.items():
+        planet = moon if name == "Moon Station" else earth
+        away = norm(sub(center, planet.center))
+        if planet is moon:
+            away = mul(away, -1)
+        objects.append(
+            shipyard(
+                yard,
+                ids,
+                f"{name} Shipyard",
+                *shipyard_place(template, center, forward, up, away),
+                owner,
+            )
+        )
 
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),

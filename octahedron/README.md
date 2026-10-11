@@ -53,9 +53,19 @@ downloaded.
   gravity (12.3 km), between the directions to the two nearest stations.
   The 6 stations' up is EarthLike's north. Moon Station's up is square to the
   line between EarthLike and the Moon, the one such direction nearest to Delta
-  Station, and it faces the Moon. Each station sits in a 200 m admin safe
-  zone, owned by the "Octahedron Authority" NPC faction, and players can't
-  damage or edit it. The stations start empty, apart from 10,000 kg of
+  Station, and it faces away from the Moon. Each station sits in a 250 m admin
+  safe zone, owned by the "Octahedron Authority" NPC faction, and players can't
+  damage or edit it.
+- Places a shipyard next to every station (`blueprints/intellibeam-lasershipyard.sbc`,
+  24 OmniArc beam welders around an open frame), in view of the station's
+  lobby, its pressurized back half: straight behind the equatorial stations,
+  away from EarthLike, 45 degrees between behind and away from EarthLike at
+  the pole stations, and on the Moon side of Moon Station. The lanes leave the
+  stations the other way. The shipyard's side faces the lobby, and it is 15 m
+  from the station, so all of it is inside the safe zone (241 m at most). Its
+  blocks are shared with everyone but its 4 large reactors and 72 batteries;
+  on the server Essentials keeps those at 1000 uranium ingots and full charge
+  (`config/essentials.cfg`). The stations start empty, apart from 10,000 kg of
   uranium ingots in each large reactor, a full safe zone block (75 zone chips)
   and the gas in the tanks. North Station, the one with the lane to the Moon,
   shares its inventories and production with everyone.
