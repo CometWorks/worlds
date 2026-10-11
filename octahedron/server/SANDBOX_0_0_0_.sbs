@@ -1798,7 +1798,7 @@ ships!</Text>
           <ColorMaskHSV x="0" y="-0.8" z="0.15" />
           <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -11903,7 +11903,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -12014,7 +12014,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -12234,7 +12234,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -13481,7 +13481,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -13609,7 +13609,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -13720,7 +13720,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -13872,7 +13872,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -13910,7 +13910,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -13948,7 +13948,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -14010,7 +14010,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -14168,7 +14168,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -14217,7 +14217,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -14297,7 +14297,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -14343,7 +14343,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -14381,7 +14381,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -14469,7 +14469,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -15034,7 +15034,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="0" z="0.05" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -15100,7 +15100,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0" y="0" z="0.05" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -15741,7 +15741,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -15861,7 +15861,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.33333334" y="-0.49" z="-0.25" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -16014,7 +16014,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -16047,7 +16047,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
           <ColorMaskHSV x="0.575" y="0" z="0" />
           <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>
@@ -28045,7 +28045,7 @@ Bohrer=aus (10)
           <ColorMaskHSV x="0.0" y="0.2" z="0.55" />
           <SkinSubtypeId>Clean_Armor</SkinSubtypeId>
           <Owner>152137438111824285</Owner>
-          <ShareMode>All</ShareMode>
+          <ShareMode>Faction</ShareMode>
           <ComponentContainer>
             <Components>
               <ComponentData>

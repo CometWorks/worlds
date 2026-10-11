@@ -88,12 +88,6 @@ PUBLIC_BLOCKS = {
     "MedicalRoom", "Projector", "StoreBlock", "ContractBlock", "VendingMachine", "Door",
     "AirtightSlideDoor", "ButtonPanel", "Cockpit", "ShipConnector",
 }  # fmt: skip
-# The shared station also opens its inventories and production to everyone. Power, safe zone,
-# antenna, timers, vents and the rest stay with the faction, so no one can switch them off.
-SHARED_BLOCKS = PUBLIC_BLOCKS | {
-    "CargoContainer", "Assembler", "Refinery", "OxygenGenerator", "OxygenTank",
-    "ConveyorSorter",
-}  # fmt: skip
 # The one container per station the economy's refill puts loot into, through the Essentials
 # plugin's StationLootContainerName (config/essentials.cfg). It stays with the faction on every
 # station, so the loot it gets each economy tick can't be farmed.
@@ -550,7 +544,7 @@ def stock(block, kind, uranium=REACTOR_URANIUM):
         block.find("Queue").clear()
 
 
-def station(template, ids, name, center, forward, up, owner, shared):
+def station(template, ids, name, center, forward, up, owner):
     grid = clone_grid(template, ids)
     place_grid(grid, center, forward, up)
     set_child(grid, "DisplayName", name)
@@ -566,8 +560,7 @@ def station(template, ids, name, center, forward, up, owner, shared):
             continue
         block.find("Owner").text = str(owner)
         kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
-        public = SHARED_BLOCKS if shared else PUBLIC_BLOCKS
-        block.find("ShareMode").text = "All" if kind in public else "Faction"
+        block.find("ShareMode").text = "All" if kind in PUBLIC_BLOCKS else "Faction"
         if block.findtext("CustomName") == LOOT_CONTAINER_BLUEPRINT_NAME:
             loot = block
             set_child(block, "CustomName", LOOT_CONTAINER)
@@ -843,8 +836,8 @@ def facing(planet, center):
 
 
 def layout(earth, moon):
-    """Station name -> (center, forward, up), the lane edges, and the Earth station nearest the
-    Moon. Directions are in EarthLike's frame."""
+    """Station name -> (center, forward, up), and the lane edges. Directions are in EarthLike's
+    frame."""
     north, front = earth.up, earth.forward
     right = cross(front, north)
     stations = {
@@ -879,7 +872,7 @@ def layout(earth, moon):
     ]
     assert len(edges) == 12, edges
     edges += [(name, "Moon Station") for name in near]
-    return places, edges, near[0]
+    return places, edges
 
 
 def lanes(places, edges):
@@ -1183,10 +1176,8 @@ def main():
     rng = random.Random(args.seed)
     ids = Ids(rng)
     owner, faction = add_npc(checkpoint, ids)
-    places, edges, nearest = layout(earth, moon)
+    places, edges = layout(earth, moon)
     template = ET.parse(STATION_BLUEPRINT).getroot().find(".//CubeGrid")
-    # The Earth station nearest the Moon belongs to no one, so everyone can always spawn there
-    shared = nearest
     trade_stations = {}
     shipyards = {}
     for name, (center, forward, up) in places.items():
@@ -1198,9 +1189,7 @@ def main():
         station_center, shipyards[name] = station_and_shipyard(
             template, center, forward, up, away
         )
-        grid = station(
-            template, ids, name, station_center, forward, up, owner, name == shared
-        )
+        grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
         objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))

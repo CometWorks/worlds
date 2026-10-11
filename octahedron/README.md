@@ -57,8 +57,7 @@ downloaded.
   safe zone, owned by the "Octahedron Authority" NPC faction, and players can't
   damage or edit it. The stations start empty, apart from 10,000 kg of uranium
   ingots in each large reactor, a full safe zone block (75 zone chips) and the
-  gas in the tanks. North Station, the one with the lane to the Moon, shares
-  its inventories and production with everyone.
+  gas in the tanks.
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half: straight behind the equatorial stations,
@@ -164,8 +163,7 @@ game update that changes the planet or voxel material definitions or maps.
   gas, ice in the gas generators, and loot (credits included) in every empty
   cargo container, which it then hides. On the server the Essentials plugin
   replaces that with `config/essentials.cfg`: loot only into the one
-  faction-only "Station Loot" cargo terminal per station, and no ice, so
-  North Station's shared cargo and oxygen generators can't be farmed. A world
+  faction-only "Station Loot" cargo terminal per station, and no ice. A world
   without the plugin, like the design world, has the game's refill. The
   server reads the file as `Essentials.cfg` from its instance folder; the
   options it leaves out keep their defaults.
