@@ -10,7 +10,8 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
-| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the server's Essentials config |
+| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the server's Essentials config and the Octahedron plugin's config (`octahedron.cfg`) |
+| `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
 | `ORES.md` | ore statistics of `server/` |
 | `MES.md` | the MES settings and what spawns where |
