@@ -77,7 +77,7 @@ downloaded.
     while renting the shipyard.
   - Each station has its own color (`STATION_COLORS`): the shipyard's red frame
     gets a skin and color, the station's red walls and furniture only the
-    color. Beta orange and Delta dark magenta painted metal;
+    color. Beta orange and Delta dark blue painted metal;
     Alpha black and Gamma dark green carbon fiber; Moon dark gray concrete.
 - Makes the stations the NPC faction's trade stations: the faction is a Trader
   with a bank account, and each station grid has a station entry, so the

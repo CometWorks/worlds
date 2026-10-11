@@ -131,7 +131,7 @@ STATION_COLORS = {
     "Alpha Station": ("CarbonFibre_Armor", (0.0, -1.0, -0.8)),  # black
     "Beta Station": (None, (0.083, 0.2, 0.55)),  # orange
     "Gamma Station": ("CarbonFibre_Armor", (0.333, 0.2, -0.3)),  # dark green
-    "Delta Station": (None, (0.833, 0.2, 0.22)),  # magenta, a third darker
+    "Delta Station": (None, (0.667, 0.2, 0.22)),  # dark blue
     "Moon Station": ("Concrete_Armor", (0.0, -1.0, -0.45)),  # dark gray
 }
 SHIPYARD_REACTOR = "Shipyard Reactor"
