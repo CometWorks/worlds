@@ -353,8 +353,8 @@
           <MyObjectBuilder_Station>
             <Id>919160980677612549</Id>
             <Position x="13302.1243838055" y="125190.69826708132" z="-104117.99815739407" />
-            <Up x="0.0" y="1.0" z="0.0" />
-            <Forward x="0.3086354135870143" y="0.0" z="-0.9511804147899455" />
+            <Up x="-0.06013781351129373" y="-0.6346271834024051" z="-0.7704750362424541" />
+            <Forward x="0.20557527728662764" y="0.7474511086746455" z="-0.6317085130893594" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
             <StationEntityId>118363774393739852</StationEntityId>

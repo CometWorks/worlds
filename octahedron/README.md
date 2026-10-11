@@ -51,7 +51,9 @@ downloaded.
 - Places the 6 stations of the octahedron 80 km above EarthLike, over the poles
   and on the equator, and one 15 km from the Moon's center, just outside its
   gravity (12.3 km), between the directions to the two nearest stations.
-  Every station's up is its planet's north. Each sits in a 200 m admin safe
+  The 6 stations' up is EarthLike's north. Moon Station's up is square to the
+  line between EarthLike and the Moon, the one such direction nearest to Delta
+  Station, and it faces the Moon. Each station sits in a 200 m admin safe
   zone, owned by the "Octahedron Authority" NPC faction, and players can't
   damage or edit it. The stations start empty, apart from 10,000 kg of
   uranium ingots in each large reactor, a full safe zone block (75 zone chips)

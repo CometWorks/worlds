@@ -207444,9 +207444,9 @@ center 30</Value>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>118363774393739852</Name>
       <PositionAndOrientation>
-        <Position x="13302.1243838055" y="125183.19826708132" z="-104117.99815739407" />
-        <Forward x="0.3086354135870143" y="0.0" z="-0.9511804147899455" />
-        <Up x="0.0" y="1.0" z="0.0" />
+        <Position x="13302.575417406835" y="125195.45797095684" z="-104112.21959462226" />
+        <Forward x="0.20557527728662764" y="0.7474511086746455" z="-0.6317085130893594" />
+        <Up x="-0.06013781351129373" y="-0.6346271834024051" z="-0.7704750362424541" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>

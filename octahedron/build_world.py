@@ -632,6 +632,11 @@ def load_planets(sector):
     }
 
 
+def perpendicular_part(v, axis):
+    """v without its component along the unit vector axis"""
+    return sub(v, mul(axis, dot(v, axis)))
+
+
 def facing(planet, center):
     """(forward, up) for a station: up is the planet's north, forward faces the planet's axis if it can."""
     inward = sub(planet.center, center)
@@ -662,7 +667,12 @@ def layout(earth, moon):
     near = sorted(places, key=lambda name: dist(places[name][0], moon.center))[:2]
     toward = norm(add(*(norm(sub(places[name][0], moon.center)) for name in near)))
     center = add(moon.center, mul(toward, MOON_STATION_DISTANCE))
-    places["Moon Station"] = (center, *facing(moon, center))
+    # Its up is square to the Earth-Moon line, the one of those directions nearest to Delta
+    # Station; it faces the Moon
+    axis = norm(sub(moon.center, earth.center))
+    up = norm(perpendicular_part(sub(places["Delta Station"][0], center), axis))
+    forward = norm(perpendicular_part(sub(moon.center, center), up))
+    places["Moon Station"] = (center, forward, up)
     names = list(places)[:6]
     edges = [
         (a, b)
