@@ -56,7 +56,7 @@ downloaded.
   Station, and it faces away from the Moon. Each station sits in a 250 m admin
   safe zone, owned by the "Octahedron Authority" NPC faction, and players can't
   damage or edit it.
-- Places a shipyard next to every station (`blueprints/intellibeam-lasershipyard.sbc`,
+- Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half: straight behind the equatorial stations,
   away from EarthLike, 45 degrees between behind and away from EarthLike at
