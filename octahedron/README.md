@@ -174,8 +174,13 @@ game update that changes the planet or voxel material definitions or maps.
   the cluster a stored ship stays in the world folder of the node that stored
   it, no other node can return it, and it is lost when that node restarts
   (SE1-0126). The Hangar plugin parks ships instead.
-- Each player gets `TotalPCU / MaxPlayers` PCU. `MaxPlayers` is still the Star
-  System scenario's 4, so set both for the server (see `DEPLOY.md`).
+- PCU limits are per player, 1,000,000 each. The game gives every player
+  `TotalPCU / MaxPlayers` and a dedicated server admits at most `MaxPlayers`
+  players, so the world sets `MaxPlayers` 100 (`MAX_PLAYERS`) and `TotalPCU`
+  100,000,000. The scenario's `MaxPlayers` 4 would have meant 250,000 PCU each and
+  4 players. On a cluster each node counts the same, and the cluster plugin's PCU
+  ledger adds up a player's PCU over the nodes; grids in Hangar are not in the
+  world, so they don't count.
 - Radiation is on (planets, weather, blocks); solar radiation (`SolarRadiationIntensity`)
   and hunger (`FoodConsumptionRate`) stay at 0.
 - Every economy tick the game refills each trade station: fuel, batteries,

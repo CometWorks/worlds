@@ -143,6 +143,9 @@ SHIPYARD_REACTOR_URANIUM = 10
 # The safe zone block's 5 L, times BlocksInventorySizeMultiplier, of 0.2 L zone chips
 ZONE_CHIPS = 75
 
+# Players a server admits (on a cluster: each node)
+MAX_PLAYERS = 100
+
 SETTINGS = {
     "GameMode": "Survival",
     "OnlineMode": "PUBLIC",
@@ -165,8 +168,11 @@ SETTINGS = {
     # is on, a character or grid that drops out of a Havok cluster's broadphase is
     # killed or deleted (MyPhysics.CreateHkWorld). The 500 km edge is a plugin's.
     "WorldSizeKm": 0,
+    # 1M PCU per player: the game gives each player TotalPCU / MaxPlayers, and a
+    # dedicated server admits at most MaxPlayers players, so both are set
+    "MaxPlayers": MAX_PLAYERS,
     "BlockLimitsEnabled": "PER_PLAYER",
-    "TotalPCU": 1_000_000,
+    "TotalPCU": 1_000_000 * MAX_PLAYERS,
     "MaxFactionsCount": 0,
     "EnableCopyPaste": "false",
     "EnableSpectator": "false",
