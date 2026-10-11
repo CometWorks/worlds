@@ -243,6 +243,11 @@
       <PublishedFileId>3082595868</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
+    <ModItem FriendlyName="Octahedron Music">
+      <Name>3817490449.sbm</Name>
+      <PublishedFileId>3817490449</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
     <ModItem FriendlyName="Modular Encounters Systems">
       <Name>1521905890.sbm</Name>
       <PublishedFileId>1521905890</PublishedFileId>

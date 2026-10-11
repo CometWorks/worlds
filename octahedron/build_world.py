@@ -206,6 +206,8 @@ MODS = [
     (3730092649, "Arthur's Lcd Mod"),
     # Inventory sorting and assembler quotas, worked out on the client
     (3082595868, "GV Inventory Sorter/Assembly Quota"),
+    # Two Kevin MacLeod songs for the Jukebox, our own mod (CometWorks/octahedron-music)
+    (3817490449, "Octahedron Music"),
 ]
 
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
