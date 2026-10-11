@@ -64,10 +64,11 @@ downloaded.
   stations the other way. The shipyard's side faces the lobby, rolled 30
   degrees about its long axis with its top toward the station, so more of the
   build volume shows past its near wall. The station and its shipyard are
-  centered on the safe zone together, spread apart as far as their block
-  bounds stay 10 m inside its edge: 150 m between them (122 m at the pole
-  stations), the station about 150 m from the zone's center, the farthest
-  block 222 m out. The lanes still start from the zone's center. Its
+  centered on the safe zone together, the shipyard lifted 50 m along the
+  station's up, and spread apart as far as their block bounds stay 10 m inside
+  the zone's edge: 139 m between them (81 m at the pole stations), the farthest
+  block 226 m from the zone's center. The lanes still start from the zone's
+  center. Its
   blocks are shared with everyone but its 4 large reactors and 72 batteries;
   on the server Essentials tops those up to 1000 uranium ingots and full charge
   every 10 minutes (`config/essentials.cfg`). The stations start empty, apart from 10,000 kg of

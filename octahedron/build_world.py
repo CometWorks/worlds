@@ -110,6 +110,8 @@ FREE_TOOLS_COUNT = 4
 # lanes. The pair is centered on the safe zone, and spread apart as far as their block bounds
 # stay this far inside the zone's edge.
 SAFE_ZONE_MARGIN = 10.0
+# The shipyard sits this much higher than the station, along the station's up
+SHIPYARD_LIFT = 50.0
 # Rolled about its long axis, its top leaning toward the station, so the view from the lobby
 # passes the near wall into the build volume. Raycast in game from Alpha Station, 5 spots by
 # 9 points between the welder walls: 13 m above the station's middle, 33 of 45 clear at +30,
@@ -572,9 +574,9 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
     the space side (the Moon side for Moon Station): straight behind the equatorial stations
     and Moon Station, 45 degrees off for the pole stations. The view from the lobby falls on
     its side, along its local X, through its open frame, rolled by SHIPYARD_ROLL_DEGREES.
-    Along that side the pair's block bounds are centered on the zone's center, and the gap
-    between them is the largest that keeps every corner of both bounds SAFE_ZONE_MARGIN inside
-    the zone."""
+    Along that side the pair's block bounds are centered on the zone's center, the shipyard
+    then lifted by SHIPYARD_LIFT along the station's up, and the gap between them is the
+    largest that keeps every corner of both bounds SAFE_ZONE_MARGIN inside the zone."""
     side = norm(add(mul(forward, -1), away))
     right = cross(forward, up)
     lo, hi = grid_bounds(station_grid)
@@ -600,7 +602,7 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
         extent = (2 * reach + gap + 2 * half) / 2
         station_center = add(zone, mul(side, reach - extent))
         yard_center = add(zone, mul(side, extent - half))
-        return station_center, yard_center
+        return station_center, add(yard_center, mul(up, SHIPYARD_LIFT))
 
     def fits(gap):
         station_center, yard_center = place(gap)
