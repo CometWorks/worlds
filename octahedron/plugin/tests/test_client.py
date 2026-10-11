@@ -2,7 +2,7 @@
 world edge (grids and the character), the starter ship and the station refill.
 Prints what it saw; the asserts stop it at the first rule broken.
 
-    uv run --with httpx python tests/test_client.py
+    uv run --no-project --with httpx python tests/test_client.py
 """
 
 from __future__ import annotations

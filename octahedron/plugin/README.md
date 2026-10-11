@@ -75,8 +75,10 @@ distance, outward speed and the limit there.
 
 Players don't get a respawn ship. A player who stands within `StarterShipTableReach`
 (10 m) of a station's hologram table (an NPC-owned `LargeBlockConsole` projector)
-with a blueprint loaded into it types `!oct ship`, or `!oct ship <table name>` to
-pick one table of several, and the blueprint is built as a ship:
+switched on and with a blueprint loaded into it types `!oct ship`, or
+`!oct ship <table name>` to pick one table of several, and the blueprint is built
+as a ship. The stations' tables start switched off, and a projector that is off
+holds no blueprint for the server.
 
 - It must be a single grid of at most `StarterShipMaxShipPcu` (20,000) PCU.
 - The player's PCU with the new ship may be at most `StarterShipMaxPlayerPcu`

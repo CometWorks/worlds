@@ -3,8 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
-using Sandbox;
 using PluginSdk.Commands;
+using Sandbox;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
@@ -57,7 +57,9 @@ internal static class StarterShip
         var builder = (MyObjectBuilder_ProjectorBase)table.GetObjectBuilderCubeBlock(true);
         var grids = builder.ProjectedGrids;
         if (grids == null || grids.Count == 0)
-            return CommandReply.Error("Load a blueprint into the hologram table first.");
+            return CommandReply.Error(
+                "Switch the hologram table on and load a blueprint into it first."
+            );
         if (grids.Count != 1)
             return CommandReply.Error(
                 $"The blueprint has {grids.Count} grids, a starter ship is a single grid."
