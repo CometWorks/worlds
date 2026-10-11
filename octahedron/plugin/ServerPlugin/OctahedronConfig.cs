@@ -9,6 +9,7 @@ namespace ServerPlugin;
 [Section("stations", caption: "Economy Stations")]
 [Section("refill", caption: "Refill Containers")]
 [Section("edge", caption: "World Edge")]
+[Section("starter", caption: "Starter Ship")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -166,6 +167,87 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 0.5;
+
+    [BoolOption(
+        "Players get a starter ship with !oct ship: the blueprint loaded into a station's hologram table, built outside the station's safe zone.",
+        Parent = "starter"
+    )]
+    public bool StarterShipEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [StringOption(
+        description: "Block subtype of the hologram tables. Only NPC-owned ones give ships.",
+        Parent = "starter"
+    )]
+    public string StarterShipTableSubtype
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "LargeBlockConsole";
+
+    [DoubleOption(1, 100, "The player must stand this close to the table (m).", Parent = "starter")]
+    public double StarterShipTableReach
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
+    [IntOption(
+        0,
+        description: "Most PCU a starter ship may have. It is a single grid.",
+        Parent = "starter"
+    )]
+    public int StarterShipMaxShipPcu
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20_000;
+
+    [IntOption(
+        0,
+        description: "Most PCU the player may have with the new ship: built blocks on every cluster node and ships in Hangar.",
+        Parent = "starter"
+    )]
+    public int StarterShipMaxPlayerPcu
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20_000;
+
+    [IntOption(
+        0,
+        description: "Minutes a player waits between two starter ships. Counted on each server node on its own, and reset by a restart.",
+        Parent = "starter"
+    )]
+    public int StarterShipCooldownMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 15;
+
+    [DoubleOption(
+        0,
+        description: "Gap between the station's safe zone and the ship (m).",
+        Parent = "starter"
+    )]
+    public double StarterShipClearance
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 50;
+
+    [BoolOption(
+        "Charge the new ship's batteries. Its cargo, fuel and gas tanks are empty either way.",
+        Parent = "starter"
+    )]
+    public bool StarterShipChargeBatteries
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
 }
 
 public struct RefillContainer

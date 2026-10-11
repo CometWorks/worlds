@@ -18,4 +18,18 @@ public sealed class Commands : CommandModule
     [Command("edge", "Lists the grids and characters in the world edge's braking zone")]
     [Permission(MyPromoteLevel.Admin)]
     public IEnumerable<string> Edge() => WorldEdge.Describe(Plugin.Config);
+
+    [Command(
+        "ship",
+        "Builds the blueprint loaded into the nearest station hologram table as your starter ship",
+        "!oct ship [table name]: stand by a station's hologram table with a blueprint loaded. "
+            + "The ship appears outside the station's safe zone, owned by you."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public CommandReply Ship(params string[] table) =>
+        StarterShip.Request(
+            Context.Caller.IdentityId,
+            Context.Caller.SteamId,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
 }

@@ -71,6 +71,33 @@ cluster each node brakes the grids and characters in the partitions it owns.
 `!oct edge` (admin) lists the grids and characters in the braking zone with their
 distance, outward speed and the limit there.
 
+### Starter ship
+
+Players don't get a respawn ship. A player who stands within `StarterShipTableReach`
+(10 m) of a station's hologram table (an NPC-owned `LargeBlockConsole` projector)
+with a blueprint loaded into it types `!oct ship`, or `!oct ship <table name>` to
+pick one table of several, and the blueprint is built as a ship:
+
+- It must be a single grid of at most `StarterShipMaxShipPcu` (20,000) PCU.
+- The player's PCU with the new ship may be at most `StarterShipMaxPlayerPcu`
+  (20,000). It counts the blocks the player built, on every cluster node through
+  the cluster plugin's PCU ledger, and the player's ships in Hangar when Hangar
+  is loaded.
+- It appears past the station's safe zone, `StarterShipClearance` (50 m) beyond
+  its edge, on the table's side of the station if there is room there, else
+  turned about the station's up. Its main cockpit (or any cockpit, or the grid's
+  forward) faces away from the station and its up is the station's up.
+- It is built as a projector would build it: empty cargo, no fuel or gas,
+  nobody seated, scripts as the table got them. With `StarterShipChargeBatteries`
+  its batteries are full. The player owns every block and has built it, so it
+  counts toward their PCU.
+- It costs nothing. A player gets one every `StarterShipCooldownMinutes` (15);
+  each cluster node counts that on its own, and a restart forgets it.
+- The player gets a GPS marker on the ship.
+
+On a cluster the node that owns the station's partition builds the ship; that is
+the node the player is on while standing at the table.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a
