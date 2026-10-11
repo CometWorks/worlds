@@ -34,6 +34,7 @@ public class Plugin : IPlugin
         Environment.GetEnvironmentVariable("OCTAHEDRON_CONFIG")
         ?? Path.Combine(MyFileSystem.UserDataPath, $"{Name}.cfg");
 
+    private readonly RefillContainers refillContainers = new();
     private bool failed;
 
     public void Init(object gameInstance)
@@ -54,7 +55,10 @@ public class Plugin : IPlugin
         if (failed || !Config.Enabled)
             return;
 
-        try { }
+        try
+        {
+            refillContainers.Update();
+        }
         catch (Exception e)
         {
             Log.Critical("Update failed, the plugin stops", e);

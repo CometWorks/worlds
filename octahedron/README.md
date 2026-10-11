@@ -10,7 +10,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
-| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the server's Essentials config and the Octahedron plugin's config (`octahedron.cfg`) |
+| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
 | `ORES.md` | ore statistics of `server/` |
@@ -80,8 +80,8 @@ downloaded.
     100 m between them, the farthest block 227 m from the zone's center.
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries. Those start with 10 uranium ingots each and full charge, and on
-    the server Essentials tops them back up every 10 minutes
-    (`config/essentials.cfg`). Only 10 ingots, since players get at the reactors
+    the server the Octahedron plugin tops them back up every 10 minutes
+    (`config/octahedron.cfg`). Only 10 ingots, since players get at the reactors
     while renting the shipyard.
   - Each station has its own color (`STATION_COLORS`): the shipyard's red frame
     gets a skin and color, the station's red walls and furniture only the
@@ -180,16 +180,16 @@ game update that changes the planet or voxel material definitions or maps.
   and hunger (`FoodConsumptionRate`) stay at 0.
 - Every economy tick the game refills each trade station: fuel, batteries,
   gas, ice in the gas generators, and loot (credits included) in every empty
-  cargo container, which it then hides. On the server the Essentials plugin
-  replaces that with `config/essentials.cfg`: loot only into the one
+  cargo container, which it then hides. On the server the Octahedron plugin
+  replaces that with `config/octahedron.cfg`: loot only into the one
   faction-only "Station Loot" cargo terminal per station, and no ice. A world
   without the plugin, like the design world, has the game's refill. The
-  server reads the file as `Essentials.cfg` from its instance folder; the
+  server reads the file as `Octahedron.cfg` from its instance folder; the
   options it leaves out keep their defaults.
 - Every station has 4 "Free Tools" cargo terminals (the blueprint's hidden
   toolboxes by its "Free tools!" signs, renamed and shown in inventory screens)
-  shared with all players. On the server, Essentials' `RefillContainers` rule
-  in `config/essentials.cfg` tops each up every minute to 3 of each Elite tool
+  shared with all players. On the server, the Octahedron plugin's
+  `RefillContainers` rule in `config/octahedron.cfg` tops each up every minute to 3 of each Elite tool
   (welder, grinder, drill), 3 full oxygen and 3 full hydrogen bottles, and 3
   suit battery packs (Powerkit). "Station Loot" is the blueprint's tools,
   bottles and ammo container.

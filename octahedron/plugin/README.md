@@ -9,6 +9,43 @@ Server only. It was made from `server-plugin-template`, without the client
 project and the template's shared plumbing: PluginSdk provides the config,
 logging and chat commands.
 
+## Rules
+
+### Economy stations
+
+Every economy tick (`EconomyTickInSeconds`, 600 s by default) the game refills
+each NPC trade station grid. It fills reactors with fuel, charges batteries,
+fills gas tanks, adds 10,000 ice to every gas generator, and fills turrets with
+ammo. It also puts the station type's loot (tools, datapads, Space Credits) into
+every empty cargo container and cryo chamber, and hides them all from inventory
+screens. Anyone could empty a shared container and find new loot after the next
+tick.
+
+With `StationRefillEnabled` on, the plugin's refill replaces the game's. Each
+part has its own switch, and loot goes only into the cargo containers and cryo
+chambers named `StationLootContainerName` (case-insensitive). Only those are
+hidden; other containers keep their setting. With the name empty, nothing gets
+loot or is hidden. Off, the game's own refill runs unchanged.
+
+### Refill containers
+
+`RefillContainers` keeps blocks stocked with fixed items, independent of the
+economy. Each rule names the blocks (case-insensitive), the seconds between
+refills, and the items with the minimum amount of each. Every interval, each
+matching block with an inventory (a cargo container, a reactor and so on) is
+topped up to those amounts; items above the minimum and other items stay as
+they are. A matching battery is charged full; its rule needs no items. Only
+blocks owned by an NPC are refilled, so players can't name their own after a
+rule and farm it.
+
+Items are written as `Type/Subtype`, for example the Elite tools
+`PhysicalGunObject/Welder4Item`, `PhysicalGunObject/AngleGrinder4Item` and
+`PhysicalGunObject/HandDrill4Item`, the bottles `OxygenContainerObject/OxygenBottle`
+and `GasContainerObject/HydrogenBottle`, or the suit battery pack
+`ConsumableItem/Powerkit`. An unknown item is logged once and skipped. Bottles
+are added full, and bottles of a rule's item that aren't full are removed from
+the container at each refill.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a
