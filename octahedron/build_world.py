@@ -134,8 +134,8 @@ SHIPYARD_SHARED = {
 # are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1).
 BLUEPRINT_RED = (1.0, 0.2, 0.55)
 STATION_COLORS = {
-    "North Station": (None, (0.667, 0.2, 0.55)),  # blue
-    "South Station": (None, (0.0, 0.2, 0.55)),  # red
+    "North Station": (None, (0.0, 0.2, 0.55)),  # red
+    "South Station": (None, (0.667, 0.2, 0.55)),  # blue
     "Alpha Station": ("CarbonFibre_Armor", (0.0, -1.0, -0.8)),  # black
     "Beta Station": (None, (0.083, 0.2, 0.55)),  # orange
     "Gamma Station": ("CarbonFibre_Armor", (0.333, 0.2, -0.3)),  # dark green
