@@ -107,9 +107,9 @@ FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
 # Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
 # pressurized back half: behind the station and away from the planet, which keeps it off the
-# lanes. This much space between the station's and the shipyard's block bounds keeps the
-# shipyard inside the station's safe zone.
-SHIPYARD_GAP = 10.0
+# lanes. The pair is centered on the safe zone, and spread apart as far as their block bounds
+# stay this far inside the zone's edge.
+SAFE_ZONE_MARGIN = 10.0
 # Rolled about its long axis, its top leaning toward the station, so the view from the lobby
 # passes the near wall into the build volume. Raycast in game from Alpha Station, 5 spots by
 # 9 points between the welder walls: 13 m above the station's middle, 33 of 45 clear at +30,
@@ -542,33 +542,85 @@ def station(template, ids, name, center, forward, up, owner, shared):
     return as_sector_object(grid)
 
 
-def shipyard_place(station_grid, center, forward, up, away):
-    """(center, forward, up) of a station's shipyard. It goes between the station's back, where
-    the lobby is, and away, the space side (the Moon side for Moon Station): straight behind
-    the equatorial stations and Moon Station, 45 degrees off for the pole stations. The view
-    from the lobby falls on its side, along its local X, through its open frame, rolled by
-    SHIPYARD_ROLL_DEGREES."""
-    backward = mul(forward, -1)
-    side = norm(add(backward, away))
+def box_corners(grid, center, forward, up):
+    """World corners of the grid's block bounds, with the bounds centered on center."""
+    lo, hi = grid_bounds(grid)
+    right = cross(forward, up)
+    corners = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            for sz in (-1, 1):
+                offset = [
+                    s * (hi[i] - lo[i] + 1) * 1.25 for i, s in enumerate((sx, sy, sz))
+                ]
+                corners.append(
+                    add(
+                        center,
+                        add(
+                            add(mul(right, offset[0]), mul(up, offset[1])),
+                            mul(forward, -offset[2]),
+                        ),
+                    )
+                )
+    return corners
+
+
+def station_and_shipyard(station_grid, zone, forward, up, away):
+    """(station center, (shipyard center, forward, up)) around the safe zone's center.
+
+    The shipyard goes on the side between the station's back, where the lobby is, and away,
+    the space side (the Moon side for Moon Station): straight behind the equatorial stations
+    and Moon Station, 45 degrees off for the pole stations. The view from the lobby falls on
+    its side, along its local X, through its open frame, rolled by SHIPYARD_ROLL_DEGREES.
+    Along that side the pair's block bounds are centered on the zone's center, and the gap
+    between them is the largest that keeps every corner of both bounds SAFE_ZONE_MARGIN inside
+    the zone."""
+    side = norm(add(mul(forward, -1), away))
     right = cross(forward, up)
     lo, hi = grid_bounds(station_grid)
-    # How far the station's block bounds reach toward side, and the shipyard's half width
+    # How far the station's block bounds reach toward side
     reach = sum(
         (hi[i] - lo[i] + 1) * 1.25 * abs(dot(side, axis))
-        for i, axis in enumerate((right, up, backward))
+        for i, axis in enumerate((right, up, mul(forward, -1)))
     )
     level = norm(perpendicular_part(up, side))
     roll = math.radians(SHIPYARD_ROLL_DEGREES)
-    shipyard_right = add(mul(side, math.cos(roll)), mul(level, math.sin(roll)))
-    shipyard_up = add(mul(level, math.cos(roll)), mul(side, -math.sin(roll)))
+    yard_right = add(mul(side, math.cos(roll)), mul(level, math.sin(roll)))
+    yard_up = add(mul(level, math.cos(roll)), mul(side, -math.sin(roll)))
     # The long axis, which the roll turns about
-    shipyard_forward = cross(level, side)
-    lo, hi = grid_bounds(shipyard_template())
-    half = (hi[0] - lo[0] + 1) * 1.25 * abs(dot(side, shipyard_right)) + (
+    yard_forward = cross(level, side)
+    yard = shipyard_template()
+    lo, hi = grid_bounds(yard)
+    half = (hi[0] - lo[0] + 1) * 1.25 * abs(dot(side, yard_right)) + (
         hi[1] - lo[1] + 1
-    ) * 1.25 * abs(dot(side, shipyard_up))
-    position = add(center, mul(side, reach + SHIPYARD_GAP + half))
-    return position, shipyard_forward, shipyard_up
+    ) * 1.25 * abs(dot(side, yard_up))
+
+    def place(gap):
+        # Bounds from -extent to +extent along side, the station's end first
+        extent = (2 * reach + gap + 2 * half) / 2
+        station_center = add(zone, mul(side, reach - extent))
+        yard_center = add(zone, mul(side, extent - half))
+        return station_center, yard_center
+
+    def fits(gap):
+        station_center, yard_center = place(gap)
+        corners = box_corners(station_grid, station_center, forward, up) + box_corners(
+            yard, yard_center, yard_forward, yard_up
+        )
+        return (
+            max(dist(c, zone) for c in corners)
+            <= STATION_SAFE_ZONE_RADIUS - SAFE_ZONE_MARGIN
+        )
+
+    assert fits(0), "the station and its shipyard don't fit the safe zone"
+    low, high = 0.0, 2 * STATION_SAFE_ZONE_RADIUS
+    while high - low > 0.5:
+        if fits((low + high) / 2):
+            low = (low + high) / 2
+        else:
+            high = (low + high) / 2
+    station_center, yard_center = place(math.floor(low))
+    return station_center, (yard_center, yard_forward, yard_up)
 
 
 def shipyard_template():
@@ -1071,10 +1123,21 @@ def main():
     # The Earth station nearest the Moon belongs to no one, so everyone can always spawn there
     shared = nearest
     trade_stations = {}
+    shipyards = {}
     for name, (center, forward, up) in places.items():
-        grid = station(template, ids, name, center, forward, up, owner, name == shared)
+        planet = moon if name == "Moon Station" else earth
+        away = norm(sub(center, planet.center))
+        if planet is moon:
+            away = mul(away, -1)
+        # The station and its shipyard share the safe zone around the station's place
+        station_center, shipyards[name] = station_and_shipyard(
+            template, center, forward, up, away
+        )
+        grid = station(
+            template, ids, name, station_center, forward, up, owner, name == shared
+        )
         objects.append(grid)
-        trade_stations[name] = (grid.findtext("EntityId"), center, forward, up)
+        trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
         objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
 
     lane_list = lanes(places, edges)
@@ -1100,20 +1163,8 @@ def main():
     add_trade_stations(checkpoint, ids, faction, trade_stations)
 
     yard = shipyard_template()
-    for name, (center, forward, up) in places.items():
-        planet = moon if name == "Moon Station" else earth
-        away = norm(sub(center, planet.center))
-        if planet is moon:
-            away = mul(away, -1)
-        objects.append(
-            shipyard(
-                yard,
-                ids,
-                f"{name} Shipyard",
-                *shipyard_place(template, center, forward, up, away),
-                owner,
-            )
-        )
+    for name, placement in shipyards.items():
+        objects.append(shipyard(yard, ids, f"{name} Shipyard", *placement, owner))
 
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),

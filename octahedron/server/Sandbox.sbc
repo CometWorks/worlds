@@ -262,7 +262,7 @@
         <Stations>
           <MyObjectBuilder_Station>
             <Id>903047082892446518</Id>
-            <Position x="0.0" y="140000.0" z="0.0" />
+            <Position x="0.0" y="139896.88310598934" z="-103.11689401064365" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="-0.0" y="-0.0" z="-1.0" />
             <StationType>SpaceStation</StationType>
@@ -277,7 +277,7 @@
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
             <Id>879913659129436153</Id>
-            <Position x="0.0" y="-140000.0" z="0.0" />
+            <Position x="0.0" y="-139896.88310598934" z="-103.11689401064365" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="-0.0" y="-0.0" z="-1.0" />
             <StationType>SpaceStation</StationType>
@@ -292,7 +292,7 @@
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
             <Id>886103346580618567</Id>
-            <Position x="140000.0" y="0.0" z="0.0" />
+            <Position x="139840.17068998035" y="0.0" z="0.0" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="-1.0" y="0.0" z="0.0" />
             <StationType>SpaceStation</StationType>
@@ -307,7 +307,7 @@
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
             <Id>933332584032114460</Id>
-            <Position x="0.0" y="0.0" z="140000.0" />
+            <Position x="0.0" y="0.0" z="139840.17068998035" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="0.0" y="0.0" z="-1.0" />
             <StationType>SpaceStation</StationType>
@@ -322,7 +322,7 @@
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
             <Id>897102252784400106</Id>
-            <Position x="-140000.0" y="0.0" z="0.0" />
+            <Position x="-139840.17068998035" y="0.0" z="0.0" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="1.0" y="0.0" z="0.0" />
             <StationType>SpaceStation</StationType>
@@ -337,7 +337,7 @@
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
             <Id>871849307866479329</Id>
-            <Position x="0.0" y="0.0" z="-140000.0" />
+            <Position x="0.0" y="0.0" z="-139840.17068998035" />
             <Up x="0.0" y="1.0" z="0.0" />
             <Forward x="0.0" y="0.0" z="1.0" />
             <StationType>SpaceStation</StationType>
@@ -352,7 +352,7 @@
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
             <Id>919160980677612549</Id>
-            <Position x="13302.1243838055" y="125190.69826708132" z="-104117.99815739407" />
+            <Position x="13269.276755919116" y="125071.33199048978" z="-104016.91337270189" />
             <Up x="-0.06013781351129373" y="-0.6346271834024051" z="-0.7704750362424541" />
             <Forward x="-0.20557527728662764" y="-0.7474511086746455" z="0.6317085130893594" />
             <StationType>SpaceStation</StationType>
