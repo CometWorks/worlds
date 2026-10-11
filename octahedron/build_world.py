@@ -195,14 +195,21 @@ SETTINGS = {
     "EnableReducedStatsOnRespawn": "false",
     "EnableWolfs": "false",
     "EnableSpiders": "false",
+    # Shared limits by block tag (BlockTags.sbc); the OctahedronOres mod adds the OmniArcTools tag
+    "LimitBlocksBy": "Tag",
+    # No Services Terminal ship storage: on the cluster a stored ship lives only in the
+    # world folder of the node that stored it and is lost when that node restarts
+    # (SE1-0126). Players park ships with the Hangar plugin instead.
+    "GridStorageMaxPerPlayer": 0,
     # Vanilla defaults; the Star System scenario has sparser asteroid ores (1, 60, 0.8)
     "DepositsCountCoefficient": 2,
     "DepositSizeDenominator": 30,
     "HarvestRatioMultiplier": 1,
 }
 
-# Per player, by block pair name; vanilla counts built blocks, not active ones
-BLOCK_LIMITS = {}
+# Per player, by block tag (LimitBlocksBy Tag); vanilla counts built blocks, not
+# active ones. OmniArcTools is the six OmniArc tool blocks, from the OctahedronOres mod.
+BLOCK_LIMITS = {"OmniArcTools": 4}
 
 # (Workshop id, name), MES and its encounter mods come from mes-mods.xml
 MODS = [
@@ -546,6 +553,17 @@ def stock(block, kind, uranium=REACTOR_URANIUM):
         block.find("Queue").clear()
 
 
+def clear_program(block):
+    """The blueprint's programmable blocks carry Isy's Inventory Manager (its copy says
+    not for distribution) and Automatic LCDs 2, which the stations don't need: the
+    inventory manager would sort the Free Tools out of their boxes. The blocks stay,
+    empty and off."""
+    for tag in ("Program", "Storage", "DefaultRunArgument"):
+        for child in block.findall(tag):
+            block.remove(child)
+    set_child(block, "Enabled", "false")
+
+
 def station(template, ids, name, center, forward, up, owner):
     grid = clone_grid(template, ids)
     place_grid(grid, center, forward, up)
@@ -573,6 +591,8 @@ def station(template, ids, name, center, forward, up, owner):
             set_child(block, "ShowInInventory", "true")
             block.find("ShareMode").text = "All"
         stock(block, kind)
+        if kind == "MyProgrammableBlock":
+            clear_program(block)
         if (
             kind == "MedicalRoom"
             and block.findtext("SubtypeName") == "LargeMedicalRoom"

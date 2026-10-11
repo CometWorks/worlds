@@ -17,6 +17,8 @@
   ores. The seed picks the spots. Use the seed of the world the mod goes with
   (build_world.py), so a world built with another seed has its ores elsewhere,
   on the planets as well as in the asteroids.
+- Not about ores: the OmniArcTools block tag of the six OmniArc tool blocks, so
+  the world can limit them together (LimitBlocksBy Tag in build_world.py).
 
 Rerun it after a game update that changes these definitions or ore maps.
 """
@@ -53,6 +55,16 @@ NOT_IN_ASTEROIDS = ("Gold_01", "Silver_01", "Uraninite_01")
 # asteroids only, uranium on the Moon only, so this scales exactly those.
 MINED_ORE_MULTIPLIER = {"Platinum_01": 3, "Uraninite_01": 5}
 
+# The tool blocks of OmniArc (Workshop 3412657089), all conveyor sorters
+OMNIARC_BLOCKS = (
+    "OmniArcBeam",
+    "OmniArcDestro",
+    "OmniArcDrill",
+    "OmniArcDrillSG",
+    "OmniArcRing",
+    "OmniArcRingLarge",
+)
+
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
 ET.register_namespace("xsi", XSI)
 ET.register_namespace("xsd", "http://www.w3.org/2001/XMLSchema")
@@ -67,6 +79,23 @@ def write(root, path):
     if "xmlns:xsi=" not in text[:300]:
         text = text.replace("<Definitions", f'<Definitions xmlns:xsi="{XSI}"', 1)
     path.write_text('<?xml version="1.0"?>\n' + text + "\n", encoding="utf-8")
+
+
+def block_tags():
+    """The OmniArcTools block tag: the world limits the OmniArc tool blocks together
+    (LimitBlocksBy Tag in build_world.py), 4 per player in all."""
+    root = ET.Element("Definitions")
+    tag = ET.SubElement(ET.SubElement(root, "BlockTags"), "BlockTag")
+    ident = ET.SubElement(tag, "Id")
+    ET.SubElement(ident, "TypeId").text = "CubeBlockTagDefinition"
+    ET.SubElement(ident, "SubtypeId").text = "OmniArcTools"
+    ET.SubElement(tag, "DisplayName").text = "OmniArc tools"
+    blocks = ET.SubElement(tag, "Blocks")
+    for subtype in OMNIARC_BLOCKS:
+        ET.SubElement(
+            blocks, "Block", Type="MyObjectBuilder_ConveyorSorter", Subtype=subtype
+        )
+    return root
 
 
 def planets():
@@ -187,6 +216,7 @@ def main():
     (out / "Data").mkdir(parents=True)
     write(planets(), out / "Data/PlanetGeneratorDefinitions.sbc")
     write(asteroid_materials(), out / "Data/VoxelMaterials_asteroids.sbc")
+    write(block_tags(), out / "Data/BlockTags_Octahedron.sbc")
     ore_maps(out, np.random.default_rng(args.seed))
     print(out)
 

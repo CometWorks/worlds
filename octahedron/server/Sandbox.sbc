@@ -163,7 +163,12 @@
     <EnableStructuralSimulation>false</EnableStructuralSimulation>
     <MaxActiveFracturePieces>50</MaxActiveFracturePieces>
     <BlockTypeLimits>
-      <dictionary />
+      <dictionary>
+        <item>
+          <Key>OmniArcTools</Key>
+          <Value>4</Value>
+        </item>
+      </dictionary>
     </BlockTypeLimits>
     <EnableScripterRole>true</EnableScripterRole>
     <ExperimentalMode>true</ExperimentalMode>
@@ -191,6 +196,8 @@
     <EnableDrones>false</EnableDrones>
     <GlobalEncounterCap>0</GlobalEncounterCap>
     <EnablePlanetaryEncounters>false</EnablePlanetaryEncounters>
+    <LimitBlocksBy>Tag</LimitBlocksBy>
+    <GridStorageMaxPerPlayer>0</GridStorageMaxPerPlayer>
   </Settings>
   <ScriptManagerData>
     <variables>

@@ -14,6 +14,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `server/` | the server's world, seed 42 |
 | `ORES.md` | ore statistics of `server/` |
 | `MES.md` | the MES settings and what spawns where |
+| `DEPLOY.md` | how to deploy the cluster with Quasar |
 
 ## One seed per world
 
@@ -61,7 +62,9 @@ downloaded.
   safe zone, owned by the "Octahedron Authority" NPC faction, and players can't
   damage or edit it. The stations start empty, apart from 10,000 kg of uranium
   ingots in each large reactor, a full safe zone block (75 zone chips) and the
-  gas in the tanks.
+  gas in the tanks. Their two programmable blocks are emptied and off: the
+  blueprint's scripts (Isy's Inventory Manager, Automatic LCDs 2) aren't needed,
+  and the inventory manager would sort the Free Tools out of their boxes.
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half: straight behind the equatorial stations,
@@ -142,6 +145,10 @@ maps and changes only these:
   uranium.
 - EarthLike keeps its ore rules; it already has gold and silver and no uranium
   or platinum.
+- Not about ores: the `OmniArcTools` block tag (`Data/BlockTags_Octahedron.sbc`),
+  the six OmniArc tool blocks. The world limits blocks by tag (`LimitBlocksBy`
+  Tag) and allows 4 of the tag per player, whatever the mix of welders, drills,
+  deconstructors and rings. The limit counts built blocks, turned on or off.
 - EarthLike's and the Moon's ore maps (the blue channel of their `*_mat.png`)
   are redrawn from the seed: every deposit moves to a random free spot on the
   same cube face, with its shape and ores. Terrain and biomes stay as they are.
@@ -162,6 +169,12 @@ game update that changes the planet or voxel material definitions or maps.
   edit a programmable block's code, and grids pasted or projected by anyone
   else lose their scripts. Anyone can still run the scripts already on a block.
 - Progression (research) is off: every block is available from the start.
+- The Services Terminal's ship storage is off (`GridStorageMaxPerPlayer` 0). On
+  the cluster a stored ship stays in the world folder of the node that stored
+  it, no other node can return it, and it is lost when that node restarts
+  (SE1-0126). The Hangar plugin parks ships instead.
+- Each player gets `TotalPCU / MaxPlayers` PCU. `MaxPlayers` is still the Star
+  System scenario's 4, so set both for the server (see `DEPLOY.md`).
 - Radiation is on (planets, weather, blocks); solar radiation (`SolarRadiationIntensity`)
   and hunger (`FoodConsumptionRate`) stay at 0.
 - Every economy tick the game refills each trade station: fuel, batteries,
