@@ -180,9 +180,9 @@
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>101197766977030844</Name>
       <PositionAndOrientation>
-        <Position x="139826.622154934" y="-7.5" z="0.0" />
-        <Forward x="-1.0" y="0.0" z="0.0" />
-        <Up x="0.0" y="1.0" z="0.0" />
+        <Position x="139826.6221552079" y="-6.7973147342791576" z="3.1696383667159402" />
+        <Forward x="-0.9999999999999993" y="-3.6518531422902054e-08" z="8.095963504015843e-09" />
+        <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>
@@ -34724,9 +34724,9 @@ center 30</Value>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>107125878253522413</Name>
       <PositionAndOrientation>
-        <Position x="0.0" y="-7.5" z="139826.622154934" />
-        <Forward x="0.0" y="0.0" z="-1.0" />
-        <Up x="0.0" y="1.0" z="0.0" />
+        <Position x="1.6775496917309204e-06" y="-80.06995190891091" z="139846.0359458801" />
+        <Forward x="8.095963504015843e-09" y="-0.4226182617406979" z="-0.9063077870366506" />
+        <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>
@@ -69268,9 +69268,9 @@ center 30</Value>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>102605898965279832</Name>
       <PositionAndOrientation>
-        <Position x="-139826.622154934" y="-7.5" z="0.0" />
-        <Forward x="1.0" y="0.0" z="0.0" />
-        <Up x="0.0" y="1.0" z="0.0" />
+        <Position x="-139826.62215466012" y="-6.797302071270592" z="3.1696355593945285" />
+        <Forward x="0.9999999999999993" y="3.6518531422902054e-08" z="-8.095963504015843e-09" />
+        <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>
@@ -103812,9 +103812,9 @@ center 30</Value>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>101744925466580896</Name>
       <PositionAndOrientation>
-        <Position x="0.0" y="-7.5" z="-139826.622154934" />
-        <Forward x="0.0" y="0.0" z="1.0" />
-        <Up x="0.0" y="1.0" z="0.0" />
+        <Position x="-1.1297717203873893e-06" y="66.47533510336116" z="-139839.696671954" />
+        <Forward x="-8.095963504015843e-09" y="0.4226182617406979" z="0.9063077870366506" />
+        <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>
@@ -199516,9 +199516,9 @@ RingInterval:10000</Value>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>128465434079667612</Name>
       <PositionAndOrientation>
-        <Position x="140067.81171786066" y="80.31088913245536" z="7.646643868195346" />
-        <Forward x="-0.3007057995042731" y="0.0" z="-0.9537169507482269" />
-        <Up x="-0.4768584753741134" y="0.8660254037844387" z="0.15035289975213653" />
+        <Position x="140067.81171486594" y="76.01799802069257" z="-27.01063603056788" />
+        <Forward x="-0.3007057917830153" y="-0.4030582108991887" z="-0.8643610966574647" />
+        <Up x="-0.47685850821734055" y="0.8484274309481459" z="-0.22973214306113443" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>
@@ -230623,9 +230623,9 @@ RingInterval:10000</Value>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>91741936975617578</Name>
       <PositionAndOrientation>
-        <Position x="-7.646643868195346" y="80.31088913245536" z="140067.81171786066" />
-        <Forward x="0.9537169507482269" y="0.0" z="-0.3007057995042731" />
-        <Up x="-0.15035289975213653" y="0.8660254037844387" z="-0.4768584753741134" />
+        <Position x="-7.6466473500322625" y="101.44485425326275" z="140027.51743964734" />
+        <Forward x="0.9537169531827294" y="-0.1270837274535003" z="-0.2725320154190622" />
+        <Up x="-0.15035292751748355" y="0.5833564617718014" z="-0.7981786990993978" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>
@@ -260404,9 +260404,9 @@ RingInterval:10000</Value>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>99076041355532656</Name>
       <PositionAndOrientation>
-        <Position x="-140067.81171786066" y="80.31088913245536" z="-7.646643868195346" />
-        <Forward x="0.3007057995042731" y="0.0" z="0.9537169507482269" />
-        <Up x="0.4768584753741134" y="0.8660254037844387" z="-0.15035289975213653" />
+        <Position x="-140067.81172073158" y="69.55477038847012" z="-40.87106069744849" />
+        <Forward x="0.3007057917830153" y="0.4030582108991887" z="0.8643610966574647" />
+        <Up x="0.47685844496538876" y="0.7213437034946457" z="-0.5022641584801966" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>
@@ -291511,9 +291511,9 @@ RingInterval:10000</Value>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
       <Name>129630140918667333</Name>
       <PositionAndOrientation>
-        <Position x="7.646643868195346" y="80.31088913245536" z="-140067.81171786066" />
-        <Forward x="-0.9537169507482269" y="0.0" z="0.3007057995042731" />
-        <Up x="0.15035289975213653" y="0.8660254037844387" z="0.4768584753741134" />
+        <Position x="7.6466414843608055" y="44.127914155899944" z="-140095.39913637537" />
+        <Forward x="-0.9537169531827294" y="0.1270837274535003" z="0.2725320154190622" />
+        <Up x="0.1503528642655317" y="0.9864146726709901" z="0.0661823975580668" />
       </PositionAndOrientation>
       <LocalPositionAndOrientation xsi:nil="true" />
       <GridSizeEnum>Large</GridSizeEnum>

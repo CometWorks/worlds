@@ -51,8 +51,12 @@ downloaded.
 - Places 4 stations 80 km above EarthLike on the equator, the octahedron's
   middle square (the pole stations were dropped), and one 15 km from the Moon's
   center, just outside its gravity (12.3 km), between the directions to the
-  two nearest stations. The 4 stations' up is EarthLike's north. Moon Station's up is square to the
-  line between EarthLike and the Moon, the one such direction nearest to Delta
+  two nearest stations. The 4 Earth stations are placed with EarthLike's
+  north as up, then each is tilted together with its shipyard about its safe
+  zone's center, so its deck lies parallel to the asteroid ring (up along the
+  ring's axis, 25 degrees from north). Otherwise the sun shines sideways
+  through the deck all day: bad shadows and unreadable LCDs. The lanes don't
+  tilt. Moon Station's up is square to the line between EarthLike and the Moon, the one such direction nearest to Delta
   Station, and it faces away from the Moon. Each station sits in a 250 m admin
   safe zone, owned by the "Octahedron Authority" NPC faction, and players can't
   damage or edit it. The stations start empty, apart from 10,000 kg of uranium

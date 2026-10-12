@@ -1173,6 +1173,7 @@ def main():
     ids = Ids(rng)
     owner, faction = add_npc(checkpoint, ids)
     places, edges = layout(earth, moon)
+    axis = magnetic_axis(earth, sun_direction(sector))
     template = ET.parse(STATION_BLUEPRINT).getroot().find(".//CubeGrid")
     trade_stations = {}
     shipyards = {}
@@ -1182,9 +1183,22 @@ def main():
         if planet is moon:
             away = mul(away, -1)
         # The station and its shipyard share the safe zone around the station's place
-        station_center, shipyards[name] = station_and_shipyard(
-            template, center, forward, up, away
-        )
+        station_center, yard = station_and_shipyard(template, center, forward, up, away)
+        if planet is earth:
+            # Tilt the pair about the zone's center until the station's deck lies parallel
+            # to the asteroid ring, so the sun doesn't shine sideways through it all day
+            turn = norm(cross(up, axis))
+            angle = math.acos(max(-1.0, min(1.0, dot(up, axis))))
+            tilt = lambda v: rotate(v, turn, angle)
+            station_center = add(center, tilt(sub(station_center, center)))
+            yard_center, yard_forward, yard_up = yard
+            yard = (
+                add(center, tilt(sub(yard_center, center))),
+                tilt(yard_forward),
+                tilt(yard_up),
+            )
+            forward, up = tilt(forward), tilt(up)
+        shipyards[name] = yard
         grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
@@ -1203,7 +1217,6 @@ def main():
                 lane_computer(ids, position, facing, up, lane_id, here, there)
             )
 
-    axis = magnetic_axis(earth, sun_direction(sector))
     for storage, center, size, data in asteroid_ring(
         rng, earth, axis, places, lane_list
     ):
