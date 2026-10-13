@@ -238,10 +238,7 @@ ship from a blueprint loaded into the hologram tables, and its limits.
 the refilled blocks and the starter ships. `tests/test_projection_limits.py` runs
 the server alone, with OmniArc and ToolCore: an OmniArc welder welds a projection
 of more light armor blocks than the world's limit, with the check off, on with
-Multigrid Projector and on without it. `tests/test_projection_limits.py` runs
-the server alone, with OmniArc and ToolCore, and lets an OmniArc welder weld a
-projection past a light armor limit, with the check off, on with Multigrid
-Projector and on without it. `tests/test_hologram.py` takes
+Multigrid Projector and on without it. `tests/test_hologram.py` takes
 screenshots of fitted holograms, a blueprint with a cockpit and one without, from
 the side, the front and above, on a bench of two tables in open space; it needs a
 rendering client.
