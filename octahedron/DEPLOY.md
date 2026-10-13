@@ -31,10 +31,13 @@ These are not done yet. Each one changes what gets deployed.
    and only 4 players can join. Pick the player cap, then set `MaxPlayers` to it
    and `TotalPCU` to 1,000,000 times it, in `SETTINGS` of `build_world.py` and in
    the Quasar config profile.
-4. **The Octahedron plugin (SE1-0133)** takes over the station refill and the
-   refill containers (`config/essentials.cfg`). Until it exists, the stations
-   get the game's own economy refill: loot in every empty cargo container, ice
-   in the gas generators, and no Free Tools top-up.
+4. **The Octahedron plugin (`plugin/`, SE1-0133).** Quasar can't load it on a
+   managed cluster yet: the cluster setup refuses dev folders, and a config
+   profile takes no local plugin bundle (see "Loading it on a cluster" in
+   `plugin/README.md`). It is to take over the station refill and the refill
+   containers (SE1-0129). Until then the stations get the game's own economy
+   refill: loot in every empty cargo container, ice in the gas generators, and
+   no Free Tools top-up.
 5. **World edge (SE1-0119).** The world has no edge (`WorldSizeKm` 0) until the
    plugin that brakes ships from 450 km exists.
 
@@ -141,7 +144,8 @@ world's `Sandbox_config.sbc`. In the profile:
 - `MaxPlayers` and `TotalPCU` as decided above.
 - Administrators: the SteamID64s of the admins.
 - Plugins, from the MagnetarHub: Essentials, Hangar, Multigrid Projector,
-  Bugfixes. Quasar adds the cluster plugins and Direct Transport itself.
+  Bugfixes. Quasar adds the cluster plugins and Direct Transport itself. The
+  Octahedron plugin isn't on the hub (item 4 above).
 - Leave the mod order as the world has it; Quasar may add dependency mods it
   finds missing (Definition Extension API is already listed before Radio
   Spectrometry).
