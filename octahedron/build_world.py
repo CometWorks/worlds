@@ -42,7 +42,7 @@ MES_STORAGE = CONFIG / "storage"
 RELATIVE_TOP_SPEED = CONFIG / "relative-top-speed.xml"
 
 NAME = "Octahedron"
-DESCRIPTION = "Octahedron public test cluster: EarthLike and its Moon, 5 stations linked by Trade Lanes, an asteroid ring."
+DESCRIPTION = "Octahedron public test cluster: EarthLike and its Moon, 7 stations linked by Trade Lanes, an asteroid ring."
 KEEP_PLANETS = ("EarthLike", "Moon")
 
 # Altitudes are from the planet's 60 km (EarthLike) or 9.5 km (Moon) radius
@@ -72,7 +72,7 @@ VOXEL_GENERATOR = 4
 STATION_SAFE_ZONE_RADIUS = 250.0
 LANE_ENDPOINT_DISTANCE = 1_000.0
 # The Earth end of a Moon lane, farther out, so its rings stay clear of the station's other
-# lane ends (they touched the then North Station lane's at Delta Station)
+# lane ends (they touched another lane's at Delta Station)
 MOON_LANE_ENDPOINT_DISTANCE = 1_500.0
 LANE_SPEED = 10_000
 LANE_RING_INTERVAL = 10_000
@@ -125,14 +125,18 @@ SHIPYARD_SHARED = {
 }  # fmt: skip
 # Each station's color: its shipyard's red frame gets the skin and the color, the station's
 # red walls and furniture only the color. Skin None is the default, painted metal. Colors
-# are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1).
+# are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1); the game adds
+# 0.8 to the saturation and 0.45 to the value, so 0.2 is full saturation and 0.25 is 70 %
+# brightness.
 BLUEPRINT_RED = (1.0, 0.2, 0.55)
 STATION_COLORS = {
+    "North Station": (None, (0.0, 0.2, 0.25)),  # red
+    "South Station": (None, (0.667, 0.2, 0.25)),  # blue
     "Alpha Station": ("CarbonFibre_Armor", (0.0, -1.0, -0.8)),  # black
-    "Beta Station": (None, (0.083, 0.2, 0.55)),  # orange
-    "Gamma Station": ("CarbonFibre_Armor", (0.333, 0.2, -0.3)),  # dark green
-    "Delta Station": (None, (0.667, 0.2, 0.22)),  # dark blue
-    "Moon Station": ("Concrete_Armor", (0.0, -1.0, -0.45)),  # dark gray
+    "Beta Station": (None, (0.333, 0.2, 0.25)),  # green
+    "Gamma Station": ("CarbonFibre_Armor", (0.5, 0.2, 0.25)),  # cyan
+    "Delta Station": (None, (0.083, 0.2, 0.25)),  # orange
+    "Moon Station": ("Concrete_Armor", (0.75, 0.2, 0.25)),  # purple
 }
 SHIPYARD_REACTOR = "Shipyard Reactor"
 SHIPYARD_BATTERY = "Shipyard Battery"
@@ -701,10 +705,13 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
     return as_sector_object(grid)
 
 
-def lane_up(direction, north):
+def lane_up(direction, home, target, north):
     """Up of a lane's computers, the same at both ends. The Trade Lanes mod puts a lane's two
-    rings side by side along the computers' right axis, so they lie level with the stations'
-    horizontal plane."""
+    rings side by side along the computers' right axis: level with the stations' horizontal
+    plane, but one above the other on the lane to North Station, so pilots can tell the Moon's
+    two lanes apart."""
+    if "North Station" in (home, target):
+        return norm(cross(direction, north))
     return norm(perpendicular_part(north, direction))
 
 
@@ -837,6 +844,8 @@ def layout(earth, moon):
     north, front = earth.up, earth.forward
     right = cross(front, north)
     stations = {
+        "North": north,
+        "South": mul(north, -1),
         "Alpha": right,
         "Beta": mul(front, -1),
         "Gamma": mul(right, -1),
@@ -846,12 +855,16 @@ def layout(earth, moon):
     for name, direction in stations.items():
         center = add(earth.center, mul(direction, STATION_DISTANCE))
         places[f"{name} Station"] = (center, *facing(earth, center))
-    # Moon Station has a lane to each of the two Earth stations nearest the Moon, Delta and
-    # Alpha (one to Beta would pass 62 km from EarthLike's center, deep in its gravity). It
-    # sits halfway between their directions, so neither lane passes over the Moon.
-    near = sorted(places, key=lambda name: dist(places[name][0], moon.center))[:2]
-    assert near == ["Delta Station", "Alpha Station"], near
-    toward = norm(add(*(norm(sub(places[name][0], moon.center)) for name in near)))
+    # Moon Station sits halfway between the directions to Delta and Alpha Station, where it
+    # was placed when those two had its lanes
+    toward = norm(
+        add(
+            *(
+                norm(sub(places[f"{name} Station"][0], moon.center))
+                for name in ("Delta", "Alpha")
+            )
+        )
+    )
     center = add(moon.center, mul(toward, MOON_STATION_DISTANCE))
     # Its up is square to the Earth-Moon line, the one of those directions nearest to Delta
     # Station; it faces away from the Moon, so its lobby and its shipyard are on the Moon side
@@ -859,15 +872,15 @@ def layout(earth, moon):
     up = norm(perpendicular_part(sub(places["Delta Station"][0], center), axis))
     forward = norm(perpendicular_part(sub(center, moon.center), up))
     places["Moon Station"] = (center, forward, up)
-    names = list(places)[:4]
+    # Around the equator, then the Moon's two; South Station has no lane
     edges = [
-        (a, b)
-        for i, a in enumerate(names)
-        for b in names[i + 1 :]
-        if dist(places[a][0], places[b][0]) < 1.9 * STATION_DISTANCE
+        ("Alpha Station", "Beta Station"),
+        ("Alpha Station", "Delta Station"),
+        ("Beta Station", "Gamma Station"),
+        ("Gamma Station", "Delta Station"),
+        ("Delta Station", "Moon Station"),
+        ("North Station", "Moon Station"),
     ]
-    assert len(edges) == 4, edges
-    edges += [(name, "Moon Station") for name in near]
     return places, edges
 
 
@@ -1207,7 +1220,7 @@ def main():
     lane_list = lanes(places, edges)
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
-        up = lane_up(direction, earth.up)
+        up = lane_up(direction, home, target, earth.up)
         for position, here, there, facing in (
             (start, home, target, direction),
             (end, target, home, mul(direction, -1)),
