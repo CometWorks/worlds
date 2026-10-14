@@ -53,14 +53,29 @@ recompiles when the sources change.
 `!oct reload` (admin) rereads the config without a restart.
 
 `OCTAHEDRON_CONFIG`, when set, names the config file instead, for example the
-checkout's `config/octahedron.cfg` on every node of a cluster.
+checkout's `config/octahedron.cfg` on every node of a cluster run by the
+cluster CLI.
 
 ## Loading it on a cluster
 
-Dev folders don't work everywhere. Magnetar's managed preparation, which
-Quasar's cluster setup runs, refuses dev-folder builds because a manifest
-commit can't prove a working tree's contents, and the cluster CLI's release
-mode loads compiled local plugins only. For those, `package.sh <folder>` builds
+A Quasar cluster loads it as a dev folder too, with Magnetar 2.4.3.4 or later.
+On the Quasar host, add this folder of a `worlds` checkout, with `Octahedron.xml`,
+as a dev folder (Configs, Developer panel) and select the plugin in the
+cluster's config profile. Cluster setup and every profile staging compile it
+once, as a release build, and pin it to the checkout's HEAD commit. The nodes
+run that build and need no checkout. Preparation fails if the checkout has
+modified, staged or untracked files. To deploy a newer commit, update the
+checkout, choose **Stage profile changes** for the cluster, then apply the
+pending update from Maintenance. Quasar's content update monitoring doesn't
+see new commits of a dev folder.
+
+On a Quasar cluster the plugin gets its config from Quasar, not from a file:
+set it in the cluster's plugin configuration editor to the values in
+`../config/octahedron.cfg`. `OCTAHEDRON_CONFIG` and `Octahedron.cfg` in the
+instance folder are ignored there.
+
+The cluster CLI (`se1/cluster`, also the test bench) loads compiled local
+plugins only. For it, `package.sh <folder>` builds
 `<folder>/Octahedron/Octahedron.dll` with an `Octahedron.xml` that names this
 repository and the commit it was built from, the layout of a Magnetar local
 plugin. The checkout must be clean.

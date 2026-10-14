@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Builds the plugin as a Magnetar local plugin bundle, <output>/Octahedron/Octahedron.dll with
-# Octahedron.xml pinned to the checkout's commit, for loaders that take compiled plugins only:
-# the cluster CLI (CLUSTER_EXTRA_PLUGINS=node:<output>/Octahedron) and Quasar's managed
-# clusters, whose preparation refuses dev folders.
+# Octahedron.xml pinned to the checkout's commit, for the cluster CLI, which takes compiled
+# plugins only (CLUSTER_EXTRA_PLUGINS=node:<output>/Octahedron). Quasar clusters use the dev folder.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 output=${1:?usage: package.sh <output folder>}
