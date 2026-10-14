@@ -53,8 +53,8 @@ internal static class TableHologram
             pending
         );
         pending.Clear();
-        foreach (var (table, grids) in tables)
-            Fit(table, grids);
+        foreach (var entry in tables)
+            Fit(entry.Key, entry.Value);
     }
 
     // Fits every station table that holds a blueprint, for example after a config change

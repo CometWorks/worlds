@@ -200,7 +200,9 @@ def prepare_world(
             text,
             flags=re.S,
         )
-        assert count >= 28, count
+        assert (
+            0 < count == text.count("<SubtypeName>LargeBlockConsole</SubtypeName>")
+        ), count
     text = text.replace(
         "</SectorObjects>", "".join(extra_grids) + "</SectorObjects>", 1
     )
