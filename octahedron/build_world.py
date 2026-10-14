@@ -102,6 +102,11 @@ LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 FREE_TOOLS = "Free Tools"
 FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
+# The blueprint's inventory manager script; the station's PB keeps only its LCD script
+INVENTORY_PB_BLUEPRINT_NAME = (
+    "Programmable Block - Isy's Inventory Manager IIM - Station"
+)
+INVENTORY_PB = "Programmable Block - Station"
 # Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
 # pressurized back half: behind the station and away from the planet, which keeps it off the
 # lanes. The pair is centered on the safe zone, and spread apart as far as their block bounds
@@ -561,7 +566,7 @@ def station(template, ids, name, center, forward, up, owner):
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
-    loot, free_tools = None, 0
+    loot, free_tools, inventory_pb = None, 0, None
     for block in grid.find("CubeBlocks"):
         recolor(block, STATION_COLORS[name])
         if block.find("Owner") is None:
@@ -578,6 +583,13 @@ def station(template, ids, name, center, forward, up, owner):
             set_child(block, "CustomName", FREE_TOOLS)
             set_child(block, "ShowInInventory", "true")
             block.find("ShareMode").text = "All"
+        if block.findtext("CustomName") == INVENTORY_PB_BLUEPRINT_NAME:
+            inventory_pb = block
+            set_child(block, "CustomName", INVENTORY_PB)
+            for tag in ("Program", "Storage", "DefaultRunArgument", "CustomData"):
+                for child in block.findall(tag):
+                    block.remove(child)
+            set_child(block, "Enabled", "false")
         stock(block, kind)
         if (
             kind == "MedicalRoom"
@@ -589,6 +601,7 @@ def station(template, ids, name, center, forward, up, owner):
             set_child(block, "HudText", name)
     assert loot is not None, f"no {LOOT_CONTAINER_BLUEPRINT_NAME} for {LOOT_CONTAINER}"
     assert free_tools == FREE_TOOLS_COUNT, f"{free_tools} {FREE_TOOLS_BLUEPRINT_NAME}"
+    assert inventory_pb is not None, f"no {INVENTORY_PB_BLUEPRINT_NAME}"
     return as_sector_object(grid)
 
 
@@ -759,7 +772,9 @@ def lane_computer(ids, position, forward, up, lane_id, home, target):
 
 
 def safe_zone(ids, center, radius, name):
-    """An admin safe zone: no damage or shooting, players can still build and weld."""
+    """An admin safe zone: no damage, shooting, welding, grinding or block placing. The
+    shipyard's OmniArc welders obey it too; the Octahedron plugin is to let them weld
+    (SE1-0204)."""
     zone = ET.Element(
         "MyObjectBuilder_EntityBase", {XSI_TYPE: "MyObjectBuilder_SafeZone"}
     )
@@ -778,7 +793,7 @@ def safe_zone(ids, center, radius, name):
     el(
         zone,
         "AllowedActions",
-        "Drilling Welding Grinding Building LandingGearLock BuildingProjections",
+        "Drilling LandingGearLock",
     )
     for tag in ("Factions", "Players", "Entities"):
         el(zone, tag)

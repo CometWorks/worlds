@@ -62,11 +62,16 @@ downloaded.
   ring's axis, 25 degrees from north). Otherwise the sun shines sideways
   through the deck all day: bad shadows and unreadable LCDs. The lanes don't
   tilt. Moon Station's up is square to the line between EarthLike and the
-  Moon, the one such direction nearest to Delta Station, and it faces away from the Moon. Each station sits in a 250 m admin
-  safe zone, owned by the "Octahedron Authority" NPC faction, and players can't
-  damage or edit it. The stations start empty, apart from 10,000 kg of uranium
-  ingots in each large reactor, a full safe zone block (75 zone chips) and the
-  gas in the tanks.
+  Moon, the one such direction nearest to Delta Station, and it faces away
+  from the Moon. Each station sits in a 250 m admin safe zone, owned by the
+  "Octahedron Authority" NPC faction, and players can't damage or edit it. The
+  zone allows only drilling and landing gear locks: no welding, grinding or
+  block placing, also not by the shipyard's welders until the Octahedron plugin
+  makes an exception for them (SE1-0204). The stations start empty, apart from
+  10,000 kg of uranium ingots in each large reactor, a full safe zone block (75
+  zone chips) and the gas in the tanks. Of the two programmable blocks, the
+  inventory manager's (Isy's) is emptied and off; MMaster's Automatic LCDs
+  script runs.
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half: straight behind the equatorial stations,
