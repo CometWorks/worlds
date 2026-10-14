@@ -55,6 +55,9 @@ RING_INNER = 105_000.0
 RING_OUTER = 135_000.0
 RING_THICKNESS = 1_000.0
 RING_ASTEROIDS = 2000
+# The ring's asteroids are dealt out evenly to this many equal sectors around it, counted
+# from Alpha Station's direction as ORES.md counts them (ore_stats.py SEGMENT)
+RING_SECTORS = 24
 # The 4 ice asteroids sit in the middle of the band
 RING_RADIUS = 120_000.0
 # Surface to surface, between asteroids
@@ -421,9 +424,8 @@ def storage_size(path):
     return struct.unpack_from("<4i", data, i)[1]
 
 
-def voxel_map(ids, storage_name, center, size, rng):
+def voxel_map(ids, storage_name, center, size, forward, up):
     """A VoxelMap sector object; its position is the storage's min corner."""
-    forward, up = random_basis(rng)
     right = cross(forward, up)
     half = size / 2
     # Corner = center - R * half extent, R columns are Right, Up, Backward
@@ -925,8 +927,14 @@ def magnetic_axis(planet, sun):
     return norm(sub(mul(planet.up, math.cos(tilt)), mul(norm(away), math.sin(tilt))))
 
 
-def asteroid_ring(rng, earth, axis, places, lane_list):
-    """(storage name, center, size, vx2 bytes) for the ring around axis and its 4 ice asteroids."""
+def asteroid_ring(seed, earth, axis, places, lane_list):
+    """(storage name, center, size, forward, up, vx2 bytes) for the ring around axis and its 4
+    ice asteroids. Each asteroid draws from its own random generator, so a station or lane
+    added later moves only the asteroids in its way."""
+
+    def own_rng(name):
+        return random.Random(f"{seed}:{name}")
+
     asteroids = []
     taken = []
     equator = [
@@ -942,11 +950,13 @@ def asteroid_ring(rng, earth, axis, places, lane_list):
         in_plane = sub(halfway, mul(axis, dot(halfway, axis)))
         center = add(earth.center, mul(norm(in_plane), RING_RADIUS))
         size = storage_size(SCENARIO.parents[1] / f"VoxelMaps/{ICE_SHAPE}.vx2")
+        storage = f"Octahedron-Ice-{i + 1}"
         asteroids.append(
             (
-                f"Octahedron-Ice-{i + 1}",
+                storage,
                 center,
                 size,
+                *random_basis(own_rng(storage)),
                 predefined_asteroid(ICE_SHAPE, ICE_MATERIAL, size),
             )
         )
@@ -972,32 +982,34 @@ def asteroid_ring(rng, earth, axis, places, lane_list):
     for center, radius in taken:
         grid[key(center)].append((center, radius))
 
-    u = perpendicular(axis)
+    u = norm(perpendicular_part(sub(places["Alpha Station"][0], earth.center), axis))
     v = cross(axis, u)
     sizes, weights = zip(*ASTEROID_SIZES)
-    while len(asteroids) < RING_ASTEROIDS + len(equator):
-        size = rng.choices(sizes, weights)[0]
-        angle = rng.uniform(0, 2 * math.pi)
-        # Uniform over the band's area
-        radius = math.sqrt(rng.uniform(RING_INNER**2, RING_OUTER**2))
-        height = rng.uniform(-RING_THICKNESS / 2, RING_THICKNESS / 2)
-        radial = add(mul(u, math.cos(angle)), mul(v, math.sin(angle)))
-        center = add(earth.center, add(mul(radial, radius), mul(axis, height)))
-        if not free(center, size):
-            continue
-        if any(
-            segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
-            for _, _, _, s, e in lane_list
-        ):
-            continue
-        seed = rng.getrandbits(31)
-        storage = f"Octahedron-Asteroid-{len(asteroids) - len(equator) + 1:04d}"
+    for number in range(1, RING_ASTEROIDS + 1):
+        storage = f"Octahedron-Asteroid-{number:04d}"
+        rng = own_rng(storage)
+        sector = (number - 1) % RING_SECTORS
+        while True:
+            size = rng.choices(sizes, weights)[0]
+            angle = rng.uniform(sector, sector + 1) * 2 * math.pi / RING_SECTORS
+            # Uniform over the band's area
+            radius = math.sqrt(rng.uniform(RING_INNER**2, RING_OUTER**2))
+            height = rng.uniform(-RING_THICKNESS / 2, RING_THICKNESS / 2)
+            radial = add(mul(u, math.cos(angle)), mul(v, math.sin(angle)))
+            center = add(earth.center, add(mul(radial, radius), mul(axis, height)))
+            if free(center, size) and not any(
+                segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
+                for _, _, _, s, e in lane_list
+            ):
+                break
+        voxel_seed = rng.getrandbits(31)
         asteroids.append(
             (
                 storage,
                 center,
                 size,
-                procedural_asteroid(seed, rng.getrandbits(31), size),
+                *random_basis(rng),
+                procedural_asteroid(voxel_seed, rng.getrandbits(31), size),
             )
         )
         grid[key(center)].append((center, size / 2))
@@ -1181,12 +1193,20 @@ def main():
     apply_settings(checkpoint, args.ore_mod)
     apply_settings(config_tree.getroot(), args.ore_mod)
 
-    # The one random generator of the world; every random choice below draws from it in order
-    rng = random.Random(args.seed)
-    ids = Ids(rng)
-    owner, faction = add_npc(checkpoint, ids)
+    # Entity and identity ids come from one generator, in the order they are drawn below
+    ids = Ids(random.Random(args.seed))
     places, edges = layout(earth, moon)
+    lane_list = lanes(places, edges)
     axis = magnetic_axis(earth, sun_direction(sector))
+    # The asteroids take the first ids, so stations and grids added later leave their ids as
+    # they are; their places come from their own generators (asteroid_ring)
+    for storage, center, size, forward, up, data in asteroid_ring(
+        args.seed, earth, axis, places, lane_list
+    ):
+        (out / f"{storage}.vx2").write_bytes(data)
+        objects.append(voxel_map(ids, storage, center, size, forward, up))
+
+    owner, faction = add_npc(checkpoint, ids)
     template = ET.parse(STATION_BLUEPRINT).getroot().find(".//CubeGrid")
     trade_stations = {}
     shipyards = {}
@@ -1217,7 +1237,6 @@ def main():
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
         objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
 
-    lane_list = lanes(places, edges)
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
         up = lane_up(direction, home, target, earth.up)
@@ -1230,12 +1249,6 @@ def main():
                 lane_computer(ids, position, facing, up, lane_id, here, there)
             )
 
-    for storage, center, size, data in asteroid_ring(
-        rng, earth, axis, places, lane_list
-    ):
-        (out / f"{storage}.vx2").write_bytes(data)
-        objects.append(voxel_map(ids, storage, center, size, rng))
-    # Drawn last, so the economy's ids leave every id and asteroid above as they were
     add_trade_stations(checkpoint, ids, faction, trade_stations)
 
     yard = shipyard_template()

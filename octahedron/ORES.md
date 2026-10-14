@@ -14,7 +14,7 @@ million.
 - The asteroid belt is an expectation, not a count: the game rolls each
   asteroid's ores from its seed with its own random generator. It applies
   generator 4's rules (MyCompositeShapes) to the belt's 2000 procedural asteroids
-  (1013 of 256 m, 818 of 512 m, 169 of 1024 m), with DepositsCountCoefficient 2 and
+  (1015 of 256 m, 820 of 512 m, 165 of 1024 m), with DepositsCountCoefficient 2 and
   DepositSizeDenominator 30. A deposit is a sphere, and
   part of it may stick out of the rock, so the belt's amounts are upper bounds.
 - Not counted: the stone around the deposits, the 4 placed ice asteroids
@@ -27,7 +27,7 @@ million.
 |---|---:|---:|---:|
 | Iron | 132M | 1.76M | 10.1M |
 | Silicon | 135M | 744k | 3.64M |
-| Cobalt | 122M | 371k | 2.41M |
+| Cobalt | 122M | 371k | 2.4M |
 | Magnesium | 76.2M | 384k | 2.46M |
 | Nickel | 65.5M | 1.48M | 3.63M |
 | Ice | 31.9M | 1.41M | 10.1M |
@@ -81,12 +81,12 @@ xychart-beta
 
 | Ore | Deposits | Ore rock (m³) | Ore (t) |
 |---|---:|---:|---:|
-| Ice | 3.29k | 82.9M | 10.1M |
-| Iron | 3.29k | 82.8M | 10.1M |
+| Ice | 3.29k | 82.8M | 10.1M |
+| Iron | 3.29k | 82.7M | 10.1M |
 | Silicon | 1.98k | 49.9M | 3.64M |
-| Nickel | 1.98k | 49.7M | 3.63M |
-| Magnesium | 1.34k | 33.8M | 2.46M |
-| Cobalt | 1.31k | 33M | 2.41M |
+| Nickel | 1.97k | 49.7M | 3.63M |
+| Magnesium | 1.34k | 33.7M | 2.46M |
+| Cobalt | 1.31k | 32.9M | 2.4M |
 | Platinum | 646 | 16.3M | 1.19M |
 
 ```mermaid
@@ -94,7 +94,7 @@ xychart-beta
     title "Asteroid belt (expected)"
     x-axis ["Ice", "Iron", "Silicon", "Nickel", "Magnesium", "Cobalt", "Platinum"]
     y-axis "Ore (kt)"
-    bar [10086.6, 10072.1, 3643.0, 3629.9, 2464.6, 2406.3, 1187.3]
+    bar [10075.7, 10061.1, 3639.1, 3625.9, 2461.9, 2403.7, 1186.0]
 ```
 
 ## Asteroids around the ring
@@ -107,35 +107,35 @@ and the 4 placed ice asteroids by their direction from EarthLike's center.
 
 | Segment | Asteroids | 256 m | 512 m | 1024 m | Here |
 |---|---:|---:|---:|---:|---|
-| 0°-15° | 91 | 48 | 36 | 7 | Alpha Station |
-| 15°-30° | 68 | 40 | 24 | 4 |  |
-| 30°-45° | 90 | 41 | 41 | 8 | Ice-4 |
-| 45°-60° | 99 | 55 | 35 | 9 |  |
-| 60°-75° | 88 | 42 | 41 | 5 |  |
-| 75°-90° | 80 | 48 | 29 | 3 |  |
-| 90°-105° | 66 | 30 | 31 | 5 | Delta Station |
-| 105°-120° | 70 | 38 | 26 | 6 |  |
-| 120°-135° | 78 | 44 | 30 | 4 |  |
-| 135°-150° | 84 | 36 | 35 | 13 | Ice-3 |
-| 150°-165° | 93 | 55 | 33 | 5 |  |
-| 165°-180° | 79 | 41 | 32 | 6 |  |
-| 180°-195° | 74 | 36 | 31 | 7 | Gamma Station |
-| 195°-210° | 97 | 38 | 44 | 15 |  |
-| 210°-225° | 91 | 46 | 36 | 9 | Ice-2 |
-| 225°-240° | 91 | 47 | 36 | 8 |  |
-| 240°-255° | 77 | 42 | 27 | 8 |  |
-| 255°-270° | 59 | 35 | 21 | 3 |  |
-| 270°-285° | 100 | 55 | 38 | 7 | Beta Station |
-| 285°-300° | 110 | 55 | 46 | 9 |  |
-| 300°-315° | 72 | 31 | 34 | 7 |  |
-| 315°-330° | 85 | 43 | 36 | 6 | Ice-1 |
-| 330°-345° | 89 | 39 | 42 | 8 |  |
-| 345°-360° | 69 | 28 | 34 | 7 |  |
+| 0°-15° | 84 | 34 | 45 | 5 | Alpha Station |
+| 15°-30° | 84 | 43 | 34 | 7 |  |
+| 30°-45° | 84 | 45 | 33 | 6 | Ice-4 |
+| 45°-60° | 84 | 44 | 35 | 5 |  |
+| 60°-75° | 84 | 48 | 30 | 6 |  |
+| 75°-90° | 84 | 47 | 30 | 7 | Delta Station |
+| 90°-105° | 84 | 39 | 40 | 5 |  |
+| 105°-120° | 84 | 37 | 36 | 11 |  |
+| 120°-135° | 83 | 47 | 25 | 11 |  |
+| 135°-150° | 83 | 41 | 35 | 7 | Ice-3 |
+| 150°-165° | 83 | 44 | 33 | 6 |  |
+| 165°-180° | 83 | 44 | 32 | 7 |  |
+| 180°-195° | 83 | 45 | 31 | 7 | Gamma Station |
+| 195°-210° | 83 | 41 | 28 | 14 |  |
+| 210°-225° | 83 | 35 | 42 | 6 | Ice-2 |
+| 225°-240° | 83 | 46 | 32 | 5 |  |
+| 240°-255° | 83 | 44 | 32 | 7 |  |
+| 255°-270° | 83 | 40 | 35 | 8 | Beta Station |
+| 270°-285° | 83 | 44 | 35 | 4 |  |
+| 285°-300° | 83 | 38 | 39 | 6 |  |
+| 300°-315° | 83 | 41 | 33 | 9 |  |
+| 315°-330° | 83 | 38 | 41 | 4 | Ice-1 |
+| 330°-345° | 83 | 47 | 30 | 6 |  |
+| 345°-360° | 83 | 43 | 34 | 6 |  |
 
 ```mermaid
 xychart-beta
     title "Asteroids per 15 degrees, from Alpha Station"
     x-axis ["0", "15", "30", "45", "60", "75", "90", "105", "120", "135", "150", "165", "180", "195", "210", "225", "240", "255", "270", "285", "300", "315", "330", "345"]
     y-axis "Asteroids"
-    bar [91, 68, 90, 99, 88, 80, 66, 70, 78, 84, 93, 79, 74, 97, 91, 91, 77, 59, 100, 110, 72, 85, 89, 69]
+    bar [84, 84, 84, 84, 84, 84, 84, 84, 83, 83, 83, 83, 83, 83, 83, 83, 83, 83, 83, 83, 83, 83, 83, 83]
 ```

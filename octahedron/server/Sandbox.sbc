@@ -20,7 +20,7 @@
   <CameraEntity>0</CameraEntity>
   <ControlledObject>0</ControlledObject>
   <Password />
-  <Description>Octahedron public test cluster: EarthLike and its Moon, 5 stations linked by Trade Lanes, an asteroid ring.</Description>
+  <Description>Octahedron public test cluster: EarthLike and its Moon, 7 stations linked by Trade Lanes, an asteroid ring.</Description>
   <LastSaveTime>2016-12-19T15:07:23.1983593+01:00</LastSaveTime>
   <SpectatorDistance>2.6</SpectatorDistance>
   <CharacterToolbar>
@@ -240,14 +240,14 @@
         <EnableFriendlyFire>false</EnableFriendlyFire>
       </MyObjectBuilder_Faction>
       <MyObjectBuilder_Faction>
-        <FactionId>269607123185769169</FactionId>
+        <FactionId>258806895015508287</FactionId>
         <Tag>OCT</Tag>
         <Name>Octahedron Authority</Name>
         <Description>Keeps the Octahedron stations and Trade Lanes running.</Description>
         <PrivateInfo />
         <Members>
           <MyObjectBuilder_FactionMember>
-            <PlayerId>152137438111824285</PlayerId>
+            <PlayerId>184230955976420208</PlayerId>
             <IsLeader>true</IsLeader>
             <IsFounder>true</IsFounder>
           </MyObjectBuilder_FactionMember>
@@ -261,14 +261,14 @@
         <FactionTypeString>Trader</FactionTypeString>
         <Stations>
           <MyObjectBuilder_Station>
-            <Id>896882966751422193</Id>
+            <Id>897839327666129023</Id>
             <Position x="4.000119855551924e-06" y="139880.8489598956" z="-43.3674319798533" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="8.095963504015843e-09" y="-0.4226182617406979" z="-0.9063077870366506" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>101197766977030844</StationEntityId>
-            <FactionId>269607123185769169</FactionId>
+            <StationEntityId>86861518674125845</StationEntityId>
+            <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
             <StoreItems />
@@ -276,14 +276,14 @@
             <Name>North Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>909659767888492654</Id>
+            <Id>890277127465416678</Id>
             <Position x="-3.7784421169702466e-06" y="-139935.6992345262" z="-176.66490119291458" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="8.095963504015843e-09" y="-0.4226182617406979" z="-0.9063077870366506" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>107125878253522413</StationEntityId>
-            <FactionId>269607123185769169</FactionId>
+            <StationEntityId>72966636013376401</StationEntityId>
+            <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
             <StoreItems />
@@ -291,14 +291,14 @@
             <Name>South Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>921705606987316757</Id>
+            <Id>936658003276961260</Id>
             <Position x="139826.622154934" y="-6.33150428307734e-06" z="1.403660706059155e-06" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="-0.9999999999999993" y="-3.6518531422902054e-08" z="8.095963504015843e-09" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>102605898965279832</StationEntityId>
-            <FactionId>269607123185769169</FactionId>
+            <StationEntityId>91036914466016190</StationEntityId>
+            <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
             <StoreItems />
@@ -306,14 +306,14 @@
             <Name>Alpha Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>891756255802331198</Id>
+            <Id>920345997649493526</Id>
             <Position x="1.4036607060591549e-06" y="-73.27264350613603" z="139842.86630891706" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="8.095963504015843e-09" y="-0.4226182617406979" z="-0.9063077870366506" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>101744925466580896</StationEntityId>
-            <FactionId>269607123185769169</FactionId>
+            <StationEntityId>115607155117627529</StationEntityId>
+            <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
             <StoreItems />
@@ -321,14 +321,14 @@
             <Name>Beta Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>873620856383116618</Id>
+            <Id>920796164370501217</Id>
             <Position x="-139826.622154934" y="6.33150428307734e-06" z="-1.403660706059155e-06" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="0.9999999999999993" y="3.6518531422902054e-08" z="-8.095963504015843e-09" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>118321372015532228</StationEntityId>
-            <FactionId>269607123185769169</FactionId>
+            <StationEntityId>108916132227313990</StationEntityId>
+            <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
             <StoreItems />
@@ -336,14 +336,14 @@
             <Name>Gamma Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>875850302958389147</Id>
+            <Id>933369612460946264</Id>
             <Position x="-1.4036607060591549e-06" y="73.27264350613603" z="-139842.86630891706" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="-8.095963504015843e-09" y="0.4226182617406979" z="0.9063077870366506" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>127920713868146153</StationEntityId>
-            <FactionId>269607123185769169</FactionId>
+            <StationEntityId>127381891013577464</StationEntityId>
+            <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
             <StoreItems />
@@ -351,14 +351,14 @@
             <Name>Delta Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>920594001491969066</Id>
+            <Id>926383694833771753</Id>
             <Position x="20443.02055936676" y="122083.3461759347" z="-110582.16013166316" />
             <Up x="-0.13119715693921277" y="-0.6251764194297497" z="-0.7693775085093568" />
             <Forward x="0.34926384158937257" y="-0.7554748446152053" z="0.5543216828808567" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>118363774393739852</StationEntityId>
-            <FactionId>269607123185769169</FactionId>
+            <StationEntityId>81948747272086158</StationEntityId>
+            <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
             <StoreItems />
@@ -379,8 +379,8 @@
           <Value xsi:type="xsd:long">270184222006364636</Value>
         </item>
         <item>
-          <Key xsi:type="xsd:long">152137438111824285</Key>
-          <Value xsi:type="xsd:long">269607123185769169</Value>
+          <Key xsi:type="xsd:long">184230955976420208</Key>
+          <Value xsi:type="xsd:long">258806895015508287</Value>
         </item>
       </dictionary>
     </Players>
@@ -642,7 +642,7 @@
       <LastLoginTime>2016-12-19T15:05:33.984439+01:00</LastLoginTime>
     </MyObjectBuilder_Identity>
     <MyObjectBuilder_Identity>
-      <IdentityId>152137438111824285</IdentityId>
+      <IdentityId>184230955976420208</IdentityId>
       <DisplayName>Octahedron Authority</DisplayName>
       <CharacterEntityId>0</CharacterEntityId>
     </MyObjectBuilder_Identity>
@@ -661,7 +661,7 @@
   <NonPlayerIdentities>
     <long>144115188075855894</long>
     <long>144115188075855896</long>
-    <long>152137438111824285</long>
+    <long>184230955976420208</long>
   </NonPlayerIdentities>
   <Gps>
     <dictionary />
@@ -797,9 +797,9 @@
     <MyObjectBuilder_SessionComponent xsi:type="MyObjectBuilder_BankingSystem">
       <Accounts>
         <MyObjectBuilder_AccountEntry>
-          <OwnerIdentifier>269607123185769169</OwnerIdentifier>
+          <OwnerIdentifier>258806895015508287</OwnerIdentifier>
           <Account>
-            <OwnerIdentifier>269607123185769169</OwnerIdentifier>
+            <OwnerIdentifier>258806895015508287</OwnerIdentifier>
             <Balance>1000000000</Balance>
           </Account>
         </MyObjectBuilder_AccountEntry>

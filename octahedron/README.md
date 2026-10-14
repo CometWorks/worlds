@@ -24,6 +24,12 @@ seeds, and where the ore deposits sit on EarthLike and the Moon. The layout
 which ore goes where) are the same for every seed, and the same seed always
 gives the same files.
 
+The asteroids take the first entity ids, and each one is placed by its own
+generator, seeded from the world seed and its name. Adding, moving or removing
+stations and other grids leaves their ids, places and shapes as they are. A new
+lane moves only the asteroids within 1 km of it, and the few placed after them
+that would then overlap.
+
 The server runs seed 42. The world players get to design ships and stations
 offline is built with another seed and its own ore mod, so the ores they find
 there don't lead them to the server's.
@@ -115,7 +121,9 @@ downloaded.
   away from the sun. So the band is tilted against the equator: its nearest
   asteroids are 6 to 9 km from Alpha and Gamma Station, but about 58 km from
   Beta and Delta. The plugin's axis follows the sun as it moves, the band doesn't.
-  `ORES.md` counts the asteroids per 15 degrees around it.
+  The ring's asteroids are dealt out evenly to 24 sectors of 15 degrees,
+  counted from Alpha Station's direction, 83 or 84 in each; `ORES.md` counts
+  them per sector.
 - The asteroids are the game's own procedural ones, saved as seed and size only
   (a `.vx2` of about 100 bytes each), so the game generates their shape and
   ores. The ice ones are the largest plain vanilla asteroid shape
