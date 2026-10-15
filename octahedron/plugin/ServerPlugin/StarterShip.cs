@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
@@ -45,10 +46,10 @@ internal static class StarterShip
         }
 
         var owned = PlayerPcu(identity);
-        if (owned >= config.StarterShipPlayerPcuLimit)
+        if (owned >= config.FreeBuildPcuLimit)
             return CommandReply.Error(
-                $"You have {owned:N0} PCU. Starter ships are for players under "
-                    + $"{config.StarterShipPlayerPcuLimit:N0} PCU; build your ship at the station's shipyard."
+                $"You have {owned:N0} PCU, ships in Hangar included. Starter ships are for players under "
+                    + $"{config.FreeBuildPcuLimit:N0} PCU; build your ship at the station's shipyard."
             );
 
         var table = FindTable(character, tableName, config);
@@ -75,9 +76,13 @@ internal static class StarterShip
         // A saved projection is the projector's own list, so it is never changed in place
         var grid = (MyObjectBuilder_CubeGrid)grids[0].Clone();
         var pcu = grid.CalculatePCUs();
-        if (pcu > config.StarterShipMaxShipPcu)
+        var maxPcu =
+            config.GroupPcuLimit > 0
+                ? Math.Min(config.StarterShipMaxShipPcu, config.GroupPcuLimit)
+                : config.StarterShipMaxShipPcu;
+        if (pcu > maxPcu)
             return CommandReply.Error(
-                $"The blueprint has {pcu:N0} PCU, a starter ship at most {config.StarterShipMaxShipPcu:N0}."
+                $"The blueprint has {pcu:N0} PCU, a starter ship at most {maxPcu:N0}."
             );
         if (!Place(grid, table, config))
             return CommandReply.Error(
@@ -267,8 +272,9 @@ internal static class StarterShip
         MyEntities.RemapObjectBuilder(grid);
     }
 
-    // The player's PCU in the world: built blocks on this node and, on a cluster, on the other
-    // nodes (the cluster plugin's ledger). Ships in Hangar don't count.
+    // The player's PCU: built blocks on this node and, on a cluster, on the other nodes (the
+    // cluster plugin's ledger), plus the ships the player keeps in Hangar. The ledger knows only
+    // the grids some node has loaded, not those in offline partitions.
     private static int PlayerPcu(MyIdentity identity)
     {
         var pcu = identity.BlockLimits.PCUBuilt;
@@ -276,10 +282,33 @@ internal static class StarterShip
             pcu += (
                 (ValueTuple<int, int>)RemoteUsage.Value.Invoke(null, [identity.IdentityId])
             ).Item1;
-        return pcu;
+        return pcu + HangarPcu(MySession.Static.Players.TryGetSteamId(identity.IdentityId));
     }
 
     private static readonly Lazy<MethodInfo> RemoteUsage = new(() =>
         AccessTools.TypeByName("ClusterPlugin.PcuLedgerService")?.GetMethod("RemoteUsage")
     );
+
+    // Hangar's public Plugin.Instance.Storage.ListPlayerEntries, found by reflection so the
+    // plugin works without Hangar. Hangar's types share our namespace and names, hence the lookup
+    // through its storage type's assembly.
+    private static int HangarPcu(ulong steamId)
+    {
+        var storageType = AccessTools.TypeByName("ServerPlugin.HangarStorage");
+        var hangar = storageType
+            ?.Assembly.GetType("ServerPlugin.Plugin")
+            ?.GetProperty("Instance")
+            ?.GetValue(null);
+        var storage = hangar?.GetType().GetProperty("Storage")?.GetValue(hangar);
+        if (
+            storage == null
+            || storageType.GetMethod("ListPlayerEntries")?.Invoke(storage, [steamId])
+                is not IEnumerable entries
+        )
+            return 0;
+        var pcu = 0;
+        foreach (var entry in entries)
+            pcu += (int)entry.GetType().GetProperty("Pcu").GetValue(entry);
+        return pcu;
+    }
 }
