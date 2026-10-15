@@ -223,8 +223,9 @@ the ship for them, for at most `ShipyardOrderMinutes` (60; 0 turns orders off).
   NPC-owned projector and battery named `Shipyard Order` project the blueprint
   (Multigrid Projector builds its subgrids). The components of the other blocks
   go into the shipyard's cargo containers, and its OmniArc welders are switched
-  on through their terminal switches, which also tells the clients, so players
-  see the beams.
+  on through their terminal switches. Clients don't see the beams in a
+  no-welding safe zone: ToolCore turns the tools off there on the client, which
+  doesn't have the shipyard exception above (SE1-0259).
 - Every projected block welded onto the ship or its subgrids is the player's,
   owner and `BuiltBy`, so it counts toward the player's PCU and the projection
   limits check it for them.
@@ -346,7 +347,8 @@ like a shipyard do nothing, and that the player's tools work outside the zone.
 It runs with the plugin's rules on, on with the zones holding every test grid
 from the start, and off. `tests/test_shipyard_order.py` orders a ship at a station
 table with the client and checks the saved world after the shipyard finished it,
-then lets a bigger order run out after a server restart. `tests/test_hologram.py` takes
+then lets a bigger order run out after a server restart; with `OCT_SHOTS` it also
+takes screenshots of the welding from among the welders. `tests/test_hologram.py` takes
 screenshots of fitted holograms, a blueprint with a cockpit and one without, from
 the side, the front and above, on a bench of two tables in open space; it needs a
 rendering client.

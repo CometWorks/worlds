@@ -631,8 +631,8 @@ internal static class ShipyardOrders
             .GetFatBlocks<MyFunctionalBlock>()
             .Where(b => ((IMyTerminalBlock)b).GetProperty(ShootProperty) != null);
 
-    // Through the tools' terminal switches: on the server they also tell the clients, so
-    // players see the beams
+    // Through the tools' terminal switches, which ToolCore also sends to the clients. In a
+    // no-welding zone the clients turn the tools off again, so they show no beams (SE1-0259).
     private static void Welders(MyCubeGrid shipyard, bool on)
     {
         foreach (var beam in Beams(shipyard))
