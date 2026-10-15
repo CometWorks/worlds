@@ -76,7 +76,7 @@ internal static class ProjectionLimits
     // The game takes a new block's first component from the welding character or ship welder
     // after it built the block. ToolCore's block tools take it from their own inventory before
     // they ask, so they get it back; an OmniArc welder would lose one at every retry otherwise.
-    private static void Refund(long builderEntityId, MyCubeBlockDefinition definition)
+    internal static void Refund(long builderEntityId, MyCubeBlockDefinition definition)
     {
         if (MySession.Static.CreativeMode || definition.Components.Length == 0)
             return;

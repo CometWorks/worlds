@@ -144,6 +144,31 @@ checked the same way. Its own limit, `ProjectionPcuLimitPercent`, applies when a
 blueprint is loaded and is counted apart from the player's PCU, so nothing is
 counted twice.
 
+### Shipyard welding in safe zones
+
+The station safe zones allow no welding, and each one holds the station's
+shipyard. Its OmniArc welders run on ToolCore, which obeys the zone like the
+game's tools do. The plugin lets a shipyard grid, a grid named `<station>
+Shipyard` and owned by the Octahedron Authority NPC, weld and build projected
+blocks in a zone. Every other tool stays bound by the zone: hand tools, ship
+welders, ToolCore tools on players' grids, and grinding with any tool, the
+shipyard's included.
+
+The game asks a zone either about an entity, sometimes naming who acts on it, or
+about a box, naming nobody. The plugin allows welding when the entity is a
+shipyard grid or one of its blocks (ToolCore asks about its own grid every tick),
+when a shipyard's tool asks to build a projected block (the zone check of the
+grid and of the new block's box), and when a block is welded with components
+from a shipyard tool's inventory. ToolCore first asks the projector whether it
+can build a block, and that answer checks the block's box too. Any mod gets past
+that check, since the build request after it names the tool. ToolCore takes a
+block's first component before it asks to build it, so a mod tool whose request
+builds nothing gets the component back, as with the projection limits.
+
+All of it runs only after the zone refused welding. There is no switch of its
+own; `Enabled` turns it off with the other rules. The server welds, and clients
+without the plugin see the welded blocks.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a
@@ -238,7 +263,13 @@ ship from a blueprint loaded into the hologram tables, and its limits.
 the refilled blocks and the starter ships. `tests/test_projection_limits.py` runs
 the server alone, with OmniArc and ToolCore: an OmniArc welder welds a projection
 of more light armor blocks than the world's limit, with the check off, on with
-Multigrid Projector and on without it. `tests/test_hologram.py` takes
+Multigrid Projector and on without it. `tests/test_shipyard_zone.py` restricts
+the zones as the world does, then checks with the client that Alpha Station's
+shipyard welds a projection, while in the same zone a player's hand welder and
+grinder, ship welder and grinder, and an OmniArc welder on a player's grid named
+like a shipyard do nothing, and that the player's tools work outside the zone.
+It runs with the plugin's rules on, on with the zones holding every test grid
+from the start, and off. `tests/test_hologram.py` takes
 screenshots of fitted holograms, a blueprint with a cockpit and one without, from
 the side, the front and above, on a bench of two tables in open space; it needs a
 rendering client.
