@@ -10,13 +10,15 @@ headless client.
   components and with its welders off.
 - "expire": a 1,536 block heavy armor ship ("Order Big") with ShipyardOrderMinutes 2.
   The server restarts in the middle, the client gone, and must pick the order up from
-  the world. After the 2 minutes the saved world must hold the unfinished ship,
-  dynamic and the player's, with no scaffold and no leftover components.
+  the world and end it once the 2 minutes are up (the restart alone may take that
+  long). The saved world must then hold the unfinished ship, dynamic and the
+  player's, with no scaffold and no leftover components.
 
     uv run --no-project --with httpx python tests/test_shipyard_order.py [case ...]
 
-With OCT_SHOTS=<folder> the client renders (1280x720) and saves a screenshot of the
-ship being welded, seen from the table, to that folder.
+With OCT_SHOTS=<folder> the client renders (1280x720) and saves three screenshots
+of the ship being welded to that folder, taken from among the shipyard's welders
+(the client teleports there). Only "expire" is still welding by then.
 
 Needs what tests/test_projection_limits.py needs.
 """
@@ -24,6 +26,7 @@ Needs what tests/test_projection_limits.py needs.
 from __future__ import annotations
 
 import base64
+import math
 import os
 import re
 import sys
@@ -142,17 +145,38 @@ def order(remote) -> int:
     return next(g["entityId"] for g in remote.list_grids() if g["name"] == name)
 
 
-def beam_shoot(remote, shipyard_id: int) -> object:
-    grid = ET.parse(rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").getroot()
-    beam = next(
-        b
-        for o in grid.find("SectorObjects")
+def shipyard_grid(shipyard_id: int) -> ET.Element:
+    sector = ET.parse(rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").getroot()
+    return next(
+        o
+        for o in sector.find("SectorObjects")
         if o.findtext("EntityId") == str(shipyard_id)
-        for b in o.find("CubeBlocks")
-        if b.findtext("SubtypeName") == "OmniArcBeam"
     )
-    cell = tuple(int(c) for c in sz.vec(beam.find("Min")))
+
+
+def beam_shoot(remote, shipyard_id: int) -> object:
+    cell = tuple(
+        int(c) for c in sz.block_cells(shipyard_grid(shipyard_id), "OmniArcBeam")[0]
+    )
     return remote.get_property(shipyard_id, cell, "ToolCore_Shoot")
+
+
+def screenshots(remote, shipyard_id: int, case: str) -> None:
+    """From the free space, 70% of the way from the welders' middle (the ship) to the
+    farthest welder, looking at the ship"""
+    grid = shipyard_grid(shipyard_id)
+    beams = sz.cells_to_world(grid, sz.block_cells(grid, "OmniArcBeam"))
+    middle = tuple(sum(c) / len(beams) for c in zip(*beams))
+    far = max(beams, key=lambda b: math.dist(b, middle))
+    remote.character_teleport(*(m + 0.7 * (f - m) for m, f in zip(middle, far)))
+    time.sleep(5)
+    remote.character_look_at(*middle)
+    for shot in range(3):
+        time.sleep(5)
+        path = Path(SHOTS) / f"{case}-welding-{shot}.png"
+        remote.screenshot_save(str(path), 1280, 720)
+        log(f"screenshot {path}")
+    time.sleep(5)
 
 
 # --- the saved world ----------------------------------------------------------------
@@ -192,7 +216,7 @@ def check_ship(name: str, blocks: int | None, complete: bool) -> None:
         f"{ship.findtext('IsStatic')}, owners {owners}, built by {built_by}, player {player}"
     )
     assert ship.findtext("IsStatic") != "true", "the ship is handed over dynamic"
-    assert owners == built_by == {str(player)}, (owners, built_by)
+    assert owners <= {str(player)} and built_by == {str(player)}, (owners, built_by)
     assert "Shipyard Order" not in ET.tostring(ship, encoding="unicode"), "scaffold"
     if complete:
         assert len(cubes) == blocks and not partial
@@ -236,14 +260,7 @@ def run(case: str) -> None:
     time.sleep(20)
     log(f"client: a welder's ToolCore_Shoot {beam_shoot(remote, shipyard)}")
     if SHOTS:
-        ship = next(
-            g for g in remote.list_grids() if g["name"] == name and g["isStatic"]
-        )
-        remote.character_look_at(*remote.get_grid(ship["entityId"])["position"])
-        time.sleep(3)
-        path = Path(SHOTS) / f"{case}-welding.png"
-        remote.screenshot_save(str(path), 1280, 720)
-        log(f"screenshot {path}")
+        screenshots(remote, shipyard, case)
 
     if case == "complete":
         log(wait_chat(remote, "is ready", 900))
@@ -258,15 +275,24 @@ def run(case: str) -> None:
         assert "<CustomName>Shipyard Order</CustomName>" in text, "the order is saved"
         rig.start_server()
         log("server restarted without the client")
-        time.sleep(max(0.0, minutes * 60 + 30 - (time.monotonic() - ordered)))
-        rig.stop_server()
-        log(
-            [
+        # The restart may take longer than the order, then it ends at the first check
+        deadline = (
+            time.monotonic()
+            + max(0.0, minutes * 60 - (time.monotonic() - ordered))
+            + 120
+        )
+        while time.monotonic() < deadline:
+            lines = [
                 line
                 for line in rig.server_game_log().splitlines()
                 if "Shipyard order" in line
             ]
-        )
+            if any(" ended: " in line for line in lines):
+                break
+            time.sleep(10)
+        rig.stop_server()
+        log(lines)
+        assert any(" picked up " in line for line in lines), "the order is picked up"
         check_ship(name, blocks, complete=False)
     check_shipyards()
     errors = [

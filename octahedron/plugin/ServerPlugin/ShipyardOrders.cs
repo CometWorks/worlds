@@ -45,14 +45,6 @@ internal static class ShipyardOrders
     private const string TrackProperty = "ToolCore_TrackTargets";
     private const int UpdateTicks = 600;
 
-    // SE1-0150's rules, fixed here until it lands. A ship is built for free only while the
-    // player has less than FreeBuildPcuLimit, ships in Hangar counted (by PlayerPcu). The
-    // ordered ship is the player's, so GroupPcuLimit caps it like any ship: the projection
-    // limits would stop welding it there, so a bigger blueprint is refused up front. Wired up
-    // by using Plugin.Config.FreeBuildPcuLimit and Plugin.Config.GroupPcuLimit instead.
-    private const int FreeBuildPcuLimit = 20_000;
-    private const int GroupPcuLimit = 60_000;
-
     private sealed class Order
     {
         public MyProjectorBase Projector;
@@ -81,10 +73,11 @@ internal static class ShipyardOrders
         if (character == null || character.IsDead || character.MarkedForClose)
             return CommandReply.Error("Spawn first, then order at a hologram table.");
 
+        // A ship is built for free only while the player has less than FreeBuildPcuLimit
         var pcu = StarterShip.PlayerPcu(identity);
-        if (pcu >= FreeBuildPcuLimit)
+        if (pcu >= config.FreeBuildPcuLimit)
             return CommandReply.Error(
-                $"You have {pcu:N0} PCU. The shipyard builds for free only for players under {FreeBuildPcuLimit:N0} PCU."
+                $"You have {pcu:N0} PCU. The shipyard builds for free only for players under {config.FreeBuildPcuLimit:N0} PCU."
             );
 
         var table = StarterShip.FindTable(character, tableName, config);
@@ -100,10 +93,11 @@ internal static class ShipyardOrders
                 "Switch the hologram table on and load a blueprint into it first."
             );
 
+        // The ordered ship is the player's, so GroupPcuLimit would stop welding it there
         var shipPcu = blueprint.Sum(g => g.CalculatePCUs());
-        if (GroupPcuLimit > 0 && shipPcu > GroupPcuLimit)
+        if (config.GroupPcuLimit > 0 && shipPcu > config.GroupPcuLimit)
             return CommandReply.Error(
-                $"The blueprint has {shipPcu:N0} PCU, a ship at most {GroupPcuLimit:N0}."
+                $"The blueprint has {shipPcu:N0} PCU, a ship at most {config.GroupPcuLimit:N0}."
             );
 
         var shipyard = FindShipyard(table);
@@ -251,6 +245,10 @@ internal static class ShipyardOrders
                 if (order == null)
                     continue;
                 orders[shipyard.EntityId] = order;
+                Plugin.Log.Info(
+                    $"Shipyard order '{projector.CubeGrid.DisplayName}' ({projector.CubeGrid.EntityId}) "
+                        + $"of {Name(order.Player)} picked up at {shipyard.DisplayName}, until {order.Ends:u}"
+                );
             }
 
             var ship = projector.CubeGrid.DisplayName;

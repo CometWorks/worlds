@@ -210,10 +210,9 @@ A player who stands by a station's hologram table with a blueprint loaded into i
 types `!oct order`, or `!oct order <table name>`, and the station's shipyard builds
 the ship for them, for at most `ShipyardOrderMinutes` (60; 0 turns orders off).
 
-- It is free, so only a player with less than 20,000 PCU may order, and the
-  blueprint may have at most 60,000 PCU, the cap of a ship. These are SE1-0150's
-  `FreeBuildPcuLimit` and `GroupPcuLimit`, fixed in `ShipyardOrders.cs` until
-  that change lands; Hangar isn't counted yet.
+- It is free, so only a player with less than `FreeBuildPcuLimit` PCU may
+  order, counted as for the starter ship, and the blueprint may have at most
+  `GroupPcuLimit` PCU, the cap of a ship.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
   shipyard. The space must be empty: a ship left there has to fly out first.
