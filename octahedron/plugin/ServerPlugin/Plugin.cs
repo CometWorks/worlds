@@ -62,6 +62,7 @@ public class Plugin : IPlugin
         try
         {
             refillContainers.Update();
+            StationRefillPatch.UpdateNode();
             worldEdge.Update();
             TableHologram.Update();
         }
