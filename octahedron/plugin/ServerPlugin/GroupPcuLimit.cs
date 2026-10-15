@@ -138,31 +138,30 @@ internal static class GroupPcuLimit
         }
     }
 
-    // A rotor, piston or hinge attaching a top part it found. The game reattaches the tops it
-    // already had (after loading, for example) through the same TryAttach, those stay attached.
-    [HarmonyPatch(typeof(MyMechanicalConnectionBlockBase), "FindAndAttachTopServer")]
-    private static class AttachFound
-    {
-        [ThreadStatic]
-        internal static bool Active;
-
-        private static void Prefix() => Active = true;
-
-        private static void Finalizer() => Active = false;
-    }
-
-    [HarmonyPatch(typeof(MyMechanicalConnectionBlockBase), "TryAttach")]
+    // A rotor, piston, hinge or suspension attaching a top part. The game reattaches the
+    // tops it already had, after loading for example, and attaches a new top it just added,
+    // with the top's id already in the block's connection state; those aren't checked here.
+    [HarmonyPatch(
+        typeof(MyMechanicalConnectionBlockBase),
+        "Attach",
+        [typeof(MyAttachableTopBlockBase), typeof(bool)]
+    )]
     private static class Attach
     {
         private static bool Prefix(
             MyMechanicalConnectionBlockBase __instance,
-            MyAttachableTopBlockBase top,
+            MyAttachableTopBlockBase topBlock,
             ref bool __result
         )
         {
             if (
-                !AttachFound.Active
-                || Allows(__instance.BuiltBy, __instance.CubeGrid, 0, top.CubeGrid)
+                Traverse
+                    .Create(__instance)
+                    .Field("m_connectionState")
+                    .Property("Value")
+                    .Field("TopBlockId")
+                    .GetValue<long?>() == topBlock.EntityId
+                || Allows(__instance.BuiltBy, __instance.CubeGrid, 0, topBlock.CubeGrid)
             )
                 return true;
             __result = false;
@@ -188,12 +187,20 @@ internal static class GroupPcuLimit
     [HarmonyPatch]
     private static class NewTop
     {
+        // Not the parameterless CanPlaceTop() of the base class
         private static IEnumerable<MethodBase> TargetMethods() =>
-            [
-                AccessTools.Method(typeof(MyMechanicalConnectionBlockBase), "CanPlaceTop"),
-                AccessTools.Method(typeof(MyPistonBase), "CanPlaceTop"),
-                AccessTools.Method(typeof(MyMotorSuspension), "CanPlaceTop"),
-            ];
+            new[]
+            {
+                typeof(MyMechanicalConnectionBlockBase),
+                typeof(MyPistonBase),
+                typeof(MyMotorSuspension),
+            }.Select(type =>
+                AccessTools.DeclaredMethod(
+                    type,
+                    "CanPlaceTop",
+                    [typeof(MyAttachableTopBlockBase), typeof(long)]
+                )
+            );
 
         private static void Postfix(
             MyMechanicalConnectionBlockBase __instance,

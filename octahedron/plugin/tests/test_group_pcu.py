@@ -8,6 +8,8 @@ would have done it.
   300, the third doesn't.
 - Merge: two grids of 215 PCU with merge blocks face to face. Merged they would have
   430.
+- Attach: a programmable block asks a rotor base on its grid (215 PCU) to attach the
+  free rotor head in front of it, on a grid of 101 PCU. Joined they would have 316.
 
 The server runs a while, stops (it saves) and the saved world is read.
 
@@ -128,11 +130,68 @@ def merge_pair(name: str, entity_id: int, y: float, built_by: int) -> list[str]:
     ]
 
 
+# Where the game puts a large rotor head's grid: above the base's cell, in the base
+# grid's orientation (read from a save)
+HEAD_OFFSET = 0.421
+
+
+# The game attaches a rotor's top only when asked, and an attach a save asks for is
+# dropped on load
+ATTACH_SCRIPT = (
+    "public Program() { Runtime.UpdateFrequency = UpdateFrequency.Update100; }\n"
+    "public void Main(string argument, UpdateType updateSource) {\n"
+    '    (GridTerminalSystem.GetBlockWithName("Cap Rotor") as IMyMotorStator)?.Attach();\n'
+    "}"
+)
+
+
+def attach_pair(name: str, entity_id: int, y: float, built_by: int) -> list[str]:
+    """A rotor base with a battery and a programmable block that keeps asking it to
+    attach, and a detached head grid with two gyros on top"""
+    base = rig.grid(
+        f"{name} Base",
+        entity_id,
+        [
+            rig.block(
+                "MyObjectBuilder_MotorStator",
+                "LargeStator",
+                (0, 0, 0),
+                owned(built_by)
+                + "<CustomName>Cap Rotor</CustomName><Enabled>true</Enabled>",
+            ),
+            battery((0, -1, 0)),
+            rig.block(
+                "MyObjectBuilder_MyProgrammableBlock",
+                "LargeProgrammableBlock",
+                (0, -2, 0),
+                owned(PLAYER)
+                + f"<Enabled>true</Enabled><Program>{ATTACH_SCRIPT}</Program>",
+            ),
+        ],
+        position=(250_000, y, 0),
+    )
+    head = rig.grid(
+        f"{name} Head",
+        entity_id + 1,
+        [
+            rig.block(
+                "MyObjectBuilder_MotorRotor", "LargeRotor", (0, 0, 0), owned(PLAYER)
+            ),
+            gyro((0, 1, 0)),
+            gyro((0, 2, 0)),
+        ],
+        position=(250_000, y + HEAD_OFFSET, 0),
+    )
+    return [base, head]
+
+
 GRIDS = [
     weld_rig("Weld Capped", 777000150000100, (250_000, 3_000, 0), PLAYER),
     weld_rig("Weld Free", 777000150000200, (250_000, 6_000, 0), 0),
     *merge_pair("Merge Capped", 777000150000300, 9_000, PLAYER),
     *merge_pair("Merge Free", 777000150000400, 12_000, 0),
+    *attach_pair("Attach Capped", 777000150000500, 15_000, PLAYER),
+    *attach_pair("Attach Free", 777000150000600, 18_000, 0),
 ]
 
 
@@ -180,6 +239,12 @@ def functional_gyros(grid: str) -> int:
     return count
 
 
+def top_block(grid: str) -> int:
+    """The rotor base's TopBlockId, 0 without a top"""
+    top = re.search(r"<TopBlockId>(\d+)</TopBlockId>", grid)
+    return int(top[1]) if top else 0
+
+
 def main() -> None:
     rig.stop_server()
     prepare()
@@ -196,6 +261,8 @@ def main() -> None:
         print(f"{name}: functional gyros {functional_gyros(grids[name][0])}")
     for name in ("Merge Capped", "Merge Free"):
         print(f"{name}: grids {sorted(n for n in grids if n.startswith(name))}")
+    for name in ("Attach Capped", "Attach Free"):
+        print(f"{name}: top block {top_block(grids[name + ' Base'][0])}")
     refused = rig.server_game_log().count("may have at most 300 PCU")
     print(f"refusals logged {refused}")
 
@@ -206,7 +273,9 @@ def main() -> None:
         "Merge Capped A",
         "Merge Capped B",
     ]
-    assert refused >= 2
+    assert top_block(grids["Attach Free Base"][0]), "attached"
+    assert not top_block(grids["Attach Capped Base"][0])
+    assert refused >= 3
     print("passed")
 
 

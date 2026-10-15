@@ -270,16 +270,16 @@ docstring.
 world (`tests/edge_grids.py`) and the character on its jetpack, the starter
 ship from a blueprint loaded into the hologram tables, and its limits with a
 ship in Hangar (a Hangar working copy runs on the server), and the PCU cap per
-ship: pasting, a new rotor head, attaching it again and placing a block, each
-refused at the cap and allowed under it.
+ship: pasting, a rotor base's new head and placing a block, each refused at the
+cap and allowed under it.
 `tests/check_save.py` then reads the saved world: where the edge grids ended up,
 the refilled blocks and the starter ships. `tests/test_projection_limits.py` runs
 the server alone, with OmniArc and ToolCore: an OmniArc welder welds a projection
 of more light armor blocks than the world's limit, with the check off, on with
 Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
-blocks to their functional level and two grids merging, each stopped by the
-cap, next to a copy built by nobody that isn't. `tests/test_hologram.py` takes
+blocks to their functional level, two grids merging and a rotor attaching a
+head, each stopped by the cap, next to a copy built by nobody that isn't. `tests/test_hologram.py` takes
 screenshots of fitted holograms, a blueprint with a cockpit and one without, from
 the side, the front and above, on a bench of two tables in open space; it needs a
 rendering client.

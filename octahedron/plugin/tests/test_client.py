@@ -43,12 +43,13 @@ HANGAR_CONFIG = f"""<?xml version="1.0" encoding="utf-8"?>
 <SavedUtc>2026-10-15T00:00:00Z</SavedUtc><Pcu>{HANGAR_PCU}</Pcu><Blocks>10</Blocks>
 </HangarEntry></HangarEntries></PluginConfig>
 """
-# Pasted for the group cap: a rotor base (100 PCU), a battery (15) and an armor block (1)
+# Pasted for the group cap: two gyros (50 PCU each), a battery (15) and an armor block (1)
 CAP_GRID = rig.grid(
     "Cap Test",
     None,
     [
-        rig.block("MyObjectBuilder_MotorStator", "LargeStator", (0, 0, 0)),
+        rig.block("MyObjectBuilder_Gyro", "LargeBlockGyro", (0, 0, 0)),
+        rig.block("MyObjectBuilder_Gyro", "LargeBlockGyro", (0, 1, 0)),
         rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (0, -1, 0)),
         rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (1, -1, 0)),
     ],
@@ -233,9 +234,20 @@ def group_refusals() -> int:
     return rig.server_game_log().count("may have at most")
 
 
-def test_group_cap(remote, home) -> int | None:
-    """Paste, a new rotor head, attaching it again and placing a block, each refused at
-    the cap and allowed under it. Returns the rotor head grid's id."""
+def refused_since(count: int, timeout: float = 60) -> bool:
+    """Whether the server logged a group cap refusal since there were count; its log
+    reaches the file some seconds late"""
+    deadline = time.monotonic() + timeout
+    while group_refusals() <= count:
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(2)
+    return True
+
+
+def test_group_cap(remote, home) -> None:
+    """Pasting, a rotor's new head and placing a block, each refused at the cap and
+    allowed under it. With creative tools a placed block has its full PCU at once."""
     x, y, z = home
     remote.character_teleport(x + 3000, y, z)
     time.sleep(5)
@@ -249,64 +261,51 @@ def test_group_cap(remote, home) -> int | None:
         remote.paste_blueprint(xml=CAP_BLUEPRINT, position=spot, timeout_seconds=15)
     except Exception as e:  # the server never answers a refused paste
         log(f"paste at cap 100: {e}")
-    time.sleep(3)
-    assert not cap_grids(remote), "paste of 116 PCU refused at 100"
-    assert group_refusals() > refusals
+    assert refused_since(refusals) and not cap_grids(remote), "116 PCU refused at 100"
     with_config(remote, GroupPcuLimit=200)
     remote.paste_blueprint(xml=CAP_BLUEPRINT, position=spot)
     time.sleep(3)
     (grid,) = cap_grids(remote)
     grid_id = grid["entityId"]
-    log(f"pasted at cap 200: {remote.get_grid(grid_id)}")
+    log(f"pasted at cap 200: {grid}")
 
     def grids() -> set[int]:
         return {g["entityId"] for g in remote.list_grids()}
 
+    def build(cell, subtype="LargeBlockArmorBlock") -> None:
+        report = remote.character_build_block(grid_id, cell, subtype)
+        log(f"build {subtype} at {cell}: sent {report.get('sent')}")
+        time.sleep(5)
+
+    # A rotor base (100 PCU) fits under 216, its new head (1) doesn't
     before = grids()
     refusals = group_refusals()
-    with_config(remote, GroupPcuLimit=116)
-    remote.apply_action(grid_id, (0, 0, 0), "AddRotorTopPart")
-    time.sleep(5)
-    assert grids() == before, "no rotor head at the cap"
-    assert group_refusals() > refusals
-    with_config(remote, GroupPcuLimit=200)
-    remote.apply_action(grid_id, (0, 0, 0), "AddRotorTopPart")
-    time.sleep(5)
+    with_config(remote, GroupPcuLimit=216)
+    build((2, -1, 0), "LargeStator")
+    assert refused_since(refusals) and grids() == before, "no head at the cap"
+    with_config(remote, GroupPcuLimit=400)
+    build((-1, -1, 0), "LargeStator")
     (head,) = grids() - before
-    log(f"rotor head added at cap 200: {head}")
+    log(f"rotor head grid {head} at cap 400")
 
-    remote.apply_action(grid_id, (0, 0, 0), "Detach")
-    time.sleep(3)
-    refusals = group_refusals()
-    with_config(remote, GroupPcuLimit=116)
-    remote.apply_action(grid_id, (0, 0, 0), "Attach")
-    time.sleep(5)
-    assert group_refusals() > refusals, "attach refused at the cap"
-    with_config(remote, GroupPcuLimit=200)
-    remote.apply_action(grid_id, (0, 0, 0), "Attach")
-    time.sleep(5)
-
-    # Base and head: 117 PCU. An armor block (1 PCU, built complete with creative tools)
-    # doesn't fit under 117 and does under 118
+    # 116 + two rotor bases + one head: 317. An armor block (1 PCU) doesn't fit under
+    # 317 and does under 318.
     def blocks() -> int:
         return remote.list_cubes(grid_id)["total"]
 
     count = blocks()
     refusals = group_refusals()
-    with_config(remote, GroupPcuLimit=117)
-    log(f"build at cap 117: {remote.character_build_block(grid_id, (2, -1, 0))}")
-    time.sleep(3)
-    assert blocks() == count and group_refusals() > refusals, "placing refused"
-    with_config(remote, GroupPcuLimit=118)
-    log(f"build at cap 118: {remote.character_build_block(grid_id, (2, -1, 0))}")
-    time.sleep(3)
+    with_config(remote, GroupPcuLimit=317)
+    build((1, -2, 0))
+    assert blocks() == count and refused_since(refusals), "placing refused"
+    with_config(remote, GroupPcuLimit=318)
+    build((1, -2, 0))
     assert blocks() == count + 1, "placing allowed"
 
     remote.set_admin_flag("creativeTools", False)
     with_config(remote)
     remote.character_teleport(*home)
     time.sleep(3)
-    return head
 
 
 def main() -> None:
@@ -331,7 +330,7 @@ def main() -> None:
 
     check_edge(edge_report(remote))
     test_starter_ship(remote, home)
-    head = test_group_cap(remote, home)
+    test_group_cap(remote, home)
     test_character_edge(remote, home)
 
     # Edge 440 out reaches the braking zone about 10 minutes after the start
@@ -343,14 +342,6 @@ def main() -> None:
     rig.stop_client()
     rig.stop_server()
     log("server stopped and saved")
-    # The rotor attached its head again once the cap allowed it
-    attached = re.search(
-        r"<SubtypeName>LargeStator</SubtypeName>.*?<TopBlockId>(\d+)</TopBlockId>",
-        (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8"),
-        re.S,
-    )
-    log(f"rotor top block {attached and attached[1]}, head grid {head}")
-    assert attached and attached[1] != "0"
 
 
 if __name__ == "__main__":

@@ -414,6 +414,9 @@ def start_server(timeout: float = 2400.0, env: dict | None = None) -> None:
         if time.monotonic() > deadline:
             raise TimeoutError(f"The server did not get ready, see {SERVER_LOG}")
         time.sleep(2)
+    # A plugin whose Init throws leaves the server running with only some of its patches
+    if "Failed to initialize" in (SERVER_CONFIG / "info.log").read_text(errors="replace"):
+        raise RuntimeError(f"A plugin failed to initialize, see {SERVER_CONFIG}/info.log")
 
 
 def stop_server() -> None:
