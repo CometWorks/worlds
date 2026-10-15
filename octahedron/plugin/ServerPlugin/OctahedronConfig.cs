@@ -11,6 +11,7 @@ namespace ServerPlugin;
 [Section("edge", caption: "World Edge")]
 [Section("starter", caption: "Starter Ship")]
 [Section("projections", caption: "Projections")]
+[Section("pcu", caption: "PCU Limits")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -209,18 +210,6 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "Only players with less PCU than this get a starter ship; the others build at the station's shipyard. "
-            + "Counts the blocks the player built on every cluster node, not their ships in Hangar.",
-        Parent = "starter"
-    )]
-    public int StarterShipPlayerPcuLimit
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 30_000;
-
-    [IntOption(
-        0,
         description: "Minutes a player waits between two starter ships. Counted on each server node on its own, and reset by a restart.",
         Parent = "starter"
     )]
@@ -283,6 +272,30 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     }
+
+    [IntOption(
+        0,
+        description: "Most PCU of a ship or station: the grids joined by rotors, pistons and hinges, not by connectors. "
+            + "Placing, welding, projecting, attaching, merging or pasting past it is refused. 0: no limit.",
+        Parent = "pcu"
+    )]
+    public int GroupPcuLimit
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60_000;
+
+    [IntOption(
+        0,
+        description: "Players get a ship built for free, the starter ship, only while they have less PCU than this. "
+            + "Counts the blocks the player built on every cluster node and their ships in Hangar.",
+        Parent = "pcu"
+    )]
+    public int FreeBuildPcuLimit
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20_000;
 }
 
 public struct RefillContainer

@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
 using HarmonyLib;
 using Sandbox.Definitions;
-using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.World;
@@ -17,12 +14,10 @@ namespace ServerPlugin;
 // server for the player the new block will count toward, its BuiltBy, and refuses a block over
 // any of them: block type or tag limit, PCU, blocks per player, grid size. Multigrid Projector
 // builds projected blocks through the same request, so this covers its projections as well.
+// The same request checks the mechanical group's PCU cap (GroupPcuLimit) for projected blocks.
 [HarmonyPatch(typeof(MyCubeGrid), nameof(MyCubeGrid.BuildBlockRequestInternal))]
 internal static class ProjectionLimits
 {
-    private static readonly TimeSpan NotifyInterval = TimeSpan.FromSeconds(10);
-    private static readonly Dictionary<long, DateTime> lastNotified = new();
-
     private static bool Prefix(
         MyCubeGrid __instance,
         MyCubeGrid.MyBlockLocation location,
@@ -33,7 +28,7 @@ internal static class ProjectionLimits
     )
     {
         var config = Plugin.Config;
-        if (!isProjection || !config.Enabled || !config.ProjectionLimitsEnabled)
+        if (!isProjection || !config.Enabled)
             return true;
 
         // Blocks built by nobody or by an NPC, like those an NPC station's welders weld, count
@@ -56,20 +51,27 @@ internal static class ProjectionLimits
             session.CreativeMode || instantBuild
                 ? definition.PCU
                 : MyCubeBlockDefinition.PCU_CONSTRUCTION_STAGE_COST;
-        var limitType = definition.GetLimitType();
-        var result = session.IsWithinWorldLimits(
-            out _,
-            builtBy,
-            limitType,
-            pcu,
-            blocksToBuild: 1,
-            blocksCount: __instance.BlocksCount
-        );
-        if (result == MySession.LimitResult.Passed)
+        if (config.ProjectionLimitsEnabled)
+        {
+            var limitType = definition.GetLimitType();
+            var result = session.IsWithinWorldLimits(
+                out _,
+                builtBy,
+                limitType,
+                pcu,
+                blocksToBuild: 1,
+                blocksCount: __instance.BlocksCount
+            );
+            if (result != MySession.LimitResult.Passed)
+            {
+                Refund(builderEntityId, definition);
+                Notify(builtBy, definition, limitType, result);
+                return false;
+            }
+        }
+        if (GroupPcuLimit.Allows(builtBy, __instance, pcu))
             return true;
-
         Refund(builderEntityId, definition);
-        Notify(builtBy, definition, limitType, result);
         return false;
     }
 
@@ -94,7 +96,6 @@ internal static class ProjectionLimits
             );
     }
 
-    // A tool retries every second or so, the player hears about it every NotifyInterval
     private static void Notify(
         long identityId,
         MyCubeBlockDefinition definition,
@@ -102,11 +103,6 @@ internal static class ProjectionLimits
         MySession.LimitResult result
     )
     {
-        var now = DateTime.UtcNow;
-        if (lastNotified.TryGetValue(identityId, out var last) && now - last < NotifyInterval)
-            return;
-        lastNotified[identityId] = now;
-
         var reason = result switch
         {
             MySession.LimitResult.BlockTypeLimit =>
@@ -118,9 +114,9 @@ internal static class ProjectionLimits
             MySession.LimitResult.NoFaction => "join a faction to build",
             _ => result.ToString(),
         };
-        var message = $"Projected {definition.DisplayNameText} not built: {reason}.";
-        MyVisualScriptLogicProvider.ShowNotification(message, 5000, "Red", identityId);
-        var name = MySession.Static.Players.TryGetIdentity(identityId)?.DisplayName;
-        Plugin.Log.Info($"{name} ({identityId}): {message}");
+        GroupPcuLimit.Notify(
+            identityId,
+            $"Projected {definition.DisplayNameText} not built: {reason}."
+        );
     }
 }
