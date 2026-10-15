@@ -27,6 +27,12 @@ chambers named `StationLootContainerName` (case-insensitive). Only those are
 hidden; other containers keep their setting. With the name empty, nothing gets
 loot or is hidden. Off, the game's own refill runs unchanged.
 
+On a cluster the economy tick runs only on the World Authority, which has no
+grids, so the game never refills a station there. Each node runs the refill
+itself for the stations it simulates: once when it starts, then every
+`EconomyTickInSeconds`. With `StationRefillEnabled` off, that is the game's own
+refill.
+
 ### Refill containers
 
 `RefillContainers` keeps blocks stocked with fixed items, independent of the
