@@ -1,6 +1,10 @@
 """Checks the plugin's rules on the test server with the headless client: the
-world edge (grids and the character), the starter ship and the station refill.
-Prints what it saw; the asserts stop it at the first rule broken.
+world edge (grids and the character), the starter ship, the PCU cap per mechanical
+grid group and the station refill. Prints what it saw; the asserts stop it at the
+first rule broken.
+
+Hangar runs on the server too (OCT_HANGAR_REPO, a working copy of CometWorks/hangar),
+with one stored ship of the player's, so that the starter ship's PCU rule counts it.
 
     uv run --no-project --with httpx python tests/test_client.py
 """
@@ -8,8 +12,10 @@ Prints what it saw; the asserts stop it at the first rule broken.
 from __future__ import annotations
 
 import math
+import os
 import re
 import time
+from pathlib import Path
 
 import rig
 from se_remote import CallOp
@@ -22,6 +28,39 @@ BLUEPRINT = rig.grid(
     rig.small_ship_blocks(),
     tag="MyObjectBuilder_CubeGrid",
 )
+HANGAR = (
+    "hangar",
+    Path(os.environ.get("OCT_HANGAR_REPO", rig.WORKSPACE / "se1/plugins/hangar")),
+    "Hangar.xml",
+    "17C928CE-4645-4E1B-9365-C3C46BFE061D",
+)
+# The player's ship in Hangar
+HANGAR_PCU = 1000
+HANGAR_CONFIG = f"""<?xml version="1.0" encoding="utf-8"?>
+<PluginConfig><HangarEntries><HangarEntry>
+<Id>oct-test</Id><Scope>Player</Scope><OwnerId>{rig.CLIENT_ID}</OwnerId>
+<OwnerName>{rig.CLIENT_NAME}</OwnerName><GridName>Parked</GridName>
+<SavedUtc>2026-10-15T00:00:00Z</SavedUtc><Pcu>{HANGAR_PCU}</Pcu><Blocks>10</Blocks>
+</HangarEntry></HangarEntries></PluginConfig>
+"""
+# Pasted for the group cap: a rotor base (100 PCU), a battery (15) and an armor block (1)
+CAP_GRID = rig.grid(
+    "Cap Test",
+    None,
+    [
+        rig.block("MyObjectBuilder_MotorStator", "LargeStator", (0, 0, 0)),
+        rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (0, -1, 0)),
+        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (1, -1, 0)),
+    ],
+    tag="CubeGrid",
+)
+CAP_BLUEPRINT = f"""<?xml version="1.0"?>
+<Definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ShipBlueprints><ShipBlueprint xsi:type="MyObjectBuilder_ShipBlueprintDefinition">
+<Id Type="MyObjectBuilder_ShipBlueprintDefinition" Subtype="Cap Test" />
+<DisplayName>Cap Test</DisplayName><CubeGrids>{CAP_GRID}</CubeGrids>
+</ShipBlueprint></ShipBlueprints></Definitions>
+"""
 EDGE_LINE = re.compile(
     r"^(?P<name>.*): (?P<km>[\d.]+) km, outward (?P<out>-?[\d.]+) m/s, limit (?P<limit>-?[\d.]+) m/s$"
 )
@@ -171,14 +210,103 @@ def test_starter_ship(remote, home) -> None:
 
     with_config(remote, StarterShipCooldownMinutes=0, StarterShipMaxShipPcu=5)
     assert "at most 5" in ship_reply(remote)
-    # The player has the first ship's 62 PCU: at the limit refused, under it allowed
-    with_config(remote, StarterShipCooldownMinutes=0, StarterShipPlayerPcuLimit=62)
-    assert "shipyard" in ship_reply(remote)
-    with_config(remote, StarterShipCooldownMinutes=0, StarterShipPlayerPcuLimit=63)
+    with_config(remote, StarterShipCooldownMinutes=0, GroupPcuLimit=6)
+    assert "at most 6" in ship_reply(remote), "the group cap caps a starter ship too"
+    # The player has the first ship's 62 PCU and the Hangar ship: at the limit refused,
+    # under it allowed
+    owned = 62 + HANGAR_PCU
+    with_config(remote, StarterShipCooldownMinutes=0, FreeBuildPcuLimit=owned)
+    reply = ship_reply(remote)
+    assert "shipyard" in reply and f"{owned:,}" in reply, "Hangar counted"
+    with_config(remote, StarterShipCooldownMinutes=0, FreeBuildPcuLimit=owned + 1)
     assert "waits outside" in ship_reply(remote), "second ship without a cooldown"
     with_config(remote)
     remote.character_teleport(*home)
     time.sleep(3)
+
+
+def cap_grids(remote) -> list[dict]:
+    return [g for g in remote.list_grids() if g["name"] == "Cap Test"]
+
+
+def group_refusals() -> int:
+    return rig.server_game_log().count("may have at most")
+
+
+def test_group_cap(remote, home) -> int | None:
+    """Paste, a new rotor head, attaching it again and placing a block, each refused at
+    the cap and allowed under it. Returns the rotor head grid's id."""
+    x, y, z = home
+    remote.character_teleport(x + 3000, y, z)
+    time.sleep(5)
+    position = remote.get_character()["position"]
+    spot = (position[0], position[1], position[2] - 25)
+    remote.set_admin_flag("creativeTools", True)
+
+    refusals = group_refusals()
+    with_config(remote, GroupPcuLimit=100)
+    try:
+        remote.paste_blueprint(xml=CAP_BLUEPRINT, position=spot, timeout_seconds=15)
+    except Exception as e:  # the server never answers a refused paste
+        log(f"paste at cap 100: {e}")
+    time.sleep(3)
+    assert not cap_grids(remote), "paste of 116 PCU refused at 100"
+    assert group_refusals() > refusals
+    with_config(remote, GroupPcuLimit=200)
+    remote.paste_blueprint(xml=CAP_BLUEPRINT, position=spot)
+    time.sleep(3)
+    (grid,) = cap_grids(remote)
+    grid_id = grid["entityId"]
+    log(f"pasted at cap 200: {remote.get_grid(grid_id)}")
+
+    def grids() -> set[int]:
+        return {g["entityId"] for g in remote.list_grids()}
+
+    before = grids()
+    refusals = group_refusals()
+    with_config(remote, GroupPcuLimit=116)
+    remote.apply_action(grid_id, (0, 0, 0), "AddRotorTopPart")
+    time.sleep(5)
+    assert grids() == before, "no rotor head at the cap"
+    assert group_refusals() > refusals
+    with_config(remote, GroupPcuLimit=200)
+    remote.apply_action(grid_id, (0, 0, 0), "AddRotorTopPart")
+    time.sleep(5)
+    (head,) = grids() - before
+    log(f"rotor head added at cap 200: {head}")
+
+    remote.apply_action(grid_id, (0, 0, 0), "Detach")
+    time.sleep(3)
+    refusals = group_refusals()
+    with_config(remote, GroupPcuLimit=116)
+    remote.apply_action(grid_id, (0, 0, 0), "Attach")
+    time.sleep(5)
+    assert group_refusals() > refusals, "attach refused at the cap"
+    with_config(remote, GroupPcuLimit=200)
+    remote.apply_action(grid_id, (0, 0, 0), "Attach")
+    time.sleep(5)
+
+    # Base and head: 117 PCU. An armor block (1 PCU, built complete with creative tools)
+    # doesn't fit under 117 and does under 118
+    def blocks() -> int:
+        return remote.list_cubes(grid_id)["total"]
+
+    count = blocks()
+    refusals = group_refusals()
+    with_config(remote, GroupPcuLimit=117)
+    log(f"build at cap 117: {remote.character_build_block(grid_id, (2, -1, 0))}")
+    time.sleep(3)
+    assert blocks() == count and group_refusals() > refusals, "placing refused"
+    with_config(remote, GroupPcuLimit=118)
+    log(f"build at cap 118: {remote.character_build_block(grid_id, (2, -1, 0))}")
+    time.sleep(3)
+    assert blocks() == count + 1, "placing allowed"
+
+    remote.set_admin_flag("creativeTools", False)
+    with_config(remote)
+    remote.character_teleport(*home)
+    time.sleep(3)
+    return head
 
 
 def main() -> None:
@@ -192,7 +320,8 @@ def main() -> None:
         grids, settings={"EconomyTickInSeconds": 60}, table_blueprint=BLUEPRINT
     )
     rig.write_plugin_config()
-    rig.prepare_server()
+    (rig.SERVER_DATA / "Hangar.cfg").write_text(HANGAR_CONFIG, encoding="utf-8")
+    rig.prepare_server(extra_dev_folders=[HANGAR])
     rig.start_server()
     server_ready = time.monotonic()
     log("server ready")
@@ -202,6 +331,7 @@ def main() -> None:
 
     check_edge(edge_report(remote))
     test_starter_ship(remote, home)
+    head = test_group_cap(remote, home)
     test_character_edge(remote, home)
 
     # Edge 440 out reaches the braking zone about 10 minutes after the start
@@ -213,6 +343,14 @@ def main() -> None:
     rig.stop_client()
     rig.stop_server()
     log("server stopped and saved")
+    # The rotor attached its head again once the cap allowed it
+    attached = re.search(
+        r"<SubtypeName>LargeStator</SubtypeName>.*?<TopBlockId>(\d+)</TopBlockId>",
+        (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8"),
+        re.S,
+    )
+    log(f"rotor top block {attached and attached[1]}, head grid {head}")
+    assert attached and attached[1] != "0"
 
 
 if __name__ == "__main__":

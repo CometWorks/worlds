@@ -25,7 +25,7 @@ namespace ServerPlugin;
 internal static class GroupPcuLimit
 {
     private static readonly TimeSpan NotifyInterval = TimeSpan.FromSeconds(10);
-    private static readonly Dictionary<long, DateTime> lastNotified = new();
+    private static readonly Dictionary<(long, string), DateTime> lastNotified = new();
 
     // The PCU the game counts on the grids of the group, both groups if two grids are given
     public static int Pcu(MyCubeGrid grid, MyCubeGrid other = null)
@@ -79,14 +79,17 @@ internal static class GroupPcuLimit
             && settings.HasFlag(AdminSettingsEnum.IgnorePcu);
     }
 
-    // A tool or a merge block retries every second or so, the player hears about it every
-    // NotifyInterval
+    // A tool or a merge block retries every second or so, the player hears the same message
+    // every NotifyInterval
     internal static void Notify(long identityId, string message)
     {
         var now = DateTime.UtcNow;
-        if (lastNotified.TryGetValue(identityId, out var last) && now - last < NotifyInterval)
+        if (
+            lastNotified.TryGetValue((identityId, message), out var last)
+            && now - last < NotifyInterval
+        )
             return;
-        lastNotified[identityId] = now;
+        lastNotified[(identityId, message)] = now;
         MyVisualScriptLogicProvider.ShowNotification(message, 5000, "Red", identityId);
         var name = MySession.Static.Players.TryGetIdentity(identityId)?.DisplayName;
         Plugin.Log.Info($"{name} ({identityId}): {message}");

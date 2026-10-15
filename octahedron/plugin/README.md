@@ -80,11 +80,14 @@ switched on and with a blueprint loaded into it types `!oct ship`, or
 as a ship. The stations' tables start switched off, and a projector that is off
 holds no blueprint for the server.
 
-- It must be a single grid of at most `StarterShipMaxShipPcu` (20,000) PCU.
-- Only a player with less than `StarterShipPlayerPcuLimit` (30,000) PCU gets
-  one; the others are told to build at the station's shipyard. It counts the
-  blocks the player built, on every cluster node through the cluster plugin's PCU
-  ledger, and not the player's ships in Hangar.
+- It must be a single grid of at most `StarterShipMaxShipPcu` (20,000) PCU, and
+  of no more than `GroupPcuLimit`.
+- Only a player with less than `FreeBuildPcuLimit` (20,000) PCU gets one; the
+  others are told to build at the station's shipyard. It counts the blocks the
+  player built, on every cluster node through the cluster plugin's PCU ledger,
+  and the player's ships in Hangar, read from Hangar's storage when the Hangar
+  plugin is loaded. The ledger knows only the grids some node has loaded, so a
+  player's grids in offline cluster partitions don't count yet.
 - It appears past the station's safe zone, `StarterShipClearance` (50 m) beyond
   its edge, on the table's side of the station if there is room there, else
   turned about the station's up. Its main cockpit (else any cockpit, control seat
@@ -131,9 +134,9 @@ With `ProjectionLimitsEnabled` on, the server checks every projected block befor
 building it, for the player the block will count toward (its `BuiltBy`): block
 type or tag limits, PCU, blocks per player and grid size, the check the game's
 welders make. A block over a limit isn't built, and the player gets a red
-notification, at most every 10 seconds. ToolCore takes a block's first component
-from the tool's inventory before it asks, so a refused block gives it back; the
-game's welders pay only for the blocks they build.
+notification, the same one at most every 10 seconds. ToolCore takes a block's
+first component from the tool's inventory before it asks, so a refused block
+gives it back; the game's welders pay only for the blocks they build.
 
 On a cluster the check counts the player's blocks on every node, through the
 cluster plugin's PCU ledger. Blocks built by an NPC, like those an NPC-owned
@@ -143,6 +146,38 @@ Multigrid Projector builds projected blocks through the same request, so they ar
 checked the same way. Its own limit, `ProjectionPcuLimitPercent`, applies when a
 blueprint is loaded and is counted apart from the player's PCU, so nothing is
 counted twice.
+
+### PCU per ship or station
+
+A ship or station may have at most `GroupPcuLimit` (60,000) PCU: all grids
+joined by rotors, pistons, hinges and wheel suspensions (the game's mechanical
+group), not the ones docked by connectors. The game itself caps PCU only per
+player. The plugin refuses, the way the game refuses a block over the player's
+PCU, anything that would take a group past the cap, and tells the player in red
+(the same message at most every 10 seconds):
+
+- placing blocks by hand, one or an area of them;
+- building a projected block, by any welder, the OmniArc ones and Multigrid
+  Projector's builds included;
+- welding a block to its functional level, where it goes from 1 PCU to its full
+  PCU;
+- adding a top part to a rotor, piston, hinge or suspension, and attaching a top
+  part, unless both grids are in the group already;
+- two merge blocks merging their grids: the two stay locked but apart;
+- pasting grids, onto a grid or as new grids, per mechanical group of the
+  pasted grids; a starter ship is checked by its own rule above.
+
+The PCU of a group is what the game counts on its grids, the PCU shown in the
+terminal's Info tab, so a vanilla projector's reservation (one PCU per projected
+block) is part of it; Multigrid Projector doesn't reserve on the grid.
+
+Blocks built by nobody or by an NPC, like the stations' blocks, and admins with
+"Ignore PCU limit" on are not capped. A group already over the cap, pasted by an
+admin for example, keeps what it has. The game reattaches the top parts it
+already had, after a load for example, without the check. 0 turns the cap off.
+
+On a cluster the partitions keep a mechanical group together, so the node that
+owns a group sees all of it.
 
 ## Loading it on a Magnetar server
 
@@ -233,12 +268,18 @@ docstring.
 
 `tests/test_client.py` checks the rules with them: grids flying out of the
 world (`tests/edge_grids.py`) and the character on its jetpack, the starter
-ship from a blueprint loaded into the hologram tables, and its limits.
+ship from a blueprint loaded into the hologram tables, and its limits with a
+ship in Hangar (a Hangar working copy runs on the server), and the PCU cap per
+ship: pasting, a new rotor head, attaching it again and placing a block, each
+refused at the cap and allowed under it.
 `tests/check_save.py` then reads the saved world: where the edge grids ended up,
 the refilled blocks and the starter ships. `tests/test_projection_limits.py` runs
 the server alone, with OmniArc and ToolCore: an OmniArc welder welds a projection
 of more light armor blocks than the world's limit, with the check off, on with
-Multigrid Projector and on without it. `tests/test_hologram.py` takes
+Multigrid Projector and on without it, and the PCU cap per ship stopping it.
+`tests/test_group_pcu.py` runs the server alone too: a ship welder welding
+blocks to their functional level and two grids merging, each stopped by the
+cap, next to a copy built by nobody that isn't. `tests/test_hologram.py` takes
 screenshots of fitted holograms, a blueprint with a cockpit and one without, from
 the side, the front and above, on a bench of two tables in open space; it needs a
 rendering client.
