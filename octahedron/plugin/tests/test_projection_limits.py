@@ -169,6 +169,11 @@ def prepare(check: bool, mgp: bool, group: int) -> None:
             r"<BlockTypeLimits>.*?</BlockTypeLimits>", TYPE_LIMITS, text, flags=re.S
         )
         assert count == 1, name
+        # The world limits by tag (OmniArcTools); light armor has no tag
+        text = text.replace(
+            "<LimitBlocksBy>Tag</LimitBlocksBy>",
+            "<LimitBlocksBy>BlockPairName</LimitBlocksBy>",
+        )
         if name == "Sandbox.sbc":
             text = text.replace("</Identities>", IDENTITY + "</Identities>", 1)
         path.write_text(text, encoding="utf-8")
