@@ -89,17 +89,8 @@ internal static class TableHologram
         )
             return false;
 
-        // The blueprint's bounds in its main grid's frame, all grids included
         var main = grids[0];
-        var toMain = MatrixD.Invert(GridMatrix(main));
-        var bounds = BoundingBoxD.CreateInvalid();
-        foreach (var grid in grids)
-        {
-            var toFrame = GridMatrix(grid) * toMain;
-            var box = (BoundingBoxD)grid.CalculateBoundingBox();
-            for (var i = 0; i < 8; i++)
-                bounds.Include(Vector3D.Transform(box.GetCorner(i), toFrame));
-        }
+        var bounds = Bounds(grids);
 
         // The cockpit's forward and up become the table's
         var (forward, up) = StarterShip.CockpitFrame(main);
@@ -132,6 +123,21 @@ internal static class TableHologram
             ((IMyProjector)table).ShowOnlyBuildable
         );
         return true;
+    }
+
+    // The blueprint's bounds in its main grid's frame, all grids included
+    internal static BoundingBoxD Bounds(List<MyObjectBuilder_CubeGrid> grids)
+    {
+        var toMain = MatrixD.Invert(GridMatrix(grids[0]));
+        var bounds = BoundingBoxD.CreateInvalid();
+        foreach (var grid in grids)
+        {
+            var toFrame = GridMatrix(grid) * toMain;
+            var box = (BoundingBoxD)grid.CalculateBoundingBox();
+            for (var i = 0; i < 8; i++)
+                bounds.Include(Vector3D.Transform(box.GetCorner(i), toFrame));
+        }
+        return bounds;
     }
 
     private static MatrixD GridMatrix(MyObjectBuilder_CubeGrid grid) =>

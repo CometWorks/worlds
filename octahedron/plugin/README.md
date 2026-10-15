@@ -169,6 +169,41 @@ All of it runs only after the zone refused welding. There is no switch of its
 own; `Enabled` turns it off with the other rules. The server welds, and clients
 without the plugin see the welded blocks.
 
+### Shipyard orders
+
+A player who stands by a station's hologram table with a blueprint loaded into it
+types `!oct order`, or `!oct order <table name>`, and the station's shipyard builds
+the ship for them, for at most `ShipyardOrderMinutes` (60; 0 turns orders off).
+
+- It is free, so only a player with less than 20,000 PCU may order, and the
+  blueprint may have at most 60,000 PCU, the cap of a ship. These are SE1-0150's
+  `FreeBuildPcuLimit` and `GroupPcuLimit`, fixed in `ShipyardOrders.cs` until
+  that change lands; Hangar isn't counted yet.
+- The ship must fit the shipyard's free space, the largest box between its
+  welders free of its blocks, turned so that its main cockpit points along the
+  shipyard. The space must be empty: a ship left there has to fly out first.
+- One order per shipyard. Another player is told whose ship it builds and
+  when it is free at the latest.
+- The ship starts as a static grid of one of its blocks, built complete and the
+  player's, centered in the free space. Next to it, outside the ship's bounds, an
+  NPC-owned projector and battery named `Shipyard Order` project the blueprint
+  (Multigrid Projector builds its subgrids). The components of the other blocks
+  go into the shipyard's cargo containers, and its OmniArc welders are switched
+  on through their terminal switches, which also tells the clients, so players
+  see the beams.
+- Every projected block welded onto the ship or its subgrids is the player's,
+  owner and `BuiltBy`, so it counts toward the player's PCU and the projection
+  limits check it for them.
+- The order ends when every block is complete, or when the time is up. The
+  welders go off, the projector and battery are removed with the projection,
+  what is left of the loaded components is taken out of the shipyard's
+  containers and welders, and the ship, finished or not, becomes the player's
+  dynamic ship. The player gets a chat message either way.
+
+The order is kept in the world, in the projector's custom data, so it goes on
+after a restart. Every 10 seconds the node that simulates a shipyard checks it,
+so on a cluster the node owning the station's partition runs the order.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a
@@ -269,7 +304,9 @@ shipyard welds a projection, while in the same zone a player's hand welder and
 grinder, ship welder and grinder, and an OmniArc welder on a player's grid named
 like a shipyard do nothing, and that the player's tools work outside the zone.
 It runs with the plugin's rules on, on with the zones holding every test grid
-from the start, and off. `tests/test_hologram.py` takes
+from the start, and off. `tests/test_shipyard_order.py` orders a ship at a station
+table with the client and checks the saved world after the shipyard finished it,
+then lets a bigger order run out after a server restart. `tests/test_hologram.py` takes
 screenshots of fitted holograms, a blueprint with a cockpit and one without, from
 the side, the front and above, on a bench of two tables in open space; it needs a
 rendering client.

@@ -64,6 +64,7 @@ public class Plugin : IPlugin
             refillContainers.Update();
             worldEdge.Update();
             TableHologram.Update();
+            ShipyardOrders.Update();
         }
         catch (Exception e)
         {

@@ -115,7 +115,7 @@ internal static class StarterShip
     }
 
     // The nearest NPC-owned hologram table within reach, of the given name if there is one
-    private static MyProjectorBase FindTable(
+    internal static MyProjectorBase FindTable(
         MyCharacter character,
         string name,
         OctahedronConfig config
@@ -269,7 +269,7 @@ internal static class StarterShip
 
     // The player's PCU in the world: built blocks on this node and, on a cluster, on the other
     // nodes (the cluster plugin's ledger). Ships in Hangar don't count.
-    private static int PlayerPcu(MyIdentity identity)
+    internal static int PlayerPcu(MyIdentity identity)
     {
         var pcu = identity.BlockLimits.PCUBuilt;
         if (RemoteUsage.Value != null)
