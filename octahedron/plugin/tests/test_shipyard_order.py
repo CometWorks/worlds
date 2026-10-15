@@ -8,7 +8,7 @@ headless client.
   when the ship is complete; the saved world must hold it as a dynamic grid owned and
   built by the player, without the scaffold, and the shipyard without the loaded
   components and with its welders off.
-- "expire": a 108 block heavy armor ship ("Order Big") with ShipyardOrderMinutes 2.
+- "expire": a 1,536 block heavy armor ship ("Order Big") with ShipyardOrderMinutes 2.
   The server restarts in the middle, the client gone, and must pick the order up from
   the world. After the 2 minutes the saved world must hold the unfinished ship,
   dynamic and the player's, with no scaffold and no leftover components.
@@ -57,14 +57,14 @@ BIG = rig.grid(
     777000151000200,
     [
         rig.block("MyObjectBuilder_CubeBlock", "LargeHeavyBlockArmorBlock", (x, y, z))
-        for x in range(3)
-        for y in range(3)
-        for z in range(12)
+        for x in range(8)
+        for y in range(8)
+        for z in range(24)
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
 # name: (blueprint, its blocks, ShipyardOrderMinutes)
-CASES = {"complete": (SMALL, 10, 60), "expire": (BIG, 108, 2)}
+CASES = {"complete": (SMALL, 10, 60), "expire": (BIG, 1536, 2)}
 
 SHOTS = os.environ.get("OCT_SHOTS")
 started = time.monotonic()
