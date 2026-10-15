@@ -276,7 +276,7 @@ public class OctahedronConfig : PluginConfig
     [IntOption(
         0,
         description: "Most PCU of a ship or station: the grids joined by rotors, pistons and hinges, not by connectors. "
-            + "Placing, welding, attaching or merging past it is refused. 0: no limit.",
+            + "Placing, welding, projecting, attaching, merging or pasting past it is refused. 0: no limit.",
         Parent = "pcu"
     )]
     public int GroupPcuLimit
