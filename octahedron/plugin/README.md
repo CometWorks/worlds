@@ -279,10 +279,10 @@ of more light armor blocks than the world's limit, with the check off, on with
 Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
 blocks to their functional level, two grids merging and a rotor attaching a
-head, each stopped by the cap, next to a copy built by nobody that isn't. `tests/test_hologram.py` takes
-screenshots of fitted holograms, a blueprint with a cockpit and one without, from
-the side, the front and above, on a bench of two tables in open space; it needs a
-rendering client.
+head, each stopped by the cap, next to a copy built by nobody that isn't.
+`tests/test_hologram.py` takes screenshots of fitted holograms, a blueprint with
+a cockpit and one without, from the side, the front and above, on a bench of two
+tables in open space; it needs a rendering client.
 
 ## Building locally
 

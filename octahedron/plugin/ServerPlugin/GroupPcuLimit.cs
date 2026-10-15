@@ -17,18 +17,19 @@ using VRage.Network;
 
 namespace ServerPlugin;
 
-// Caps the PCU of a mechanical grid group: the grids joined by rotors, pistons and hinges, not
-// by connectors. The game has no such cap. A group grows when a block is placed, a projected
-// block is built, a block is welded past its functional level, a top part is added or
-// attached, two grids merge, or a blueprint is pasted; each is refused over GroupPcuLimit. Blocks built by nobody or by an NPC, and
-// admins who ignore PCU limits, aren't capped.
+// Caps the PCU of a mechanical grid group: the grids joined by rotors, pistons, hinges and
+// suspensions, not by connectors. The game has no such cap. A group grows when a block is
+// placed, a projected block is built, a block is welded past its functional level, a top part
+// is added or attached, two grids merge, or a blueprint is pasted; each is refused over
+// GroupPcuLimit. Blocks built by nobody or by an NPC, and admins who ignore PCU limits, aren't
+// capped.
 internal static class GroupPcuLimit
 {
     private static readonly TimeSpan NotifyInterval = TimeSpan.FromSeconds(10);
     private static readonly Dictionary<(long, string), DateTime> lastNotified = new();
 
     // The PCU the game counts on the grids of the group, both groups if two grids are given
-    public static int Pcu(MyCubeGrid grid, MyCubeGrid other = null)
+    private static int Pcu(MyCubeGrid grid, MyCubeGrid other = null)
     {
         var pcu = GroupPcu(grid);
         if (other != null && !MyCubeGridGroups.Static.Mechanical.HasSameGroup(grid, other))
