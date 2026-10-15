@@ -12,9 +12,10 @@ client.
 - The same player tools outside the zone weld and grind, proving the setup works.
 
 The server runs, the client drives the tools, then the server stops (it saves) and the
-saved world is checked.
+saved world is checked. The cases (CASES): the plugin's rules on, on with the zones
+holding every test grid from the start, and off, where the shipyard welds nothing.
 
-    uv run --no-project --with httpx python tests/test_shipyard_zone.py
+    uv run --no-project --with httpx python tests/test_shipyard_zone.py [case ...]
 
 Needs what tests/test_projection_limits.py needs.
 """
@@ -414,7 +415,7 @@ def wait_grids(remote, ids, timeout=180.0) -> None:
         time.sleep(3)
 
 
-def hand_tool(remote, hand_grid, position, x: int, tool: str) -> None:
+def hand_tool(remote, position, x: int, tool: str) -> None:
     """Holds a hand tool on block x of the hand targets grid for HAND_SECONDS"""
     block = add(position, (x * 2.5, 12.5, 0))
     remote.character_teleport(*add(block, (0, 0, -3.25)))
@@ -445,8 +446,8 @@ def drive(yard, inside, outside) -> None:
         remote.character_teleport(*add(spot, (0, 12.5, -10)))
         # The ship grinder outside may have ground its target away already
         wait_grids(remote, [TOOLS[i], HAND[i]])
-        hand_tool(remote, HAND[i], spot, 0, "WelderItem")
-        hand_tool(remote, HAND[i], spot, 2, "AngleGrinderItem")
+        hand_tool(remote, spot, 0, "WelderItem")
+        hand_tool(remote, spot, 2, "AngleGrinderItem")
     rig.stop_client()
 
 
