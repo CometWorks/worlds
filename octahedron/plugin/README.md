@@ -27,6 +27,12 @@ chambers named `StationLootContainerName` (case-insensitive). Only those are
 hidden; other containers keep their setting. With the name empty, nothing gets
 loot or is hidden. Off, the game's own refill runs unchanged.
 
+On a cluster the economy tick runs only on the World Authority, which has no
+grids, so the game never refills a station there. Each node runs the refill
+itself for the stations it simulates: once when it starts, then every
+`EconomyTickInSeconds`. With `StationRefillEnabled` off, that is the game's own
+refill.
+
 ### Refill containers
 
 `RefillContainers` keeps blocks stocked with fixed items, independent of the
@@ -339,19 +345,20 @@ of more light armor blocks than the world's limit, with the check off, on with
 Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
 blocks to their functional level, two grids merging and a rotor attaching a
-head, each stopped by the cap, next to a copy built by nobody that isn't. `tests/test_shipyard_zone.py` restricts
-the zones as the world does, then checks with the client that Alpha Station's
-shipyard welds a projection, while in the same zone a player's hand welder and
-grinder, ship welder and grinder, and an OmniArc welder on a player's grid named
-like a shipyard do nothing, and that the player's tools work outside the zone.
-It runs with the plugin's rules on, on with the zones holding every test grid
-from the start, and off. `tests/test_shipyard_order.py` orders a ship at a station
-table with the client and checks the saved world after the shipyard finished it,
-then lets a bigger order run out after a server restart; with `OCT_SHOTS` it also
-takes screenshots of the welding from among the welders. `tests/test_hologram.py` takes
-screenshots of fitted holograms, a blueprint with a cockpit and one without, from
-the side, the front and above, on a bench of two tables in open space; it needs a
-rendering client.
+head, each stopped by the cap, next to a copy built by nobody that isn't.
+`tests/test_shipyard_zone.py` restricts the zones as the world does, then checks
+with the client that Alpha Station's shipyard welds a projection, while in the
+same zone a player's hand welder and grinder, ship welder and grinder, and an
+OmniArc welder on a player's grid named like a shipyard do nothing, and that the
+player's tools work outside the zone. It runs with the plugin's rules on, on
+with the zones holding every test grid from the start, and off.
+`tests/test_shipyard_order.py` orders a ship at a station table with the client
+and checks the saved world after the shipyard finished it, then lets a bigger
+order run out after a server restart; with `OCT_SHOTS` it also takes
+screenshots of the welding from among the welders.
+`tests/test_hologram.py` takes screenshots of fitted holograms, a blueprint with
+a cockpit and one without, from the side, the front and above, on a bench of two
+tables in open space; it needs a rendering client.
 
 ## Building locally
 

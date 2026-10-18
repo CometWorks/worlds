@@ -1,11 +1,13 @@
 using System;
 using System.Reflection;
 using HarmonyLib;
+using PluginSdk.Clustering;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.Weapons;
+using Sandbox.Game.World;
 using VRage;
 using VRage.Game;
 using VRage.ObjectBuilders;
@@ -16,6 +18,8 @@ namespace ServerPlugin;
 // turret ammo, and loot in every empty cargo container and cryo chamber, which it also hides
 // from inventory screens. This replaces that refill with one whose parts can be switched off
 // and whose loot goes only into containers of a configured name.
+// On a cluster the economy tick runs only on the World Authority, which simulates no grids, so
+// the game refills no station there. Each node refills the stations it simulates instead.
 internal static class StationRefillPatch
 {
     private const int IceAmount = 10000;
@@ -35,6 +39,37 @@ internal static class StationRefillPatch
         Action<MyGasTank, double>
     >(AccessTools.Method(typeof(MyGasTank), "Transfer"));
 
+    private static readonly Action<MyFactionStation, MyFaction> UpdateFactionStation =
+        AccessTools.MethodDelegate<Action<MyFactionStation, MyFaction>>(
+            AccessTools.Method(typeof(MyFactionStation), "Update")
+        );
+    private static DateTime nextNodeRefill;
+
+    // Runs the game's refill of every station on a timer of the economy tick's length, on a
+    // cluster only. The prefix below skips the stations another node simulates. A starting node
+    // refills at once, so frequent restarts can't hold the refill back.
+    public static void UpdateNode()
+    {
+        var session = MySession.Static;
+        if (
+            !PluginCluster.IsClusterProcess
+            || session?.Ready != true
+            || !session.Settings.EnableEconomy
+            || DateTime.UtcNow < nextNodeRefill
+        )
+            return;
+        nextNodeRefill = DateTime.UtcNow.AddSeconds(
+            Math.Max(1, session.Settings.EconomyTickInSeconds)
+        );
+
+        foreach (var faction in session.Factions)
+        foreach (var station in faction.Value.Stations)
+        {
+            if (station is MyFactionStation factionStation)
+                UpdateFactionStation(factionStation, faction.Value);
+        }
+    }
+
     [HarmonyPatch]
     private static class UpdateStation
     {
@@ -48,7 +83,11 @@ internal static class StationRefillPatch
         private static bool Prefix(object __instance, MyCubeGrid grid)
         {
             var config = Plugin.Config;
-            if (!config.Enabled || !config.StationRefillEnabled)
+            if (!config.Enabled)
+                return true;
+            if (!Plugin.Simulated(grid))
+                return false;
+            if (!config.StationRefillEnabled)
                 return true;
 
             if (grid.MarkedForClose || grid.Closed)
