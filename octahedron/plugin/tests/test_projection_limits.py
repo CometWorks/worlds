@@ -6,7 +6,9 @@ steel plate ToolCore took for each refused block.
 
 Each case runs the server for a while, stops it (it saves) and counts the blocks in the
 saved world. The cases: the plugin's check off (ToolCore welds all six), on with
-Multigrid Projector (as on the Octahedron servers) and on without it.
+Multigrid Projector (as on the Octahedron servers) and on without it. The group case
+leaves the check off and caps the rig's PCU (GroupPcuLimit) two light armor blocks
+above what it has, so the cap per mechanical grid group stops the welder at two.
 
     uv run --no-project --with httpx python tests/test_projection_limits.py [case ...]
 
@@ -49,11 +51,14 @@ MGP = (
     "MultigridProjectorServer.xml",
     "B91FD7B3-E1AC-4B57-8765-C677A7AC1F5F",
 )
+# The rig's PCU: projector 50, heavy armor 1, OmniArc beam 250, five batteries 15 each
+RIG_PCU = 376
 CASES = {
-    # name: (check on, Multigrid Projector)
-    "off": (False, True),
-    "mgp": (True, True),
-    "vanilla": (True, False),
+    # name: (check on, Multigrid Projector, GroupPcuLimit)
+    "off": (False, True, 0),
+    "mgp": (True, True, 0),
+    "vanilla": (True, False, 0),
+    "group": (False, True, RIG_PCU + 2),
 }
 
 PLAYER = 144115188075999123
@@ -154,7 +159,7 @@ TYPE_LIMITS = (
 )
 
 
-def prepare(check: bool, mgp: bool) -> None:
+def prepare(check: bool, mgp: bool, group: int) -> None:
     rig.prepare_world([RIG])
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
         path = rig.WORLD / name
@@ -164,6 +169,11 @@ def prepare(check: bool, mgp: bool) -> None:
             r"<BlockTypeLimits>.*?</BlockTypeLimits>", TYPE_LIMITS, text, flags=re.S
         )
         assert count == 1, name
+        # The world limits by tag (OmniArcTools); light armor has no tag
+        text = text.replace(
+            "<LimitBlocksBy>Tag</LimitBlocksBy>",
+            "<LimitBlocksBy>BlockPairName</LimitBlocksBy>",
+        )
         if name == "Sandbox.sbc":
             text = text.replace("</Identities>", IDENTITY + "</Identities>", 1)
         path.write_text(text, encoding="utf-8")
@@ -182,6 +192,10 @@ def prepare(check: bool, mgp: bool) -> None:
         config,
     )
     assert count == 1
+    config = config.replace(
+        "</OctahedronConfig>",
+        f"  <GroupPcuLimit>{group}</GroupPcuLimit>\n</OctahedronConfig>",
+    )
     rig.write_plugin_config(config)
     rig.prepare_server(extra_dev_folders=[LOCAL_WORLD_MODS] + ([MGP] if mgp else []))
 
@@ -197,12 +211,13 @@ def saved_rig() -> str:
 
 
 def run(case: str) -> None:
-    check, mgp = CASES[case]
+    check, mgp, group = CASES[case]
     print(
-        f"--- {case}: check {'on' if check else 'off'}, Multigrid Projector {'on' if mgp else 'off'}"
+        f"--- {case}: check {'on' if check else 'off'}, Multigrid Projector {'on' if mgp else 'off'}, "
+        f"GroupPcuLimit {group}"
     )
     rig.stop_server()
-    prepare(check, mgp)
+    prepare(check, mgp, group)
     started = time.monotonic()
     rig.start_server()
     print(
@@ -225,12 +240,15 @@ def run(case: str) -> None:
         grid,
     )
     plates = float(plates[1]) if plates else 0.0
-    refused = rig.server_game_log().count("not built: you reached the limit")
+    log = rig.server_game_log()
+    refused = log.count("not built: you reached the limit") + log.count(
+        "may have at most"
+    )
     print(
         f"light armor blocks: {len(blocks)}, built by {built_by}, steel plates left {plates:.0f}, "
         f"refusals logged {refused}"
     )
-    if not check:
+    if not check and not group:
         assert len(blocks) == 6, "ToolCore should weld the whole projection"
         return
     assert len(blocks) == LIMIT
