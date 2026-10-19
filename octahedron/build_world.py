@@ -102,11 +102,6 @@ LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 FREE_TOOLS = "Free Tools"
 FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
-# The blueprint's inventory manager script; the station's PB keeps only its LCD script
-INVENTORY_PB_BLUEPRINT_NAME = (
-    "Programmable Block - Isy's Inventory Manager IIM - Station"
-)
-INVENTORY_PB = "Programmable Block - Station"
 # Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
 # pressurized back half: behind the station and away from the planet, which keeps it off the
 # lanes. The pair is centered on the safe zone, and spread apart as far as their block bounds
@@ -132,11 +127,12 @@ SHIPYARD_SHARED = {
     "ConveyorSorter", "ShipConnector", "CargoContainer", "MedicalRoom", "ReflectorLight",
 }  # fmt: skip
 # Each station's color: its shipyard's red frame gets the skin and the color, the station's
-# red walls and furniture only the color. Skin None is the default, painted metal. Colors
+# purple walls and furniture only the color. Skin None is the default, painted metal. Colors
 # are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1); the game adds
 # 0.8 to the saturation and 0.45 to the value, so 0.2 is full saturation and 0.25 is 70 %
 # brightness.
-BLUEPRINT_RED = (1.0, 0.2, 0.55)
+# The blueprints' accent colors: the shipyard's red and the station's purple
+BLUEPRINT_ACCENTS = ((1.0, 0.2, 0.55), (0.778, 0.2, -0.08))
 STATION_COLORS = {
     "North Station": (None, (0.0, 0.2, 0.25)),  # red
     "South Station": (None, (0.667, 0.2, 0.25)),  # blue
@@ -207,14 +203,21 @@ SETTINGS = {
     "EnableReducedStatsOnRespawn": "false",
     "EnableWolfs": "false",
     "EnableSpiders": "false",
+    # Shared limits by block tag (BlockTags.sbc); the OctahedronOres mod adds the OmniArcTools tag
+    "LimitBlocksBy": "Tag",
+    # No Services Terminal ship storage: on the cluster a stored ship lives only in the
+    # world folder of the node that stored it and is lost when that node restarts
+    # (SE1-0126). Players park ships with the Hangar plugin instead.
+    "GridStorageMaxPerPlayer": 0,
     # Vanilla defaults; the Star System scenario has sparser asteroid ores (1, 60, 0.8)
     "DepositsCountCoefficient": 2,
     "DepositSizeDenominator": 30,
     "HarvestRatioMultiplier": 1,
 }
 
-# Per player, by block pair name; vanilla counts built blocks, not active ones
-BLOCK_LIMITS = {}
+# Per player, by block tag (LimitBlocksBy Tag); vanilla counts built blocks, not
+# active ones. OmniArcTools is the six OmniArc tool blocks, from the OctahedronOres mod.
+BLOCK_LIMITS = {"OmniArcTools": 4}
 
 # (Workshop id, name), MES and its encounter mods come from mes-mods.xml
 MODS = [
@@ -514,13 +517,16 @@ def set_items(inventory, items):
 
 
 def recolor(block, color, skin=False):
-    """Paints a block of the blueprints' red: color is (skin, hsv) from STATION_COLORS; the
+    """Paints a block of a blueprint's accent color: color is (skin, hsv) from STATION_COLORS; the
     skin changes only when skin is true."""
     mask = block.find("ColorMaskHSV")
     if mask is None:
         return
     hsv = tuple(float(mask.get(k)) for k in "xyz")
-    if any(abs(hsv[i] - BLUEPRINT_RED[i]) > 0.01 for i in range(3)):
+    if not any(
+        all(abs(hsv[i] - accent[i]) <= 0.01 for i in range(3))
+        for accent in BLUEPRINT_ACCENTS
+    ):
         return
     for k, v in zip("xyz", color[1]):
         mask.set(k, repr(v))
@@ -557,6 +563,17 @@ def stock(block, kind, uranium=REACTOR_URANIUM):
         block.find("Queue").clear()
 
 
+def clear_program(block):
+    """The blueprint's programmable block carries MMaster's Automatic LCDs 2, which the
+    stations don't need (SE1-0121). The block stays, empty and off. Older versions of the
+    blueprint also had Isy's Inventory Manager, which would sort the Free Tools out of
+    their boxes; this clears any programmable block the same way."""
+    for tag in ("Program", "Storage", "DefaultRunArgument"):
+        for child in block.findall(tag):
+            block.remove(child)
+    set_child(block, "Enabled", "false")
+
+
 def station(template, ids, name, center, forward, up, owner):
     grid = clone_grid(template, ids)
     place_grid(grid, center, forward, up)
@@ -566,7 +583,7 @@ def station(template, ids, name, center, forward, up, owner):
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
-    loot, free_tools, inventory_pb = None, 0, None
+    loot, free_tools = None, 0
     for block in grid.find("CubeBlocks"):
         recolor(block, STATION_COLORS[name])
         if block.find("Owner") is None:
@@ -583,14 +600,9 @@ def station(template, ids, name, center, forward, up, owner):
             set_child(block, "CustomName", FREE_TOOLS)
             set_child(block, "ShowInInventory", "true")
             block.find("ShareMode").text = "All"
-        if block.findtext("CustomName") == INVENTORY_PB_BLUEPRINT_NAME:
-            inventory_pb = block
-            set_child(block, "CustomName", INVENTORY_PB)
-            for tag in ("Program", "Storage", "DefaultRunArgument", "CustomData"):
-                for child in block.findall(tag):
-                    block.remove(child)
-            set_child(block, "Enabled", "false")
         stock(block, kind)
+        if kind == "MyProgrammableBlock":
+            clear_program(block)
         if (
             kind == "MedicalRoom"
             and block.findtext("SubtypeName") == "LargeMedicalRoom"
@@ -601,7 +613,6 @@ def station(template, ids, name, center, forward, up, owner):
             set_child(block, "HudText", name)
     assert loot is not None, f"no {LOOT_CONTAINER_BLUEPRINT_NAME} for {LOOT_CONTAINER}"
     assert free_tools == FREE_TOOLS_COUNT, f"{free_tools} {FREE_TOOLS_BLUEPRINT_NAME}"
-    assert inventory_pb is not None, f"no {INVENTORY_PB_BLUEPRINT_NAME}"
     return as_sector_object(grid)
 
 
