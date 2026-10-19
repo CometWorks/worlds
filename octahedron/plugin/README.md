@@ -71,6 +71,54 @@ cluster each node brakes the grids and characters in the partitions it owns.
 `!oct edge` (admin) lists the grids and characters in the braking zone with their
 distance, outward speed and the limit there.
 
+### Starter ship
+
+Players don't get a respawn ship. A player who stands within `StarterShipTableReach`
+(10 m) of a station's hologram table (an NPC-owned `LargeBlockConsole` projector)
+switched on and with a blueprint loaded into it types `!oct ship`, or
+`!oct ship <table name>` to pick one table of several, and the blueprint is built
+as a ship. The stations' tables start switched off, and a projector that is off
+holds no blueprint for the server.
+
+- It must be a single grid of at most `StarterShipMaxShipPcu` (20,000) PCU.
+- Only a player with less than `StarterShipPlayerPcuLimit` (30,000) PCU gets
+  one; the others are told to build at the station's shipyard. It counts the
+  blocks the player built, on every cluster node through the cluster plugin's PCU
+  ledger, and not the player's ships in Hangar.
+- It appears past the station's safe zone, `StarterShipClearance` (50 m) beyond
+  its edge, on the table's side of the station if there is room there, else
+  turned about the station's up. Its main cockpit (else any cockpit, control seat
+  or remote control, else the grid's forward) faces away from the station and its
+  up is the station's up.
+- It is built as a projector would build it: empty cargo, no fuel or gas,
+  nobody seated, scripts as the table got them. With `StarterShipChargeBatteries`
+  its batteries are full. The player owns every block and has built it, so it
+  counts toward their PCU.
+- It costs nothing. A player gets one every `StarterShipCooldownMinutes` (15);
+  each cluster node counts that on its own, and a restart forgets it.
+- The player gets a GPS point on the ship, named after it: cyan, always shown on
+  the HUD, and kept (not a temporary one). Only that player has it.
+
+On a cluster the node that owns the station's partition builds the ship; that is
+the node the player is on while standing at the table.
+
+While starter ships are on, a blueprint loaded into a station table gets its
+hologram fitted to the table by the server. The game only scales a blueprint to
+fit the 2.5 m block and leaves its grid origin at the block's center. The free
+space is the table block's own cell above the table's top: the cell above it is
+taken, by a column on the stations. The plugin scales the whole blueprint, all its
+grids, uniformly to fit that space, from `StarterShipHologramTableTop` (0.33 m
+below the block's center) to the top of the block, with
+`StarterShipHologramMargin` (5 cm) kept free on every side, and centers it there.
+It turns the blueprint so that the up and forward of the main grid's main cockpit,
+or of any cockpit, control seat or remote control, point along the table's up and
+forward. A blueprint without one keeps its main grid's own up and forward. It sets
+the projector's offset, rotation and scale, which the server sends to every
+client. The offset moves in whole scaled cubes and the game keeps it within 50 of
+them, so a blueprint longer than about 150 m may sit a little off center.
+`!oct holograms` (admin) fits every station table again, for example after a
+config change.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a
@@ -157,6 +205,15 @@ mods and asteroids left out, and this working copy as a dev folder (or a
 `package.sh` bundle as a local plugin), plus a headless client with the Remote plugin that joins it. Ports, ids and folders
 come from a test slot of the workspace (`se/notes/parallel-test-work`). See its
 docstring.
+
+`tests/test_client.py` checks the rules with them: grids flying out of the
+world (`tests/edge_grids.py`) and the character on its jetpack, the starter
+ship from a blueprint loaded into the hologram tables, and its limits.
+`tests/check_save.py` then reads the saved world: where the edge grids ended up,
+the refilled blocks and the starter ships. `tests/test_hologram.py` takes
+screenshots of fitted holograms, a blueprint with a cockpit and one without, from
+the side, the front and above, on a bench of two tables in open space; it needs a
+rendering client.
 
 ## Building locally
 
