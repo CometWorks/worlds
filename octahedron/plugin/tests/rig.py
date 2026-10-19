@@ -194,7 +194,7 @@ def prepare_world(
         tables = iter(range(1_000_000))
         text, count = re.subn(
             r'(<MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_Projector">\s*'
-            r"<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>false</Enabled>",
+            r"<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>(?:true|false)</Enabled>",
             lambda m: f"{m[1]}<Enabled>true</Enabled><ProjectedGrids>"
             f"{blueprints[next(tables) % len(blueprints)]}</ProjectedGrids>",
             text,
