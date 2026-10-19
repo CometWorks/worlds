@@ -3,7 +3,7 @@ the Octahedron world with the plugin compiled from this working copy, and a
 headless game client with Remote and DirectTransport that joins it.
 
 Ports, the client id and folders come from a test slot of the workspace
-(se/notes/parallel-test-work/NOTE.md), claimed under OCT_TASK. Every process
+(se/testing/parallel-test-work/README.md), claimed under OCT_TASK. Every process
 starts under run-test.sh, which waits for free RAM and holds the shared test
 lock. Nothing is read from or written to the machine's own Magnetar, Pulsar or
 game folders apart from copying their launchers and configs.
@@ -33,7 +33,7 @@ PLUGIN = Path(__file__).resolve().parent.parent
 WORLD_SOURCE = PLUGIN.parent / "server"
 CONFIG_SOURCE = PLUGIN.parent / "config" / "octahedron.cfg"
 WORKSPACE = Path(os.environ.get("OCT_WORKSPACE", HOME / "ws/se"))
-PARALLEL = WORKSPACE / "notes" / "parallel-test-work"
+PARALLEL = WORKSPACE / "testing" / "parallel-test-work"
 REMOTE_REPO = Path(os.environ.get("OCT_REMOTE_REPO", WORKSPACE / "se1/plugins/remote"))
 DIRECT_TRANSPORT_REPO = Path(
     os.environ.get("OCT_DIRECT_TRANSPORT_REPO", WORKSPACE / "se1/direct-transport")
@@ -57,7 +57,7 @@ from se_remote import RemoteAPI  # noqa: E402
 TASK = os.environ.get("OCT_TASK", "SE1-0133")
 TEST_ROOT = HOME / ".se-test"
 PLUGIN_ID = "F7FB710B-7B41-45D6-B05C-A01DDE0FEE3A"
-# Measured RSS (notes/parallel-test-work): a --no-render and a rendering client; the
+# Measured RSS (testing/parallel-test-work): a --no-render and a rendering client; the
 # server is a guess
 CLIENT_GIB = 3.7
 RENDER_GIB = 5.5
@@ -440,7 +440,7 @@ def prepare_client() -> None:
     if not LAUNCHER.exists():
         subprocess.run(
             [
-                str(WORKSPACE / "notes/pulsar-dev-instances/new-pulsar-instance.sh"),
+                str(WORKSPACE / "testing/pulsar-dev-instances/new-pulsar-instance.sh"),
                 str(PULSAR),
                 str(PULSAR_TEMPLATE),
             ],
