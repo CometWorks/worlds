@@ -31,10 +31,14 @@ These are not done yet. Each one changes what gets deployed.
    and only 4 players can join. Pick the player cap, then set `MaxPlayers` to it
    and `TotalPCU` to 1,000,000 times it, in `SETTINGS` of `build_world.py` and in
    the Quasar config profile.
-4. **The Octahedron plugin (SE1-0133)** takes over the station refill and the
-   refill containers (`config/essentials.cfg`). Until it exists, the stations
-   get the game's own economy refill: loot in every empty cargo container, ice
-   in the gas generators, and no Free Tools top-up.
+4. **The Octahedron plugin (`plugin/`, SE1-0133).** It isn't on the hub.
+   Quasar compiles it from a dev folder, a clean checkout of this repository
+   on the Quasar host, and pins it to the checkout's HEAD commit. That needs
+   Magnetar 2.4.3.4 or later (see "Loading it on a cluster" in
+   `plugin/README.md`). It is to take over the station refill and the refill
+   containers (SE1-0129). Until then the stations get the game's own economy
+   refill: loot in every empty cargo container, ice in the gas generators, and
+   no Free Tools top-up.
 5. **World edge (SE1-0119).** The world has no edge (`WorldSizeKm` 0) until the
    plugin that brakes ships from 450 km exists.
 
@@ -142,6 +146,9 @@ world's `Sandbox_config.sbc`. In the profile:
 - Administrators: the SteamID64s of the admins.
 - Plugins, from the MagnetarHub: Essentials, Hangar, Multigrid Projector,
   Bugfixes. Quasar adds the cluster plugins and Direct Transport itself.
+- The Octahedron plugin, from its dev folder (item 4 above). Before that,
+  clone this repository on the host at the commit to deploy and add its
+  `octahedron/plugin` folder, with `Octahedron.xml`, under Configs, Developer.
 - Leave the mod order as the world has it; Quasar may add dependency mods it
   finds missing (Definition Extension API is already listed before Radio
   Spectrometry).
@@ -161,8 +168,7 @@ Dashboard, **Create Cluster**, **Create and deploy**:
    MagnetarWorld, and leaves the cluster stopped.
 4. In the cluster's plugin configuration editor, set the plugin configs: Hangar
    and Multigrid Projector as their defaults suit, Essentials as the cluster
-   needs (the Octahedron-specific parts go to the Octahedron plugin, item 4
-   above).
+   needs, and the Octahedron plugin to the values in `config/octahedron.cfg`.
 5. **Start.** Watch the nodes come up on the cluster page.
 
 Then, once every node runs cluster 0.1.8 or later, raise the Gateway's
