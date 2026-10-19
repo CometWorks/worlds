@@ -91,14 +91,14 @@ PUBLIC_BLOCKS = {
     "MedicalRoom", "Projector", "StoreBlock", "ContractBlock", "VendingMachine", "Door",
     "AirtightSlideDoor", "ButtonPanel", "Cockpit", "ShipConnector",
 }  # fmt: skip
-# The one container per station the economy's refill puts loot into, through the Essentials
-# plugin's StationLootContainerName (config/essentials.cfg). It stays with the faction on every
+# The one container per station the economy's refill puts loot into, through the Octahedron
+# plugin's StationLootContainerName (config/octahedron.cfg). It stays with the faction on every
 # station, so the loot it gets each economy tick can't be farmed.
 LOOT_CONTAINER = "Station Loot"
 LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 # The station's 4 toolboxes by its "Free tools!" signs, renamed, shared with everyone and shown in
-# inventory screens. The Essentials plugin keeps 3 of each Elite tool in each, topped up every
-# minute (RefillContainers in config/essentials.cfg).
+# inventory screens. The Octahedron plugin keeps 3 of each Elite tool in each, topped up every
+# minute (RefillContainers in config/octahedron.cfg).
 FREE_TOOLS = "Free Tools"
 FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
@@ -120,9 +120,9 @@ SHIPYARD_ROLL_DEGREES = 30.0
 # up: center clear from 8 at +17.5 and at -17.5 (the station's kitchen blocks the other 2),
 # from none unturned.
 SHIPYARD_YAW_DEGREES = 17.5
-# Its blocks are shared with everyone, but power: Essentials keeps the reactors at
+# Its blocks are shared with everyone, but power: the Octahedron plugin keeps the reactors at
 # SHIPYARD_REACTOR_URANIUM ingots and the batteries charged (RefillContainers in
-# config/essentials.cfg).
+# config/octahedron.cfg).
 SHIPYARD_SHARED = {
     "ConveyorSorter", "ShipConnector", "CargoContainer", "MedicalRoom", "ReflectorLight",
 }  # fmt: skip
