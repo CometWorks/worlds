@@ -183,7 +183,7 @@ def prepare_world(
     if table_blueprint:
         text, count = re.subn(
             r'(<MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_Projector">\s*'
-            r"<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>false</Enabled>",
+            r"<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>(?:true|false)</Enabled>",
             rf"\1<Enabled>true</Enabled><ProjectedGrids>{table_blueprint}</ProjectedGrids>",
             text,
             flags=re.S,
