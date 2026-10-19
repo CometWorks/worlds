@@ -330,10 +330,12 @@ def write_plugin_config(text: str | None = None) -> None:
     )
 
 
-def prepare_server(plugin: bool = True, bundle: Path | None = None) -> None:
+def prepare_server(
+    plugin: bool = True, bundle: Path | None = None, extra_dev_folders=()
+) -> None:
     """The server's Magnetar config: the plugin compiled from this working copy as a dev
     folder, or, given a bundle made by package.sh, installed as a local plugin the way a
-    cluster loads it"""
+    cluster loads it. extra_dev_folders: more plugins as (name, folder, manifest, id)"""
     if not (SERVER_CONFIG / "Sources").exists():
         SERVER_CONFIG.mkdir(parents=True, exist_ok=True)
         shutil.copytree(MAGNETAR / "Magnetar" / "Sources", SERVER_CONFIG / "Sources")
@@ -349,10 +351,14 @@ def prepare_server(plugin: bool = True, bundle: Path | None = None) -> None:
         shutil.copytree(bundle, local)
     else:
         register_source(sources, "octahedron", PLUGIN, "Octahedron.xml")
+    for name, folder, file, _ in extra_dev_folders:
+        register_source(sources, name, folder, file)
     (SERVER_CONFIG / "Profiles").mkdir(exist_ok=True)
     (SERVER_CONFIG / "Profiles" / "Current.xml").write_text(
         profile_xml(
-            ["direct-transport"] + ([PLUGIN_ID] if plugin and not bundle else []),
+            ["direct-transport"]
+            + ([PLUGIN_ID] if plugin and not bundle else [])
+            + [i for *_, i in extra_dev_folders],
             [PLUGIN_ID] if plugin and bundle else [],
         ),
         encoding="utf-8",

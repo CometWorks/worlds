@@ -195,7 +195,9 @@ game update that changes the planet or voxel material definitions or maps.
   100,000,000. The scenario's `MaxPlayers` 4 would have meant 250,000 PCU each and
   4 players. On a cluster each node counts the same, and the cluster plugin's PCU
   ledger adds up a player's PCU over the nodes; grids in Hangar are not in the
-  world, so they don't count.
+  world, so they don't count. On the server the Octahedron plugin also checks
+  the limits when a projected block is welded, which ToolCore's tools (OmniArc)
+  don't.
 - Radiation is on (planets, weather, blocks); solar radiation (`SolarRadiationIntensity`)
   and hunger (`FoodConsumptionRate`) stay at 0.
 - Every economy tick the game refills each trade station: fuel, batteries,

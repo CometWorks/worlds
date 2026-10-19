@@ -119,6 +119,31 @@ them, so a blueprint longer than about 150 m may sit a little off center.
 `!oct holograms` (admin) fits every station table again, for example after a
 config change.
 
+### Projection limits
+
+The server welds a projected block without checking the world's block limits.
+The game's welders check them before they ask; ToolCore's tools, the OmniArc
+welders among them, don't. An OmniArc welder could print a projection with more
+OmniArc tools than a tag limit like `OmniArcTools` allows, or past the player's
+PCU.
+
+With `ProjectionLimitsEnabled` on, the server checks every projected block before
+building it, for the player the block will count toward (its `BuiltBy`): block
+type or tag limits, PCU, blocks per player and grid size, the check the game's
+welders make. A block over a limit isn't built, and the player gets a red
+notification, at most every 10 seconds. ToolCore takes a block's first component
+from the tool's inventory before it asks, so a refused block gives it back; the
+game's welders pay only for the blocks they build.
+
+On a cluster the check counts the player's blocks on every node, through the
+cluster plugin's PCU ledger. Blocks built by an NPC, like those an NPC-owned
+shipyard welder welds, count toward no player and aren't checked.
+
+Multigrid Projector builds projected blocks through the same request, so they are
+checked the same way. Its own limit, `ProjectionPcuLimitPercent`, applies when a
+blueprint is loaded and is counted apart from the player's PCU, so nothing is
+counted twice.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a
@@ -210,7 +235,10 @@ docstring.
 world (`tests/edge_grids.py`) and the character on its jetpack, the starter
 ship from a blueprint loaded into the hologram tables, and its limits.
 `tests/check_save.py` then reads the saved world: where the edge grids ended up,
-the refilled blocks and the starter ships. `tests/test_hologram.py` takes
+the refilled blocks and the starter ships. `tests/test_projection_limits.py` runs
+the server alone, with OmniArc and ToolCore: an OmniArc welder welds a projection
+of more light armor blocks than the world's limit, with the check off, on with
+Multigrid Projector and on without it. `tests/test_hologram.py` takes
 screenshots of fitted holograms, a blueprint with a cockpit and one without, from
 the side, the front and above, on a bench of two tables in open space; it needs a
 rendering client.
