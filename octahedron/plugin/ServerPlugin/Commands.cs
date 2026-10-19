@@ -32,6 +32,19 @@ public sealed class Commands : CommandModule
             table.Length == 0 ? null : string.Join(" ", table)
         );
 
+    [Command(
+        "order",
+        "Orders the blueprint loaded into the nearest station hologram table from the station's shipyard",
+        "!oct order [table name]: stand by a station's hologram table with a blueprint loaded. "
+            + "The station's shipyard builds the ship for you."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public CommandReply Order(params string[] table) =>
+        ShipyardOrders.Request(
+            Context.Caller.IdentityId,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+
     [Command("holograms", "Fits the blueprints in the station hologram tables to the tables again")]
     [Permission(MyPromoteLevel.Admin)]
     public string Holograms() => $"Fitted {TableHologram.FitAll()} hologram tables.";

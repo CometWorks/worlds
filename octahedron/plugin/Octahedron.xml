@@ -9,8 +9,9 @@
         Server rules that only the Octahedron world uses: the economy stations' refill,
         refill containers, braking at the world's edge, starter ships from the
         stations' hologram tables, block limits for welded projections, a PCU cap per
-        ship or station and shipyard welding in the stations' safe zones. Loaded from
-        a checkout of the worlds repo as a local dev folder; it has no hub entry.
+        ship or station, shipyard welding in the stations' safe zones and ships ordered
+        from the shipyards. Loaded from a checkout of the worlds repo as a local dev
+        folder; it has no hub entry.
     </Description>
     <SourceDirectories>
         <Directory>ServerPlugin</Directory>

@@ -44,7 +44,7 @@ internal static class ShipyardZoneWelding
     [ThreadStatic]
     private static bool shipyardBuilds;
 
-    private static bool IsShipyard(MyEntity entity)
+    internal static bool IsShipyard(MyEntity entity)
     {
         var grid = entity as MyCubeGrid ?? (entity as MyCubeBlock)?.CubeGrid;
         if (grid?.DisplayName?.EndsWith(NameSuffix) != true)

@@ -12,6 +12,7 @@ namespace ServerPlugin;
 [Section("starter", caption: "Starter Ship")]
 [Section("projections", caption: "Projections")]
 [Section("pcu", caption: "PCU Limits")]
+[Section("shipyard", caption: "Shipyard Orders")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -296,6 +297,18 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 20_000;
+
+    [IntOption(
+        0,
+        description: "Players order the blueprint loaded into a station's hologram table with !oct order, and the station's shipyard "
+            + "builds it for at most this many minutes. 0: no orders.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardOrderMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60;
 }
 
 public struct RefillContainer
