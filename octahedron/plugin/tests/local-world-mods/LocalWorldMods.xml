@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>local-world-mods</Id>
+    <GroupId>local-world-mods</GroupId>
+    <RepoId>local/local-world-mods</RepoId>
+
+    <FriendlyName>Local World Mods</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: the dedicated server loads world mods from its Mods folder</Tooltip>
+    <Description>Test only. A dedicated server running without Steam (DirectTransport)
+        cannot query or download Workshop items, so a modded world fails to load.
+        With this plugin the server takes each world mod from
+        Mods/&lt;PublishedFileId&gt;.sbm in its data folder and downloads nothing.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>

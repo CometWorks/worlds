@@ -329,7 +329,7 @@ CLUSTER_EXTRA_PLUGINS=node:/path/to/out/Octahedron python3 cli/cluster.py \
 `tests/rig.py` runs an isolated Magnetar server with a copy of the world, the
 mods and asteroids left out, and this working copy as a dev folder (or a
 `package.sh` bundle as a local plugin), plus a headless client with the Remote plugin that joins it. Ports, ids and folders
-come from a test slot of the workspace (`se/notes/parallel-test-work`). See its
+come from a test slot of the workspace (`se/testing/parallel-test-work`). See its
 docstring.
 
 `tests/test_client.py` checks the rules with them: grids flying out of the

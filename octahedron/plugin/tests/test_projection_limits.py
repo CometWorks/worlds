@@ -13,8 +13,8 @@ above what it has, so the cap per mechanical grid group stops the welder at two.
     uv run --no-project --with httpx python tests/test_projection_limits.py [case ...]
 
 Needs the Workshop copies of OmniArc and ToolCore, served from the server's Mods folder
-by the local-world-mods test plugin (se/se1/notes/trade-lanes-mp), and a Multigrid
-Projector working copy (OCT_MGP_REPO).
+by the local-world-mods test plugin (tests/local-world-mods), and a Multigrid Projector
+working copy (OCT_MGP_REPO).
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ WORKSHOP = Path(
 MODS = {3040438530: "ToolCore", 3412657089: "OmniCorp The OmniArc Project: Adv Tools"}
 LOCAL_WORLD_MODS = (
     "local-world-mods",
-    rig.WORKSPACE / "se1/notes/trade-lanes-mp/local-world-mods",
+    Path(__file__).resolve().parent / "local-world-mods",
     "LocalWorldMods.xml",
     "local-world-mods",
 )
