@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PluginSdk.Commands;
 using VRage.Game.ModAPI;
 
@@ -13,4 +14,8 @@ public sealed class Commands : CommandModule
         Plugin.LoadConfig();
         return "Octahedron config reloaded.";
     }
+
+    [Command("edge", "Lists the grids and characters in the world edge's braking zone")]
+    [Permission(MyPromoteLevel.Admin)]
+    public IEnumerable<string> Edge() => WorldEdge.Describe(Plugin.Config);
 }

@@ -46,6 +46,31 @@ and `GasContainerObject/HydrogenBottle`, or the suit battery pack
 are added full, and bottles of a rule's item that aren't full are removed from
 the container at each refill.
 
+### World edge
+
+The world is a sphere: `WorldEdgeCenter` and `WorldEdgeRadius` (Octahedron: EarthLike's
+center, the world origin, and 500 km). From `WorldEdgeBrakingRadius` (450 km) outward,
+the outward component of every grid's and character's velocity is capped. The cap is
+`WorldEdgeBrakingSpeed` (360 m/s, the world's top speed) at the braking radius and falls
+to zero at the world radius:
+
+    cap = WorldEdgeBrakingSpeed * ((WorldEdgeRadius - distance) / (WorldEdgeRadius - WorldEdgeBrakingRadius)) ^ WorldEdgeBrakingExponent
+
+The exponent 0.5 gives a constant deceleration, about 1.3 m/s² with these values: a
+ship at 360 m/s stops just at 500 km, a ship at 100 m/s starts braking 3.9 km before
+it. The inward and sideways components are left alone, so a ship can always turn
+back. Beyond the world radius the cap turns negative and pulls a body back, at 1 m/s
+per meter beyond it and at most 10 m/s; a ship thrusting outward at the edge settles
+within about a meter of it.
+
+Nothing is deleted. The rule doesn't use the game's `WorldSizeKm` or
+`MySession.IsInsideWorld`: the world keeps `WorldSizeKm` at 0, since above 0 the game
+also kills characters and deletes grids that drop out of a Havok broadphase. On a
+cluster each node brakes the grids and characters in the partitions it owns.
+
+`!oct edge` (admin) lists the grids and characters in the braking zone with their
+distance, outward speed and the limit there.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a

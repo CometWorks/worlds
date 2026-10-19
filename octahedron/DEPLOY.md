@@ -39,8 +39,9 @@ These are not done yet. Each one changes what gets deployed.
    (`config/octahedron.cfg`). Without it the stations get the game's own
    economy refill: loot in every empty cargo container, ice in the gas
    generators, and no Free Tools top-up.
-5. **World edge (SE1-0119).** The world has no edge (`WorldSizeKm` 0) until the
-   plugin that brakes ships from 450 km exists.
+5. **World edge (SE1-0119).** The Octahedron plugin brakes ships from 450 km
+   and stops them at 500 km; the world keeps `WorldSizeKm` 0. Without the
+   plugin (item 4) the world has no edge.
 
 ## The host
 
