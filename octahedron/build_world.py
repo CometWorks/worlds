@@ -42,7 +42,7 @@ MES_STORAGE = CONFIG / "storage"
 RELATIVE_TOP_SPEED = CONFIG / "relative-top-speed.xml"
 
 NAME = "Octahedron"
-DESCRIPTION = "Octahedron public test cluster: EarthLike and its Moon, 5 stations linked by Trade Lanes, an asteroid ring."
+DESCRIPTION = "Octahedron public test cluster: EarthLike and its Moon, 7 stations linked by Trade Lanes, an asteroid ring."
 KEEP_PLANETS = ("EarthLike", "Moon")
 
 # Altitudes are from the planet's 60 km (EarthLike) or 9.5 km (Moon) radius
@@ -55,6 +55,9 @@ RING_INNER = 105_000.0
 RING_OUTER = 135_000.0
 RING_THICKNESS = 1_000.0
 RING_ASTEROIDS = 2000
+# The ring's asteroids are dealt out evenly to this many equal sectors around it, counted
+# from Alpha Station's direction as ORES.md counts them (ore_stats.py SEGMENT)
+RING_SECTORS = 24
 # The 4 ice asteroids sit in the middle of the band
 RING_RADIUS = 120_000.0
 # Surface to surface, between asteroids
@@ -72,7 +75,7 @@ VOXEL_GENERATOR = 4
 STATION_SAFE_ZONE_RADIUS = 250.0
 LANE_ENDPOINT_DISTANCE = 1_000.0
 # The Earth end of a Moon lane, farther out, so its rings stay clear of the station's other
-# lane ends (they touched the then North Station lane's at Delta Station)
+# lane ends (they touched another lane's at Delta Station)
 MOON_LANE_ENDPOINT_DISTANCE = 1_500.0
 LANE_SPEED = 10_000
 LANE_RING_INTERVAL = 10_000
@@ -124,15 +127,20 @@ SHIPYARD_SHARED = {
     "ConveyorSorter", "ShipConnector", "CargoContainer", "MedicalRoom", "ReflectorLight",
 }  # fmt: skip
 # Each station's color: its shipyard's red frame gets the skin and the color, the station's
-# red walls and furniture only the color. Skin None is the default, painted metal. Colors
-# are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1).
-BLUEPRINT_RED = (1.0, 0.2, 0.55)
+# purple walls and furniture only the color. Skin None is the default, painted metal. Colors
+# are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1); the game adds
+# 0.8 to the saturation and 0.45 to the value, so 0.2 is full saturation and 0.25 is 70 %
+# brightness.
+# The blueprints' accent colors: the shipyard's red and the station's purple
+BLUEPRINT_ACCENTS = ((1.0, 0.2, 0.55), (0.778, 0.2, -0.08))
 STATION_COLORS = {
+    "North Station": (None, (0.0, 0.2, 0.25)),  # red
+    "South Station": (None, (0.667, 0.2, 0.25)),  # blue
     "Alpha Station": ("CarbonFibre_Armor", (0.0, -1.0, -0.8)),  # black
-    "Beta Station": (None, (0.083, 0.2, 0.55)),  # orange
-    "Gamma Station": ("CarbonFibre_Armor", (0.333, 0.2, -0.3)),  # dark green
-    "Delta Station": (None, (0.667, 0.2, 0.22)),  # dark blue
-    "Moon Station": ("Concrete_Armor", (0.0, -1.0, -0.45)),  # dark gray
+    "Beta Station": (None, (0.333, 0.2, 0.25)),  # green
+    "Gamma Station": ("CarbonFibre_Armor", (0.5, 0.2, 0.25)),  # cyan
+    "Delta Station": (None, (0.083, 0.2, 0.25)),  # orange
+    "Moon Station": ("Concrete_Armor", (0.75, 0.2, 0.25)),  # purple
 }
 SHIPYARD_REACTOR = "Shipyard Reactor"
 SHIPYARD_BATTERY = "Shipyard Battery"
@@ -430,9 +438,8 @@ def storage_size(path):
     return struct.unpack_from("<4i", data, i)[1]
 
 
-def voxel_map(ids, storage_name, center, size, rng):
+def voxel_map(ids, storage_name, center, size, forward, up):
     """A VoxelMap sector object; its position is the storage's min corner."""
-    forward, up = random_basis(rng)
     right = cross(forward, up)
     half = size / 2
     # Corner = center - R * half extent, R columns are Right, Up, Backward
@@ -516,13 +523,16 @@ def set_items(inventory, items):
 
 
 def recolor(block, color, skin=False):
-    """Paints a block of the blueprints' red: color is (skin, hsv) from STATION_COLORS; the
+    """Paints a block of a blueprint's accent color: color is (skin, hsv) from STATION_COLORS; the
     skin changes only when skin is true."""
     mask = block.find("ColorMaskHSV")
     if mask is None:
         return
     hsv = tuple(float(mask.get(k)) for k in "xyz")
-    if any(abs(hsv[i] - BLUEPRINT_RED[i]) > 0.01 for i in range(3)):
+    if not any(
+        all(abs(hsv[i] - accent[i]) <= 0.01 for i in range(3))
+        for accent in BLUEPRINT_ACCENTS
+    ):
         return
     for k, v in zip("xyz", color[1]):
         mask.set(k, repr(v))
@@ -560,10 +570,10 @@ def stock(block, kind, uranium=REACTOR_URANIUM):
 
 
 def clear_program(block):
-    """The blueprint's programmable blocks carry Isy's Inventory Manager (its copy says
-    not for distribution) and Automatic LCDs 2, which the stations don't need: the
-    inventory manager would sort the Free Tools out of their boxes. The blocks stay,
-    empty and off."""
+    """The blueprint's programmable block carries MMaster's Automatic LCDs 2, which the
+    stations don't need (SE1-0121). The block stays, empty and off. Older versions of the
+    blueprint also had Isy's Inventory Manager, which would sort the Free Tools out of
+    their boxes; this clears any programmable block the same way."""
     for tag in ("Program", "Storage", "DefaultRunArgument"):
         for child in block.findall(tag):
             block.remove(child)
@@ -727,10 +737,13 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
     return as_sector_object(grid)
 
 
-def lane_up(direction, north):
+def lane_up(direction, home, target, north):
     """Up of a lane's computers, the same at both ends. The Trade Lanes mod puts a lane's two
-    rings side by side along the computers' right axis, so they lie level with the stations'
-    horizontal plane."""
+    rings side by side along the computers' right axis: level with the stations' horizontal
+    plane, but one above the other on the lane to North Station, so pilots can tell the Moon's
+    two lanes apart."""
+    if "North Station" in (home, target):
+        return norm(cross(direction, north))
     return norm(perpendicular_part(north, direction))
 
 
@@ -776,7 +789,9 @@ def lane_computer(ids, position, forward, up, lane_id, home, target):
 
 
 def safe_zone(ids, center, radius, name):
-    """An admin safe zone: no damage or shooting, players can still build and weld."""
+    """An admin safe zone: no damage, shooting, welding, grinding or block placing. The
+    shipyard's OmniArc welders obey it too; the Octahedron plugin is to let them weld
+    (SE1-0204)."""
     zone = ET.Element(
         "MyObjectBuilder_EntityBase", {XSI_TYPE: "MyObjectBuilder_SafeZone"}
     )
@@ -795,7 +810,7 @@ def safe_zone(ids, center, radius, name):
     el(
         zone,
         "AllowedActions",
-        "Drilling Welding Grinding Building LandingGearLock BuildingProjections",
+        "Drilling LandingGearLock",
     )
     for tag in ("Factions", "Players", "Entities"):
         el(zone, tag)
@@ -863,6 +878,8 @@ def layout(earth, moon):
     north, front = earth.up, earth.forward
     right = cross(front, north)
     stations = {
+        "North": north,
+        "South": mul(north, -1),
         "Alpha": right,
         "Beta": mul(front, -1),
         "Gamma": mul(right, -1),
@@ -872,12 +889,16 @@ def layout(earth, moon):
     for name, direction in stations.items():
         center = add(earth.center, mul(direction, STATION_DISTANCE))
         places[f"{name} Station"] = (center, *facing(earth, center))
-    # Moon Station has a lane to each of the two Earth stations nearest the Moon, Delta and
-    # Alpha (one to Beta would pass 62 km from EarthLike's center, deep in its gravity). It
-    # sits halfway between their directions, so neither lane passes over the Moon.
-    near = sorted(places, key=lambda name: dist(places[name][0], moon.center))[:2]
-    assert near == ["Delta Station", "Alpha Station"], near
-    toward = norm(add(*(norm(sub(places[name][0], moon.center)) for name in near)))
+    # Moon Station sits halfway between the directions to Delta and Alpha Station, where it
+    # was placed when those two had its lanes
+    toward = norm(
+        add(
+            *(
+                norm(sub(places[f"{name} Station"][0], moon.center))
+                for name in ("Delta", "Alpha")
+            )
+        )
+    )
     center = add(moon.center, mul(toward, MOON_STATION_DISTANCE))
     # Its up is square to the Earth-Moon line, the one of those directions nearest to Delta
     # Station; it faces away from the Moon, so its lobby and its shipyard are on the Moon side
@@ -885,15 +906,15 @@ def layout(earth, moon):
     up = norm(perpendicular_part(sub(places["Delta Station"][0], center), axis))
     forward = norm(perpendicular_part(sub(center, moon.center), up))
     places["Moon Station"] = (center, forward, up)
-    names = list(places)[:4]
+    # Around the equator, then the Moon's two; South Station has no lane
     edges = [
-        (a, b)
-        for i, a in enumerate(names)
-        for b in names[i + 1 :]
-        if dist(places[a][0], places[b][0]) < 1.9 * STATION_DISTANCE
+        ("Alpha Station", "Beta Station"),
+        ("Alpha Station", "Delta Station"),
+        ("Beta Station", "Gamma Station"),
+        ("Gamma Station", "Delta Station"),
+        ("Delta Station", "Moon Station"),
+        ("North Station", "Moon Station"),
     ]
-    assert len(edges) == 4, edges
-    edges += [(name, "Moon Station") for name in near]
     return places, edges
 
 
@@ -938,8 +959,14 @@ def magnetic_axis(planet, sun):
     return norm(sub(mul(planet.up, math.cos(tilt)), mul(norm(away), math.sin(tilt))))
 
 
-def asteroid_ring(rng, earth, axis, places, lane_list):
-    """(storage name, center, size, vx2 bytes) for the ring around axis and its 4 ice asteroids."""
+def asteroid_ring(seed, earth, axis, places, lane_list):
+    """(storage name, center, size, forward, up, vx2 bytes) for the ring around axis and its 4
+    ice asteroids. Each asteroid draws from its own random generator, so a station or lane
+    added later moves only the asteroids in its way."""
+
+    def own_rng(name):
+        return random.Random(f"{seed}:{name}")
+
     asteroids = []
     taken = []
     equator = [
@@ -955,11 +982,13 @@ def asteroid_ring(rng, earth, axis, places, lane_list):
         in_plane = sub(halfway, mul(axis, dot(halfway, axis)))
         center = add(earth.center, mul(norm(in_plane), RING_RADIUS))
         size = storage_size(SCENARIO.parents[1] / f"VoxelMaps/{ICE_SHAPE}.vx2")
+        storage = f"Octahedron-Ice-{i + 1}"
         asteroids.append(
             (
-                f"Octahedron-Ice-{i + 1}",
+                storage,
                 center,
                 size,
+                *random_basis(own_rng(storage)),
                 predefined_asteroid(ICE_SHAPE, ICE_MATERIAL, size),
             )
         )
@@ -985,32 +1014,34 @@ def asteroid_ring(rng, earth, axis, places, lane_list):
     for center, radius in taken:
         grid[key(center)].append((center, radius))
 
-    u = perpendicular(axis)
+    u = norm(perpendicular_part(sub(places["Alpha Station"][0], earth.center), axis))
     v = cross(axis, u)
     sizes, weights = zip(*ASTEROID_SIZES)
-    while len(asteroids) < RING_ASTEROIDS + len(equator):
-        size = rng.choices(sizes, weights)[0]
-        angle = rng.uniform(0, 2 * math.pi)
-        # Uniform over the band's area
-        radius = math.sqrt(rng.uniform(RING_INNER**2, RING_OUTER**2))
-        height = rng.uniform(-RING_THICKNESS / 2, RING_THICKNESS / 2)
-        radial = add(mul(u, math.cos(angle)), mul(v, math.sin(angle)))
-        center = add(earth.center, add(mul(radial, radius), mul(axis, height)))
-        if not free(center, size):
-            continue
-        if any(
-            segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
-            for _, _, _, s, e in lane_list
-        ):
-            continue
-        seed = rng.getrandbits(31)
-        storage = f"Octahedron-Asteroid-{len(asteroids) - len(equator) + 1:04d}"
+    for number in range(1, RING_ASTEROIDS + 1):
+        storage = f"Octahedron-Asteroid-{number:04d}"
+        rng = own_rng(storage)
+        sector = (number - 1) % RING_SECTORS
+        while True:
+            size = rng.choices(sizes, weights)[0]
+            angle = rng.uniform(sector, sector + 1) * 2 * math.pi / RING_SECTORS
+            # Uniform over the band's area
+            radius = math.sqrt(rng.uniform(RING_INNER**2, RING_OUTER**2))
+            height = rng.uniform(-RING_THICKNESS / 2, RING_THICKNESS / 2)
+            radial = add(mul(u, math.cos(angle)), mul(v, math.sin(angle)))
+            center = add(earth.center, add(mul(radial, radius), mul(axis, height)))
+            if free(center, size) and not any(
+                segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
+                for _, _, _, s, e in lane_list
+            ):
+                break
+        voxel_seed = rng.getrandbits(31)
         asteroids.append(
             (
                 storage,
                 center,
                 size,
-                procedural_asteroid(seed, rng.getrandbits(31), size),
+                *random_basis(rng),
+                procedural_asteroid(voxel_seed, rng.getrandbits(31), size),
             )
         )
         grid[key(center)].append((center, size / 2))
@@ -1194,12 +1225,20 @@ def main():
     apply_settings(checkpoint, args.ore_mod)
     apply_settings(config_tree.getroot(), args.ore_mod)
 
-    # The one random generator of the world; every random choice below draws from it in order
-    rng = random.Random(args.seed)
-    ids = Ids(rng)
-    owner, faction = add_npc(checkpoint, ids)
+    # Entity and identity ids come from one generator, in the order they are drawn below
+    ids = Ids(random.Random(args.seed))
     places, edges = layout(earth, moon)
+    lane_list = lanes(places, edges)
     axis = magnetic_axis(earth, sun_direction(sector))
+    # The asteroids take the first ids, so stations and grids added later leave their ids as
+    # they are; their places come from their own generators (asteroid_ring)
+    for storage, center, size, forward, up, data in asteroid_ring(
+        args.seed, earth, axis, places, lane_list
+    ):
+        (out / f"{storage}.vx2").write_bytes(data)
+        objects.append(voxel_map(ids, storage, center, size, forward, up))
+
+    owner, faction = add_npc(checkpoint, ids)
     template = ET.parse(STATION_BLUEPRINT).getroot().find(".//CubeGrid")
     trade_stations = {}
     shipyards = {}
@@ -1230,10 +1269,9 @@ def main():
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
         objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
 
-    lane_list = lanes(places, edges)
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
-        up = lane_up(direction, earth.up)
+        up = lane_up(direction, home, target, earth.up)
         for position, here, there, facing in (
             (start, home, target, direction),
             (end, target, home, mul(direction, -1)),
@@ -1243,12 +1281,6 @@ def main():
                 lane_computer(ids, position, facing, up, lane_id, here, there)
             )
 
-    for storage, center, size, data in asteroid_ring(
-        rng, earth, axis, places, lane_list
-    ):
-        (out / f"{storage}.vx2").write_bytes(data)
-        objects.append(voxel_map(ids, storage, center, size, rng))
-    # Drawn last, so the economy's ids leave every id and asteroid above as they were
     add_trade_stations(checkpoint, ids, faction, trade_stations)
 
     yard = shipyard_template()
