@@ -230,6 +230,8 @@ MODS = [
     (3415912276, "Skybox: SE1 Alpha Release"),
     (1359618037, "Relative Top Speed"),
     (3816175430, "Trade Lanes MP"),
+    # Workshop dependencies directly before the mods that need them
+    (3040438530, "ToolCore"),
     (3412657089, "OmniCorp The OmniArc Project: Adv Tools"),
     # Quality of life, mostly client side; the HUD frameworks before the mods using them
     (1965654081, "Rich HUD Master"),
@@ -237,6 +239,7 @@ MODS = [
     (1475392343, "Build Colors"),
     (758597413, "Text HUD API"),
     (1697184408, "Build Vision 3.0"),
+    (3170315974, "Leak Finder"),
     (514062285, "Build Info"),
     (2923698329, "Camera - Over The Shoulder"),
     (
@@ -613,7 +616,8 @@ def station(template, ids, name, center, forward, up, owner):
             kind == "MedicalRoom"
             and block.findtext("SubtypeName") == "LargeMedicalRoom"
         ):
-            set_child(block, "CustomName", f"Medical Room - {name}")
+            # The spawn selector lists the room by its name: plain "Delta Station"
+            set_child(block, "CustomName", name)
             set_child(block, "SpawnName", name)
         if kind == "RadioAntenna":
             set_child(block, "HudText", name)
@@ -747,8 +751,16 @@ def lane_up(direction, home, target, north):
     return norm(perpendicular_part(north, direction))
 
 
-def lane_computer(ids, position, forward, up, lane_id, home, target):
-    data = f"TLID:{lane_id}\nFrom:{home}\nTo:{target}\nSpeed:{LANE_SPEED}\nRingInterval:{LANE_RING_INTERVAL}"
+def lane_computer(ids, position, forward, up, lane_id, home, target, partner):
+    """partner: the other end's computer. Its place goes in as a Target GPS, the last line (the
+    mod finds the other keys by substring): a computer whose grid the cluster loads before its
+    partner's or the lane registry's answer is paired at once, instead of telling the clients
+    the lane has no target, which takes its tunnel off their screens."""
+    x, y, z = partner
+    data = (
+        f"TLID:{lane_id}\nFrom:{home}\nTo:{target}\nSpeed:{LANE_SPEED}\nRingInterval:{LANE_RING_INTERVAL}"
+        f"\nTarget:GPS:TL {lane_id} {target}:{x:.2f}:{y:.2f}:{z:.2f}:"
+    )
     grid = ET.Element(
         "MyObjectBuilder_EntityBase", {XSI_TYPE: "MyObjectBuilder_CubeGrid"}
     )
@@ -906,7 +918,8 @@ def layout(earth, moon):
     up = norm(perpendicular_part(sub(places["Delta Station"][0], center), axis))
     forward = norm(perpendicular_part(sub(center, moon.center), up))
     places["Moon Station"] = (center, forward, up)
-    # Around the equator, then the Moon's two; South Station has no lane
+    # The octahedron's 12 edges (around the equator, then each pole to the four equator
+    # stations), then the Moon's two
     edges = [
         ("Alpha Station", "Beta Station"),
         ("Alpha Station", "Delta Station"),
@@ -914,6 +927,14 @@ def layout(earth, moon):
         ("Gamma Station", "Delta Station"),
         ("Delta Station", "Moon Station"),
         ("North Station", "Moon Station"),
+        ("North Station", "Alpha Station"),
+        ("North Station", "Beta Station"),
+        ("North Station", "Gamma Station"),
+        ("North Station", "Delta Station"),
+        ("South Station", "Alpha Station"),
+        ("South Station", "Beta Station"),
+        ("South Station", "Gamma Station"),
+        ("South Station", "Delta Station"),
     ]
     return places, edges
 
@@ -1272,13 +1293,13 @@ def main():
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
         up = lane_up(direction, home, target, earth.up)
-        for position, here, there, facing in (
-            (start, home, target, direction),
-            (end, target, home, mul(direction, -1)),
+        for position, here, there, facing, partner in (
+            (start, home, target, direction, end),
+            (end, target, home, mul(direction, -1), start),
         ):
             # No safe zone: the computer can't be damaged and the lane's rings have no physics
             objects.append(
-                lane_computer(ids, position, facing, up, lane_id, here, there)
+                lane_computer(ids, position, facing, up, lane_id, here, there, partner)
             )
 
     add_trade_stations(checkpoint, ids, faction, trade_stations)

@@ -125,6 +125,11 @@
       <PublishedFileId>3816175430</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
+    <ModItem FriendlyName="ToolCore">
+      <Name>3040438530.sbm</Name>
+      <PublishedFileId>3040438530</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
     <ModItem FriendlyName="OmniCorp The OmniArc Project: Adv Tools">
       <Name>3412657089.sbm</Name>
       <PublishedFileId>3412657089</PublishedFileId>
@@ -153,6 +158,11 @@
     <ModItem FriendlyName="Build Vision 3.0">
       <Name>1697184408.sbm</Name>
       <PublishedFileId>1697184408</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Leak Finder">
+      <Name>3170315974.sbm</Name>
+      <PublishedFileId>3170315974</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
     <ModItem FriendlyName="Build Info">

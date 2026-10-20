@@ -268,13 +268,13 @@
         <FactionTypeString>Trader</FactionTypeString>
         <Stations>
           <MyObjectBuilder_Station>
-            <Id>904506068174385898</Id>
+            <Id>882634578103071452</Id>
             <Position x="4.000119855551924e-06" y="139880.8489598956" z="-43.3674319798533" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="8.095963504015843e-09" y="-0.4226182617406979" z="-0.9063077870366506" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>104953192834932154</StationEntityId>
+            <StationEntityId>121942182620620939</StationEntityId>
             <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
@@ -283,13 +283,13 @@
             <Name>North Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>867528468523095547</Id>
+            <Id>878659940569482106</Id>
             <Position x="-3.7784421169702466e-06" y="-139935.6992345262" z="-176.66490119291458" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="8.095963504015843e-09" y="-0.4226182617406979" z="-0.9063077870366506" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>94241836458951133</StationEntityId>
+            <StationEntityId>131238737230700481</StationEntityId>
             <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
@@ -298,13 +298,13 @@
             <Name>South Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>898541567990635430</Id>
+            <Id>916441551805767341</Id>
             <Position x="139826.622154934" y="-6.33150428307734e-06" z="1.403660706059155e-06" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="-0.9999999999999993" y="-3.6518531422902054e-08" z="8.095963504015843e-09" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>84215383637399699</StationEntityId>
+            <StationEntityId>122849093701395490</StationEntityId>
             <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
@@ -313,13 +313,13 @@
             <Name>Alpha Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>893999251071422603</Id>
+            <Id>878215189182012381</Id>
             <Position x="1.4036607060591549e-06" y="-73.27264350613603" z="139842.86630891706" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="8.095963504015843e-09" y="-0.4226182617406979" z="-0.9063077870366506" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>99752766871229886</StationEntityId>
+            <StationEntityId>130741135465672763</StationEntityId>
             <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
@@ -328,13 +328,13 @@
             <Name>Beta Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>882013041690543181</Id>
+            <Id>911365897539555468</Id>
             <Position x="-139826.622154934" y="6.33150428307734e-06" z="-1.403660706059155e-06" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="0.9999999999999993" y="3.6518531422902054e-08" z="-8.095963504015843e-09" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>105676250520730135</StationEntityId>
+            <StationEntityId>104206647811043362</StationEntityId>
             <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
@@ -343,13 +343,13 @@
             <Name>Gamma Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>908077184739035276</Id>
+            <Id>893493175122734492</Id>
             <Position x="-1.4036607060591549e-06" y="73.27264350613603" z="-139842.86630891706" />
             <Up x="-3.6518531422902054e-08" y="0.9063077870366499" z="-0.4226182617406979" />
             <Forward x="-8.095963504015843e-09" y="0.4226182617406979" z="0.9063077870366506" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>111443206811329541</StationEntityId>
+            <StationEntityId>101989811387682137</StationEntityId>
             <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
@@ -358,13 +358,13 @@
             <Name>Delta Station</Name>
           </MyObjectBuilder_Station>
           <MyObjectBuilder_Station>
-            <Id>908949537461403298</Id>
+            <Id>882145434314637591</Id>
             <Position x="20443.02055936676" y="122083.3461759347" z="-110582.16013166316" />
             <Up x="-0.13119715693921277" y="-0.6251764194297497" z="-0.7693775085093568" />
             <Forward x="0.34926384158937257" y="-0.7554748446152053" z="0.5543216828808567" />
             <StationType>SpaceStation</StationType>
             <IsDeepSpaceStation>false</IsDeepSpaceStation>
-            <StationEntityId>109856347563842145</StationEntityId>
+            <StationEntityId>126715275772981623</StationEntityId>
             <FactionId>258806895015508287</FactionId>
             <PrefabName />
             <SafeZoneEntityId>0</SafeZoneEntityId>
@@ -416,6 +416,11 @@
       <PublishedFileId>3816175430</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
+    <ModItem FriendlyName="ToolCore">
+      <Name>3040438530.sbm</Name>
+      <PublishedFileId>3040438530</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
     <ModItem FriendlyName="OmniCorp The OmniArc Project: Adv Tools">
       <Name>3412657089.sbm</Name>
       <PublishedFileId>3412657089</PublishedFileId>
@@ -444,6 +449,11 @@
     <ModItem FriendlyName="Build Vision 3.0">
       <Name>1697184408.sbm</Name>
       <PublishedFileId>1697184408</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Leak Finder">
+      <Name>3170315974.sbm</Name>
+      <PublishedFileId>3170315974</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
     <ModItem FriendlyName="Build Info">
