@@ -918,8 +918,7 @@ def layout(earth, moon):
     up = norm(perpendicular_part(sub(places["Delta Station"][0], center), axis))
     forward = norm(perpendicular_part(sub(center, moon.center), up))
     places["Moon Station"] = (center, forward, up)
-    # The octahedron's 12 edges (around the equator, then each pole to the four equator
-    # stations), then the Moon's two
+    # Around the equator, then the Moon's two; South Station has no lane
     edges = [
         ("Alpha Station", "Beta Station"),
         ("Alpha Station", "Delta Station"),
@@ -927,14 +926,6 @@ def layout(earth, moon):
         ("Gamma Station", "Delta Station"),
         ("Delta Station", "Moon Station"),
         ("North Station", "Moon Station"),
-        ("North Station", "Alpha Station"),
-        ("North Station", "Beta Station"),
-        ("North Station", "Gamma Station"),
-        ("North Station", "Delta Station"),
-        ("South Station", "Alpha Station"),
-        ("South Station", "Beta Station"),
-        ("South Station", "Gamma Station"),
-        ("South Station", "Delta Station"),
     ]
     return places, edges
 
