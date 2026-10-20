@@ -119,8 +119,8 @@ downloaded.
   the other end's computer, so a computer the cluster loads before its partner
   still knows where its lane leads. The ends have no safe zone; the lane's
   rings have no physics. The two rings of a tunnel sit side by side, level with
-  the stations' horizontal plane, but one above the other on the lanes to North
-  Station, so pilots can tell North Station's lanes apart.
+  the equator, on the lanes of the equatorial square, and one above the other
+  on all others (to the poles and the Moon).
 - Places 2,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays

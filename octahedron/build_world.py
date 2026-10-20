@@ -741,14 +741,16 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
     return as_sector_object(grid)
 
 
+EQUATOR_STATIONS = {"Alpha Station", "Beta Station", "Gamma Station", "Delta Station"}
+
+
 def lane_up(direction, home, target, north):
     """Up of a lane's computers, the same at both ends. The Trade Lanes mod puts a lane's two
-    rings side by side along the computers' right axis: level with the stations' horizontal
-    plane, but one above the other on the lane to North Station, so pilots can tell the Moon's
-    two lanes apart."""
-    if "North Station" in (home, target):
-        return norm(cross(direction, north))
-    return norm(perpendicular_part(north, direction))
+    rings side by side along the computers' right axis: level with the equator on the lanes
+    of the equatorial square, one above the other on all others (to the poles and the Moon)."""
+    if {home, target} <= EQUATOR_STATIONS:
+        return norm(perpendicular_part(north, direction))
+    return norm(cross(direction, north))
 
 
 def lane_computer(ids, position, forward, up, lane_id, home, target, partner):
