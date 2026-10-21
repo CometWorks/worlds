@@ -1,5 +1,16 @@
 <?xml version="1.0"?>
 <ConfigBossEncounters xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <!-- No cleanup: NPC grids stay, the cluster takes partitions without players offline -->
-  <UseCleanupSettings>false</UseCleanupSettings>
+  <!-- Cleanup tuned for the cluster (MES.md, "MES on a cluster"): every node runs its own MES and sees
+       only its own players, so the nearest player is the nearest on the grid's node. Remove a grid
+       after 900 s with no such player within 15 km; a player coming back within 15 km resets the
+       timer. 15 km is far beyond what any client sees (sync distance 3 km), so no player sees a
+       removal. The unpowered override is off: MES swaps its powered and unpowered values. -->
+  <UseCleanupSettings>true</UseCleanupSettings>
+  <CleanupUseDistance>true</CleanupUseDistance>
+  <CleanupDistanceTrigger>15000</CleanupDistanceTrigger>
+  <CleanupUseTimer>true</CleanupUseTimer>
+  <CleanupDistanceStartsTimer>true</CleanupDistanceStartsTimer>
+  <CleanupResetTimerWithinDistance>true</CleanupResetTimerWithinDistance>
+  <CleanupTimerTrigger>900</CleanupTimerTrigger>
+  <CleanupUnpoweredOverride>false</CleanupUnpoweredOverride>
 </ConfigBossEncounters>
