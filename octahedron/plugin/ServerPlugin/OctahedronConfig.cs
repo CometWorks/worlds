@@ -13,6 +13,7 @@ namespace ServerPlugin;
 [Section("projections", caption: "Projections")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
+[Section("drops", caption: "Container Drops")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -309,6 +310,17 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 60;
+
+    [BoolOption(
+        "Spawn the game's personal drop pods (Unknown Signal), each only for its player. Off: only the strong ones "
+            + "(Strong Unknown Signal), the game's 5 % share of the drops, still spawn. Needs EnableContainerDrops in the world settings.",
+        Parent = "drops"
+    )]
+    public bool ContainerDropsPersonal
+    {
+        get;
+        set => SetField(ref field, value);
+    }
 }
 
 public struct RefillContainer

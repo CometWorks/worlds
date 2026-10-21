@@ -200,9 +200,11 @@ SETTINGS = {
     "EnableDrones": "false",
     "GlobalEncounterCap": 0,
     "EnablePlanetaryEncounters": "false",
-    # No vanilla drop pods ('Unknown Signal'): each player gets one every 5-20 min, the
-    # load-test pilots never collect them, and they pile up along the lanes (#1378)
-    "EnableContainerDrops": "false",
+    # Vanilla drop pods on, but the Octahedron plugin refuses the personal ones ('Unknown
+    # Signal', ContainerDropsPersonal): every player gets one every few minutes wherever
+    # they fly, the load-test pilots never collect them, and they pile up along the lanes
+    # and chain partitions (#1378, #1389). The strong ones ('Strong Unknown Signal') stay.
+    "EnableContainerDrops": "true",
     # Our stations trade; the game's own trade factions and their stations stay out
     # (GenerateFactionsOnStart false in the economy component, see add_trade_stations)
     "EnableEconomy": "true",
