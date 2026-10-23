@@ -11,8 +11,11 @@ listed them in config/mes-mods.xml before MES was dropped (ticket 1447). Writes 
 - SpawnGroups.xml: every group the MES timers could spawn on their own, with its
   condition profiles (spawn types, chances, threat, planets, air, reputation, sandbox
   variables) and prefabs (blueprint, offset, speed). The plugin reads it at load.
-- Blueprints/<prefab>.bp.sbc.gz: each prefab's grids as a gzipped local blueprint, with
-  the MES blocks swapped for vanilla ones, so clients need none of the mods.
+- Blueprints/<prefab>.bp.sbc.gz: each prefab's grids as a gzipped local blueprint, as
+  the mod has it, only without MES's three service terminals (research, suit upgrade,
+  shipyard), if that leaves every grid in one piece. A prefab with any other block the
+  base game doesn't define (MES's reactors, thrusters and remote controls, other mods'
+  blocks) is left out, and with it a group whose main prefab it is.
 - Factions.xml: the encounter mods' NPC factions, for the world build.
 
 Groups only other NPCs spawn (RivalAiSpawn and the like), admin-only groups and groups
@@ -57,19 +60,6 @@ TYPES = {
     "BossEncounterSpace": "BossEncounterChance",
     "BossEncounterAtmo": "BossEncounterChance",
     "BossEncounterAny": "BossEncounterChance",
-}
-
-# MES blocks in the prefabs, as (type, subtype) -> vanilla subtype, or None to drop
-MES_BLOCKS = {
-    ("Reactor", "ProprietaryLargeBlockSmallGenerator"): "LargeBlockSmallGenerator",
-    ("Reactor", "ProprietaryLargeBlockLargeGenerator"): "LargeBlockLargeGenerator",
-    ("Thrust", "MES-NPC-Thrust-Ion-LargeGrid-Small"): "LargeBlockSmallThrust",
-    ("Thrust", "MES-NPC-Thrust-Ion-LargeGrid-Large"): "LargeBlockLargeThrust",
-    ("RemoteControl", "RivalAIRemoteControlSmall"): "SmallBlockRemoteControl",
-    ("RemoteControl", "RivalAIRemoteControlLarge"): "LargeBlockRemoteControl",
-    ("ButtonPanel", "MES-Blocks-ResearchTerminal"): None,
-    ("ButtonPanel", "MES-Blocks-SuitUpgradeStation"): None,
-    ("Projector", "MES-Blocks-ShipyardTerminal"): None,
 }
 
 # Base game <Factions> subtypes as MES maps them to tags (GetOldSpawnGroupDetails)
@@ -330,19 +320,154 @@ def base_game_faction(el):
     return "Types", " ".join(types or ["Pirate"])
 
 
-def blueprint(name, grids):
-    """A local blueprint of the prefab's grids, the MES blocks swapped or dropped."""
-    for grid in grids.findall("CubeGrid"):
-        blocks = grid.find("CubeBlocks")
-        for block in list(blocks if blocks is not None else []):
-            kind = (block.get(f"{{{XSI}}}type") or "").removeprefix("MyObjectBuilder_")
-            key = (kind, block.findtext("SubtypeName") or "")
-            if key not in MES_BLOCKS:
+# MES's terminals: services only MES runs (research points, suit upgrades, its NPC
+# shipyard), 1 x 1 x 1 blocks. A blueprint whose only non-vanilla blocks are these loses
+# them; one with any other non-vanilla block is left out.
+MES_TERMINALS = {
+    ("ButtonPanel", "MES-Blocks-ResearchTerminal"),
+    ("ButtonPanel", "MES-Blocks-SuitUpgradeStation"),
+    ("Projector", "MES-Blocks-ShipyardTerminal"),
+}
+
+DIRECTIONS = {
+    "Forward": (0, 0, -1),
+    "Backward": (0, 0, 1),
+    "Up": (0, 1, 0),
+    "Down": (0, -1, 0),
+    "Left": (-1, 0, 0),
+    "Right": (1, 0, 0),
+}
+
+
+def vanilla_blocks(game):
+    """(type, subtype) -> (x, y, z) size of every block the base game defines"""
+    found = {}
+    for path in sorted((game / "Data").rglob("*.sbc")):
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
+        if "<CubeBlocks>" not in text:
+            continue
+        for el in read(path).iter():
+            if local(el.tag) != "Definition" or el.find("Id") is None:
                 continue
-            if MES_BLOCKS[key] is None:
-                blocks.remove(block)
-            else:
-                block.find("SubtypeName").text = MES_BLOCKS[key]
+            idel = el.find("Id")
+            kind = (idel.get("Type") or idel.findtext("TypeId") or "").strip()
+            sub = (idel.get("Subtype") or idel.findtext("SubtypeId") or "").strip()
+            size = el.find("Size")
+            found[(kind.removeprefix("MyObjectBuilder_"), sub)] = (
+                tuple(int(size.get(a, 1)) for a in "xyz")
+                if size is not None
+                else (1, 1, 1)
+            )
+    return found
+
+
+def block_key(block):
+    kind = (block.get(f"{{{XSI}}}type") or "").removeprefix("MyObjectBuilder_")
+    return kind, (block.findtext("SubtypeName") or "").strip()
+
+
+def foreign_blocks(grids, vanilla):
+    """The blocks of a prefab's grids the base game doesn't define"""
+    return {
+        block_key(b) for b in grids.iter("MyObjectBuilder_CubeBlock")
+    } - vanilla.keys()
+
+
+def cells(block, vanilla):
+    """The grid cells a block takes, from its Min, orientation and size"""
+    m = block.find("Min")
+    lo = [int(m.get(a, 0)) for a in "xyz"] if m is not None else [0, 0, 0]
+    o = block.find("BlockOrientation")
+    forward = DIRECTIONS[o.get("Forward", "Forward")] if o is not None else (0, 0, -1)
+    up = DIRECTIONS[o.get("Up", "Up")] if o is not None else (0, 1, 0)
+    right = (
+        forward[1] * up[2] - forward[2] * up[1],
+        forward[2] * up[0] - forward[0] * up[2],
+        forward[0] * up[1] - forward[1] * up[0],
+    )
+    sx, sy, sz = vanilla.get(block_key(block), (1, 1, 1))
+    ext = [abs(sx * right[i] + sy * up[i] - sz * forward[i]) for i in range(3)]
+    return [
+        (lo[0] + x, lo[1] + y, lo[2] + z)
+        for x in range(ext[0])
+        for y in range(ext[1])
+        for z in range(ext[2])
+    ]
+
+
+def pieces(blocks, vanilla):
+    """How many face-connected pieces the blocks make"""
+    owner = {}
+    for i, b in enumerate(blocks):
+        for c in cells(b, vanilla):
+            owner[c] = i
+    parent = list(range(len(blocks)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for (x, y, z), i in owner.items():
+        for n in ((x + 1, y, z), (x, y + 1, z), (x, y, z + 1)):
+            if n in owner:
+                parent[find(i)] = find(owner[n])
+    return len({find(i) for i in range(len(blocks))})
+
+
+def usable(grids, vanilla):
+    """Whether a prefab spawns with vanilla blocks only once its MES terminals are gone,
+    every grid still in one piece without them"""
+    foreign = foreign_blocks(grids, vanilla)
+    if foreign - MES_TERMINALS:
+        return False
+    for grid in grids.findall("CubeGrid"):
+        blocks = list(grid.iter("MyObjectBuilder_CubeBlock"))
+        kept = [b for b in blocks if block_key(b) not in MES_TERMINALS]
+        if len(kept) < len(blocks) and pieces(kept, vanilla) > pieces(blocks, vanilla):
+            return False
+    return True
+
+
+def remap(c, index):
+    """A condition with its prefab indexes moved to the prefabs left, old -> new in
+    index; None if it would spawn nothing"""
+    c = dict(c)
+    if "PrefabIndexes" in c:
+        kept = [
+            str(index[int(i)]) for i in c["PrefabIndexes"].split() if int(i) in index
+        ]
+        if not kept:
+            return None
+        c["PrefabIndexes"] = " ".join(kept)
+    if "PrefabIndexGroups" in c:
+        groups = []
+        for group in c["PrefabIndexGroups"].split():
+            key, values = group.split(":")
+            kept = [
+                str(index[int(v)]) if int(v) >= 0 else v
+                for v in values.split(",")
+                if int(v) < 0 or int(v) in index
+            ]
+            if kept:
+                groups.append(f"{key}:{','.join(kept)}")
+        if not groups:
+            return None
+        c["PrefabIndexGroups"] = " ".join(groups)
+    return c
+
+
+def blueprint(name, grids):
+    """A local blueprint of the prefab's grids, without MES's terminals"""
+    for grid in grids.findall("CubeGrid"):
+        for parent in grid.iter():
+            for block in list(parent):
+                if (
+                    block.tag == "MyObjectBuilder_CubeBlock"
+                    and block_key(block) in MES_TERMINALS
+                ):
+                    parent.remove(block)
     ET.indent(grids, "  ", level=3)
     xml = "      " + ET.tostring(grids, encoding="unicode").strip()
     xml = xml.replace(f' xmlns:xsi="{XSI}"', "")
@@ -387,7 +512,8 @@ def main():
         args.workshop, args.game
     )
     mod_names = dict(MODS) | {0: "Space Engineers"}
-    lines, used = [], {}
+    vanilla = vanilla_blocks(args.game)
+    lines, used, skipped, dropped_prefabs = [], {}, [], 0
     for name, (el, mod) in sorted(groups.items(), key=lambda g: (g[1][1], g[0])):
         found = group_conditions(el, mod, profiles, cgroups)
         if found is None:
@@ -403,7 +529,7 @@ def main():
                 conditions.append(c)
         if not conditions or (persistent is not None and condition(persistent) is None):
             continue
-        pf = []
+        pf, names = [], []
         for p in (
             x for x in el.iter() if local(x.tag) == "Prefab" and x.get("SubtypeId")
         ):
@@ -421,8 +547,28 @@ def main():
             )
             if behaviors.get(p.findtext("Behaviour")):
                 pf[-1]["SetsVariables"] = " ".join(behaviors[p.findtext("Behaviour")])
-            used[p.get("SubtypeId")] = pf[-1]["Blueprint"]
+            names.append(p.get("SubtypeId"))
         else:
+            # Prefabs with blocks the base game doesn't define, other than MES's
+            # terminals, are left out; a group whose main (first) prefab is one of them
+            # goes, as does a condition left with nothing to spawn
+            ok = [usable(prefabs[n][0].find("CubeGrids"), vanilla) for n in names]
+            dropped_prefabs += ok.count(False)
+            if not ok or not ok[0]:
+                skipped.append(name)
+                continue
+            index = {}
+            for i, keep in enumerate(ok):
+                if keep:
+                    index[i] = len(index)
+            conditions = [c for c in (remap(c, index) for c in conditions) if c]
+            if not conditions:
+                skipped.append(name)
+                continue
+            pf = [p for p, keep in zip(pf, ok) if keep]
+            for n, keep in zip(names, ok):
+                if keep:
+                    used[n] = file_name(n)
             t = tags(el.findtext("Description"))
             attrs = {"Name": name, "Mod": mod, "ModName": mod_names[mod]}
             attrs["Frequency"] = f"{float(el.findtext('Frequency') or 1):g}"
@@ -474,7 +620,9 @@ def main():
         "<Factions>\n" + "\n".join(faction_lines) + "\n</Factions>\n"
     )
     print(
-        f"{len(lines) and sum(l.startswith('  <Group') for l in lines)} groups, {len(used)} blueprints, {len(factions)} factions"
+        f"{sum(l.startswith('  <Group') for l in lines)} groups, {len(used)} blueprints, "
+        f"{len(factions)} factions; non-vanilla blocks left out {dropped_prefabs} prefabs "
+        f"and {len(skipped)} groups"
     )
 
 

@@ -274,13 +274,21 @@ lists no MES mod any more (ticket 1447). `../MES.md` describes the rules as MES
 applied them; the plugin follows that document, with the differences listed below.
 
 `Encounters/` is written by `tools/export_encounters.py` from the mods in the local
-Workshop folder: `SpawnGroups.xml` holds the 361 spawn groups the MES timers could
+Workshop folder: `SpawnGroups.xml` holds the 320 spawn groups the MES timers could
 spawn, with their spawn conditions and prefabs, `Blueprints/` one gzipped blueprint
-per prefab (985), and `Factions.xml` the mods' 11 NPC factions, which
-`../build_world.py` writes into the world. In the blueprints, MES's own blocks are
-swapped for vanilla ones (its reactors, ion thrusters and remote controls) or left
-out (its research, suit upgrade and shipyard terminals). Rerun the script after an
-encounter mod changes.
+per prefab (936), and `Factions.xml` the mods' 11 NPC factions, which
+`../build_world.py` writes into the world. Rerun the script after an encounter mod
+changes.
+
+Every blueprint has only blocks the base game defines, so no grid spawns with a
+block swapped for another or missing. A blueprint loses MES's three service
+terminals (research, suit upgrade and shipyard), which work only with MES, if every
+grid stays in one piece without them. A prefab with any other non-vanilla block is
+left out: MES's proprietary reactors, NPC thrusters and RivalAI remote controls, and
+other mods' blocks (shields, modded weapons, desks and couches saved as remote
+controls). That drops 47 prefabs, and the 41 spawn groups whose main prefab is one of
+them, among them 10 of the 13 Trade Operators Coalition groups (their stations have
+proprietary reactors) and 26 of Wasteland Encounters' 82 wrecks.
 
 What it does, as MES does it with its default settings and Octahedron's:
 

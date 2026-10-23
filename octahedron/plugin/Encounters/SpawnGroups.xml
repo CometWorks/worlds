@@ -199,8 +199,8 @@
   </Group>
   <Group Name="Incon-SpawnGroup-DBSLookoutTower" Mod="445996030" ModName="Independent Contractors" Frequency="5" FactionOverride="INCON">
     <Persistent />
-    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0 1 2" />
-    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0 3 4" />
+    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
+    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
     <Prefab Blueprint="(NPC-INC) DBS Lookout Tower.bp.sbc.gz" X="0.0" Y="9.0" Z="0.0" Speed="0" />
   </Group>
@@ -379,8 +379,8 @@
   </Group>
   <Group Name="Imber-SpawnGroup-DefenseInstallation" Mod="973526550" ModName="Imber Corporation" Frequency="5" FactionOverride="IMBER">
     <Persistent />
-    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0 1 2" />
-    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0 3 4" />
+    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
+    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
     <Prefab Blueprint="(NPC-IBR) Defense Installation.bp.sbc.gz" X="0.0" Y="7.5" Z="0.0" Speed="0" />
   </Group>
@@ -524,8 +524,8 @@
   </Group>
   <Group Name="Imber-SpawnGroup-SupplyCache" Mod="973526550" ModName="Imber Corporation" Frequency="4" FactionOverride="IMBER">
     <Persistent />
-    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0 1 2" />
-    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0 3 4" />
+    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
+    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
     <Prefab Blueprint="(NPC-IBR) Supply Cache.bp.sbc.gz" X="0.0" Y="-11" Z="0.0" Speed="0" />
   </Group>
@@ -706,8 +706,8 @@
   </Group>
   <Group Name="Parallax-SpawnGroup-SecurityOutpost" Mod="1135484957" ModName="Parallax Concepts" Frequency="5" FactionOverride="PARALLAX">
     <Persistent />
-    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0 1 2" />
-    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0 3 4" />
+    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
+    <Condition Types="PlanetaryInstallation" PlanetaryInstallationChance="20" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ForceStaticGrid="true" PrefabSpawningMode="SelectedIndexes" PrefabIndexes="0" />
     <Prefab Blueprint="(NPC-PLX) Security Outpost.bp.sbc.gz" X="0.0" Y="11" Z="0.0" Speed="0" />
   </Group>
@@ -768,14 +768,6 @@
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="0" ThreatMaximum="5" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-SARRover.bp.sbc.gz" X="0.0" Y="0.5" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B0-SpacePod" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="30">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="0" ThreatMaximum="5" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
-    <Prefab Blueprint="AS2-SpacePod.bp.sbc.gz" X="0.0" Y="4.85" Z="0.0" Speed="0.0" />
-  </Group>
-  <Group Name="AS2-B1-ClaimSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="50">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="5" ThreatMaximum="40" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
-    <Prefab Blueprint="AS2-Claim-Marker.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0.0" />
-  </Group>
   <Group Name="AS2-B1-MaintenanceSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="5" ThreatMaximum="40" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-MaintenanceRover.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0.0" />
@@ -803,10 +795,6 @@
   <Group Name="AS2-B3-CampSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Bar.bp.sbc.gz" X="0.0" Y="7.0" Z="0.0" Speed="0.0" />
-  </Group>
-  <Group Name="AS2-B3-MineSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
-    <Prefab Blueprint="AS2-Claim-Marker.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0.0" />
   </Group>
   <Group Name="AS2-B3-ProcessingSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="10">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
@@ -1228,40 +1216,6 @@
     <Condition Types="SpaceCargoShip" ThreatMinimum="500" ThreatMaximum="-1" ThreatRange="5000" SandboxVariables="Mod-Enable" ReputationMinimum="-1001" ReputationMaximum="-1000" ReputationRange="15000" Faction="TXVE" />
     <Prefab Blueprint="TXVE-Teridax-Class-Destroyer.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
   </Group>
-  <Group Name="Kratos" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="3">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
-    <Prefab Blueprint="[NPC Large Wreck] Kratos.bp.sbc.gz" X="0.0" Y="3.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="Odin" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="2">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
-    <Prefab Blueprint="[NPC Large Wreck] Odin Mid.bp.sbc.gz" X="-10.0" Y="8.0" Z="85.0" Speed="0" />
-    <Prefab Blueprint="[NPC Large Wreck] Odin Front.bp.sbc.gz" X="40.0" Y="5.0" Z="-85.0" Speed="0" />
-    <Prefab Blueprint="[NPC Large Wreck] Odin Port Wing.bp.sbc.gz" X="-90" Y="20" Z="85.0" Speed="0" />
-  </Group>
-  <Group Name="Office V1" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
-    <Prefab Blueprint="[NPC Large Wreck] Office V1.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="Office V2" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
-    <Prefab Blueprint="[NPC Large Wreck] Office V2.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Outpost] Communication station" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Outpost] Communication station.bp.sbc.gz" X="0.0" Y="9.5" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Outpost] FOB Medium" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Outpost] FOB Medium.bp.sbc.gz" X="0.0" Y="14.5" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Outpost] FOB small" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Outpost] FOB small.bp.sbc.gz" X="0.0" Y="9.5" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Outpost] New Horizons" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Outpost] New Horizons.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
-  </Group>
   <Group Name="[NPC Wreck - Dusty] Aggressor" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="7">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Aggressor.bp.sbc.gz" X="0.0" Y="5.0" Z="0.0" Speed="0" />
@@ -1285,11 +1239,6 @@
   <Group Name="[NPC Wreck - Dusty] Corvette 2" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="2">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Corvette 2.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck - Dusty] EVE Tempest" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="2">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] EVE Tempest 1.bp.sbc.gz" X="-10.0" Y="-20.0" Z="80.0" Speed="0" />
-    <Prefab Blueprint="[NPC Wreck] EVE Tempest 2.bp.sbc.gz" X="80.0" Y="12.5" Z="-140.0" Speed="0" />
   </Group>
   <Group Name="[NPC Wreck - Dusty] Guardian" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="3">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
@@ -1315,17 +1264,9 @@
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Ketar MK1.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck - Dusty] Land Lord XL" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] Land Lord XL.bp.sbc.gz" X="0.0" Y="37.0" Z="0.0" Speed="0" />
-  </Group>
   <Group Name="[NPC Wreck - Dusty] Liberty" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Liberty .bp.sbc.gz" X="0.0" Y="-20.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck - Dusty] Lioness" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] Lioness.bp.sbc.gz" X="0.0" Y="-3.0" Z="0.0" Speed="0" />
   </Group>
   <Group Name="[NPC Wreck - Dusty] Loki" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
@@ -1363,10 +1304,6 @@
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Raptor1.4.bp.sbc.gz" X="0.0" Y="-2.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck - Dusty] Roach" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] Roach.bp.sbc.gz" X="0.0" Y="1.0" Z="0.0" Speed="0" />
-  </Group>
   <Group Name="[NPC Wreck - Dusty] Sabretooth" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Sabretooth.bp.sbc.gz" X="0.0" Y="4.0" Z="0.0" Speed="0" />
@@ -1374,11 +1311,6 @@
   <Group Name="[NPC Wreck - Dusty] Sentinel" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="7">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Sentinel.bp.sbc.gz" X="0.0" Y="1.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck - Dusty] Skywarden" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="2">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] Skywarden Back.bp.sbc.gz" X="-10.0" Y="15.0" Z="80.0" Speed="0" />
-    <Prefab Blueprint="[NPC Wreck] Skywarden Front.bp.sbc.gz" X="40.0" Y="20.0" Z="-80.0" Speed="0" />
   </Group>
   <Group Name="[NPC Wreck - Dusty] Tempest MK1" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
@@ -1404,14 +1336,6 @@
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Uppercut.bp.sbc.gz" X="0.0" Y="18.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck - Dusty] Valkyrie" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] Valkyrie.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck - Dusty] Vanguard" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="2">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] Vanguard.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
-  </Group>
   <Group Name="[NPC Wreck - Dusty] Widowmaker" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="7">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Widowmaker.bp.sbc.gz" X="0.0" Y="14.0" Z="0.0" Speed="0" />
@@ -1432,11 +1356,6 @@
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] A-50 Clipper.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] Antaios" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="3">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-1000 Antaios Back.bp.sbc.gz" X="-5.0" Y="0.0" Z="65.0" Speed="0" />
-    <Prefab Blueprint="[NPC Wreck] S-1000 Antaios Front.bp.sbc.gz" X="0.0" Y="5.0" Z="-10.0" Speed="0" />
-  </Group>
   <Group Name="[NPC Wreck] Assault Ship" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="7">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Assault Ship.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
@@ -1444,11 +1363,6 @@
   <Group Name="[NPC Wreck] B-2 Kaiman" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] B-2 Kaiman.bp.sbc.gz" X="0.0" Y="6.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck] Crusader" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] Crusader back.bp.sbc.gz" X="-10.0" Y="19.0" Z="0.0" Speed="0" />
-    <Prefab Blueprint="[NPC Wreck] Crusader front.bp.sbc.gz" X="0.0" Y="3.0" Z="-30.0" Speed="0" />
   </Group>
   <Group Name="[NPC Wreck] Doodle bug" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
@@ -1494,53 +1408,21 @@
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] Mule.bp.sbc.gz" X="0.0" Y="-2.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] S-1 Petrel" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-1 Petrel.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck] S-150 Pavo" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-150 Pavo.bp.sbc.gz" X="0.0" Y="3.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck] S-2 Kite" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-2 Kite.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
-  </Group>
   <Group Name="[NPC Wreck] S-20 Reliant" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="7">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] S-20 Reliant.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck] S-3 Rapier" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="6">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-3 Rapier.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck] S-4 Gladius" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="6">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-4 Gladius.bp.sbc.gz" X="0.0" Y="4.0" Z="0.0" Speed="0" />
   </Group>
   <Group Name="[NPC Wreck] S-40 Prospero" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] S-40 Prospero.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] S-400 Carack" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="4">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-400 Carack.bp.sbc.gz" X="0.0" Y="7.0" Z="0.0" Speed="0" />
-  </Group>
   <Group Name="[NPC Wreck] S-50 Taurus" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="3">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] S-50 Taurus.bp.sbc.gz" X="0.0" Y="3.5" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] S-500 Themis" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-500 Themis.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
-  </Group>
   <Group Name="[NPC Wreck] S-600 Ilios" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] S-600 Ilios.bp.sbc.gz" X="0.0" Y="5.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck] S-700 Scylla" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="6">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] S-700 Scylla.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
   </Group>
   <Group Name="[NPC Wreck] Small Housing Block" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
@@ -1557,10 +1439,6 @@
   <Group Name="[NPC Wreck] X-20" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] X-20.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
-  </Group>
-  <Group Name="[NPC Wreck] X-300 Scutum" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
-    <Prefab Blueprint="[NPC Wreck] X-300 Scutum.bp.sbc.gz" X="0.0" Y="-1.0" Z="0.0" Speed="0" />
   </Group>
   <Group Name="SPRT-District-Headquarters-MK2" Mod="2609155402" ModName="MES Space Pirates Enhanced" Frequency="5" EraseScripts="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Large" ThreatMinimum="455" ThreatMaximum="-1" ThreatRange="5000" PlanetRequiresAtmo="true" Faction="SPRTE" />
@@ -1613,14 +1491,6 @@
   <Group Name="SPRT-Stinging-Adversary-MK2" Mod="2609155402" ModName="MES Space Pirates Enhanced" Frequency="5" EraseScripts="true">
     <Condition Types="SpaceCargoShip AtmosphericCargoShip" ThreatMinimum="1400" ThreatMaximum="-1" ThreatRange="5000" SkipAirDensityCheck="true" MaxGravity="1.11" Faction="SPRTE" />
     <Prefab Blueprint="SPRT-Stinging-Adversary-MK2.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="THIE-142-MS-Fafnir-Cruiser" Mod="2615864222" ModName="MES Terran Heavy Industries Engineering" Frequency="5" EraseScripts="true">
-    <Condition Types="SpaceCargoShip" SpaceCargoShipChance="5" ThreatMinimum="1500" ThreatMaximum="-1" ThreatRange="5000" MaxGravity="1.21" Faction="THIE" />
-    <Prefab Blueprint="THIE-142-MS-Fafnir-Cruiser.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="THIE-202-AS-Atlas" Mod="2615864222" ModName="MES Terran Heavy Industries Engineering" Frequency="5" EraseScripts="true">
-    <Condition Types="SpaceCargoShip AtmosphericCargoShip" PlanetRequiresAtmo="true" MaxGravity="1.11" Faction="THIE" />
-    <Prefab Blueprint="THIE-202-AS-Atlas.bp.sbc.gz" X="0.0" Y="5.0" Z="0.0" Speed="25" />
   </Group>
   <Group Name="THIE-205-ASC-Atlas" Mod="2615864222" ModName="MES Terran Heavy Industries Engineering" Frequency="5" EraseScripts="true">
     <Condition Types="SpaceCargoShip AtmosphericCargoShip" PlanetRequiresAtmo="true" MaxGravity="1.11" Faction="THIE" />
@@ -1890,8 +1760,6 @@
     <Prefab Blueprint="Wrecks-143.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-144.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-154.bp.sbc.gz" X="0.0" Y="6.0" Z="0.0" Speed="0" />
-    <Prefab Blueprint="Wrecks-159.bp.sbc.gz" X="0.0" Y="20.0" Z="0.0" Speed="0" />
-    <Prefab Blueprint="Wrecks-160.bp.sbc.gz" X="0.0" Y="25.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-161.bp.sbc.gz" X="0.0" Y="6.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-162.bp.sbc.gz" X="0.0" Y="22.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-163.bp.sbc.gz" X="0.0" Y="10.0" Z="0.0" Speed="0" />
@@ -2009,7 +1877,6 @@
     <Prefab Blueprint="Wrecks-371.bp.sbc.gz" X="0.0" Y="4.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-372.bp.sbc.gz" X="0.0" Y="6.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-373.bp.sbc.gz" X="0.0" Y="12.0" Z="0.0" Speed="0" />
-    <Prefab Blueprint="Wrecks-374.bp.sbc.gz" X="0.0" Y="-26.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-375.bp.sbc.gz" X="0.0" Y="11.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-376.bp.sbc.gz" X="0.0" Y="5.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-377.bp.sbc.gz" X="0.0" Y="10.0" Z="0.0" Speed="0" />
@@ -2367,49 +2234,9 @@
     <Prefab Blueprint="Wrecks-640.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
     <Prefab Blueprint="Wrecks-649.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="TOC-SpawnGroup-BrazierDockTradeStation" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="3">
-    <Condition Types="SpaceRandomEncounter" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="100000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) Brazier Dock Trade Station.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
-  </Group>
   <Group Name="TOC-SpawnGroup-CargoShip" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="1">
     <Condition Types="SpaceCargoShip AtmosphericCargoShip" PlanetRequiresAtmo="true" RemoteControlCode="TOCStation" RemoteControlCodeMaxDistance="25000" Faction="TRADE" />
     <Prefab Blueprint="(NPC-TOC) Zedius Mk.II Cargo Transport.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-GSX5010ChronoStation" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="3">
-    <Condition Types="SpaceRandomEncounter" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="100000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) GSX-5010 Chrono-Station.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-LittleCity" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Large" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="25000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) Little City.bp.sbc.gz" X="0.0" Y="4" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-NanyangStation" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="3">
-    <Condition Types="SpaceRandomEncounter" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="100000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) Nanyang Station.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-OrbitalTradeStation" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="3">
-    <Condition Types="SpaceRandomEncounter" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="100000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) Orbital Trade Station.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-PlanetaryLogisticsOutpost" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Large" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="25000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) Planetary Logistics Outpost.bp.sbc.gz" X="0.0" Y="-22.5" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-PlanetaryTradeStationMkI" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Large" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="25000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) Planetary Trade Station Mk.I.bp.sbc.gz" X="0.0" Y="32.0" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-PoseidonStation" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="3">
-    <Condition Types="SpaceRandomEncounter" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="100000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) Poseidon Station.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-TheHangar" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Large" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="25000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) The Hangar.bp.sbc.gz" X="0.0" Y="22.5" Z="0.0" Speed="25" />
-  </Group>
-  <Group Name="TOC-SpawnGroup-TheTower" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="5">
-    <Condition Types="PlanetaryInstallation" InstallationSize="Large" ForceStaticGrid="true" RemoteControlCode="TOCStation" RemoteControlCodeMinDistance="25000" Faction="TRADE" />
-    <Prefab Blueprint="(NPC-TOC) The Tower.bp.sbc.gz" X="0.0" Y="34.0" Z="0.0" Speed="25" />
   </Group>
   <Group Name="TOC-SpawnGroup-WanderingMerchant-EA" Mod="2966429095" ModName="Trade Operators Coalition" Frequency="3">
     <Condition Types="AtmosphericCargoShip" PlanetRequiresAtmo="true" Faction="TRADE" />

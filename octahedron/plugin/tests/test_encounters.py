@@ -180,8 +180,8 @@ def main() -> None:
     sample(remote, "SpaceCargoShip")
     sample(remote, "SpaceRandomEncounter")
     station = remote.get_character()["position"]
-    _, made = force(remote, "SpaceCargoShip")
-    force(remote, "SpaceRandomEncounter")
+    force(remote, "SpaceCargoShip")
+    _, encounter = force(remote, "SpaceRandomEncounter")
     # Bosses need a threat score of 1500 within 15 km; the test player has none
     assert "BossEncounterSpace: 0 eligible" in here(remote)
     summary.append("BossEncounterSpace: none eligible at threat 0")
@@ -210,7 +210,7 @@ def main() -> None:
     force(remote, "PlanetaryInstallation")
 
     visit(remote, installation[0])
-    visit(remote, made[0])
+    visit(remote, encounter[0])
     rig.ensure_character(remote)
     remote.character_teleport(*station)
 
