@@ -10,25 +10,29 @@ Source paths below are relative to the MES script folder, `1521905890/Data/Scrip
 
 ### Files
 
-MES keeps one XML file per area in the world's `Storage/1521905890.sbm_ModularEncountersSystems/`. It creates every missing file with the defaults of its config class on the first load, and a file that sets only some values gets the class defaults for the rest. We ship only `Config-SpaceCargoShips.xml` (from `config/storage/`).
+MES keeps one XML file per area in the world's `Storage/1521905890.sbm_ModularEncountersSystems/`. It creates every missing file with the defaults of its config class on the first load, and a file that sets only some values gets the class defaults for the rest. We ship the 8 files marked below (from `config/storage/`; `build_world.py` copies them into `server/Storage/`). `python3 check_mes_config.py <MES Data/Scripts/ModularEncountersSystems folder>` checks every element against the MES sources and that both copies match.
+
+"Cluster cleanup" is the same set of values in every spawn type file, chosen for the cluster (section 5): a grid is removed after 900 s with no player of its own node within 15 km, and a player coming back within 15 km resets the timer.
 
 | File | Class (`Configuration/`) | Controls | Ours |
 |---|---|---|---|
-| `Config-General.xml` | `ConfigGeneral` | mod weighting, global NPC cap, threat handicap, difficulty, global blacklists | default |
-| `Config-SpaceCargoShips.xml` | `ConfigSpaceCargoShips` | space and lunar cargo ships | `MinLunarSpawnHeight` = 0, cleanup off, `DespawnDistanceFromPlayer` = 10⁹ m |
-| `Config-RandomEncounters.xml` | `ConfigRandomEncounters` | space random encounters | cleanup off |
-| `Config-PlanetaryCargoShips.xml` | `ConfigPlanetaryCargoShips` | atmospheric and gravity cargo ships | cleanup off |
-| `Config-PlanetaryInstallations.xml` | `ConfigPlanetaryInstallations` | surface installations | cleanup off |
-| `Config-BossEncounters.xml` | `ConfigBossEncounters` | boss encounters | cleanup off |
-| `Config-ConfigDroneEncounters.xml` (MES's spelling) | `ConfigDroneEncounters` | drone encounters | cleanup off |
+| `Config-General.xml` | `ConfigGeneral` | mod weighting, global NPC cap, threat handicap, difficulty, global blacklists | `UseMaxNpcGrids` on, `MaxGlobalNpcGrids` = 100 (per node on the cluster) |
+| `Config-SpaceCargoShips.xml` | `ConfigSpaceCargoShips` | space and lunar cargo ships | `MinLunarSpawnHeight` = 0, `FirstSpawnTime` = 780 s, cluster cleanup |
+| `Config-RandomEncounters.xml` | `ConfigRandomEncounters` | space random encounters | cluster cleanup |
+| `Config-PlanetaryCargoShips.xml` | `ConfigPlanetaryCargoShips` | atmospheric and gravity cargo ships | `FirstSpawnTime` = 780 s, cluster cleanup |
+| `Config-PlanetaryInstallations.xml` | `ConfigPlanetaryInstallations` | surface installations | cluster cleanup |
+| `Config-BossEncounters.xml` | `ConfigBossEncounters` | boss encounters | cluster cleanup |
+| `Config-ConfigDroneEncounters.xml` (MES's spelling) | `ConfigDroneEncounters` | drone encounters | cluster cleanup |
 | `Config-Creatures.xml` | `ConfigCreatures` | creature spawns | default |
-| `Config-OtherNPCs.xml` | `ConfigOtherNPCs` | cleanup of NPCs spawned by other NPCs (reinforcements) | cleanup off |
+| `Config-OtherNPCs.xml` | `ConfigOtherNPCs` | cleanup of NPCs spawned by other NPCs (reinforcements) | cluster cleanup |
 | `Config-Combat.xml` | `ConfigCombat` | combat/peace phases (off) | default |
 | `Config-Grids.xml`, `Config-CustomBlocks.xml`, `Config-Progression.xml` | | NPC grid tweaks, MES blocks, suit upgrades | default |
 
 Every spawn type file also has `SpawnTypeBlacklist` (spawn group names or mod ids), `SpawnTypePlanetBlacklist` and `PlanetSpawnFilters`, all empty. These are the tools to switch off single groups or mods per spawn type. In game, an admin can change a value with `/MES.Settings.<Area>.<Field>.<Value>` (for example `/MES.Settings.SpaceCargoShips.MinLunarSpawnHeight.0`), and `/MES.GESAP` lists the groups eligible at the admin's position.
 
-### Our one override
+### Our spawn overrides
+
+The cleanup and NPC cap values are explained under "Caps and cleanup" and in section 5. `FirstSpawnTime` = 780 s (default 300 s) for space and planetary cargo ships: a cluster node starts new timers for every player who enters it, so the default would hand out an early cargo ship at each node change (section 5).
 
 `MinLunarSpawnHeight` = 0 (default 3500) turns lunar cargo ships off. MES offers them when the point `MinLunarSpawnHeight` above the player is outside gravity (`World/EnvironmentEvaluation.cs`, `SetEligibleSpawns`). With 0, that point is the player's own position, which is in gravity whenever the check runs. So no space cargo ship spawns inside either planet's gravity.
 
@@ -38,9 +42,9 @@ Each online, living player has their own timers (`Spawning/WatchedPlayer.cs`), s
 
 | Spawn type | Player must be | When MES tries | Where it spawns |
 |---|---|---|---|
-| Space cargo ship | outside gravity | 300 s after the player joins, then every 780–1020 s | a straight path 10–15 km long that passes 2–4 km from the player; the start is ≥1 km from any grid; the path must not touch the nearest planet's gravity sphere or any asteroid's bounding box within 20 km |
+| Space cargo ship | outside gravity | 780 s after the player joins (ours; MES default 300 s), then every 780–1020 s | a straight path 10–15 km long that passes 2–4 km from the player; the start is ≥1 km from any grid; the path must not touch the nearest planet's gravity sphere or any asteroid's bounding box within 20 km |
 | Random encounter | outside gravity | every 60 s, but only once the player is ≥15 km (straight line) from where the last check passed; 300 s cooldown after a spawn | 8–12 km from the player, ≥3 km from any grid and from any asteroid's center; moved to the opposite side if the point is in the nearest planet's gravity |
-| Atmospheric cargo ship | in gravity, ≤6 km altitude | own timer: 300 s after joining, then every 780–1020 s | a path 10–13 km long at 1.7–2.5 km altitude, 3–5 km from the player, never below 900 m altitude; air density ≥0.7 at both ends unless the group sets `SkipAirDensityCheck` |
+| Atmospheric cargo ship | in gravity, ≤6 km altitude | own timer: 780 s after joining (ours; default 300 s), then every 780–1020 s | a path 10–13 km long at 1.7–2.5 km altitude, 3–5 km from the player, never below 900 m altitude; air density ≥0.7 at both ends unless the group sets `SkipAirDensityCheck` |
 | Gravity cargo ship | in gravity, >6 km altitude | the same timer as atmospheric | a path 10–13 km long at the player's altitude ±1.7–2.5 km, 3–5 km away, start ≥1.2 km from any grid |
 | Planetary installation | in gravity, ≤6 km altitude | every 60 s, but only after the player moved ≥6 km over the surface since the last spawn; 300 s cooldown after a spawn | 3–6 km from the player (2 km farther for medium, 4 km for large) on flat ground (±2.5 m), ≥2.5 km from any grid |
 | Boss encounter | anywhere | every 1200 s; 600 s cooldown after a spawn | a GPS signal 6–8 km away, sent to every player within 25 km and kept for 1200 s; the boss spawns 2.5–4 km from it once a player gets within 300 m |
@@ -52,7 +56,7 @@ Installation size: MES first offers a small one and rolls for medium with a chan
 
 ### Caps and cleanup
 
-| Spawn type | Max of the type around the player | Timeout (spawns / radius / time since the last one) | Cleanup (MES defaults, off in Octahedron) |
+| Spawn type | Max of the type around the player | Timeout (spawns / radius / time since the last one) | Cleanup (MES defaults, replaced in Octahedron) |
 |---|---|---|---|
 | Space cargo ship | 15 grids within 15 km | 4 / 10 km / 900 s | at the end of its path when nobody is within 1 km, or when the nearest player is >30 km away |
 | Random encounter | 10 grids within 25 km | 2 / 25 km / 900 s | after 3600 s in total with the nearest player >50 km away (the timer does not reset) |
@@ -60,13 +64,15 @@ Installation size: MES first offers a small one and rolls for medium with a chan
 | Planetary installation | 10 grids within 15 km | 2 / 25 km / 900 s | after 3600 s with the nearest player >50 km away; the timer resets when a player comes back |
 | Boss encounter | 6 grids within 25 km | none | when the nearest player is >50 km away |
 
-Octahedron turns this cleanup off: `UseCleanupSettings` is false for every spawn type, including the "other NPCs" that reinforcements and disowned spawns become, and `DespawnDistanceFromPlayer` of space cargo ships is 10⁹ m, so the legacy cargo ship watcher never despawns a ship at the end of its path (it does when the nearest player is farther than that). NPC grids stay in the world; on the cluster their partitions go offline when no player is near. Despawns written into the mods' AI behavior profiles still happen, since no MES setting reaches them: an AI cargo ship at the end of its path with no player within 1.2 km (`Behavior/CargoShip.cs`), retreating ships, and the profiles' own player-distance and no-target timers (`Behavior/Subsystems/DespawnSystem.cs`). Checked in an offline client: MES loads all 7 config files.
+Octahedron replaces these with one rule for every spawn type, including the "other NPCs" that reinforcements and disowned spawns become: a grid is removed after 900 s with no player within 15 km, and a player within 15 km resets the timer (`CleanupDistanceStartsTimer`, `CleanupResetTimerWithinDistance`, `CleanupUnpoweredOverride` off). On the cluster "player" means a player on the grid's own node (section 5). The legacy cargo ship watcher keeps its default: a ship at the end of its path is despawned when the nearest player is farther than 1 km. Despawns written into the mods' AI behavior profiles happen as well, since no MES setting reaches them: an AI cargo ship at the end of its path with no player within 1.2 km (`Behavior/CargoShip.cs`), retreating ships, and the profiles' own player-distance and no-target timers (`Behavior/Subsystems/DespawnSystem.cs`).
+
+The first version of the world turned this cleanup off (`UseCleanupSettings` false everywhere and the legacy watcher's distance at 10⁹ m), expecting the cluster to take NPC partitions offline instead. That is not enough (DF #1306): on the #1191 run the MES grids grew from 644 to 889 `(NPC-*)` grids in 2.5 h, plus 263 MES prefabs named `XXXX-*`, about 48 % of the cluster's simulation time. Partitions near the trade lanes rarely go offline (awake members, pilots near), and the grids that do go offline drop out of every MES count, so MES spawns more in their place.
 
 The defaults, for reference: `CleanupUnpoweredOverride` is on for every type but random encounters. The code (`Watchers/Cleaning.cs`) applies the `CleanupUnpowered*` values (25 km / 900 s, or 20 km for space cargo ships) to powered grids and the normal ones to unpowered grids, which looks inverted. Cleanup only removes MES-spawned grids (`OnlyCleanNpcsFromMes`), so the stations are safe from it, and it skips groups tagged `IgnoreCleanupRules`.
 
 ### Global settings in `Config-General.xml`
 
-- `UseMaxNpcGrids` = false: no global NPC limit (`MaxGlobalNpcGrids` = 50 is not used). Only the per-area caps above apply.
+- `UseMaxNpcGrids` = true, `MaxGlobalNpcGrids` = 100 (default off and 50): no spawn while 100 or more NPC-majority grids are loaded (`World/NpcManager.cs`, `GetGlobalNpcCount`). MES-spawned and other NPC-owned grids count; unowned debris does not. On the cluster this is a cap per node (section 5).
 - `UseModIdSelectionForSpawning` and `UseWeightedModIdSelection` = true. For each attempt MES collects the eligible groups, picks a mod first, weighted 1 if it has ≤10 eligible groups, 2 for 11–19 and 3 for ≥20, then a group in that mod weighted by the group's `Frequency` (`Spawning/SpawnGroupCollection.cs`, `SelectSpawnGroupSublist`). A group's chance tags (`SpaceCargoShipChance` and the like) are rolled while collecting, so a 20 % group is in the pool one attempt in five.
 - `ThreatReductionHandicap` = 0, `Difficulty` = 1. No group in these mods uses the difficulty tags.
 - Combat phases are off (`Config-Combat.xml`), so the 78 groups tagged `UseCombatPhase` spawn normally.
@@ -211,9 +217,9 @@ What this means for the theme:
 
 1. **Vanilla planetary encounters are on.** Without mod 3796756949 (Suppress Vanilla Planetary Installations) MES spawns 28 base-game outposts on EarthLike and 13 on the Moon, including military watchtowers and pirate strongholds owned by the economy and pirate factions. They are 20–28 % of all small installations. Add the mod, or blacklist them in `Config-PlanetaryInstallations.xml`, if we don't want them.
 2. **Hubs fill up with NPCs.** The space cargo timer runs for every player parked at a station. A busy station can get 4 cargo ships per 15 min within 10 km, up to 15 alive within 15 km, on paths 2–4 km from the players there. MES keeps spawn starts ≥1 km (cargo), ≥2 km (boss signal), ≥2.5 km (installation) or ≥3 km (encounter) from any grid, so nothing spawns inside the 250 m station safe zones, but paths and AI-driven ships can fly through them, and MES's placement code never looks at safe zones. Hostile ships right outside a station's zone meet new players there.
-3. **Trade Lanes trigger random encounters.** A lane trip covers far more than 15 km, so the next 60 s check after arriving is eligible: a static encounter 8–12 km from the arrival station. These are only cleaned up after an hour with nobody within 50 km, which never happens around a used station, so they pile up to the cap of 10 grids within 25 km around each busy station.
-4. **No global NPC limit.** `UseMaxNpcGrids` is off. With many players the NPC grid count is bounded only by the per-area caps. Worth turning on with a `MaxGlobalNpcGrids` the cluster can carry. How MES counts and cleans up on a cluster where each node sees only its own players and grids was not checked.
-5. **Some installations are never removed.** 27 installation groups carry `IgnoreCleanupRules` (18 Abandoned Settlements, 9 Wasteland), and the settlement parts their behaviors spawn carry it too. They accumulate on EarthLike and the Moon for good. The powered/unpowered cleanup values also look swapped in MES (section 1).
+3. **Trade Lanes trigger random encounters.** A lane trip covers far more than 15 km, so the next 60 s check after arriving is eligible: a static encounter 8–12 km from the arrival station. With MES's default cleanup (an hour with nobody within 50 km, which never happens around a used station) they would pile up to the cap of 10 grids within 25 km around each busy station. Our cleanup (15 km, 900 s) removes them a quarter of an hour after the players leave.
+4. **Global NPC limit.** Was off; now `UseMaxNpcGrids` with 100 grids, which on the cluster is per node (section 5).
+5. **Some installations are never removed.** 27 installation groups carry `IgnoreCleanupRules` (18 Abandoned Settlements, 9 Wasteland), and the settlement parts their behaviors spawn carry it too. They accumulate on EarthLike and the Moon for good. The powered/unpowered cleanup values also look swapped in MES (section 1); our files turn `CleanupUnpoweredOverride` off, so only the normal values apply.
 6. **High-threat spawns at hubs.** Bosses need 1500 within 15 km, which a few parked fleets at a station reach. Boss signals then go to every player within 25 km, new ones included.
 7. **Xenvakian Final Boss can end the mod early.** Once unlocked, any spot with threat ≥700 within 5 km in space can get it, and destroying it stops Xenvakian spawns for the world.
 8. **Suppressor blocks.** 18 Weyland-Yutani bases on EarthLike get MES drill suppressors. Of the Xenvakian groups, 36 get jetpack suppressors, 8 drill suppressors, and the Final Boss also a Nanobot suppressor. That cuts into practical planet mining near those NPCs; the Nanobot suppressor does nothing, since the world has no Nanobot mod.
@@ -223,6 +229,30 @@ What this means for the theme:
 12. **Abandoned Mining Facility brings its own voxels** (`RemoveVoxelsIfGridRemoved`). Its ores were not checked against the world's ore rules (uranium on the Moon only, platinum in asteroids only). It is ~1 % of random encounters.
 
 Checked and fine: space spawns cannot start inside EarthLike's or the Moon's gravity (cargo paths that touch the gravity sphere are rejected, encounter points are moved to the other side), so the stations and the ring 17 km outside EarthLike's gravity edge only get space content, and nothing spawns on the planets because of a player at the stations.
+
+## 5. MES on a cluster
+
+Worked out on 2026-10-21 for DF #1306 from the MES 2.74 sources as deployed on the #1191 cluster, and the cluster's player handling. Not yet measured with these settings: the check is a census of the NPC grids over 2 h at a fixed pilot count.
+
+Every cluster node and the World Authority run their own copy of MES with the same config files (each node has its own world storage). MES keeps all its state in memory per process, so on the cluster it is per node:
+
+| MES state | Where (MES sources) | On the cluster |
+|---|---|---|
+| Players it spawns for and measures distances to | `Entities/PlayerManager.cs` (`MyAPIGateway.Players.GetPlayers`) | only the players attached to this node; the cluster shows other nodes' players to clients only |
+| A player's spawn timers and cooldowns | `Spawning/WatchedPlayer.cs` | new timers on every node the player enters (hence `FirstSpawnTime` = 780 s); a node keeps the old ones after the player leaves |
+| NPC grids it knows: per-area caps, global cap | `World/NpcManager.cs` (`ActiveNpcs`, `GetAreaNpcCount`, `GetGlobalNpcCount`) | only the grids loaded on this node; grids on other nodes and in offline partitions are not counted |
+| Spawn timeouts (spawns per radius per time) | `World/TimeoutManagement.cs` | only this node's spawns |
+| Cleanup timers | `Watchers/GridCleanupData.cs` | per node; a grid that moves to another node starts from 0 there (the saved copy is the World Authority's, which holds no grids) |
+| NPC data of a grid (spawn type, spawn time, flags) | `World/NpcData.cs`, in the grid's mod storage | travels with the grid, so a handed-over grid is still an MES NPC on its new node |
+
+What follows from it:
+
+- **Spawning is per player, but the caps bind less.** A player is on one node at a time, so only that node spawns for them. The caps around the player count only that node's grids, while the NPC grids along a lane are spread over several nodes and some are offline, so the per-area caps rarely stop a spawn. That is why `UseMaxNpcGrids` is on: 100 NPC-majority grids per node, about 600 on the 6 serving nodes.
+- **Cleanup measures from the grid's node.** The nearest player MES sees is the nearest one on the grid's node. That errs toward removal when the real nearest player is on another node, which is harmless at 15 km: the cluster keeps partitions within 4 km of each other on one node (sync distance 3 km plus a 1 km margin), and no client renders a grid 15 km away (at most an antenna marker on the HUD disappears, as on one server). A node with no player at all never runs the timer, so its NPC grids stay until a player comes or their partition goes offline.
+- **Cleanup timers restart after a handover.** A grid that changes node waits up to 900 s again. Grids far from players rarely change node, so this delays the cleanup but does not stop it.
+- **Offline partitions keep their NPC grids.** An offline partition is closed on every node, so MES neither counts nor cleans its grids. They cost no simulation time while offline and come back when a player gets within 5 km; once that player leaves again, the cleanup rule applies to them.
+
+What only a cluster-aware MES can do (cluster-wide caps, timeouts and nearest player, through the cluster's mod channel and position registry; MES is class D in the cluster's mod compatibility classes) is a separate DF ticket.
 
 ## Appendix A: timer-spawned groups
 
