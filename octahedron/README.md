@@ -105,18 +105,22 @@ downloaded.
   The entries name no safe zone (`SafeZoneEntityId` 0); with one, the economy
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
-- Places 6 Trade Lanes: one along each edge of the equatorial square
-  (Alpha-Beta-Gamma-Delta), and from Moon Station to Delta and to North
-  Station. South Station has no lane. The North-Moon lane passes 138 km from
-  EarthLike's center, clear of its gravity, and 15 km from the Moon's; no two
-  lanes come closer than 1.4 km, and only near a station they share. A lane
-  goes both ways: each end is an entry toward the other. Every end is a
+- Places 10 Trade Lanes: one along each edge of the equatorial square
+  (Alpha-Beta-Gamma-Delta), from Moon Station to Delta and to North Station,
+  and from Beta and Delta Station to both North and South Station. The
+  North-Moon lane passes 138 km from EarthLike's center, clear of its gravity,
+  and 15 km from the Moon's; the lanes between two EarthLike stations pass
+  99 km from its center. No two lanes come closer than 0.8 km, and only near a
+  station they share; there the closest gates of two lanes are 369 m apart. A
+  lane goes both ways: each end is an entry toward the other. Every end is a
   one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
   Delta and North Station for the Moon lanes, clear of their other lane ends),
-  indestructible and not editable. The ends have no safe zone; the lane's rings
-  have no physics. The two rings of a tunnel sit side by side, level with
-  EarthLike's equator, but one above the other on the North-Moon lane, so
-  pilots can tell the Moon's two lanes apart.
+  indestructible and not editable. Its Custom Data ends with a Target GPS at
+  the other end's computer, so a computer the cluster loads before its partner
+  still knows where its lane leads. The ends have no safe zone; the lane's
+  rings have no physics. The two rings of a tunnel sit side by side, level with
+  the equator, on the lanes of the equatorial square, and one above the other
+  on all others (to the poles and the Moon).
 - Places 2,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays
