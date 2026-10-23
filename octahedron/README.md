@@ -195,8 +195,8 @@ game update that changes the planet or voxel material definitions or maps.
   (SE1-0126). The Hangar plugin parks ships instead.
 - PCU limits are per player, 1,000,000 each. The game gives every player
   `TotalPCU / MaxPlayers` and a dedicated server admits at most `MaxPlayers`
-  players, so the world sets `MaxPlayers` 100 (`MAX_PLAYERS`) and `TotalPCU`
-  100,000,000. The scenario's `MaxPlayers` 4 would have meant 250,000 PCU each and
+  players, so the world sets `MaxPlayers` 255 (`MAX_PLAYERS`) and `TotalPCU`
+  255,000,000. The scenario's `MaxPlayers` 4 would have meant 250,000 PCU each and
   4 players. On a cluster each node counts the same, and the cluster plugin's PCU
   ledger adds up a player's PCU over the nodes; grids in Hangar are not in the
   world, so they don't count. On the server the Octahedron plugin also checks

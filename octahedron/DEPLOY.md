@@ -26,8 +26,8 @@ These are not done yet. Each one changes what gets deployed.
      after a voxel journal compaction, the edits to the pre-placed asteroids are
      lost on a fresh node, and a restarted node stops on a journal gap.
 3. **`MaxPlayers` and `TotalPCU`.** The game gives each player
-   `TotalPCU / MaxPlayers` PCU. The world sets `MaxPlayers` 100 and `TotalPCU`
-   100,000,000, so 1,000,000 PCU each. For another player cap, change
+   `TotalPCU / MaxPlayers` PCU. The world sets `MaxPlayers` 255 and `TotalPCU`
+   255,000,000, so 1,000,000 PCU each. For another player cap, change
    `MAX_PLAYERS` in `build_world.py` and set both values in the Quasar config
    profile to match.
 4. **The Octahedron plugin (`plugin/`, SE1-0133).** It isn't on the hub.
