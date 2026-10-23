@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using PluginSdk.Commands;
+using Sandbox.Game.Entities.Character;
+using Sandbox.Game.World;
 using VRage.Game.ModAPI;
 
 namespace ServerPlugin;
@@ -44,6 +47,52 @@ public sealed class Commands : CommandModule
             Context.Caller.IdentityId,
             table.Length == 0 ? null : string.Join(" ", table)
         );
+
+    [Command(
+        "encounters",
+        "Lists the encounters that could spawn where you are",
+        "!oct encounters [type count]: with a type and a count, the share of each mod in that "
+            + "many spawn attempts of the type where you are, nothing spawned."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public IEnumerable<string> EncounterList(string type = null, int count = 1000)
+    {
+        if (CallerCharacter() is not { } character)
+            return ["Spawn first."];
+        var position = character.PositionComp.GetPosition();
+        if (type == null)
+            return Encounters.Describe(position);
+        return Enum.TryParse<EncounterType>(type, out var kind)
+            ? Encounters.Sample(kind, position, count)
+            : [$"Unknown encounter type {type}."];
+    }
+
+    [Command(
+        "encounter",
+        "Spawns an encounter near you, as the spawner would, without its caps and timers",
+        "!oct encounter <type> [spawn group]: type is SpaceCargoShip, SpaceRandomEncounter, "
+            + "AtmosphericCargoShip, GravityCargoShip, PlanetaryInstallation, BossEncounterSpace or BossEncounterAtmo."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Encounter(string type, params string[] group)
+    {
+        if (CallerCharacter() is not { } character)
+            return "Spawn first.";
+        if (!Enum.TryParse<EncounterType>(type, out var kind))
+            return $"Unknown encounter type {type}.";
+        var name = group.Length == 0 ? null : string.Join(" ", group);
+        return Encounters.TrySpawn(
+            kind,
+            Spot.At(character.PositionComp.GetPosition()),
+            name,
+            force: true
+        )
+            ? "Encounter spawned, see the server log."
+            : "No encounter could spawn here.";
+    }
+
+    private MyCharacter CallerCharacter() =>
+        MySession.Static.Players.TryGetIdentity(Context.Caller.IdentityId)?.Character;
 
     [Command("holograms", "Fits the blueprints in the station hologram tables to the tables again")]
     [Permission(MyPromoteLevel.Admin)]

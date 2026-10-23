@@ -264,6 +264,85 @@ so the rule acts there.
 `!oct drop` (admin) spawns a personal drop for the caller the way the game's
 timer does, `!oct drop strong` a strong one, so the rule can be checked by hand.
 
+### Encounters
+
+With `EncountersEnabled` on, the plugin spawns the NPC encounters that Modular
+Encounters Systems (MES) and its 12 encounter mods spawned in Octahedron, by MES's
+rules, from blueprints shipped in `Encounters/`. The server spawns the grids and
+clients get them like any other grid, so players need none of those mods. The world
+lists no MES mod any more (ticket 1447). `../MES.md` describes the rules as MES
+applied them; the plugin follows that document, with the differences listed below.
+
+`Encounters/` is written by `tools/export_encounters.py` from the mods in the local
+Workshop folder: `SpawnGroups.xml` holds the 361 spawn groups the MES timers could
+spawn, with their spawn conditions and prefabs, `Blueprints/` one gzipped blueprint
+per prefab (985), and `Factions.xml` the mods' 11 NPC factions, which
+`../build_world.py` writes into the world. In the blueprints, MES's own blocks are
+swapped for vanilla ones (its reactors, ion thrusters and remote controls) or left
+out (its research, suit upgrade and shipyard terminals). Rerun the script after an
+encounter mod changes.
+
+What it does, as MES does it with its default settings and Octahedron's:
+
+- Each online player has timers, stepped every 10 seconds. The player's place picks
+  the spawn type: in space, space cargo ships (300 s after joining, then every
+  780–1020 s), random encounters (checked every 60 s once the player is 15 km from
+  the last check, 300 s apart) and space bosses; in gravity up to 6 km above the
+  ground, atmospheric cargo ships, planetary installations (checked every 60 s once
+  the player is 6 km from the last one, 300 s apart) and planet bosses; higher in
+  gravity, gravity cargo ships. Bosses are tried every 1200 s. Lunar cargo ships stay
+  off.
+- A spawn group is eligible when one of its conditions allows the spawn type and the
+  place: planet whitelist and blacklist, air for the groups that need it, maximum
+  gravity, the threat score of the player grids around, the player's reputation with
+  the owner faction, world variables (the Xenvakian `Mod-Enable`), unique encounters
+  that spawned before, the terrain type for the base game's outposts, and the
+  distance to the Trade Operators Coalition's stations. Its chance tag is rolled.
+  The owner faction must exist in the world.
+- The spawn picks a mod first, weighted 1, 2 or 3 by its number of eligible groups,
+  then one of its groups weighted by frequency. Installations first roll their size:
+  small, medium at 15 % plus 15 % per small one on the planet, large at 5 % plus
+  15 % per medium one.
+- Placement, caps and timeouts are MES's: cargo ship paths 10–15 km long past the
+  player, outside gravity, clear of grids and asteroids; random encounters 8–12 km
+  away; installations 3–6 km away (farther for medium and large ones) on ground
+  level within 2.5 m; at most 15 space cargo ships within 15 km, 10 encounters
+  within 25 km, 10 installations within 15 km and 2 planetary cargo ships within
+  20 km; at most 4, 2, 2 and 2 spawns of a type within 900 s around a place.
+- A boss starts as a red GPS signal 6–8 km away for every player within 25 km; the
+  boss spawns 2.5–4 km from it once a player comes within 300 m. The signal goes
+  after 1200 s.
+- The grids go through the game's prefab spawner with the options MES uses, owned
+  by the faction's founder. The plugin marks each spawned grid in its storage, which
+  is what the caps count.
+
+What MES did that the plugin doesn't:
+
+- MES's AI behaviors (RivalAI): the NPC ships' combat, patrols, retreats, chat,
+  reinforcements and despawn timers, the Abandoned Settlements spawner grids that
+  build a settlement around them, and the groups only other NPCs spawn. A cargo ship
+  flies to the end of its path on the game's autopilot when it has a remote control,
+  else it drifts there with its dampeners off, and leaves once nobody is within
+  1.2 km of it there. Turrets fire on their own as in the base game.
+- MES's grid changes at spawn: weapon randomization, block replacement, armor to
+  modules, damaged wrecks, NPC thrusters, faction colors and names. The grids
+  spawn as their prefabs are.
+- The Xenvakian probes set `Mod-Enable` when they spawn; the Final Boss doesn't clear
+  it when destroyed.
+- Counters live on each node: the timers, timeouts and boss signals start over
+  after a restart. Unique encounters and the installation counters are world
+  variables and stay.
+
+`!oct encounters` (admin) shows the place the caller stands in, the threat score
+there, the number of eligible groups per spawn type and the encounters spawned
+nearby. `!oct encounters <type> [count]` makes that many spawn attempts of a type
+there without spawning anything and lists each mod's share, to compare with the
+shares in `../MES.md`. `!oct encounter <type> [spawn group]` (admin) spawns one
+there without caps, timeouts or chance rolls.
+
+On a cluster each node spawns for the players it simulates and counts the
+encounters it has loaded.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a
@@ -311,6 +390,11 @@ recompiles when the sources change.
 checkout's `config/octahedron.cfg` on every node of a cluster run by the
 cluster CLI.
 
+The manifest names `Encounters` as the plugin's asset folder, and Magnetar tells the
+plugin where it is: for a dev folder, the checkout's own `Encounters`. A Quasar
+cluster's preparation (`-prepareManaged`) exports it with the build.
+`OCTAHEDRON_ENCOUNTERS`, when set, names the folder instead.
+
 ## Loading it on a cluster
 
 A Quasar cluster loads it as a dev folder too, with Magnetar 2.4.3.4 or later.
@@ -340,7 +424,8 @@ simulates no grids:
 
 ```bash
 CLUSTER_EXTRA_PLUGINS=node:/path/to/out/Octahedron python3 cli/cluster.py \
-    --node-env OCTAHEDRON_CONFIG=/path/to/worlds/octahedron/config/octahedron.cfg <command>
+    --node-env OCTAHEDRON_CONFIG=/path/to/worlds/octahedron/config/octahedron.cfg \
+    --node-env OCTAHEDRON_ENCOUNTERS=/path/to/worlds/octahedron/plugin/Encounters <command>
 ```
 
 ## Tests
@@ -375,6 +460,10 @@ with the zones holding every test grid from the start, and off.
 and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
+`tests/test_encounters.py` checks the encounters with a client that has no mods:
+the timer's first space cargo ship, each spawn type spawned by command in space, on
+EarthLike, high above it and on the Moon, the client seeing the spawned grids, and
+the mods' shares of 2,000 spawn attempts per type and place.
 `tests/test_hologram.py` takes screenshots of fitted holograms, a blueprint with
 a cockpit and one without, from the side, the front and above, on a bench of two
 tables in open space; it needs a rendering client.
