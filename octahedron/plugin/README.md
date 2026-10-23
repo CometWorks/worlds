@@ -245,6 +245,25 @@ The order is kept in the world, in the projector's custom data, so it goes on
 after a restart. Every 10 seconds the node that simulates a shipyard checks it,
 so on a cluster the node owning the station's partition runs the order.
 
+### Container drops
+
+The game's drop pods (world setting `EnableContainerDrops`) come in two kinds.
+Each drop a player is due is a personal "Unknown Signal" (`Container_MK-1` to
+`26`) only that player sees, or, in multiplayer with another player online, a
+"Strong Unknown Signal" (`LargeContainer_Mk-1` to `15`) everyone sees, with a 5 %
+chance. The personal ones spawn wherever the players fly, and on a cluster they
+chain partitions together.
+
+With `ContainerDropsPersonal` off (the default) the game still rolls the kind,
+but a personal drop finds no spawn position, so the game counts it as not
+spawned and logs nothing else; the plugin logs `Personal container drop
+(Unknown Signal) refused`. Strong drops are left alone. On a cluster the World
+Authority decides who is due a drop and the node that owns the player spawns it,
+so the rule acts there.
+
+`!oct drop` (admin) spawns a personal drop for the caller the way the game's
+timer does, `!oct drop strong` a strong one, so the rule can be checked by hand.
+
 ## Loading it on a Magnetar server
 
 Magnetar compiles the plugin from source at startup when it is registered as a

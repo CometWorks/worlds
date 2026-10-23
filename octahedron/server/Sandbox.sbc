@@ -196,7 +196,7 @@
     <EnableDrones>false</EnableDrones>
     <GlobalEncounterCap>0</GlobalEncounterCap>
     <EnablePlanetaryEncounters>false</EnablePlanetaryEncounters>
-    <EnableContainerDrops>false</EnableContainerDrops>
+    <EnableContainerDrops>true</EnableContainerDrops>
     <LimitBlocksBy>Tag</LimitBlocksBy>
     <GridStorageMaxPerPlayer>0</GridStorageMaxPerPlayer>
   </Settings>

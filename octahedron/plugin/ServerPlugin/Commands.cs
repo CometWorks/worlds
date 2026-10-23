@@ -48,4 +48,14 @@ public sealed class Commands : CommandModule
     [Command("holograms", "Fits the blueprints in the station hologram tables to the tables again")]
     [Permission(MyPromoteLevel.Admin)]
     public string Holograms() => $"Fitted {TableHologram.FitAll()} hologram tables.";
+
+    [Command(
+        "drop",
+        "Spawns a container drop for you, as the game's drop timer does",
+        "!oct drop [strong]: a personal Unknown Signal, or with strong a Strong Unknown Signal. "
+            + "ContainerDropsPersonal off refuses the personal one."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Drop(string kind = "") =>
+        ContainerDrops.Spawn(Context.Caller.IdentityId, kind == "strong");
 }
