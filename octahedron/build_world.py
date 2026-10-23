@@ -200,6 +200,9 @@ SETTINGS = {
     "EnableDrones": "false",
     "GlobalEncounterCap": 0,
     "EnablePlanetaryEncounters": "false",
+    # No vanilla drop pods ('Unknown Signal'): each player gets one every 5-20 min, the
+    # load-test pilots never collect them, and they pile up along the lanes (#1378)
+    "EnableContainerDrops": "false",
     # Our stations trade; the game's own trade factions and their stations stay out
     # (GenerateFactionsOnStart false in the economy component, see add_trade_stations)
     "EnableEconomy": "true",
