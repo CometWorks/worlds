@@ -50,6 +50,12 @@ DS_CONFIG_TEMPLATE = (
     HOME / ".config/SpaceEngineersDedicated/SpaceEngineers-Dedicated.cfg"
 )
 PULSAR_TEMPLATE = Path(os.environ.get("OCT_PULSAR_TEMPLATE", HOME / ".config/Pulsar"))
+# Given to the client, so it doesn't depend on Pulsar finding the game through Steam
+BIN64 = Path(
+    os.environ.get(
+        "OCT_BIN64", HOME / ".steam/steam/steamapps/common/SpaceEngineers/Bin64"
+    )
+)
 
 sys.path.insert(0, str(REMOTE_REPO / "skills" / "se-remote"))
 from se_remote import RemoteAPI  # noqa: E402
@@ -503,7 +509,7 @@ def start_client(timeout: float = 2400.0, render: bool = False) -> RemoteAPI:
         [
             str(LAUNCHER),
             "-multiInstance", "-lazySteam", "-noprompt", "-noupdate", "-nosplash", "-stablelogs",
-            "--no-steam", "--client-id", str(CLIENT_ID), "--client-name", CLIENT_NAME,
+            "-bin64", str(BIN64), "--no-steam", "--client-id", str(CLIENT_ID), "--client-name", CLIENT_NAME,
             "-appdata", str(APPDATA),
             "--quality", "minimal", "--no-audio", "--headless",
             *(["--resolution", "1280x720"] if render else ["--resolution", "640x480", "--no-render"]),

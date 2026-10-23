@@ -40,6 +40,7 @@ public class Plugin : IPlugin
     private readonly RefillContainers refillContainers = new();
     private readonly WorldEdge worldEdge = new();
     private bool failed;
+    private bool encountersFailed;
 
     public void Init(object gameInstance)
     {
@@ -47,6 +48,9 @@ public class Plugin : IPlugin
         new Harmony(Name).PatchAll(Assembly.GetExecutingAssembly());
         ServerCommands.Register(Assembly.GetExecutingAssembly(), typeof(Commands));
     }
+
+    // Called by Magnetar with the manifest's AssetFolder, the Encounters folder
+    public void LoadAssets(string folder) => EncounterData.SetFolder(folder);
 
     public static void LoadConfig()
     {
@@ -71,6 +75,19 @@ public class Plugin : IPlugin
         {
             Log.Critical("Update failed, the plugin stops", e);
             failed = true;
+        }
+
+        // Encounters stop on their own, so a broken spawn leaves the other rules running
+        if (encountersFailed)
+            return;
+        try
+        {
+            Encounters.Update();
+        }
+        catch (Exception e)
+        {
+            Log.Critical("Encounter spawning failed and stops", e);
+            encountersFailed = true;
         }
     }
 

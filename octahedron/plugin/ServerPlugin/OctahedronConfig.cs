@@ -14,6 +14,7 @@ namespace ServerPlugin;
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("drops", caption: "Container Drops")]
+[Section("encounters", caption: "Encounters")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -317,6 +318,17 @@ public class OctahedronConfig : PluginConfig
         Parent = "drops"
     )]
     public bool ContainerDropsPersonal
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [BoolOption(
+        "Spawn the NPC encounters Modular Encounters Systems spawned, with its rules, from the plugin's own blueprints. "
+            + "Off when the world still runs MES.",
+        Parent = "encounters"
+    )]
+    public bool EncountersEnabled
     {
         get;
         set => SetField(ref field, value);

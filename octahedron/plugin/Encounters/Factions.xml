@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Written by tools/export_encounters.py from the MES mods; do not edit -->
+<Factions>
+  <Faction Tag="IMBER" Name="Imber Corporation" Founder="The Director" DefaultRelation="Enemies" Mod="973526550">The Imber Corporation is a large and well established organization, having a presence on many planets and in outer space. They have been criticized for their many territory expansion initiatives, which have forced other smaller colonies from areas they once resided within. They considers all other factions as a potential threat, and aggressively defends their property if provoked.</Faction>
+  <Faction Tag="INCON" Name="Independent Contractor" Founder="Contractors" DefaultRelation="Enemies" Mod="445996030">Ships belonging to Independent Contractors follow no particular style or theme, since the pilots often own and operate these vessels. Contractors can be found on many planets and in outer space. Many of these contractors do not trust other factions and will become defensive if approached.</Faction>
+  <Faction Tag="PARALLAX" Name="Parallax Concepts" Founder="The Chairman" DefaultRelation="Enemies" Mod="1135484957">Parallax Concepts is a mid-sized organization that is established on several planets and in outer space. While they do not have large ambitions to conquer and expand, they don't respond kindly to those that are not affiliated with their faction and will attack if provoked.</Faction>
+  <Faction Tag="QARC" Name="Qi Asset Recovery Company" Founder="Qi Inc" DefaultRelation="Enemies" Mod="2310821218"></Faction>
+  <Faction Tag="SCRP" Name="The scrap void" Founder="VOID" DefaultRelation="Enemies" Mod="2539299261"></Faction>
+  <Faction Tag="SPRTE" Name="Space Pirates Enhanced" Founder="Space-Pirates" DefaultRelation="Enemies" Mod="2609155402">SPRT Enhanced</Faction>
+  <Faction Tag="THIE" Name="Terran Heavy Industries and Exploration" Founder="Waipa" DefaultRelation="Neutral" Mod="2615864222">Don't let this factions name fool you, they may be neutral but will look poorly upon any would-be pirates.</Faction>
+  <Faction Tag="TRADE" Name="Trade Operators Coalition" Founder="The Board" DefaultRelation="Neutral" Mod="2966429095">The Trade Operators Coalition is a collective of trading organizations that have combined their resources and various connections to become one of the dominate economic forces found across several systems.</Faction>
+  <Faction Tag="TXVE" Name="The Xenvakian Empire" Founder="Xenvakian Highlord" DefaultRelation="Enemies" Mod="2470950657">This faction starts out relatively passive. Leave them alone and they will leave you alone, annoy them repeatedly and they will up their aggressiveness in response.</Faction>
+  <Faction Tag="WLYC" Name="Weyland Yutani Corporation" Founder="Spaceman Spiff" DefaultRelation="Enemies" Mod="2390106048">This faction does not appreciate any intruders to it's territory and will defend it.</Faction>
+  <Faction Tag="WRECKS" Name="Wrecks" Founder="Wrecker" DefaultRelation="Enemies" Mod="2802625870"></Faction>
+</Factions>

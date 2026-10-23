@@ -10,11 +10,11 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
-| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`) |
+| `config/` | inputs of the world: Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
 | `ORES.md` | ore statistics of `server/` |
-| `MES.md` | the MES settings and what spawns where |
+| `MES.md` | the encounter rules MES applied, which the Octahedron plugin now follows, and what spawns where |
 | `DEPLOY.md` | how to deploy the cluster with Quasar |
 
 ## One seed per world
@@ -55,7 +55,10 @@ downloaded.
 
 - Removes every planet but EarthLike and the Moon.
 - Applies the world settings and the mod list (`SETTINGS`, `BLOCK_LIMITS` and
-  `MODS` in the script, MES and its encounter mods from `config/mes-mods.xml`).
+  `MODS` in the script). No Modular Encounters Systems or encounter mod: the
+  Octahedron plugin spawns the encounters (`plugin/README.md`, "Encounters"), so
+  players don't download them. The encounter mods' NPC factions go into the world
+  from `plugin/Encounters/Factions.xml`.
 - Places the 6 stations of the octahedron 80 km above EarthLike, over the poles
   and on the equator, and one 15 km from the Moon's center, just outside its
   gravity (12.3 km), between the directions to Delta and Alpha Station. The 6
@@ -140,9 +143,8 @@ downloaded.
   ores. The ice ones are the largest plain vanilla asteroid shape
   (`SuperRock_001`, 1024 m) filled with ice. The game's own procedural
   asteroids are off (`ProceduralDensity` = 0).
-- Writes the mod configs into the world's `Storage` folder: Relative Top Speed
-  (`config/relative-top-speed.xml`) and MES (`config/storage`: no lunar cargo
-  ships, and no cleanup, so NPC grids stay; see `MES.md`).
+- Writes the Relative Top Speed config (`config/relative-top-speed.xml`) into the
+  world's `Storage` folder.
 
 `server/` is the script's output as is, never loaded in a game: the first load
 converts it to the binary format and stocks the stores. It
