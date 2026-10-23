@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Xml.Serialization;
 using HarmonyLib;
 using Sandbox.Definitions;
@@ -48,6 +49,10 @@ public class EncounterGroup
 
     [XmlAttribute]
     public bool EraseScripts { get; set; }
+
+    // MES never cleans these up (Abandoned Settlements, Wasteland outposts)
+    [XmlAttribute]
+    public bool IgnoreCleanupRules { get; set; }
 
     [XmlElement("Persistent")]
     public EncounterCondition Persistent { get; set; }
@@ -283,6 +288,11 @@ internal static class EncounterData
 
     public static List<EncounterGroup> Groups { get; private set; } = new();
 
+    private static Dictionary<string, EncounterGroup> ByName = new();
+
+    public static EncounterGroup Group(string name) =>
+        name != null && ByName.TryGetValue(name, out var group) ? group : null;
+
     private static string folder;
 
     // From Magnetar's asset folder (Octahedron.xml), else OCTAHEDRON_ENCOUNTERS
@@ -312,6 +322,7 @@ internal static class EncounterData
                 condition.Init();
         }
         Groups = list.Groups;
+        ByName = Groups.ToDictionary(g => g.Name);
         ClaimStorage();
         Plugin.Log.Info($"Loaded {Groups.Count} encounter spawn groups from {path}");
         return true;

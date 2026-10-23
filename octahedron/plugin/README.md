@@ -293,7 +293,7 @@ proprietary reactors) and 26 of Wasteland Encounters' 82 wrecks.
 What it does, as MES does it with its default settings and Octahedron's:
 
 - Each online player has timers, stepped every 10 seconds. The player's place picks
-  the spawn type: in space, space cargo ships (300 s after joining, then every
+  the spawn type: in space, space cargo ships (780 s after joining, then every
   780–1020 s), random encounters (checked every 60 s once the player is 15 km from
   the last check, 300 s apart) and space bosses; in gravity up to 6 km above the
   ground, atmospheric cargo ships, planetary installations (checked every 60 s once
@@ -316,13 +316,18 @@ What it does, as MES does it with its default settings and Octahedron's:
   away; installations 3–6 km away (farther for medium and large ones) on ground
   level within 2.5 m; at most 15 space cargo ships within 15 km, 10 encounters
   within 25 km, 10 installations within 15 km and 2 planetary cargo ships within
-  20 km; at most 4, 2, 2 and 2 spawns of a type within 900 s around a place.
+  20 km; at most 4, 2, 2 and 2 spawns of a type within 900 s around a place; no
+  spawn at all while the node holds 100 encounter grids.
+- Cleanup: an encounter grid with no player within 15 km for 900 s is removed, and
+  a player coming back within 15 km starts the time over. The groups MES tags
+  `IgnoreCleanupRules` (Abandoned Settlements, some Wasteland outposts) stay.
 - A boss starts as a red GPS signal 6–8 km away for every player within 25 km; the
   boss spawns 2.5–4 km from it once a player comes within 300 m. The signal goes
   after 1200 s.
 - The grids go through the game's prefab spawner with the options MES uses, owned
   by the faction's founder. The plugin marks each spawned grid in its storage, which
-  is what the caps count.
+  is what the caps and the cleanup go by. A removal takes the grid and the encounter
+  grids joined to it by rotors, pistons or hinges, not ships docked to it.
 
 What MES did that the plugin doesn't:
 
@@ -337,8 +342,8 @@ What MES did that the plugin doesn't:
   spawn as their prefabs are.
 - The Xenvakian probes set `Mod-Enable` when they spawn; the Final Boss doesn't clear
   it when destroyed.
-- Counters live on each node: the timers, timeouts and boss signals start over
-  after a restart. Unique encounters and the installation counters are world
+- Counters live on each node: the timers, timeouts, cleanup times and boss signals
+  start over after a restart. Unique encounters and the installation counters are world
   variables and stay.
 
 `!oct encounters` (admin) shows the place the caller stands in, the threat score
@@ -348,8 +353,11 @@ there without spawning anything and lists each mod's share, to compare with the
 shares in `../MES.md`. `!oct encounter <type> [spawn group]` (admin) spawns one
 there without caps, timeouts or chance rolls.
 
-On a cluster each node spawns for the players it simulates and counts the
-encounters it has loaded.
+The 780 s first cargo ship, the 100 grid cap and the cleanup are the settings MES had
+in Octahedron for the cluster (`../MES.md`, "MES on a cluster"). As MES did, each
+node spawns for the players it simulates, and counts and cleans up the encounter
+grids it holds, measuring distance to its own players. A grid's cleanup time starts
+over on a node it moves to.
 
 ## Loading it on a Magnetar server
 

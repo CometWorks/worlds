@@ -1,12 +1,14 @@
 """Checks the encounter spawner on the test server with a client that has no mods: the
-world lists no MES or encounter mod, the timer spawns a space cargo ship after 5 minutes,
+world lists no MES or encounter mod, the timer spawns a space cargo ship after 13 minutes,
 each spawn type spawns where MES would spawn it, the client sees the spawned grids, and
-the mods' shares of spawn attempts per type and place. Prints a summary; the asserts stop
+the mods' shares of spawn attempts per type and place, and the cleanup removes the
+encounter grids once the player is 15 km away for 15 minutes. Prints a summary; the asserts stop
 it at the first rule broken.
 
     uv run --no-project --with httpx python tests/test_encounters.py
 
-OCT_SKIP_TIMER=1 skips the 5 minute wait for the timer's space cargo ship.
+OCT_SKIP_TIMER=1 skips the 13 minute wait for the timer's space cargo ship,
+OCT_SKIP_CLEANUP=1 the 15 minute wait for the cleanup.
 """
 
 from __future__ import annotations
@@ -166,14 +168,14 @@ def main() -> None:
     here(remote)
 
     if not os.environ.get("OCT_SKIP_TIMER"):
-        # The first space cargo attempt is 300 s after the plugin first sees the player
-        while time.monotonic() - joined < 420 and not any(
+        # The first space cargo attempt is 780 s after the plugin first sees the player
+        while time.monotonic() - joined < 900 and not any(
             s[0] == "SpaceCargoShip" for s in spawns()
         ):
             time.sleep(10)
         timed = [s for s in spawns() if s[0] == "SpaceCargoShip"]
         log(f"timer: {timed[:1]} after {time.monotonic() - joined:.0f} s")
-        assert timed, "no space cargo ship within 420 s of joining"
+        assert timed, "no space cargo ship within 900 s of joining"
         summary.append(f"timer: space cargo ship {timed[0][1]} ({timed[0][2]})")
 
     # Space, by Alpha Station's safe zone
@@ -213,6 +215,29 @@ def main() -> None:
     visit(remote, encounter[0])
     rig.ensure_character(remote)
     remote.character_teleport(*station)
+
+    if not os.environ.get("OCT_SKIP_CLEANUP"):
+        # 300 km out in space, far from every encounter: after 900 s each one goes
+        far = (0.0, 300_000.0, 0.0)
+        at(remote, far)
+        log(f"waiting for the cleanup, {len(grids())} encounter grids spawned")
+
+        # Each grid's 900 s start when the player is 15 km from it; wait until a minute
+        # passes without another removal
+        def cleaned():
+            return rig.server_game_log().count("cleaned up, no player within 15 km")
+
+        deadline = time.monotonic() + 1500
+        last, quiet = 0, 0
+        while time.monotonic() < deadline and not (last and quiet >= 6):
+            time.sleep(10)
+            count = cleaned()
+            quiet = quiet + 1 if count == last else 0
+            last = count
+        spawned = len(grids())
+        log(f"cleanup: {last} of {spawned} encounter grids removed")
+        assert last >= spawned // 2, "fewer than half of the encounter grids cleaned up"
+        summary.append(f"cleanup: {last} of {spawned} encounter grids removed")
 
     print("\n=== summary")
     for line in summary:

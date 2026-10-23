@@ -756,63 +756,63 @@
     <Prefab Blueprint="(NPC-PLX) Arrowhead.bp.sbc.gz" X="-150.0" Y="0.0" Z="0.0" Speed="18" />
     <Prefab Blueprint="(NPC-PLX) Arrowhead.bp.sbc.gz" X="150.0" Y="0.0" Z="0.0" Speed="18" />
   </Group>
-  <Group Name="AS2-B0-MoonDropPod" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B0-MoonDropPod" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="0" ThreatMaximum="5" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-MoonDropPod.bp.sbc.gz" X="0.0" Y="1.75" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B0-Respawn" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="50">
+  <Group Name="AS2-B0-Respawn" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="50" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="0" ThreatMaximum="5" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-RespawnPod-Wreckage.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B0-SARSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B0-SARSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="0" ThreatMaximum="5" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-SARRover.bp.sbc.gz" X="0.0" Y="0.5" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B1-MaintenanceSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B1-MaintenanceSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="5" ThreatMaximum="40" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-MaintenanceRover.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B1-SecuritySpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B1-SecuritySpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="5" ThreatMaximum="40" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-SecurityRover.bp.sbc.gz" X="0.0" Y="1.5" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B1-SurveySpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B1-SurveySpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="5" ThreatMaximum="40" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-SurveyRover.bp.sbc.gz" X="0.0" Y="1.2" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B2-CampSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="60">
+  <Group Name="AS2-B2-CampSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="60" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="40" ThreatMaximum="-1" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Bar.bp.sbc.gz" X="0.0" Y="7.0" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B2-ProcessingSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B2-ProcessingSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="40" ThreatMaximum="-1" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Processing-T2.bp.sbc.gz" X="0.0" Y="9.0" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B2-ServicesSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B2-ServicesSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="40" ThreatMaximum="-1" ThreatRange="5000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Workshop-T2.bp.sbc.gz" X="0.0" Y="8.0" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B3-CampSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B3-CampSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Bar.bp.sbc.gz" X="0.0" Y="7.0" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B3-ProcessingSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="10">
+  <Group Name="AS2-B3-ProcessingSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="10" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Processing-T2.bp.sbc.gz" X="0.0" Y="8.5" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B3-ResearchSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="10">
+  <Group Name="AS2-B3-ResearchSpawner" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="10" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Research.bp.sbc.gz" X="0.0" Y="8.25" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B3-TownSpawner-1" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B3-TownSpawner-1" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Store.bp.sbc.gz" X="0.0" Y="6.5" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B3-TownSpawner-2" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B3-TownSpawner-2" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Store.bp.sbc.gz" X="0.0" Y="6.5" Z="0.0" Speed="0.0" />
   </Group>
-  <Group Name="AS2-B3-TownSpawner-3" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40">
+  <Group Name="AS2-B3-TownSpawner-3" Mod="2310821218" ModName="Abandoned Settlements [v2]" Frequency="40" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Small" ThreatMinimum="60" ThreatMaximum="-1" ThreatRange="10000" ForceStaticGrid="true" Faction="QARC" />
     <Prefab Blueprint="AS2-Store.bp.sbc.gz" X="0.0" Y="6.5" Z="0.0" Speed="0.0" />
   </Group>
@@ -1396,11 +1396,11 @@
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] LX-50 Cutter.bp.sbc.gz" X="0.0" Y="3.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] Medium Housing Block" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
+  <Group Name="[NPC Wreck] Medium Housing Block" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
     <Prefab Blueprint="[NPC Wreck] Medium Housing Block.bp.sbc.gz" X="0.0" Y="1.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] Medium Housing Block 2" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
+  <Group Name="[NPC Wreck] Medium Housing Block 2" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
     <Prefab Blueprint="[NPC Wreck] Medium Housing Block 2.bp.sbc.gz" X="0.0" Y="-5.0" Z="0.0" Speed="0" />
   </Group>
@@ -1424,15 +1424,15 @@
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" ForceStaticGrid="true" Faction="SCRP" />
     <Prefab Blueprint="[NPC Wreck] S-600 Ilios.bp.sbc.gz" X="0.0" Y="5.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] Small Housing Block" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
+  <Group Name="[NPC Wreck] Small Housing Block" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
     <Prefab Blueprint="[NPC Wreck] Small Housing Block.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] Tall Housing Block" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
+  <Group Name="[NPC Wreck] Tall Housing Block" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
     <Prefab Blueprint="[NPC Wreck] Tall Housing Block.bp.sbc.gz" X="0.0" Y="2.0" Z="0.0" Speed="0" />
   </Group>
-  <Group Name="[NPC Wreck] Tall Housing Block Damaged" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8">
+  <Group Name="[NPC Wreck] Tall Housing Block Damaged" Mod="2539299261" ModName="Wasteland Encounters V2 Continued" Frequency="8" IgnoreCleanupRules="true">
     <Condition Types="PlanetaryInstallation" InstallationSize="Medium" />
     <Prefab Blueprint="[NPC Wreck] Tall Housing Block Damaged.bp.sbc.gz" X="0.0" Y="0.0" Z="0.0" Speed="0" />
   </Group>

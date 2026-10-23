@@ -579,6 +579,8 @@ def main():
                 attrs["FactionOverride"] = last(t, "FactionOverride")
             if flag(t, "EraseIngameScripts"):
                 attrs["EraseScripts"] = "true"
+            if flag(t, "IgnoreCleanupRules"):
+                attrs["IgnoreCleanupRules"] = "true"
             lines.append(f"  <Group{attributes(attrs)}>")
             if persistent is not None:
                 p = condition(persistent)

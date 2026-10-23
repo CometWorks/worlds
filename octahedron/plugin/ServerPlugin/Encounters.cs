@@ -21,13 +21,22 @@ namespace ServerPlugin;
 // spawn type the player's place allows, the eligible spawn groups (threat score, planet,
 // air, gravity, reputation, world variables, uniqueness), a mod picked by its number of
 // eligible groups and a group by its frequency, then MES's placement, caps and timeouts.
-// Numbers are MES's defaults (Configuration/Config*.cs), with Octahedron's lunar cargo ships
-// off and no cleanup. The grids come from the plugin's own blueprints, so clients need no
-// mods. Each cluster node spawns for the players it simulates.
+// Numbers are MES's defaults (Configuration/Config*.cs) with Octahedron's MES settings: lunar
+// cargo ships off, first cargo ships after 780 s, at most 100 encounter grids per node, and
+// cleanup after 900 s with no player within 15 km. The grids come from the plugin's own
+// blueprints, so clients need no mods. Each cluster node spawns for the players it
+// simulates and counts and cleans up the grids it holds.
 internal static class Encounters
 {
     private const int StepTicks = 600;
     private const double Step = 10;
+
+    // Octahedron's MES settings (MES.md, "MES on a cluster"): a node starts new timers for a
+    // player who comes to it, so the first cargo ship waits as long as the next would
+    private const double FirstCargoShip = 780;
+    private const int MaxGrids = 100;
+    private const double CleanupDistance = 15000;
+    private const double CleanupTime = 900;
 
     // An NPC grid this spawner made, in the grid's storage: "<type>|<group>|<code>"
     public static readonly Guid StorageKey = new("5B0E7C65-7F43-4D59-8B0A-1E2C9A0F2F47");
@@ -41,14 +50,17 @@ internal static class Encounters
         new();
     private static readonly List<BossSignal> Signals = new();
     private static readonly List<(MyCubeGrid Grid, Vector3D End)> Cargo = new();
+
+    // Seconds each encounter grid has been without a player within CleanupDistance
+    private static readonly Dictionary<long, double> Idle = new();
     private static double now;
     private static long tick;
     private static bool loaded;
 
     private sealed class Watched
     {
-        public double SpaceCargo = 300;
-        public double PlanetCargo = 300;
+        public double SpaceCargo = FirstCargoShip;
+        public double PlanetCargo = FirstCargoShip;
         public double Encounter = 60;
         public double Installation = 60;
         public double Boss = 1200;
@@ -84,6 +96,7 @@ internal static class Encounters
         Recent.RemoveAll(r => now - r.Time > 900);
         UpdateCargo();
         UpdateSignals();
+        Cleanup();
 
         var online = new HashSet<long>();
         foreach (var player in MySession.Static.Players.GetOnlinePlayers())
@@ -216,6 +229,8 @@ internal static class Encounters
             : type;
         if (!force)
         {
+            if (Spawned().Count() >= MaxGrids)
+                return false;
             var (cap, capRadius) = Cap(type);
             if (CountSpawned(capKind, spot.Position, capRadius) >= cap)
                 return false;
@@ -668,12 +683,48 @@ internal static class Encounters
             Plugin.Log.Info(
                 $"Encounter cargo ship {grid.DisplayName} reached its path's end and left"
             );
-            foreach (
-                var member in grid.GetGridGroup(GridLinkTypeEnum.Logical)
-                    .GetGrids(new List<IMyCubeGrid>())
-            )
-                ((MyCubeGrid)member).Close();
+            Remove(grid);
         }
+    }
+
+    // MES's cleanup with Octahedron's settings: an encounter grid with no player within 15 km
+    // for 900 s goes; a player coming back within 15 km starts the time over. Groups tagged
+    // IgnoreCleanupRules stay. Each node counts for the grids it simulates, as MES does.
+    private static void Cleanup()
+    {
+        var seen = new HashSet<long>();
+        foreach (var (grid, group) in Marked())
+        {
+            if (!Plugin.Simulated(grid) || EncounterData.Group(group)?.IgnoreCleanupRules == true)
+                continue;
+            seen.Add(grid.EntityId);
+            if (PlayerWithin(grid.PositionComp.GetPosition(), CleanupDistance))
+            {
+                Idle.Remove(grid.EntityId);
+                continue;
+            }
+            var idle = Idle[grid.EntityId] = Idle.GetValueOrDefault(grid.EntityId) + Step;
+            if (idle < CleanupTime)
+                continue;
+            Plugin.Log.Info(
+                $"Encounter grid {grid.EntityId} '{grid.DisplayName}' cleaned up, no player within {CleanupDistance / 1000:F0} km for {CleanupTime:F0} s"
+            );
+            Remove(grid);
+        }
+        foreach (var id in Idle.Keys.Where(k => !seen.Contains(k)).ToList())
+            Idle.Remove(id);
+    }
+
+    // The grid and the encounter grids joined to it by rotors, pistons and hinges; a player's
+    // ship docked by a connector stays
+    private static void Remove(MyCubeGrid grid)
+    {
+        foreach (
+            var member in grid.GetGridGroup(GridLinkTypeEnum.Mechanical)
+                .GetGrids(new List<IMyCubeGrid>())
+        )
+            if (member is MyCubeGrid g && g.Storage?.ContainsKey(StorageKey) == true)
+                g.Close();
     }
 
     private static bool PlayerWithin(Vector3D position, double range) =>
@@ -763,12 +814,24 @@ internal static class Encounters
         Spawned()
             .Count(g => (g.Type & type) != 0 && Vector3D.Distance(g.Position, position) <= radius);
 
+    // The encounter grids loaded here and their spawn group's name
+    private static IEnumerable<(MyCubeGrid Grid, string Group)> Marked()
+    {
+        foreach (var entity in MyEntities.GetEntities())
+            if (
+                entity is MyCubeGrid { MarkedForClose: false } grid
+                && grid.Storage != null
+                && grid.Storage.TryGetValue(StorageKey, out var data)
+            )
+                yield return (grid, data.Split('|').ElementAtOrDefault(1));
+    }
+
     private static IEnumerable<(EncounterType Type, string Code, Vector3D Position)> Spawned()
     {
         foreach (var entity in MyEntities.GetEntities())
         {
             if (
-                entity is not MyCubeGrid grid
+                entity is not MyCubeGrid { MarkedForClose: false } grid
                 || grid.Storage == null
                 || !grid.Storage.TryGetValue(StorageKey, out var data)
             )
