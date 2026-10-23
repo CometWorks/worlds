@@ -37,8 +37,8 @@ SCENARIO = STEAM / "common/SpaceEngineers/Content/CustomWorlds/Star System"
 STATION_BLUEPRINT = STEAM / "workshop/content/244850/3816368704/bp.sbc"
 CONFIG = Path(__file__).parent / "config"
 SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/omni-arc-beam-shipyard.sbc"
-MES_MODS = CONFIG / "mes-mods.xml"
-MES_STORAGE = CONFIG / "storage"
+# The NPC factions of the encounters the Octahedron plugin spawns (plugin/tools/export_encounters.py)
+ENCOUNTER_FACTIONS = Path(__file__).parent / "plugin/Encounters/Factions.xml"
 RELATIVE_TOP_SPEED = CONFIG / "relative-top-speed.xml"
 
 NAME = "Octahedron"
@@ -230,7 +230,7 @@ SETTINGS = {
 # active ones. OmniArcTools is the six OmniArc tool blocks, from the OctahedronOres mod.
 BLOCK_LIMITS = {"OmniArcTools": 4}
 
-# (Workshop id, name), MES and its encounter mods come from mes-mods.xml
+# (Workshop id, name); no MES or encounter mods, the Octahedron plugin spawns the encounters
 MODS = [
     (3415912276, "Skybox: SE1 Alpha Release"),
     (1359618037, "Relative Top Speed"),
@@ -1078,7 +1078,6 @@ def mod_items(ore_mod):
         el(item, "Name", f"{workshop_id}.sbm")
         el(item, "PublishedFileId", workshop_id)
         el(item, "PublishedServiceName", "Steam")
-    mods.extend(ET.parse(MES_MODS).getroot())
     item = el(mods, "ModItem", FriendlyName="OctahedronOres")
     el(item, "Name", f"{ore_mod}.sbm" if ore_mod else "OctahedronOres")
     el(item, "PublishedFileId", ore_mod)
@@ -1105,20 +1104,20 @@ def apply_settings(root, ore_mod):
     root.insert(index, mod_items(ore_mod))
 
 
-def add_npc(checkpoint, ids):
-    """The stations' owner: an NPC identity and its faction."""
+def add_faction(checkpoint, ids, tag, name, description, founder, kind, peace):
+    """An NPC faction and its founder, an NPC identity; peace: accepts every peace request."""
     identity_id, faction_id = ids.new(2), ids.new(3)
     identity = el(checkpoint.find("Identities"), "MyObjectBuilder_Identity")
     el(identity, "IdentityId", identity_id)
-    el(identity, "DisplayName", NPC_NAME)
+    el(identity, "DisplayName", founder)
     el(identity, "CharacterEntityId", 0)
     el(checkpoint.find("NonPlayerIdentities"), "long", identity_id)
     factions = checkpoint.find("Factions")
     faction = el(factions.find("Factions"), "MyObjectBuilder_Faction")
     el(faction, "FactionId", faction_id)
-    el(faction, "Tag", NPC_TAG)
-    el(faction, "Name", NPC_NAME)
-    el(faction, "Description", "Keeps the Octahedron stations and Trade Lanes running.")
+    el(faction, "Tag", tag)
+    el(faction, "Name", name)
+    el(faction, "Description", description)
     el(faction, "PrivateInfo")
     member = el(el(faction, "Members"), "MyObjectBuilder_FactionMember")
     el(member, "PlayerId", identity_id)
@@ -1126,16 +1125,46 @@ def add_npc(checkpoint, ids):
     el(member, "IsFounder", "true")
     el(faction, "JoinRequests")
     el(faction, "AutoAcceptMember", "false")
-    el(faction, "AutoAcceptPeace", "true")
+    el(faction, "AutoAcceptPeace", "true" if peace else "false")
     el(faction, "AcceptHumans", "false")
     el(faction, "EnableFriendlyFire", "false")
-    # A trade faction: the economy stocks its stations' stores and offers contracts there
-    el(faction, "FactionType", "Trader")
-    el(faction, "FactionTypeString", "Trader")
+    el(faction, "FactionType", kind)
+    el(faction, "FactionTypeString", kind)
     item = el(factions.find("Players/dictionary"), "item")
     el(item, "Key", identity_id, **{XSI_TYPE: "xsd:long"})
     el(item, "Value", faction_id, **{XSI_TYPE: "xsd:long"})
     return identity_id, faction
+
+
+def add_npc(checkpoint, ids):
+    """The stations' owner. A trade faction: the economy stocks its stations' stores and
+    offers contracts there."""
+    return add_faction(
+        checkpoint,
+        ids,
+        NPC_TAG,
+        NPC_NAME,
+        "Keeps the Octahedron stations and Trade Lanes running.",
+        NPC_NAME,
+        "Trader",
+        peace=True,
+    )
+
+
+def add_encounter_factions(checkpoint, ids):
+    """The encounters' NPC factions, which the encounter mods defined and the game made at
+    the first load while the world had them. The world keeps them without the mods."""
+    for f in ET.parse(ENCOUNTER_FACTIONS).getroot():
+        add_faction(
+            checkpoint,
+            ids,
+            f.get("Tag"),
+            f.get("Name"),
+            f.text or "",
+            f.get("Founder"),
+            "None",
+            peace=False,
+        )
 
 
 def add_trade_stations(checkpoint, ids, faction, stations):
@@ -1314,6 +1343,9 @@ def main():
             )
         )
 
+    # Last, so the ids drawn before stay as they were
+    add_encounter_factions(checkpoint, ids)
+
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),
         (checkpoint_tree, "Sandbox.sbc"),
@@ -1322,7 +1354,6 @@ def main():
         ET.indent(tree, "  ")
         write_xml(tree, out / name)
 
-    shutil.copytree(MES_STORAGE, out / "Storage", dirs_exist_ok=True)
     rts = out / "Storage/1359618037.sbm_RelativeTopSpeed"
     rts.mkdir(parents=True, exist_ok=True)
     shutil.copy(RELATIVE_TOP_SPEED, rts / "RelativeTopSpeed.cfg")
