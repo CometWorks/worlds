@@ -1,9 +1,9 @@
-"""Checks the encounter spawner on the test server with a client that has no mods: the
-world lists no MES or encounter mod, the timer spawns a space cargo ship after 13 minutes,
-each spawn type spawns where MES would spawn it, the client sees the spawned grids, and
-the mods' shares of spawn attempts per type and place, and the cleanup removes the
-encounter grids once the player is 15 km away for 15 minutes. Prints a summary; the asserts stop
-it at the first rule broken.
+"""Checks the encounter spawner, which is on hold (SE-653), on the test server with a
+client that has no mods: the test world has no mods and the encounters switched on, the
+timer spawns a space cargo ship after 13 minutes, each spawn type spawns where MES would
+spawn it, the client sees the spawned grids, the mods' shares of spawn attempts per type
+and place, and the cleanup removes the encounter grids once the player is 15 km away for
+15 minutes. Prints a summary; the asserts stop it at the first rule broken.
 
     uv run --no-project --with httpx python tests/test_encounters.py
 
@@ -146,16 +146,22 @@ def at(remote, position) -> str:
 
 
 def main() -> None:
-    world = (rig.WORLD_SOURCE / "Sandbox.sbc").read_text(encoding="utf-8")
-    mods = re.findall(r"<PublishedFileId>(\d+)</PublishedFileId>", world)
-    for mes in ("1521905890", "2802625870", "2390106048", "973526550", "2310821218"):
-        assert mes not in mods, f"the world still lists mod {mes}"
-    summary.append(f"world mods: {len(mods)}, no MES or encounter mod")
 
     rig.stop_client()
     rig.stop_server()
     rig.prepare_world()
-    rig.write_plugin_config()
+    # The world runs MES while the plugin encounters are on hold (SE-653): the rig serves
+    # its world without mods, and the test switches the encounters on
+    config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
+    rig.write_plugin_config(
+        config.replace(
+            "<EncountersEnabled>false</EncountersEnabled>",
+            "<EncountersEnabled>true</EncountersEnabled>",
+        )
+    )
+    served = (rig.WORLD / "Sandbox.sbc").read_text(encoding="utf-8")
+    assert "<PublishedFileId>" not in served, "the test world lists mods"
+    summary.append("test world: no mods; encounters switched on")
     rig.prepare_server()
     rig.start_server()
     loaded = re.search(r"Loaded (\d+) encounter spawn groups", rig.server_game_log())

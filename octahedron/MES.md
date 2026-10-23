@@ -1,8 +1,6 @@
 # MES on Octahedron
 
-How Modular Encounters Systems (MES) was set up on the Octahedron world, what it spawns where, how the spawns follow the players' threat score, and what looks risky. For the server admins.
-
-Since ticket 1447 (2026-10-23) the world has no MES or encounter mod. The Octahedron plugin spawns the same encounters from its own blueprints, by the rules below; `plugin/README.md`, "Encounters", lists what it leaves out (mainly MES's AI behaviors). The mod list and settings files named here were `config/mes-mods.xml` and `config/storage/` (with `check_mes_config.py`), last in commit 6826e09.
+How Modular Encounters Systems (MES) is set up on the Octahedron world, what it spawns where, how the spawns follow the players' threat score, and what looks risky. For the server admins.
 
 Worked out on Linux on 2026-10-10 from MES 2.74.05 (workshop 1521905890) and the spawn group definitions of the 14 mods in `config/mes-mods.xml`, as downloaded under `~/.steam/steam/steamapps/workshop/content/244850/`. Not tested in game. Figures marked *estimate* come from the MES rules and a simulation of its selection code, not from a running server.
 

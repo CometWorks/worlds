@@ -266,12 +266,17 @@ timer does, `!oct drop strong` a strong one, so the rule can be checked by hand.
 
 ### Encounters
 
+On hold since 2026-10-24 (SE-653): the world runs MES and its encounter mods again,
+and `EncountersEnabled` is off. The code, blueprints and tests stay for when the work
+resumes (SE-654: the game's AI blocks for the NPC ships, SE-655: MES's behaviors).
+Don't switch it on in a world that still loads MES: both would spawn.
+
 With `EncountersEnabled` on, the plugin spawns the NPC encounters that Modular
-Encounters Systems (MES) and its 12 encounter mods spawned in Octahedron, by MES's
+Encounters Systems (MES) and its 12 encounter mods spawn in Octahedron, by MES's
 rules, from blueprints shipped in `Encounters/`. The server spawns the grids and
-clients get them like any other grid, so players need none of those mods. The world
-lists no MES mod any more (ticket 1447). `../MES.md` describes the rules as MES
-applied them; the plugin follows that document, with the differences listed below.
+clients get them like any other grid, so players need none of those mods.
+`../MES.md` describes the rules as MES applies them; the plugin follows that
+document, with the differences listed below.
 
 `Encounters/` is written by `tools/export_encounters.py` from the mods in the local
 Workshop folder: `SpawnGroups.xml` holds the 320 spawn groups the MES timers could

@@ -266,6 +266,81 @@
       <PublishedFileId>3817490449</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
+    <ModItem FriendlyName="Modular Encounters Systems">
+      <Name>1521905890.sbm</Name>
+      <PublishedFileId>1521905890</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Wreckage">
+      <Name>2802625870.sbm</Name>
+      <PublishedFileId>2802625870</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Weyland-Yutani Corporation">
+      <Name>2390106048.sbm</Name>
+      <PublishedFileId>2390106048</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES The Xenvakian Empire">
+      <Name>2470950657.sbm</Name>
+      <PublishedFileId>2470950657</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Terran Heavy Industries Engineering">
+      <Name>2615864222.sbm</Name>
+      <PublishedFileId>2615864222</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Space Pirates Enhanced">
+      <Name>2609155402.sbm</Name>
+      <PublishedFileId>2609155402</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Suppress Vanilla Encounters">
+      <Name>888457381.sbm</Name>
+      <PublishedFileId>888457381</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Suppress Vanilla Cargo Ships">
+      <Name>888457124.sbm</Name>
+      <PublishedFileId>888457124</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Trade Operators Coalition">
+      <Name>2966429095.sbm</Name>
+      <PublishedFileId>2966429095</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Parallax Concepts">
+      <Name>1135484957.sbm</Name>
+      <PublishedFileId>1135484957</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Independent Contractors">
+      <Name>445996030.sbm</Name>
+      <PublishedFileId>445996030</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Imber Corporation">
+      <Name>973526550.sbm</Name>
+      <PublishedFileId>973526550</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Abandoned Mining Facility">
+      <Name>2634554148.sbm</Name>
+      <PublishedFileId>2634554148</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Wasteland Encounters V2 Continued">
+      <Name>2539299261.sbm</Name>
+      <PublishedFileId>2539299261</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Abandoned Settlements [v2]">
+      <Name>2310821218.sbm</Name>
+      <PublishedFileId>2310821218</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
     <ModItem FriendlyName="OctahedronOres">
       <Name>OctahedronOres</Name>
       <PublishedFileId>0</PublishedFileId>
