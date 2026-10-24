@@ -258564,6 +258564,7 @@ From:Alpha Station
 To:Beta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 01 Beta Station:707.11:0.00:139292.89:</Value>
                       </item>
                     </dictionary>
@@ -258612,6 +258613,7 @@ From:Beta Station
 To:Alpha Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 01 Alpha Station:139292.89:0.00:707.11:</Value>
                       </item>
                     </dictionary>
@@ -258660,6 +258662,7 @@ From:Alpha Station
 To:Delta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 02 Delta Station:707.11:0.00:-139292.89:</Value>
                       </item>
                     </dictionary>
@@ -258708,6 +258711,7 @@ From:Delta Station
 To:Alpha Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 02 Alpha Station:139292.89:0.00:-707.11:</Value>
                       </item>
                     </dictionary>
@@ -258756,6 +258760,7 @@ From:Beta Station
 To:Gamma Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 03 Gamma Station:-139292.89:0.00:707.11:</Value>
                       </item>
                     </dictionary>
@@ -258804,6 +258809,7 @@ From:Gamma Station
 To:Beta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 03 Beta Station:-707.11:0.00:139292.89:</Value>
                       </item>
                     </dictionary>
@@ -258852,6 +258858,7 @@ From:Gamma Station
 To:Delta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 04 Delta Station:-707.11:0.00:-139292.89:</Value>
                       </item>
                     </dictionary>
@@ -258900,6 +258907,7 @@ From:Delta Station
 To:Gamma Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 04 Gamma Station:-139292.89:0.00:-707.11:</Value>
                       </item>
                     </dictionary>
@@ -258948,6 +258956,7 @@ From:Delta Station
 To:Moon Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 05 Moon Station:20227.63:121275.99:-110880.13:</Value>
                       </item>
                     </dictionary>
@@ -258996,6 +259005,7 @@ From:Moon Station
 To:Delta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 05 Delta Station:240.13:1439.73:-139654.30:</Value>
                       </item>
                     </dictionary>
@@ -259044,6 +259054,7 @@ From:North Station
 To:Moon Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 06 Moon Station:20208.73:122391.77:-109678.25:</Value>
                       </item>
                     </dictionary>
@@ -259092,6 +259103,7 @@ From:Moon Station
 To:North Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 06 North Station:268.48:139766.07:-1457.12:</Value>
                       </item>
                     </dictionary>
@@ -259140,6 +259152,7 @@ From:Beta Station
 To:North Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 07 North Station:0.00:139292.89:707.11:</Value>
                       </item>
                     </dictionary>
@@ -259188,6 +259201,7 @@ From:North Station
 To:Beta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 07 Beta Station:0.00:707.11:139292.89:</Value>
                       </item>
                     </dictionary>
@@ -259236,6 +259250,7 @@ From:Beta Station
 To:South Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 08 South Station:0.00:-139292.89:707.11:</Value>
                       </item>
                     </dictionary>
@@ -259284,6 +259299,7 @@ From:South Station
 To:Beta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 08 Beta Station:0.00:-707.11:139292.89:</Value>
                       </item>
                     </dictionary>
@@ -259332,6 +259348,7 @@ From:Delta Station
 To:South Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 09 South Station:0.00:-139292.89:-707.11:</Value>
                       </item>
                     </dictionary>
@@ -259380,6 +259397,7 @@ From:South Station
 To:Delta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 09 Delta Station:0.00:-707.11:-139292.89:</Value>
                       </item>
                     </dictionary>
@@ -259428,6 +259446,7 @@ From:Delta Station
 To:North Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 10 North Station:0.00:139292.89:-707.11:</Value>
                       </item>
                     </dictionary>
@@ -259476,6 +259495,7 @@ From:North Station
 To:Delta Station
 Speed:10000
 RingInterval:10000
+GpsMarkers:false
 Target:GPS:TL 10 Delta Station:0.00:707.11:-139292.89:</Value>
                       </item>
                     </dictionary>

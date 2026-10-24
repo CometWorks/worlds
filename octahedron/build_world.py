@@ -762,11 +762,12 @@ def lane_computer(ids, position, forward, up, lane_id, home, target, partner):
     """partner: the other end's computer. Its place goes in as a Target GPS, the last line (the
     mod finds the other keys by substring): a computer whose grid the cluster loads before its
     partner's or the lane registry's answer is paired at once, instead of telling the clients
-    the lane has no target, which takes its tunnel off their screens."""
+    the lane has no target, which takes its tunnel off their screens. GpsMarkers:false keeps the
+    lanes off the players' GPS lists (DF-716)."""
     x, y, z = partner
     data = (
         f"TLID:{lane_id}\nFrom:{home}\nTo:{target}\nSpeed:{LANE_SPEED}\nRingInterval:{LANE_RING_INTERVAL}"
-        f"\nTarget:GPS:TL {lane_id} {target}:{x:.2f}:{y:.2f}:{z:.2f}:"
+        f"\nGpsMarkers:false\nTarget:GPS:TL {lane_id} {target}:{x:.2f}:{y:.2f}:{z:.2f}:"
     )
     grid = ET.Element(
         "MyObjectBuilder_EntityBase", {XSI_TYPE: "MyObjectBuilder_CubeGrid"}

@@ -117,7 +117,10 @@ downloaded.
   Delta and North Station for the Moon lanes, clear of their other lane ends),
   indestructible and not editable. Its Custom Data ends with a Target GPS at
   the other end's computer, so a computer the cluster loads before its partner
-  still knows where its lane leads. The ends have no safe zone; the lane's
+  still knows where its lane leads. `GpsMarkers:false` in it keeps the lanes
+  off the players' GPS lists ([DF-716](https://tasks.cometworks.se/tasks/1530);
+  needs Trade Lanes MP with that switch, older versions ignore the line). The
+  ends have no safe zone; the lane's
   rings have no physics. The two rings of a tunnel sit side by side, level with
   the equator, on the lanes of the equatorial square, and one above the other
   on all others (to the poles and the Moon).
