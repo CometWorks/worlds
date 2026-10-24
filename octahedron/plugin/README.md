@@ -264,6 +264,49 @@ so the rule acts there.
 `!oct drop` (admin) spawns a personal drop for the caller the way the game's
 timer does, `!oct drop strong` a strong one, so the rule can be checked by hand.
 
+### MES spawn pattern
+
+With `MesGateEnabled` on, the plugin patches Modular Encounters Systems (MES, Workshop
+1521905890) at runtime so that its NPC spawns leave room for the cluster's
+partitions. This is MesCluster (CometWorks/mod-mes, DF-582), folded into this plugin
+(DF-706); it contains no MES code, since MES may not be republished modified, and the
+world keeps loading MES from the Workshop.
+
+MES spreads NPC grids evenly along the players' flight paths. On a cluster those grids
+chain into huge partitions that can't be split, balanced or taken offline separately.
+
+- Spawn pattern. Space is cut into Voronoi cells around jittered lattice sites
+  (`MesCellSize`, 40 km, `MesJitter` 0.5, `MesSeed` 1321). Only the core of a cell is
+  spawnable: the cell shrunk by half the gap from every face. Cores are at least the
+  gap apart (`MesGap`, or `MesGapSyncDistances` 4 x the world's sync distance when it
+  is 0: 12 km at a 3 km sync distance, the cluster's partition split distance), so the
+  NPCs of one core form partitions of their own. Cores are convex, so a cargo ship
+  whose path starts and ends in one core stays in it.
+- Density limits. No spawn where `MesMaxNpcGridsInRadius` (12) NPC grids are already
+  within `MesDensityRadius` (15 km), and none once there are `MesMaxClusterNpcGrids`
+  (300). On a cluster that publishes its NPC census (`CometWorks.Cluster.NpcCensus.v1`,
+  DF-611) the counts are cluster-wide and include offline partitions, so a returning
+  player meets the old pocket instead of a new one; otherwise they cover this server.
+  An accepted spawn counts for 30 s before its grids show up.
+- How. A Harmony postfix on MES's `PathPlacements.GetSpawnPlacement` checks the
+  placement MES computed. If it doesn't fit, MES computes up to
+  `MesPlacementAttempts` (16) more, with all of its own obstruction checks, and the
+  first that fits is used; if none does, MES skips the spawn. Static encounters are
+  left alone, and so are the spawning types in `MesExemptSpawnTypes` (creatures).
+- Guard. Before patching, the plugin checks the MES version (`MesAcceptedVersions`)
+  and a hash of the instructions of the MES code it relies on
+  (`MesAcceptedMethodHashes`). Every start logs both. On a mismatch it logs a
+  Critical line and MES runs unpatched. After reviewing an MES update, add the new
+  version and hash to the config.
+- The cluster's NPC sweep reads the gap bands from `CometWorks.ModMes.InGap.v1`, which
+  the plugin publishes, and removes unvisited NPC grids there sooner.
+
+The pattern settings (`MesCellSize`, `MesGap`, `MesGapSyncDistances`, `MesJitter`,
+`MesSeed`) are read once, when MES is patched: every node of a cluster must use the
+same ones, and each logs them with a pattern fingerprint, which must be equal on all
+nodes. The other options apply at once. Each spawn the gate decides logs
+`spawn placed` or `spawn refused`, and a summary every 10 minutes.
+
 ### Encounters
 
 On hold since 2026-10-24 (SE-653): the world runs MES and its encounter mods again,
@@ -481,6 +524,13 @@ with the zones holding every test grid from the start, and off.
 and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
+`tests/mes/` holds MesCluster's tests for the MES spawn gate:
+`CellPatternTests` checks the cell pattern against a brute-force definition
+(`dotnet run -c Release --project tests/mes/CellPatternTests`); `ds/run.py PLAN [cfg]`
+runs a standalone server with MES, a few encounter mods and a probe plugin that fires
+MES spawn requests, and `ds/check.py gate|guard` judges it; `cluster/mes_cluster.py`
+runs the same with the cluster's NPC census on a local test cluster;
+`check_placements.py LOG...` checks the gate's decisions in any server logs.
 `tests/test_encounters.py` checks the encounters with a client that has no mods:
 the timer's first space cargo ship, each spawn type spawned by command in space, on
 EarthLike, high above it and on the Moon, the client seeing the spawned grids, and

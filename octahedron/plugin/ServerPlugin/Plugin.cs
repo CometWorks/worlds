@@ -46,6 +46,7 @@ public class Plugin : IPlugin
     {
         LoadConfig();
         new Harmony(Name).PatchAll(Assembly.GetExecutingAssembly());
+        MesCluster.Init();
         ServerCommands.Register(Assembly.GetExecutingAssembly(), typeof(Commands));
     }
 
@@ -77,6 +78,10 @@ public class Plugin : IPlugin
             failed = true;
         }
 
+        // The MES gate stops on its own too: MES then spawns ungated
+        if (!failed && Config.Enabled)
+            MesCluster.Update();
+
         // Encounters stop on their own, so a broken spawn leaves the other rules running
         if (encountersFailed)
             return;
@@ -107,6 +112,7 @@ public class Plugin : IPlugin
 
     public void Dispose()
     {
+        MesCluster.Dispose();
         // Harmony patches stay: unpatching all may break other plugins
     }
 }

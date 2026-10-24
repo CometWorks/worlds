@@ -1,0 +1,5 @@
+# Guard run: no accepted hash, MES must run unpatched
+spawn RandomEncounter 6 0 0 0 200000
+wait 40
+census guard
+done

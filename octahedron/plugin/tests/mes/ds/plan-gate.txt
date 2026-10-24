@@ -1,0 +1,9 @@
+# Gate run: spawns spread over 600 km must land in cell cores; spawns piled on one site must hit the density limit
+spawn RandomEncounter 40 0 0 0 300000
+spawn SpaceCargoShip 20 0 0 0 300000
+wait 40
+census spread
+spawn RandomEncounter 30 133499.7 -68508.5 59254.2 0
+wait 40
+census piled
+done
