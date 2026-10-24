@@ -453,7 +453,7 @@ public class OctahedronConfig : PluginConfig
     [IntOption(
         0,
         1000000,
-        "No spawn once the cluster has this many NPC grids, offline partitions included (0 = no limit)",
+        "No spawn once this many NPC grids are online in the cluster (0 = no limit; a cluster build without the online census counts offline partitions too)",
         Parent = "mes"
     )]
     public int MesMaxClusterNpcGrids

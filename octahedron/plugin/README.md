@@ -285,8 +285,12 @@ chain into huge partitions that can't be split, balanced or taken offline separa
 - Density limits. No spawn where `MesMaxNpcGridsInRadius` (12) NPC grids are already
   within `MesDensityRadius` (15 km), and none once there are `MesMaxClusterNpcGrids`
   (300). On a cluster that publishes its NPC census (`CometWorks.Cluster.NpcCensus.v1`,
-  DF-611) the counts are cluster-wide and include offline partitions, so a returning
-  player meets the old pocket instead of a new one; otherwise they cover this server.
+  DF-611) the counts are cluster-wide. The density count includes offline partitions,
+  so a returning player meets the old pocket instead of a new one. The cluster cap counts
+  only the NPC grids online on a node (`CometWorks.Cluster.NpcCensus.Online.v1`,
+  DF-712): offline partitions keep their NPC grids, and counting them filled the cap
+  within an hour in cluster run 4. Without the census the counts cover this server.
+  The 10-minute spawn summary logs the census totals (all and online).
   An accepted spawn counts for 30 s before its grids show up.
 - How. A Harmony postfix on MES's `PathPlacements.GetSpawnPlacement` checks the
   placement MES computed. If it doesn't fit, MES computes up to

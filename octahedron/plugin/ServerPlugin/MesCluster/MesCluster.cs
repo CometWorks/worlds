@@ -39,11 +39,13 @@ internal static class MesCluster
         if (MesSpawnGate.Active && DateTime.UtcNow >= nextStats)
         {
             nextStats = DateTime.UtcNow + StatsInterval;
+            var (online, all) = NpcCensus.Totals();
             Plugin.Log.Info(
                 $"spawns since start: placed {MesSpawnGate.Accepted}, moved into a core {MesSpawnGate.Moved}, "
                     + $"refused: pattern {MesSpawnGate.RefusedPattern}, density {MesSpawnGate.RefusedDensity}, "
                     + $"cluster cap {MesSpawnGate.RefusedCluster}, census unknown {MesSpawnGate.RefusedUnknown}; "
-                    + $"census {(NpcCensus.ClusterWide ? "cluster-wide" : "this process only")}"
+                    + $"census {(NpcCensus.ClusterWide ? "cluster-wide" : "this process only")}: "
+                    + $"NPC grids {all}, online {(online < 0 ? "n/a" : online.ToString())}"
             );
         }
     }

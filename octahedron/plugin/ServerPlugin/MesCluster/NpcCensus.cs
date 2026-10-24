@@ -17,6 +17,10 @@ namespace ServerPlugin;
 /// know (no snapshot yet, or a stale one). Called on the game thread; the cluster answers from a local
 /// snapshot.
 ///
+/// Offline partitions keep their NPC grids (no node runs MES there to clean them up), so a cluster-wide
+/// cap counts the grids online on a node only: the cluster's <see cref="OnlineSlot"/> (DF-712), the same
+/// delegate over the online rows. A cluster build without it falls back to <see cref="CensusSlot"/>.
+///
 /// MES spawns the prefabs of an accepted spawn over the next frames, and the cluster's snapshot lags by
 /// seconds, so every accepted spawn is also counted as a reservation for <see cref="ReservationTime"/>:
 /// two spawns in quick succession cannot both pass a limit the first one filled.
@@ -24,6 +28,7 @@ namespace ServerPlugin;
 internal static class NpcCensus
 {
     internal const string CensusSlot = "CometWorks.Cluster.NpcCensus.v1";
+    internal const string OnlineSlot = "CometWorks.Cluster.NpcCensus.Online.v1";
 
     private static readonly TimeSpan ReservationTime = TimeSpan.FromSeconds(30);
     private static readonly List<(Vector3D Position, int Grids, DateTime Expires)> reservations =
@@ -32,13 +37,16 @@ internal static class NpcCensus
     public static bool ClusterWide =>
         AppDomain.CurrentDomain.GetData(CensusSlot) is Func<double, double, double, double, int>;
 
-    /// <summary>NPC grids within <paramref name="radius"/> metres of the point; -1 = unknown.</summary>
-    public static int Count(Vector3D point, double radius)
+    public static bool OnlineCounted =>
+        AppDomain.CurrentDomain.GetData(OnlineSlot) is Func<double, double, double, double, int>;
+
+    /// <summary>
+    /// NPC grids within <paramref name="radius"/> metres of the point, those online on a node only when
+    /// <paramref name="onlineOnly"/> and the cluster can tell; -1 = unknown.
+    /// </summary>
+    public static int Count(Vector3D point, double radius, bool onlineOnly = false)
     {
-        int count = AppDomain.CurrentDomain.GetData(CensusSlot)
-            is Func<double, double, double, double, int> census
-            ? census(point.X, point.Y, point.Z, radius)
-            : CountLocal(point, radius);
+        int count = RawCount(point, radius, onlineOnly);
         if (count < 0)
             return count;
 
@@ -51,6 +59,26 @@ internal static class NpcCensus
         }
 
         return count;
+    }
+
+    /// <summary>The census without the reservations: (online, all) NPC grids in the cluster; -1 = unknown.</summary>
+    public static (int Online, int All) Totals() =>
+        (
+            OnlineCounted ? RawCount(Vector3D.Zero, double.PositiveInfinity, true) : -1,
+            RawCount(Vector3D.Zero, double.PositiveInfinity, false)
+        );
+
+    private static int RawCount(Vector3D point, double radius, bool onlineOnly)
+    {
+        var domain = AppDomain.CurrentDomain;
+        if (
+            (onlineOnly ? domain.GetData(OnlineSlot) : null)
+            is Func<double, double, double, double, int> online
+        )
+            return online(point.X, point.Y, point.Z, radius);
+        return domain.GetData(CensusSlot) is Func<double, double, double, double, int> census
+            ? census(point.X, point.Y, point.Z, radius)
+            : CountLocal(point, radius);
     }
 
     /// <summary>Counts a spawn MES is about to make until its grids show up in the census.</summary>
