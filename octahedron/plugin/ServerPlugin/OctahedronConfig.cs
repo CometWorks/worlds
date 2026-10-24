@@ -15,6 +15,7 @@ namespace ServerPlugin;
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("drops", caption: "Container Drops")]
 [Section("encounters", caption: "Encounters")]
+[Section("mes", caption: "MES Spawn Pattern")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -333,6 +334,153 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     }
+
+    // MES spawn gate (MesCluster, CometWorks/mod-mes): see MesCluster/MesSpawnGate.cs
+    [BoolOption(
+        "Gate MES spawn placements to the cell pattern and density limits below (off: MES spawns as it would without this plugin). The pattern settings are read once, at start.",
+        Parent = "mes"
+    )]
+    public bool MesGateEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [DoubleOption(
+        1000,
+        1e7,
+        "Voronoi cell size in metres: the spacing of the cell sites",
+        Parent = "mes"
+    )]
+    public double MesCellSize
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 40000;
+
+    [DoubleOption(
+        0,
+        1e7,
+        "Width of the empty band between cell cores in metres; 0 = MesGapSyncDistances x the world's sync distance",
+        Parent = "mes"
+    )]
+    public double MesGap
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 0;
+
+    [DoubleOption(
+        0,
+        100,
+        "Gap in sync distances, used when MesGap is 0. 4 = the cluster's automatic partition split distance",
+        Parent = "mes"
+    )]
+    public double MesGapSyncDistances
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 4;
+
+    [DoubleOption(
+        0,
+        1,
+        "How far cell sites move off the regular lattice, as a fraction of the cell size",
+        Parent = "mes"
+    )]
+    public double MesJitter
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 0.5;
+
+    [LongOption(
+        description: "Seed of the cell pattern; every node of a cluster must use the same one",
+        Parent = "mes"
+    )]
+    public long MesSeed
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1321;
+
+    [IntOption(
+        1,
+        100,
+        "How many placements MES may compute for one spawn until one fits a cell core",
+        Parent = "mes"
+    )]
+    public int MesPlacementAttempts
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 16;
+
+    [StringOption(
+        description: "MES spawning types left alone: SpawningType names, comma separated",
+        Parent = "mes"
+    )]
+    public string MesExemptSpawnTypes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Creature";
+
+    [DoubleOption(
+        0,
+        1e7,
+        "Radius of the density check around a spawn point in metres",
+        Parent = "mes"
+    )]
+    public double MesDensityRadius
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 15000;
+
+    [IntOption(
+        0,
+        100000,
+        "No spawn where this many NPC grids are already within MesDensityRadius (0 = no density limit)",
+        Parent = "mes"
+    )]
+    public int MesMaxNpcGridsInRadius
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 12;
+
+    [IntOption(
+        0,
+        1000000,
+        "No spawn once the cluster has this many NPC grids, offline partitions included (0 = no limit)",
+        Parent = "mes"
+    )]
+    public int MesMaxClusterNpcGrids
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 300;
+
+    [StringOption(
+        description: "MES versions (MES_SessionCore.ModVersion) the patches were checked against, comma separated",
+        Parent = "mes"
+    )]
+    public string MesAcceptedVersions
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "2.75.02";
+
+    [StringOption(
+        description: "Accepted instruction hashes of the MES methods the plugin depends on, comma separated (each startup logs the current one)",
+        Parent = "mes"
+    )]
+    public string MesAcceptedMethodHashes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "b6de8061483bbd9a";
 }
 
 public struct RefillContainer

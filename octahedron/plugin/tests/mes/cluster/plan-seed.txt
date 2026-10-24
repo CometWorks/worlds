@@ -1,0 +1,3 @@
+save
+wait 30
+done

@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<PluginData
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="GitHubPlugin"
+>
+  <!-- Test-only server plugin of the MES Cluster tests, loaded as a dev folder. Never published to a hub. -->
+  <Id>6D2B5E0A-41C3-4F7E-9A1D-3C5B7E9F1321</Id>
+  <RepoId>CometWorks/mod-mes</RepoId>
+  <FriendlyName>MES Cluster Probe</FriendlyName>
+  <Author>CometWorks</Author>
+  <Tooltip>Test hooks for the MES Cluster tests</Tooltip>
+  <Commit>TODO Git commit hash</Commit>
+</PluginData>
