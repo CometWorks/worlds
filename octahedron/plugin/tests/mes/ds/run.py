@@ -6,7 +6,8 @@ Workshop), the Octahedron plugin from this working copy and the test probe (test
 folders. The probe fires MES spawn requests from given positions and lists the NPC grids; check.py
 judges the result.
 
-    python3 tests/mes/ds/run.py PLAN [Octahedron.cfg]     (from plugin/, as a background job)
+    python3 tests/mes/ds/run.py PLAN [Octahedron.cfg]     (from plugin/, as a background job;
+    default tests/mes/ds/gate.cfg: only the MES gate)
 
 Every port and folder comes from the test slot MES_TASK (default 1509-mes), see
 testing/parallel-test-work/README.md of the se workspace. The server starts under run-test.sh (RAM
@@ -153,10 +154,9 @@ def prepare(ports: dict[str, int], plan: Path, plugin_cfg: Path | None) -> Path:
         "<IgnoreLastSession>true</IgnoreLastSession><RemoteApiEnabled>false</RemoteApiEnabled>"
         f"<LoadWorld>{world}</LoadWorld></MyConfigDedicated>\n"
     )
-    # The plugin's other rules have nothing to act on in the Empty World
-    shutil.copy(
-        plugin_cfg or PLUGIN.parent / "config/octahedron.cfg", data / "Octahedron.cfg"
-    )
+    # Only the MES gate by default: with the world's full octahedron.cfg, 2 of 3 gate runs had NPC
+    # grids far from any gate placement (DF-706 work log)
+    shutil.copy(plugin_cfg or MES_TESTS / "ds/gate.cfg", data / "Octahedron.cfg")
     shutil.copy(plan, ROOT / "plan.txt")
     (ROOT / "probe.txt").unlink(missing_ok=True)
     return config
