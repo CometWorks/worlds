@@ -375,237 +375,6 @@
           </MyObjectBuilder_Station>
         </Stations>
       </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>252087140894998697</FactionId>
-        <Tag>IMBER</Tag>
-        <Name>Imber Corporation</Name>
-        <Description>The Imber Corporation is a large and well established organization, having a presence on many planets and in outer space. They have been criticized for their many territory expansion initiatives, which have forced other smaller colonies from areas they once resided within. They considers all other factions as a potential threat, and aggressively defends their property if provoked.</Description>
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>186339441050695183</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>216424434340936878</FactionId>
-        <Tag>INCON</Tag>
-        <Name>Independent Contractor</Name>
-        <Description>Ships belonging to Independent Contractors follow no particular style or theme, since the pilots often own and operate these vessels. Contractors can be found on many planets and in outer space. Many of these contractors do not trust other factions and will become defensive if approached.</Description>
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>185720869031795779</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>219080895048745674</FactionId>
-        <Tag>PARALLAX</Tag>
-        <Name>Parallax Concepts</Name>
-        <Description>Parallax Concepts is a mid-sized organization that is established on several planets and in outer space. While they do not have large ambitions to conquer and expand, they don't respond kindly to those that are not affiliated with their faction and will attack if provoked.</Description>
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>210367643581826666</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>271276247587672626</FactionId>
-        <Tag>QARC</Tag>
-        <Name>Qi Asset Recovery Company</Name>
-        <Description />
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>166260740366198874</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>220569025379284253</FactionId>
-        <Tag>SCRP</Tag>
-        <Name>The scrap void</Name>
-        <Description />
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>198503974421361590</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>229110812639726221</FactionId>
-        <Tag>SPRTE</Tag>
-        <Name>Space Pirates Enhanced</Name>
-        <Description>SPRT Enhanced</Description>
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>175637740566040665</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>286551189932195808</FactionId>
-        <Tag>THIE</Tag>
-        <Name>Terran Heavy Industries and Exploration</Name>
-        <Description>Don't let this factions name fool you, they may be neutral but will look poorly upon any would-be pirates.</Description>
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>188175262111696458</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>225180510580250171</FactionId>
-        <Tag>TRADE</Tag>
-        <Name>Trade Operators Coalition</Name>
-        <Description>The Trade Operators Coalition is a collective of trading organizations that have combined their resources and various connections to become one of the dominate economic forces found across several systems.</Description>
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>148319575481249823</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>263968738927284907</FactionId>
-        <Tag>TXVE</Tag>
-        <Name>The Xenvakian Empire</Name>
-        <Description>This faction starts out relatively passive. Leave them alone and they will leave you alone, annoy them repeatedly and they will up their aggressiveness in response.</Description>
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>197667794594836468</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>241055225269770217</FactionId>
-        <Tag>WLYC</Tag>
-        <Name>Weyland Yutani Corporation</Name>
-        <Description>This faction does not appreciate any intruders to it's territory and will defend it.</Description>
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>209257313330566422</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
-      <MyObjectBuilder_Faction>
-        <FactionId>242921786577576717</FactionId>
-        <Tag>WRECKS</Tag>
-        <Name>Wrecks</Name>
-        <Description />
-        <PrivateInfo />
-        <Members>
-          <MyObjectBuilder_FactionMember>
-            <PlayerId>212788258428228943</PlayerId>
-            <IsLeader>true</IsLeader>
-            <IsFounder>true</IsFounder>
-          </MyObjectBuilder_FactionMember>
-        </Members>
-        <JoinRequests />
-        <AutoAcceptMember>false</AutoAcceptMember>
-        <AutoAcceptPeace>false</AutoAcceptPeace>
-        <AcceptHumans>false</AcceptHumans>
-        <EnableFriendlyFire>false</EnableFriendlyFire>
-        <FactionType>None</FactionType>
-        <FactionTypeString>None</FactionTypeString>
-      </MyObjectBuilder_Faction>
     </Factions>
     <Players>
       <dictionary>
@@ -620,50 +389,6 @@
         <item>
           <Key xsi:type="xsd:long">184230955976420208</Key>
           <Value xsi:type="xsd:long">258806895015508287</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">186339441050695183</Key>
-          <Value xsi:type="xsd:long">252087140894998697</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">185720869031795779</Key>
-          <Value xsi:type="xsd:long">216424434340936878</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">210367643581826666</Key>
-          <Value xsi:type="xsd:long">219080895048745674</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">166260740366198874</Key>
-          <Value xsi:type="xsd:long">271276247587672626</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">198503974421361590</Key>
-          <Value xsi:type="xsd:long">220569025379284253</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">175637740566040665</Key>
-          <Value xsi:type="xsd:long">229110812639726221</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">188175262111696458</Key>
-          <Value xsi:type="xsd:long">286551189932195808</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">148319575481249823</Key>
-          <Value xsi:type="xsd:long">225180510580250171</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">197667794594836468</Key>
-          <Value xsi:type="xsd:long">263968738927284907</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">209257313330566422</Key>
-          <Value xsi:type="xsd:long">241055225269770217</Value>
-        </item>
-        <item>
-          <Key xsi:type="xsd:long">212788258428228943</Key>
-          <Value xsi:type="xsd:long">242921786577576717</Value>
         </item>
       </dictionary>
     </Players>
@@ -832,6 +557,81 @@
       <PublishedFileId>3817490449</PublishedFileId>
       <PublishedServiceName>Steam</PublishedServiceName>
     </ModItem>
+    <ModItem FriendlyName="Modular Encounters Systems">
+      <Name>1521905890.sbm</Name>
+      <PublishedFileId>1521905890</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Wreckage">
+      <Name>2802625870.sbm</Name>
+      <PublishedFileId>2802625870</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Weyland-Yutani Corporation">
+      <Name>2390106048.sbm</Name>
+      <PublishedFileId>2390106048</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES The Xenvakian Empire">
+      <Name>2470950657.sbm</Name>
+      <PublishedFileId>2470950657</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Terran Heavy Industries Engineering">
+      <Name>2615864222.sbm</Name>
+      <PublishedFileId>2615864222</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Space Pirates Enhanced">
+      <Name>2609155402.sbm</Name>
+      <PublishedFileId>2609155402</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Suppress Vanilla Encounters">
+      <Name>888457381.sbm</Name>
+      <PublishedFileId>888457381</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Suppress Vanilla Cargo Ships">
+      <Name>888457124.sbm</Name>
+      <PublishedFileId>888457124</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Trade Operators Coalition">
+      <Name>2966429095.sbm</Name>
+      <PublishedFileId>2966429095</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Parallax Concepts">
+      <Name>1135484957.sbm</Name>
+      <PublishedFileId>1135484957</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Independent Contractors">
+      <Name>445996030.sbm</Name>
+      <PublishedFileId>445996030</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Imber Corporation">
+      <Name>973526550.sbm</Name>
+      <PublishedFileId>973526550</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="MES Abandoned Mining Facility">
+      <Name>2634554148.sbm</Name>
+      <PublishedFileId>2634554148</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Wasteland Encounters V2 Continued">
+      <Name>2539299261.sbm</Name>
+      <PublishedFileId>2539299261</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
+    <ModItem FriendlyName="Abandoned Settlements [v2]">
+      <Name>2310821218.sbm</Name>
+      <PublishedFileId>2310821218</PublishedFileId>
+      <PublishedServiceName>Steam</PublishedServiceName>
+    </ModItem>
     <ModItem FriendlyName="OctahedronOres">
       <Name>OctahedronOres</Name>
       <PublishedFileId>0</PublishedFileId>
@@ -864,61 +664,6 @@
       <DisplayName>Octahedron Authority</DisplayName>
       <CharacterEntityId>0</CharacterEntityId>
     </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>186339441050695183</IdentityId>
-      <DisplayName>The Director</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>185720869031795779</IdentityId>
-      <DisplayName>Contractors</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>210367643581826666</IdentityId>
-      <DisplayName>The Chairman</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>166260740366198874</IdentityId>
-      <DisplayName>Qi Inc</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>198503974421361590</IdentityId>
-      <DisplayName>VOID</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>175637740566040665</IdentityId>
-      <DisplayName>Space-Pirates</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>188175262111696458</IdentityId>
-      <DisplayName>Waipa</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>148319575481249823</IdentityId>
-      <DisplayName>The Board</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>197667794594836468</IdentityId>
-      <DisplayName>Xenvakian Highlord</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>209257313330566422</IdentityId>
-      <DisplayName>Spaceman Spiff</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
-    <MyObjectBuilder_Identity>
-      <IdentityId>212788258428228943</IdentityId>
-      <DisplayName>Wrecker</DisplayName>
-      <CharacterEntityId>0</CharacterEntityId>
-    </MyObjectBuilder_Identity>
   </Identities>
   <PreviousEnvironmentHostility>SAFE</PreviousEnvironmentHostility>
   <AllPlayersData>
@@ -935,17 +680,6 @@
     <long>144115188075855894</long>
     <long>144115188075855896</long>
     <long>184230955976420208</long>
-    <long>186339441050695183</long>
-    <long>185720869031795779</long>
-    <long>210367643581826666</long>
-    <long>166260740366198874</long>
-    <long>198503974421361590</long>
-    <long>175637740566040665</long>
-    <long>188175262111696458</long>
-    <long>148319575481249823</long>
-    <long>197667794594836468</long>
-    <long>209257313330566422</long>
-    <long>212788258428228943</long>
   </NonPlayerIdentities>
   <Gps>
     <dictionary />

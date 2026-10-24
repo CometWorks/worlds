@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<ConfigGeneral xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!-- Each node counts only the NPC grids it holds, so this caps NPC grids per node: no new spawn
+       on a node that holds 100 or more NPC-owned grids (about 600 on 6 serving nodes). -->
+  <UseMaxNpcGrids>true</UseMaxNpcGrids>
+  <MaxGlobalNpcGrids>100</MaxGlobalNpcGrids>
+</ConfigGeneral>
