@@ -182,17 +182,17 @@ internal static class ShipyardOrders
                 "pcu",
                 $"you have {playerPcu:N0} PCU, free builds are for players under {Config.FreeBuildPcuLimit:N0}"
             );
-        else if (blocked.Count > 0)
-            (plan.PaidRule, plan.Paid) = (
-                "blocked",
-                $"a free ship can't have {string.Join(", ", blocked)}"
-            );
         else if (!FreePrints.Ready)
             return Fail(plan, "The shipyard is busy, try again in a few seconds.");
         else if (wait > TimeSpan.Zero)
             (plan.PaidRule, plan.Paid) = (
                 "cooldown",
                 $"your next free ship is in {Math.Ceiling(wait.TotalMinutes)} min"
+            );
+        else if (blocked.Count > 0)
+            (plan.PaidRule, plan.Paid) = (
+                "blocked",
+                $"a free ship can't have {string.Join(", ", blocked)}"
             );
         plan.Free = plan.Paid == null;
         if (plan.Free)
