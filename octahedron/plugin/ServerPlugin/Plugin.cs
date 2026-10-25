@@ -78,6 +78,7 @@ public class Plugin : IPlugin
             ShipyardOrders.Update();
             Ledgers.Update();
             Contracts.Update();
+            FreePrints.Update();
         }
         catch (Exception e)
         {

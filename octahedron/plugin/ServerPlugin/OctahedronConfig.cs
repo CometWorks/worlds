@@ -316,6 +316,30 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 60;
 
+    [IntOption(
+        0,
+        description: "Minutes a player waits between two free shipyard builds. It starts when a free build ends with the ship "
+            + "handed over, finished or not; a ship removed before that starts none. Kept in the world, on a cluster on the World Authority.",
+        Parent = "shipyard"
+    )]
+    public int FreeBuildCooldownMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60;
+
+    [StringOption(
+        description: "Blocks a free shipyard build can't have, comma separated, as type/subtype, where * matches any text: "
+            + "prototech blocks, large ion thrusters and jump drives. The type is without MyObjectBuilder_.",
+        Parent = "shipyard"
+    )]
+    public string FreeBuildBlockedBlocks
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "*/*Prototech*, JumpDrive/*, Thrust/*LargeThrust, Thrust/*LargeThrustSciFi, Thrust/*LargeModularThruster";
+
     [BoolOption(
         "OCT's account is real, without the economy's top-up toward 1e9: new money comes only from the subsidy and OCT's floor. "
             + "Once a day (00:00 UTC) the wealth tax goes into a pool; once an hour a part of it, the subsidy and OCT's balance above its cap "
