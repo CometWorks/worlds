@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using HarmonyLib;
-using PluginSdk.Commands;
 using Sandbox;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
@@ -13,42 +14,61 @@ using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.Multiplayer;
+using Sandbox.Game.Screens.Helpers;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
+using SpaceEngineers.Game.Entities.Blocks;
 using VRage;
 using VRage.Game;
 using VRage.Game.Entity;
+using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI;
 using VRage.Network;
 using VRage.ObjectBuilders;
+using VRage.ObjectBuilders.Private;
 using VRageMath;
+using IMyTextSurface = Sandbox.ModAPI.Ingame.IMyTextSurface;
+using IMyTextSurfaceProvider = Sandbox.ModAPI.Ingame.IMyTextSurfaceProvider;
 
 namespace ServerPlugin;
 
-// A player orders the blueprint loaded into a station's hologram table with !oct order, and
-// the station's shipyard builds it. The ship starts as a static grid of one of its blocks,
-// centered in the shipyard's free space, with an NPC-owned projector and battery (the scaffold)
-// next to that block projecting the whole blueprint. The shipyard's cargo containers get the
-// components of the remaining blocks and its OmniArc welders (ToolCore) are switched on.
-// Projected blocks welded onto the ship are the player's, owner and BuiltBy. The order ends
-// when every block is complete or after ShipyardOrderMinutes: the welders go off, the scaffold
-// and the leftover components are removed, and the ship, finished or not, becomes the
-// player's dynamic ship.
+// A player loads a blueprint into a station's hologram table, reads the quote on the table's
+// large screen and presses the button next to it (ShipyardConfirmButtonName) to queue the
+// ship at the station's shipyard; pressing it again cancels their entry before its build starts.
+// The queue and the build ledgers are kept by Builds, on the authority; the station's queue
+// panels show it.
 //
-// Orders are free builds, for players under FreeBuildPcuLimit. A player gets one at a time and
-// waits FreeBuildCooldownMinutes after one ends before the next (FreePrints), and a free
-// build can't have the blocks in FreeBuildBlockedBlocks.
+// A ship is a free build for a player under FreeBuildPcuLimit, once FreeBuildCooldownMinutes
+// passed since their last free build ended (FreePrints), without the blocks in
+// FreeBuildBlockedBlocks. Any other ship is a paid build: its components, and the ice for the
+// hydrogen to fill its H2 tanks to ShipyardHydrogenFillPercent, come from the payer's ledger at
+// the station (the player's, or their faction's with the kiosk's Faction switch on), then the
+// cheapest listings and OCT, plus the labor fee; hydrogen in the tanks of the player's ships
+// docked at the station counts as ice first.
 //
-// The order lives in the world, in the scaffold projector's CustomData, so it survives a
-// restart and moves with the station's partition on a cluster: every node checks the
+// When the shipyard is free, the next order starts. The ship starts as a static grid of one of
+// its blocks, centered in the shipyard's free space, with an NPC-owned projector and battery
+// (the scaffold) next to that block projecting the whole blueprint. The shipyard's cargo
+// containers get the components of the remaining blocks, from the build ledger for a paid
+// build, and its OmniArc welders (ToolCore) are switched on. Projected blocks welded onto the
+// ship are the player's, owner and BuiltBy. The order ends when every block is complete or
+// after ShipyardOrderMinutes: the welders go off, the scaffold is removed, the leftover
+// components go back to the payer's ledger (a free build's are removed), a paid build's H2
+// tanks are filled, and the ship, finished or not, becomes the player's dynamic ship.
+//
+// The running order lives in the world, in the scaffold projector's CustomData, so it survives
+// a restart and moves with the station's partition on a cluster: every node checks the
 // shipyards it simulates every 10 s.
 internal static class ShipyardOrders
 {
     private const string ScaffoldName = "Shipyard Order";
     private const string ShootProperty = "ToolCore_Shoot";
     private const string TrackProperty = "ToolCore_TrackTargets";
+    private const string Hydrogen = "Ore/Ice";
     private const int UpdateTicks = 600;
+    private const int QuoteTicks = 60;
 
     private sealed class Order
     {
@@ -57,134 +77,837 @@ internal static class ShipyardOrders
         public DateTime Ends;
         public int Blocks;
         public Dictionary<MyDefinitionId, int> Components;
+
+        // The queue entry; empty for an order from before the queues
+        public string Id = "";
+        public bool Free = true;
+
+        // Liters for the ship's H2 tanks at the end
+        public double Hydrogen;
     }
 
     // By shipyard entity id
     private static readonly Dictionary<long, Order> orders = new();
 
+    // Shipyards whose next order is on its way from the authority
+    private static readonly HashSet<long> starting = new();
+
+    // Shipyards whose queue shows a running build without its ship, counted per check
+    private static readonly Dictionary<long, int> lost = new();
+
     // The shipyard's free space around its welders, in its grid's cells
     private static readonly Dictionary<long, BoundingBoxI> freeBoxes = new();
+
+    // The quote each hologram table shows, by table entity id
+    private static readonly Dictionary<long, TableQuote> quotes = new();
+
+    // Tables whose blueprint a player just loaded: the quote is for them
+    private static readonly Dictionary<long, long> loaded = new();
 
     private static int ticks;
 
     private static string blockedPatterns;
     private static Regex blockedRegex;
 
-    public static CommandReply Request(long identityId, string tableName)
+    private static OctahedronConfig Config => Plugin.Config;
+
+    // --- a blueprint at a table, for a player ---
+
+    private sealed class Plan
     {
-        var config = Plugin.Config;
-        if (config.ShipyardOrderMinutes <= 0)
-            return CommandReply.Error("Shipyard orders are off on this server.");
+        public string Error;
+        public MyProjectorBase Table;
+        public MyCubeGrid Shipyard;
+        public string Station;
+        public long Player;
+        public List<MyObjectBuilder_CubeGrid> Blueprint;
+        public string Ship = "";
+        public int Pcu;
+        public bool Free;
 
+        // Why it is a paid build
+        public string Paid;
+        public LedgerOwner Payer;
+        public string PayerName = "";
+        public long Fee;
+
+        // Every block's components and the ice for the hydrogen, raw
+        public Dictionary<string, long> Needed = new();
+        public double HydrogenLiters;
+
+        // Liters the player's docked ships have, at most what the build needs
+        public double ShipHydrogen;
+
+        public string Key =>
+            $"{Ship}|{Pcu}|{Blueprint?.Sum(g => g.CubeBlocks.Count)}|{Free}|{Payer}|{Error}";
+    }
+
+    private sealed class TableQuote
+    {
+        public long Player;
+        public string Key;
+        public BuildQuote Quote;
+        public DateTime At;
+    }
+
+    private static Plan MakePlan(long identityId, MyProjectorBase table)
+    {
+        var plan = new Plan { Table = table, Player = identityId };
+        plan.Station = StationOf(table.CubeGrid);
+        plan.Shipyard = FindShipyard(table);
         var identity = MySession.Static.Players.TryGetIdentity(identityId);
-        var character = identity?.Character;
-        if (character == null || character.IsDead || character.MarkedForClose)
-            return CommandReply.Error("Spawn first, then order at a hologram table.");
-
-        // A ship is built for free only while the player has less than FreeBuildPcuLimit
-        var pcu = StarterShip.PlayerPcu(identity);
-        if (pcu >= config.FreeBuildPcuLimit)
-            return CommandReply.Error(
-                $"You have {pcu:N0} PCU. The shipyard builds for free only for players under {config.FreeBuildPcuLimit:N0} PCU."
-            );
-        var building = orders.Values.FirstOrDefault(o => o.Player == identityId);
-        if (building != null)
-            return CommandReply.Error(
-                $"The shipyard is building '{building.Projector.CubeGrid.DisplayName}' for you, one free ship at a time."
-            );
-        if (!FreePrints.Ready)
-            return CommandReply.Error("The shipyard is busy, try again in a few seconds.");
-        var wait = FreePrints.Wait(identityId);
-        if (wait > TimeSpan.Zero)
-            return CommandReply.Error(
-                $"The shipyard builds your next free ship in {Math.Ceiling(wait.TotalMinutes)} min."
-            );
-
-        var table = StarterShip.FindTable(character, tableName, config);
-        if (table == null)
-            return CommandReply.Error(
-                $"Stand within {config.StarterShipTableReach:0} m of a station's hologram table."
-            );
+        if (identity == null)
+            return Fail(plan, "Unknown player.");
+        if (plan.Station == null || plan.Shipyard == null)
+            return Fail(plan, "This station has no shipyard.");
         var blueprint = ((MyObjectBuilder_ProjectorBase)table.GetObjectBuilderCubeBlock(true))
             .ProjectedGrids?.Select(g => (MyObjectBuilder_CubeGrid)g.Clone())
             .ToList();
         if (blueprint == null || blueprint.Count == 0)
-            return CommandReply.Error(
-                "Switch the hologram table on and load a blueprint into it first."
-            );
-        var blocked = Blocked(blueprint, config.FreeBuildBlockedBlocks);
-        if (blocked.Count > 0)
-            return CommandReply.Error(
-                $"A free ship can't have {string.Join(", ", blocked)}. Such a ship is a paid build, "
-                    + "and the shipyard doesn't take paid orders yet."
-            );
+            return Fail(plan, "Switch the hologram table on and load a blueprint into it first.");
+        plan.Blueprint = blueprint;
+        plan.Ship = blueprint[0].DisplayName ?? "Ship";
+        plan.Pcu = blueprint.Sum(g => g.CalculatePCUs());
+        var error = Fits(plan.Shipyard, blueprint);
+        if (error != null)
+            return Fail(plan, error);
 
-        // The ordered ship is the player's, so GroupPcuLimit would stop welding it there
-        var shipPcu = blueprint.Sum(g => g.CalculatePCUs());
-        if (config.GroupPcuLimit > 0 && shipPcu > config.GroupPcuLimit)
-            return CommandReply.Error(
-                $"The blueprint has {shipPcu:N0} PCU, a ship at most {config.GroupPcuLimit:N0}."
-            );
+        // Free, or why not
+        var playerPcu = StarterShip.PlayerPcu(identity);
+        var blocked = Blocked(blueprint, Config.FreeBuildBlockedBlocks);
+        var wait = FreePrints.Wait(identityId);
+        if (playerPcu >= Config.FreeBuildPcuLimit)
+            plan.Paid =
+                $"you have {playerPcu:N0} PCU, free builds are for players under {Config.FreeBuildPcuLimit:N0}";
+        else if (blocked.Count > 0)
+            plan.Paid = $"a free ship can't have {string.Join(", ", blocked)}";
+        else if (!FreePrints.Ready)
+            return Fail(plan, "The shipyard is busy, try again in a few seconds.");
+        else if (wait > TimeSpan.Zero)
+            plan.Paid = $"your next free ship is in {Math.Ceiling(wait.TotalMinutes)} min";
+        plan.Free = plan.Paid == null;
+        if (plan.Free)
+            return plan;
 
-        var shipyard = FindShipyard(table);
-        if (shipyard == null)
-            return CommandReply.Error("This station has no shipyard.");
-        if (!Plugin.Simulated(table.CubeGrid) || !Plugin.Simulated(shipyard))
-            return CommandReply.Error("The station is busy, try again in a few seconds.");
-        if (orders.TryGetValue(shipyard.EntityId, out var current))
+        var faction = MySession.Static.Factions.GetPlayerFaction(identityId);
+        plan.Payer =
+            Kiosks.FactionSwitch(identityId) && faction != null
+                ? LedgerOwner.OfFaction(faction.FactionId)
+                : LedgerOwner.Player(identityId);
+        plan.PayerName = plan.Payer.Faction ? $"your faction {faction.Tag}" : "you";
+        plan.Fee = BuildBook.Fee(plan.Pcu, Config.ShipyardLaborFeePer10Pcu);
+        foreach (var c in Components(blueprint, skipFirst: false))
+            plan.Needed[Ledgers.ItemName(c.Key)] = c.Value * LedgerBook.Unit;
+        plan.HydrogenLiters =
+            HydrogenCapacity(blueprint) * Config.ShipyardHydrogenFillPercent / 100;
+        if (plan.HydrogenLiters > 0)
         {
-            var left = Math.Max(1, Math.Ceiling((current.Ends - DateTime.UtcNow).TotalMinutes));
-            return CommandReply.Error(
-                $"{shipyard.DisplayName} is building '{current.Projector.CubeGrid.DisplayName}' "
-                    + $"for {Name(current.Player)}, it is free in {left} min at the latest."
+            plan.Needed[Hydrogen] = IceFor(plan.HydrogenLiters, up: true);
+            plan.ShipHydrogen = Math.Min(
+                plan.HydrogenLiters,
+                ShipTanks(plan).Sum(t => t.FilledRatio * t.Capacity)
             );
         }
-        var space = FreeSpace(shipyard);
-        var obstacle = GridsIn(space).FirstOrDefault(g => g != shipyard);
-        if (obstacle != null)
-            return CommandReply.Error(
-                $"'{obstacle.DisplayName}' is in {shipyard.DisplayName}, it has to leave first."
-            );
+        return plan;
+    }
 
+    private static Plan Fail(Plan plan, string error)
+    {
+        plan.Error = error;
+        return plan;
+    }
+
+    // Why the shipyard can't build the blueprint at all, or null
+    private static string Fits(MyCubeGrid shipyard, List<MyObjectBuilder_CubeGrid> blueprint)
+    {
+        var pcu = blueprint.Sum(g => g.CalculatePCUs());
+        // The ordered ship is the player's, so GroupPcuLimit would stop welding it there
+        if (Config.GroupPcuLimit > 0 && pcu > Config.GroupPcuLimit)
+            return $"The blueprint has {pcu:N0} PCU, a ship at most {Config.GroupPcuLimit:N0}.";
         var main = blueprint[0];
         if (!FindStart(main, out var start, out var outward))
-            return CommandReply.Error(
-                "The blueprint's main grid needs a 1x1x1 block on its outside to start from."
-            );
-        // The projector anchors the projection's first block, so the start block goes first
-        main.CubeBlocks.Remove(start);
-        main.CubeBlocks.Insert(0, start);
-        Vector3I startCell = start.Min;
-        var scaffold = new[] { startCell + outward, startCell + 2 * outward };
+            return "The blueprint's main grid needs a 1x1x1 block on its outside to start from.";
+        var size = Size(blueprint, start, outward, out _);
+        var room = FreeSpace(shipyard).HalfExtent * 2;
+        if (size.X > room.X || size.Y > room.Y || size.Z > room.Z)
+            return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}.";
+        var needed = Components(blueprint, skipFirst: true)
+            .Sum(c => MyDefinitionManager.Static.GetPhysicalItemDefinition(c.Key).Volume * c.Value);
+        var capacity = Containers(shipyard).Sum(i => (double)i.MaxVolume);
+        if (needed > capacity)
+            return $"The ship's components take {needed:N0} m³, {shipyard.DisplayName}'s containers hold {capacity:N0} m³.";
+        return null;
+    }
 
+    // The ship's size along the shipyard, turned so its cockpit points along it, scaffold included
+    private static Vector3D Size(
+        List<MyObjectBuilder_CubeGrid> blueprint,
+        MyObjectBuilder_CubeBlock start,
+        Vector3I outward,
+        out BoundingBoxD bounds
+    )
+    {
+        var main = blueprint[0];
         var cube = MyDefinitionManager.Static.GetCubeSize(main.GridSizeEnum);
-        var bounds = TableHologram.Bounds(blueprint);
-        foreach (var cell in scaffold)
+        bounds = TableHologram.Bounds(blueprint);
+        Vector3I startCell = start.Min;
+        foreach (var cell in new[] { startCell + outward, startCell + 2 * outward })
             bounds.Include(
                 new BoundingBoxD(((Vector3D)cell - 0.5) * cube, ((Vector3D)cell + 0.5) * cube)
             );
         var (forward, up) = StarterShip.CockpitFrame(main);
         var turn = MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
-        var size = Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, turn));
-        var room = space.HalfExtent * 2;
-        if (size.X > room.X || size.Y > room.Y || size.Z > room.Z)
-            return CommandReply.Error(
-                $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}."
-            );
+        return Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, turn));
+    }
 
-        var components = Components(blueprint);
+    // --- the button ---
+
+    // The confirm button's press on the server, before the game runs its toolbar item, which
+    // is only there so the clients offer the button at all
+    [HarmonyPatch(typeof(MyButtonPanel), nameof(MyButtonPanel.ActivateButton))]
+    private static class ButtonPress
+    {
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(MyButtonPanel __instance)
+        {
+            if (!Sync.IsServer || !Config.Enabled || !IsConfirmButton(__instance))
+                return true;
+            try
+            {
+                var sender = MyEventContext.Current.Sender.Value;
+                var identity = MySession.Static.Players.TryGetIdentityId(sender);
+                var table = TableBy(__instance);
+                if (identity == 0)
+                    return false;
+                if (table == null)
+                    Tell(identity, "This button has no hologram table next to it.");
+                else
+                    Press(identity, table, text => Tell(identity, text));
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.Error("Shipyard button failed", e);
+            }
+            return false;
+        }
+    }
+
+    private static bool IsConfirmButton(MyTerminalBlock block) =>
+        !string.IsNullOrWhiteSpace(Config.ShipyardConfirmButtonName)
+        && string.Equals(
+            block.CustomName?.ToString(),
+            Config.ShipyardConfirmButtonName,
+            StringComparison.OrdinalIgnoreCase
+        );
+
+    // The station hologram table nearest the button, within the table reach
+    private static MyProjectorBase TableBy(MyCubeBlock button)
+    {
+        var position = button.PositionComp.GetPosition();
+        return Grids(button.CubeGrid)
+            .SelectMany(g => g.GetFatBlocks<MyProjectorBase>())
+            .Where(IsTable)
+            .Select(t =>
+                (Table: t, Distance: Vector3D.Distance(t.PositionComp.GetPosition(), position))
+            )
+            .Where(t => t.Distance <= Config.StarterShipTableReach)
+            .OrderBy(t => t.Distance)
+            .Select(t => t.Table)
+            .FirstOrDefault();
+    }
+
+    private static bool IsTable(MyProjectorBase table) =>
+        table.BlockDefinition.Id.SubtypeName == Config.StarterShipTableSubtype
+        && MySession.Static.Players.IdentityIsNpc(table.OwnerId);
+
+    // The button gets a toolbar item, its own On switch, so that clients let players press it
+    private static void ArmButton(MyButtonPanel button)
+    {
+        if (button.Toolbar.GetItemAtIndex(0) != null)
+            return;
+        var item = MyToolbarItemFactory.TerminalBlockObjectBuilderFromBlock(button);
+        item._Action = "OnOff_On";
+        button.Toolbar.SetItemAtIndex(0, MyToolbarItemFactory.CreateToolbarItem(item));
+        Plugin.Log.Info($"Shipyard button {button.EntityId} armed");
+    }
+
+    // !oct order presses the button of the nearest table for an admin
+    public static string Request(long identityId, string tableName)
+    {
+        var character = MySession.Static.Players.TryGetIdentity(identityId)?.Character;
+        if (character == null || character.IsDead || character.MarkedForClose)
+            return "Spawn first, then order at a hologram table.";
+        var table = StarterShip.FindTable(character, tableName, Config);
+        if (table == null)
+            return $"Stand within {Config.StarterShipTableReach:0} m of a station's hologram table.";
+        var answers = new List<string>();
+        bool synchronous = true;
+        Press(
+            identityId,
+            table,
+            text =>
+            {
+                if (synchronous)
+                    answers.Add(text);
+                else
+                    Tell(identityId, text);
+            }
+        );
+        synchronous = false;
+        return answers.Count > 0 ? string.Join("\n", answers) : "The shipyard answers in chat.";
+    }
+
+    /// <summary>A press of the table's button: cancels the player's queue entry, shows their quote or orders.</summary>
+    public static void Press(long identityId, MyProjectorBase table, Action<string> tell)
+    {
+        if (Config.ShipyardOrderMinutes <= 0)
+        {
+            tell("Shipyard orders are off on this server.");
+            return;
+        }
+        var character = MySession.Static.Players.TryGetIdentity(identityId)?.Character;
+        if (character == null || character.IsDead || character.MarkedForClose)
+        {
+            tell("Spawn first, then order at a hologram table.");
+            return;
+        }
+        var plan = MakePlan(identityId, table);
+        if (plan.Station == null || plan.Shipyard == null)
+        {
+            tell(plan.Error);
+            return;
+        }
+        if (!Plugin.Simulated(table.CubeGrid) || !Plugin.Simulated(plan.Shipyard))
+        {
+            tell("The station is busy, try again in a few seconds.");
+            return;
+        }
+        Builds.Read(
+            new BuildRequest { Verb = BuildVerb.Queue, Station = plan.Station },
+            (text, error) =>
+            {
+                if (text == null)
+                {
+                    tell(error);
+                    return;
+                }
+                var mine = DecodeQueue(text).FirstOrDefault(o => o.Player == identityId);
+                if (mine == null)
+                    Place(plan, tell);
+                else if (mine.Started)
+                    tell($"'{mine.Ship}' is being built for you, it can't be canceled now.");
+                else
+                    Builds.Execute(
+                        Guid.NewGuid(),
+                        new BuildRequest
+                        {
+                            Verb = BuildVerb.Cancel,
+                            Station = plan.Station,
+                            Player = identityId,
+                        },
+                        (_, message) =>
+                        {
+                            tell(message);
+                            Refresh(plan.Station);
+                        }
+                    );
+            }
+        );
+    }
+
+    private static void Place(Plan plan, Action<string> tell)
+    {
+        if (plan.Error != null)
+        {
+            ShowQuote(plan, null);
+            tell(plan.Error);
+            return;
+        }
+        quotes.TryGetValue(plan.Table.EntityId, out var shown);
+        if (
+            shown == null
+            || shown.Player != plan.Player
+            || shown.Key != plan.Key
+            || (!plan.Free && shown.Quote == null)
+            || DateTime.UtcNow - shown.At > TimeSpan.FromMinutes(5)
+        )
+        {
+            Quote(
+                plan,
+                quote =>
+                    tell(
+                        quote == null && !plan.Free
+                            ? "The station's market did not answer, try again."
+                            : $"Your quote for '{plan.Ship}' is on the hologram table's screen"
+                                + (plan.Free ? ", a free build." : $": {quote.Total:N0} SC.")
+                                + " Press the button again to order."
+                    )
+            );
+            return;
+        }
+
+        var request = new BuildRequest
+        {
+            Verb = BuildVerb.Order,
+            Station = plan.Station,
+            Player = plan.Player,
+            Ship = plan.Ship,
+            Pcu = plan.Pcu,
+            Blueprint = EncodeBlueprint(plan.Blueprint),
+        };
+        var drained = new List<(MyGasTank Tank, double Liters)>();
+        if (!plan.Free)
+        {
+            if (!shown.Quote.Complete)
+            {
+                var missing = shown.Quote.Lines.First(l => l.Missing > 0);
+                tell(
+                    $"This station has {Units(missing.Item, missing.Missing)} {Market.ItemTitle(missing.Item)} "
+                        + "too few for sale. Deposit them into the ledger first."
+                );
+                return;
+            }
+            request.Payer = plan.Payer;
+            request.Fee = plan.Fee;
+            request.Needed = plan.Needed;
+            request.MaxTotal = shown.Quote.Total;
+            drained = Drain(plan);
+            var liters = drained.Sum(d => d.Liters);
+            if (liters > 0)
+                request.Provided[Hydrogen] = IceFor(liters, up: false);
+        }
+        Builds.Execute(
+            Guid.NewGuid(),
+            request,
+            (ok, message) =>
+            {
+                if (!ok)
+                    foreach (var (tank, liters) in drained)
+                        AddHydrogen(tank, liters);
+                tell(message.Split('\n')[0]);
+                if (ok)
+                {
+                    quotes.Remove(plan.Table.EntityId);
+                    Write(
+                        plan.Table,
+                        Config.ShipyardQuoteSurface,
+                        $"'{plan.Ship}' is in the queue for {Name(plan.Player)}.\n\nLoad a blueprint for a new quote."
+                    );
+                    Refresh(plan.Station);
+                }
+            }
+        );
+    }
+
+    // --- quotes on the hologram table ---
+
+    // A client loading a blueprint ends up here on the server too: the quote is for them
+    [HarmonyPatch(typeof(MyProjectorBase), "SetNewBlueprint")]
+    private static class SetNewBlueprint
+    {
+        private static void Postfix(MyProjectorBase __instance)
+        {
+            if (!Sync.IsServer || MyEventContext.Current.IsLocallyInvoked)
+                return;
+            var identity = MySession.Static.Players.TryGetIdentityId(
+                MyEventContext.Current.Sender.Value
+            );
+            if (identity != 0)
+                loaded[__instance.EntityId] = identity;
+        }
+    }
+
+    private static void Quote(Plan plan, Action<BuildQuote> done)
+    {
+        if (plan.Free || plan.Error != null)
+        {
+            ShowQuote(plan, null);
+            done(null);
+            return;
+        }
+        var needed = new Dictionary<string, long>(plan.Needed);
+        if (plan.ShipHydrogen > 0 && needed.ContainsKey(Hydrogen))
+            needed[Hydrogen] = Math.Max(0, needed[Hydrogen] - IceFor(plan.ShipHydrogen, up: false));
+        Builds.Read(
+            new BuildRequest
+            {
+                Verb = BuildVerb.Quote,
+                Station = plan.Station,
+                Payer = plan.Payer,
+                Fee = plan.Fee,
+                Needed = needed,
+            },
+            (text, error) =>
+            {
+                BuildQuote quote = null;
+                if (text != null)
+                    try
+                    {
+                        quote = BuildQuote.Decode(text);
+                    }
+                    catch (FormatException e)
+                    {
+                        Plugin.Log.Error("Shipyard quote", e);
+                    }
+                if (quote != null)
+                    ShowQuote(plan, quote);
+                done(quote);
+            }
+        );
+    }
+
+    private static void ShowQuote(Plan plan, BuildQuote quote)
+    {
+        quotes[plan.Table.EntityId] = new TableQuote
+        {
+            Player = plan.Player,
+            Key = plan.Key,
+            Quote = quote,
+            At = DateTime.UtcNow,
+        };
+        var text = new StringBuilder();
+        text.AppendLine($"Shipyard quote for {Name(plan.Player)}");
+        if (plan.Blueprint != null)
+            text.AppendLine($"'{plan.Ship}', {plan.Pcu:N0} PCU");
+        if (plan.Error != null)
+            text.AppendLine().AppendLine(plan.Error);
+        else if (plan.Free)
+            text.AppendLine()
+                .AppendLine("A free build.")
+                .AppendLine()
+                .AppendLine("Press the button to order, again to cancel.");
+        else if (quote != null)
+        {
+            text.AppendLine($"A paid build: {plan.Paid}. Paid by {plan.PayerName}.");
+            text.AppendLine();
+            text.Append(
+                BuildBook.QuoteText(
+                    quote,
+                    Hydrogen,
+                    plan.ShipHydrogen > 0 ? IceFor(plan.ShipHydrogen, up: false) : 0,
+                    Market.ItemTitle,
+                    Units
+                )
+            );
+            if (plan.HydrogenLiters > 0)
+                text.AppendLine(
+                    $"Hydrogen: {plan.HydrogenLiters:N0} L for the H2 tanks, as {Config.ShipyardHydrogenLitersPerIce:0.##} L per kg of ice"
+                );
+            text.AppendLine();
+            text.AppendLine(
+                quote.Complete
+                    ? "Press the button to order, again to cancel."
+                    : "Not everything is for sale here: deposit it into the ledger first."
+            );
+        }
+        Write(plan.Table, Config.ShipyardQuoteSurface, text.ToString());
+    }
+
+    private static void Write(IMyTextSurfaceProvider provider, int index, string text)
+    {
+        if (index < 0 || index >= provider.SurfaceCount)
+            return;
+        var surface = provider.GetSurface(index);
+        var lines = text.Split('\n').Length;
+        surface.ContentType = ContentType.TEXT_AND_IMAGE;
+        surface.Font = "Monospace";
+        surface.FontSize = (float)Math.Max(0.3, Math.Min(0.7, 0.7 * 16 / Math.Max(16, lines)));
+        surface.TextPadding = 2;
+        if (surface.GetText() != text)
+            surface.WriteText(text);
+    }
+
+    // --- the update ---
+
+    public static void Update()
+    {
+        ticks++;
+        if (ticks % QuoteTicks == 0 && loaded.Count > 0)
+        {
+            foreach (var (tableId, player) in loaded.ToList())
+                if (
+                    MyEntities.TryGetEntityById(tableId, out MyProjectorBase table)
+                    && IsTable(table)
+                )
+                    Quote(MakePlan(player, table), _ => { });
+            loaded.Clear();
+        }
+        if (ticks % UpdateTicks != 0)
+            return;
+
+        var shipyards = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .Where(ShipyardZoneWelding.IsShipyard)
+            .ToList();
+        foreach (var shipyard in shipyards)
+            Check(shipyard);
+        foreach (var station in StationTables())
+            Refresh(station.Key, station.Value);
+    }
+
+    private static void Check(MyCubeGrid shipyard)
+    {
+        if (!Plugin.Simulated(shipyard))
+        {
+            orders.Remove(shipyard.EntityId);
+            return;
+        }
+        orders.TryGetValue(shipyard.EntityId, out var order);
+        var projector = GridsIn(FreeSpace(shipyard))
+            .SelectMany(g => g.GetFatBlocks<MyProjectorBase>())
+            .FirstOrDefault(IsScaffold);
+        if (projector == null)
+        {
+            if (order != null)
+                End(shipyard, order, "the ship is gone");
+            return;
+        }
+        if (order?.Projector != projector)
+        {
+            order = Restore(projector);
+            if (order == null)
+                return;
+            orders[shipyard.EntityId] = order;
+            Plugin.Log.Info(
+                $"Shipyard order '{projector.CubeGrid.DisplayName}' ({projector.CubeGrid.EntityId}) "
+                    + $"of {Name(order.Player)} picked up at {shipyard.DisplayName}, until {order.Ends:u}"
+            );
+        }
+
+        var built = Built(projector.CubeGrid);
+        if (built >= order.Blocks)
+            End(shipyard, order, null);
+        else if (DateTime.UtcNow >= order.Ends)
+            End(shipyard, order, $"{built} of {order.Blocks} blocks complete");
+        else
+            Welders(shipyard, true);
+    }
+
+    // Every station's hologram tables, by station name
+    private static Dictionary<string, List<MyProjectorBase>> StationTables()
+    {
+        var tables = new Dictionary<string, List<MyProjectorBase>>();
+        var seen = new HashSet<long>();
+        foreach (var faction in MySession.Static.Factions)
+        foreach (var entry in faction.Value.Stations)
+        {
+            if (
+                !MyEntities.TryGetEntityById(entry.StationEntityId, out MyCubeGrid grid)
+                || !Plugin.Simulated(grid)
+            )
+                continue;
+            var station = StationOf(grid);
+            if (station == null)
+                continue;
+            foreach (var g in Grids(grid))
+            foreach (var table in g.GetFatBlocks<MyProjectorBase>())
+                if (IsTable(table) && seen.Add(table.EntityId))
+                {
+                    if (!tables.TryGetValue(station, out var list))
+                        tables[station] = list = [];
+                    list.Add(table);
+                }
+        }
+        return tables;
+    }
+
+    private static void Refresh(string station)
+    {
+        if (StationTables().TryGetValue(station, out var tables))
+            Refresh(station, tables);
+    }
+
+    // The station's buttons, quotes and queue panels, and its shipyard's next order
+    private static void Refresh(string station, List<MyProjectorBase> tables)
+    {
+        var grids = Grids(tables[0].CubeGrid);
+        foreach (var button in grids.SelectMany(g => g.GetFatBlocks<MyButtonPanel>()))
+            if (IsConfirmButton(button))
+                ArmButton(button);
+        foreach (var table in tables)
+            if (quotes.TryGetValue(table.EntityId, out var shown))
+                Quote(MakePlan(shown.Player, table), _ => { });
+
+        var shipyard = FindShipyard(tables[0]);
+        if (shipyard == null || !Plugin.Simulated(shipyard))
+            return;
+        Builds.Read(
+            new BuildRequest { Verb = BuildVerb.Queue, Station = station },
+            (text, _) =>
+            {
+                if (text == null || shipyard.MarkedForClose)
+                    return;
+                var queue = DecodeQueue(text);
+                ShowQueue(grids, shipyard, queue);
+                if (queue.Count == 0)
+                    return;
+                if (queue[0].Started)
+                    Lost(shipyard, queue[0]);
+                else
+                    Start(station, shipyard);
+            }
+        );
+    }
+
+    private static List<BuildOrder> DecodeQueue(string text) =>
+        text.Split('\n').Where(l => l.Length > 0).Select(BuildBook.DecodeOrder).ToList();
+
+    private static void ShowQueue(
+        List<MyCubeGrid> grids,
+        MyCubeGrid shipyard,
+        List<BuildOrder> queue
+    )
+    {
+        if (string.IsNullOrWhiteSpace(Config.ShipyardQueuePanelName))
+            return;
+        var text = new StringBuilder($"{shipyard.DisplayName} queue\n\n");
+        if (queue.Count == 0)
+            text.AppendLine("No ships in the queue.");
+        orders.TryGetValue(shipyard.EntityId, out var running);
+        int place = 1;
+        foreach (var o in queue)
+        {
+            var state = o.Started
+                ? running != null
+                    ? $"building, done by {running.Ends:HH:mm} UTC at the latest"
+                    : "building"
+                : o.Free
+                    ? "waiting, free"
+                    : "waiting, paid";
+            text.AppendLine(
+                $"{place++}. '{o.Ship}' ({o.Pcu:N0} PCU) for {Name(o.Player)}: {state}"
+            );
+        }
+        var obstacle =
+            running == null
+                ? GridsIn(FreeSpace(shipyard)).FirstOrDefault(g => g != shipyard)
+                : null;
+        if (obstacle != null && queue.Count > 0)
+            text.AppendLine()
+                .AppendLine($"Waiting for '{obstacle.DisplayName}' to leave the shipyard.");
+        foreach (var panel in grids.SelectMany(g => g.GetFatBlocks<MyTextPanel>()))
+            if (
+                string.Equals(
+                    panel.CustomName?.ToString(),
+                    Config.ShipyardQueuePanelName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+                Write(panel, 0, text.ToString());
+    }
+
+    // --- starting the next order ---
+
+    private static void Start(string station, MyCubeGrid shipyard)
+    {
+        if (orders.ContainsKey(shipyard.EntityId) || !starting.Add(shipyard.EntityId))
+            return;
+        if (GridsIn(FreeSpace(shipyard)).Any(g => g != shipyard))
+        {
+            starting.Remove(shipyard.EntityId);
+            return;
+        }
+        Builds.Read(
+            new BuildRequest { Verb = BuildVerb.Next, Station = station },
+            (text, _) =>
+            {
+                if (string.IsNullOrEmpty(text) || shipyard.MarkedForClose)
+                {
+                    starting.Remove(shipyard.EntityId);
+                    return;
+                }
+                var next = BuildBook.DecodeOrder(text);
+                var blueprint = DecodeBlueprint(next.Blueprint);
+                var error =
+                    blueprint == null || blueprint.Count == 0
+                        ? "its blueprint could not be read"
+                        : Fits(shipyard, blueprint);
+                if (error != null)
+                {
+                    // Not started: the build ledger is still whole
+                    Finish(
+                        next,
+                        new Dictionary<string, long>(),
+                        0,
+                        refund: true,
+                        $"'{next.Ship}' can't be built: {error}"
+                    );
+                    starting.Remove(shipyard.EntityId);
+                    return;
+                }
+                Builds.Execute(
+                    Guid.NewGuid(),
+                    new BuildRequest
+                    {
+                        Verb = BuildVerb.Start,
+                        Id = next.Id,
+                        Station = station,
+                    },
+                    (ok, message) =>
+                    {
+                        starting.Remove(shipyard.EntityId);
+                        if (!ok)
+                        {
+                            Plugin.Log.Warning(
+                                $"Shipyard order {next.Id} did not start: {message}"
+                            );
+                            return;
+                        }
+                        error = Create(shipyard, next, blueprint);
+                        if (error != null)
+                            Finish(
+                                next,
+                                Taken(next),
+                                0,
+                                refund: true,
+                                $"'{next.Ship}' can't be built: {error}"
+                            );
+                    }
+                );
+            }
+        );
+    }
+
+    // What a started paid build took out of its build ledger, raw
+    private static Dictionary<string, long> Taken(BuildOrder order) =>
+        order.Free
+            ? new Dictionary<string, long>()
+            : order.Items.Where(i => i.Key != Hydrogen).ToDictionary(i => i.Key, i => i.Value);
+
+    // The ship's first block and the scaffold, the components loaded; null when it started
+    private static string Create(
+        MyCubeGrid shipyard,
+        BuildOrder next,
+        List<MyObjectBuilder_CubeGrid> blueprint
+    )
+    {
+        var space = FreeSpace(shipyard);
+        var obstacle = GridsIn(space).FirstOrDefault(g => g != shipyard);
+        if (obstacle != null)
+            return $"'{obstacle.DisplayName}' is in {shipyard.DisplayName}";
+        var main = blueprint[0];
+        FindStart(main, out var start, out var outward);
+        // The projector anchors the projection's first block, so the start block goes first
+        main.CubeBlocks.Remove(start);
+        main.CubeBlocks.Insert(0, start);
+        Vector3I startCell = start.Min;
+        var scaffold = new[] { startCell + outward, startCell + 2 * outward };
+        Size(blueprint, start, outward, out var bounds);
+        var (forward, up) = StarterShip.CockpitFrame(main);
+        var turn = MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
+
+        var components = Components(blueprint, skipFirst: true);
         var containers = Containers(shipyard).ToList();
         var needed = components.Sum(c =>
             MyDefinitionManager.Static.GetPhysicalItemDefinition(c.Key).Volume * c.Value
         );
         var free = containers.Sum(i => (double)(i.MaxVolume - i.CurrentVolume));
         if (needed > free)
-            return CommandReply.Error(
-                $"The ship's components take {needed:N0} m³, {shipyard.DisplayName}'s containers have room for {free:N0} m³."
-            );
+            return $"the components take {needed:N0} m³, the containers have room for {free:N0} m³";
 
         var npc = shipyard.BigOwners.First(MySession.Static.Players.IdentityIsNpc);
-        var ends = DateTime.UtcNow.AddMinutes(config.ShipyardOrderMinutes);
+        var ends = DateTime.UtcNow.AddMinutes(Config.ShipyardOrderMinutes);
         var world = turn * shipyard.WorldMatrix.GetOrientation();
         var ship = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_CubeGrid>();
         ship.GridSizeEnum = main.GridSizeEnum;
@@ -201,7 +924,7 @@ internal static class ShipyardOrders
         first.SetupForProjector();
         first.IntegrityPercent = first.BuildPercent = 1;
         first.ConstructionStockpile = null;
-        first.Owner = first.BuiltBy = identityId;
+        first.Owner = first.BuiltBy = next.Player;
         first.ShareMode = MyOwnershipShareModeEnum.Faction;
         ship.CubeBlocks =
         [
@@ -211,97 +934,111 @@ internal static class ShipyardOrders
         ];
         MyEntities.RemapObjectBuilder(ship);
         if (MyEntities.CreateFromObjectBuilderAndAdd(ship, true) is not MyCubeGrid grid)
-            return CommandReply.Error("The ship could not be started.");
+            return "the ship could not be started";
 
+        var hydrogen =
+            next.Free || !next.Items.TryGetValue(Hydrogen, out var ice)
+                ? 0
+                : ice / (double)LedgerBook.Unit * Config.ShipyardHydrogenLitersPerIce;
         var projector = grid.GetFatBlocks<MyProjectorBase>().First();
-        projector.CustomData =
-            $"Player={identityId}\nEnds={ends.ToString("o", CultureInfo.InvariantCulture)}";
+        projector.CustomData = string.Join(
+            "\n",
+            $"Player={next.Player}",
+            $"Ends={ends.ToString("o", CultureInfo.InvariantCulture)}",
+            $"Build={next.Id}",
+            $"Free={(next.Free ? 1 : 0)}",
+            $"Hydrogen={hydrogen.ToString("R", CultureInfo.InvariantCulture)}"
+        );
         Load(containers, components);
         orders[shipyard.EntityId] = new Order
         {
             Projector = projector,
-            Player = identityId,
+            Player = next.Player,
             Ends = ends,
             Blocks = blueprint.Sum(g => g.CubeBlocks.Count),
             Components = components,
+            Id = next.Id,
+            Free = next.Free,
+            Hydrogen = hydrogen,
         };
+        lost.Remove(shipyard.EntityId);
         Welders(shipyard, true);
         Plugin.Log.Info(
-            $"Shipyard order '{grid.DisplayName}' ({grid.EntityId}, {shipPcu} PCU) "
-                + $"for {identity.DisplayName} at {shipyard.DisplayName}, until {ends:u}"
+            $"Shipyard order {next.Id} '{grid.DisplayName}' ({grid.EntityId}, {next.Pcu} PCU, "
+                + $"{(next.Free ? "free" : "paid by " + next.Payer)}) for {Name(next.Player)} at {shipyard.DisplayName}, until {ends:u}"
         );
-        return CommandReply.Ok(
-            $"{shipyard.DisplayName} builds '{grid.DisplayName}' for you, in {config.ShipyardOrderMinutes} min at most."
+        Tell(
+            next.Player,
+            $"{shipyard.DisplayName} builds '{grid.DisplayName}' for you now, in {Config.ShipyardOrderMinutes} min at most."
         );
+        return null;
     }
 
-    public static void Update()
+    // The queue says a build runs, but the shipyard has no order: after a second check in a
+    // row (the order may still be picked up from the world) it ends without its ship
+    private static void Lost(MyCubeGrid shipyard, BuildOrder running)
     {
-        if (++ticks % UpdateTicks != 0)
-            return;
-        var shipyards = MyEntities
-            .GetEntities()
-            .OfType<MyCubeGrid>()
-            .Where(ShipyardZoneWelding.IsShipyard)
-            .ToList();
-        foreach (var shipyard in shipyards)
+        if (orders.ContainsKey(shipyard.EntityId) || starting.Contains(shipyard.EntityId))
         {
-            if (!Plugin.Simulated(shipyard))
-            {
-                orders.Remove(shipyard.EntityId);
-                continue;
-            }
-            orders.TryGetValue(shipyard.EntityId, out var order);
-            var projector = GridsIn(FreeSpace(shipyard))
-                .SelectMany(g => g.GetFatBlocks<MyProjectorBase>())
-                .FirstOrDefault(IsScaffold);
-            if (projector == null)
-            {
-                if (order != null)
-                    End(
-                        shipyard,
-                        order,
-                        $"Your order at {shipyard.DisplayName} ended: the ship is gone."
-                    );
-                continue;
-            }
-            if (order?.Projector != projector)
-            {
-                order = Restore(projector);
-                if (order == null)
-                    continue;
-                orders[shipyard.EntityId] = order;
-                Plugin.Log.Info(
-                    $"Shipyard order '{projector.CubeGrid.DisplayName}' ({projector.CubeGrid.EntityId}) "
-                        + $"of {Name(order.Player)} picked up at {shipyard.DisplayName}, until {order.Ends:u}"
-                );
-            }
-
-            var ship = projector.CubeGrid.DisplayName;
-            var built = Built(projector.CubeGrid);
-            if (built >= order.Blocks)
-                End(
-                    shipyard,
-                    order,
-                    $"Your ship '{ship}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
-                );
-            else if (DateTime.UtcNow >= order.Ends)
-                End(
-                    shipyard,
-                    order,
-                    $"{shipyard.DisplayName} stopped after {Plugin.Config.ShipyardOrderMinutes} min with {built} of "
-                        + $"{order.Blocks} blocks of '{ship}' complete. The projection and the leftover components are gone, "
-                        + "the unfinished ship is yours."
-                );
-            else
-                Welders(shipyard, true);
+            lost.Remove(shipyard.EntityId);
+            return;
         }
+        lost.TryGetValue(shipyard.EntityId, out var count);
+        lost[shipyard.EntityId] = ++count;
+        if (count < 2)
+            return;
+        lost.Remove(shipyard.EntityId);
+        var left = RemoveLeftovers(
+            shipyard,
+            Taken(running).ToDictionary(t => ItemId(t.Key), t => (int)(t.Value / LedgerBook.Unit))
+        );
+        Finish(
+            running,
+            left,
+            0,
+            refund: false,
+            $"Your order '{running.Ship}' at {shipyard.DisplayName} ended: the ship is gone."
+        );
     }
+
+    private static void Finish(
+        BuildOrder order,
+        Dictionary<string, long> leftovers,
+        long hydrogenUsed,
+        bool refund,
+        string message
+    )
+    {
+        Builds.Execute(
+            Guid.NewGuid(),
+            new BuildRequest
+            {
+                Verb = BuildVerb.Finish,
+                Id = order.Id,
+                Station = order.Station,
+                Needed = leftovers,
+                HydrogenUsed = hydrogenUsed,
+                Refund = refund,
+            },
+            (ok, answer) =>
+            {
+                if (!ok)
+                    Plugin.Log.Error($"Shipyard order {order.Id} could not finish: {answer}");
+                if (message != null)
+                    Tell(order.Player, message);
+            }
+        );
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id} '{order.Ship}' of {Name(order.Player)} ended: {message}"
+        );
+    }
+
+    // --- the end of a build ---
 
     // A projected block welded onto an order's ship is the player's. Runs before the
     // projection limits, so they count it toward the player.
     [HarmonyPatch(typeof(MyCubeGrid), nameof(MyCubeGrid.BuildBlockRequestInternal))]
-    private static class BuildRequest
+    private static class BuildRequest_
     {
         [HarmonyPriority(Priority.First)]
         private static void Prefix(
@@ -330,12 +1067,16 @@ internal static class ShipyardOrders
         }
     }
 
-    private static void End(MyCubeGrid shipyard, Order order, string message)
+    // why: null when the ship is complete, else why it ended unfinished
+    private static void End(MyCubeGrid shipyard, Order order, string why)
     {
         orders.Remove(shipyard.EntityId);
         Welders(shipyard, false);
         var ship = order.Projector.CubeGrid;
-        if (!ship.MarkedForClose)
+        var name = ship.DisplayName;
+        double filled = 0;
+        var gone = ship.MarkedForClose;
+        if (!gone)
         {
             var scaffold = ship.GetFatBlocks<MyTerminalBlock>()
                 .Where(IsScaffold)
@@ -345,15 +1086,53 @@ internal static class ShipyardOrders
             ship.RazeGeneratedBlocks(scaffold);
             MyMultiplayer.RaiseEvent(ship, x => x.RazeBlocksClient, scaffold);
             HandOver(ship, order.Player);
-            FreePrints.Ended(order.Player);
+            if (order.Free)
+                FreePrints.Ended(order.Player);
+            if (order.Hydrogen > 0)
+                filled = FillHydrogen(ship, order.Hydrogen);
             if (ship.IsStatic)
                 MyMultiplayer.RaiseEvent(ship, x => x.OnConvertToDynamic);
         }
-        RemoveLeftovers(shipyard, order.Components);
-        MyVisualScriptLogicProvider.SendChatMessage(message, "Shipyard", order.Player);
-        Plugin.Log.Info(
-            $"Shipyard order '{ship.DisplayName}' of {Name(order.Player)} ended: {message}"
-        );
+        var left = RemoveLeftovers(shipyard, order.Components);
+
+        var message =
+            gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
+            : why == null
+                ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
+            : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
+                + "The projection is gone, the unfinished ship is yours.";
+        if (!order.Free)
+        {
+            if (left.Count > 0)
+                message += " The leftover components are back in the ledger.";
+            if (order.Hydrogen > 0 && !gone)
+                message +=
+                    filled <= 0
+                        ? " Warning: the ship's H2 tanks took no hydrogen, the ice for it is back in the ledger."
+                    : filled < order.Hydrogen - 1
+                        ? $" Its H2 tanks took {filled:N0} of {order.Hydrogen:N0} L, the ice for the rest is back in the ledger."
+                    : $" Its H2 tanks have {filled:N0} L of hydrogen.";
+        }
+        if (order.Id.Length > 0)
+            Finish(
+                new BuildOrder
+                {
+                    Id = order.Id,
+                    Player = order.Player,
+                    Ship = name,
+                },
+                order.Free ? new Dictionary<string, long>() : left,
+                filled > 0
+                    ? Math.Min(IceFor(filled, up: true), IceFor(order.Hydrogen, up: true))
+                    : 0,
+                refund: false,
+                message
+            );
+        else
+        {
+            Tell(order.Player, message);
+            Plugin.Log.Info($"Shipyard order '{name}' of {Name(order.Player)} ended: {message}");
+        }
     }
 
     // Blocks the projector built itself, like the tops of rotors and pistons, are BuiltBy its NPC
@@ -387,36 +1166,181 @@ internal static class ShipyardOrders
         ).ProjectedGrids;
         if (grids == null || grids.Count == 0)
             return null;
-        // Written by Request: "Player=<identity>" and "Ends=<UTC time>" lines
+        // Written by Create: "Key=value" lines
         var values = projector
             .CustomData.Split('\n')
-            .Select(l => l.Split('=').Last().Trim())
-            .ToList();
+            .Select(l => l.Split(['='], 2))
+            .Where(p => p.Length == 2)
+            .GroupBy(p => p[0].Trim())
+            .ToDictionary(g => g.Key, g => g.First()[1].Trim());
         if (
-            values.Count < 2
-            || !long.TryParse(
-                values[0],
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var player
-            )
+            !values.TryGetValue("Player", out var p)
+            || !long.TryParse(p, NumberStyles.Integer, CultureInfo.InvariantCulture, out var player)
+            || !values.TryGetValue("Ends", out var e)
             || !DateTime.TryParse(
-                values[1],
+                e,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind,
                 out var ends
             )
         )
             return null;
+        values.TryGetValue("Hydrogen", out var h);
+        double.TryParse(h, NumberStyles.Float, CultureInfo.InvariantCulture, out var hydrogen);
         return new Order
         {
             Projector = projector,
             Player = player,
             Ends = ends,
             Blocks = grids.Sum(g => g.CubeBlocks.Count),
-            Components = Components(grids),
+            Components = Components(grids, skipFirst: true),
+            Id = values.TryGetValue("Build", out var id) ? id : "",
+            Free = !values.TryGetValue("Free", out var f) || f != "0",
+            Hydrogen = hydrogen,
         };
     }
+
+    // --- hydrogen ---
+
+    private static long IceFor(double liters, bool up)
+    {
+        var raw = liters / Config.ShipyardHydrogenLitersPerIce * LedgerBook.Unit;
+        return (long)(up ? Math.Ceiling(raw - 1e-6) : Math.Floor(raw + 1e-6));
+    }
+
+    private static bool IsHydrogen(MyGasTank tank) =>
+        tank.BlockDefinition is MyGasTankDefinition d && d.StoredGasId.SubtypeName == "Hydrogen";
+
+    // Liters of all the blueprint's H2 tanks
+    private static double HydrogenCapacity(List<MyObjectBuilder_CubeGrid> blueprint) =>
+        blueprint
+            .SelectMany(g => g.CubeBlocks)
+            .Sum(b =>
+                MyDefinitionManager.Static.TryGetCubeBlockDefinition(b.GetId(), out var d)
+                && d is MyGasTankDefinition tank
+                && tank.StoredGasId.SubtypeName == "Hydrogen"
+                    ? tank.Capacity
+                    : 0
+            );
+
+    // The H2 tanks with hydrogen of the payer's ships docked at the station: the player's own,
+    // or with the faction paying any member's
+    private static List<MyGasTank> ShipTanks(Plan plan)
+    {
+        var station = Grids(plan.Table.CubeGrid);
+        var faction = plan.Payer.Faction
+            ? MySession.Static.Factions.TryGetFactionById(plan.Payer.Id)
+            : null;
+        var ships = station
+            .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
+            .Where(c => c.Connected && c.Other != null)
+            .SelectMany(c => Grids(c.Other.CubeGrid))
+            .Where(g => !station.Contains(g))
+            .Distinct();
+        return ships
+            .Where(g =>
+                g.BigOwners.Contains(plan.Player)
+                || (faction != null && g.BigOwners.Any(o => faction.IsMember(o)))
+            )
+            .SelectMany(g => g.GetFatBlocks<MyGasTank>())
+            .Where(t => IsHydrogen(t) && t.IsFunctional && t.FilledRatio > 0)
+            .ToList();
+    }
+
+    // Takes the build's hydrogen, as far as there is any, from the payer's docked ships
+    private static List<(MyGasTank Tank, double Liters)> Drain(Plan plan)
+    {
+        var taken = new List<(MyGasTank, double)>();
+        if (plan.HydrogenLiters <= 0)
+            return taken;
+        var left = plan.HydrogenLiters;
+        foreach (var tank in ShipTanks(plan))
+        {
+            if (left <= 0)
+                break;
+            var have = tank.FilledRatio * tank.Capacity;
+            var take = Math.Min(have, left);
+            ((IMyGasTank)tank).ChangeFilledRatio((have - take) / tank.Capacity, true);
+            taken.Add((tank, take));
+            left -= take;
+        }
+        return taken;
+    }
+
+    private static void AddHydrogen(MyGasTank tank, double liters)
+    {
+        if (tank.MarkedForClose)
+            return;
+        var ratio = Math.Min(1, tank.FilledRatio + liters / tank.Capacity);
+        ((IMyGasTank)tank).ChangeFilledRatio(ratio, true);
+    }
+
+    // Fills the ship's H2 tanks up to ShipyardHydrogenFillPercent with the build's hydrogen;
+    // returns the liters that went in
+    private static double FillHydrogen(MyCubeGrid ship, double liters)
+    {
+        var target = Config.ShipyardHydrogenFillPercent / 100.0;
+        var left = liters;
+        foreach (var tank in Group(ship).SelectMany(g => ((MyCubeGrid)g).GetFatBlocks<MyGasTank>()))
+        {
+            if (left <= 0 || !IsHydrogen(tank) || !tank.IsFunctional)
+                continue;
+            var room = Math.Max(0, target * tank.Capacity - tank.FilledRatio * tank.Capacity);
+            var give = Math.Min(room, left);
+            if (give <= 0)
+                continue;
+            AddHydrogen(tank, give);
+            left -= give;
+        }
+        return liters - left;
+    }
+
+    // --- the blueprint in the queue ---
+
+    private static string EncodeBlueprint(List<MyObjectBuilder_CubeGrid> grids)
+    {
+        var definition =
+            MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_ShipBlueprintDefinition>();
+        definition.CubeGrids = grids.ToArray();
+        using var stream = new MemoryStream();
+        MyObjectBuilderSerializerKeen.SerializeXML(
+            stream,
+            definition,
+            MyObjectBuilderSerializerKeen.XmlCompression.Gzip
+        );
+        return Convert.ToBase64String(stream.ToArray());
+    }
+
+    private static List<MyObjectBuilder_CubeGrid> DecodeBlueprint(string text)
+    {
+        try
+        {
+            if (
+                MyObjectBuilderSerializerKeen.DeserializeXML(
+                    Convert.FromBase64String(text),
+                    out MyObjectBuilder_ShipBlueprintDefinition definition,
+                    out _
+                )
+            )
+                return definition.CubeGrids?.ToList();
+        }
+        catch (FormatException e)
+        {
+            Plugin.Log.Error("Shipyard blueprint", e);
+        }
+        return null;
+    }
+
+    // --- the station and the shipyard ---
+
+    private static List<MyCubeGrid> Grids(MyCubeGrid grid)
+    {
+        var group = MyCubeGridGroups.Static.Mechanical.GetGroup(grid);
+        return group == null ? [grid] : group.Nodes.Select(n => n.NodeData).ToList();
+    }
+
+    private static string StationOf(MyCubeGrid grid) =>
+        Grids(grid).Select(Ledgers.StationOf).FirstOrDefault(s => s != null);
 
     // The nearest shipyard within 1 km of the table
     private static MyCubeGrid FindShipyard(MyProjectorBase table)
@@ -625,11 +1549,14 @@ internal static class ShipyardOrders
         return battery;
     }
 
-    // The components of every block but the first one, which is built already
-    private static Dictionary<MyDefinitionId, int> Components(List<MyObjectBuilder_CubeGrid> grids)
+    // The components of the blocks; skipFirst: but the first one, which is built already
+    private static Dictionary<MyDefinitionId, int> Components(
+        List<MyObjectBuilder_CubeGrid> grids,
+        bool skipFirst
+    )
     {
         var components = new Dictionary<MyDefinitionId, int>();
-        foreach (var block in grids.SelectMany(g => g.CubeBlocks).Skip(1))
+        foreach (var block in grids.SelectMany(g => g.CubeBlocks).Skip(skipFirst ? 1 : 0))
         {
             if (
                 !MyDefinitionManager.Static.TryGetCubeBlockDefinition(
@@ -666,13 +1593,15 @@ internal static class ShipyardOrders
         }
     }
 
-    // Takes back what is left of the loaded components from the shipyard's containers and welders
-    private static void RemoveLeftovers(
+    // Takes back what is left of the loaded components from the shipyard's containers and
+    // welders; returns what it took, raw by ledger item name
+    private static Dictionary<string, long> RemoveLeftovers(
         MyCubeGrid shipyard,
         Dictionary<MyDefinitionId, int> components
     )
     {
         var left = components.ToDictionary(c => c.Key, c => (MyFixedPoint)c.Value);
+        var taken = new Dictionary<string, long>();
         foreach (
             var inventory in Containers(shipyard)
                 .Concat(Beams(shipyard).Select(b => b.GetInventory()))
@@ -685,9 +1614,15 @@ internal static class ShipyardOrders
                     continue;
                 inventory.RemoveItemsOfType(amount, id);
                 left[id] -= amount;
+                var name = Ledgers.ItemName(id);
+                taken[name] = (taken.TryGetValue(name, out var had) ? had : 0) + amount.RawValue;
             }
         }
+        return taken;
     }
+
+    private static MyDefinitionId ItemId(string item) =>
+        Ledgers.TryItemId(item, out var id) ? id : default;
 
     private static IEnumerable<MyInventory> Containers(MyCubeGrid shipyard) =>
         shipyard.GetFatBlocks<MyCargoContainer>().Select(c => c.GetInventory());
@@ -733,6 +1668,18 @@ internal static class ShipyardOrders
 
     private static string Name(long identityId) =>
         MySession.Static.Players.TryGetIdentity(identityId)?.DisplayName ?? "someone";
+
+    private static void Tell(long identityId, string text) =>
+        MyVisualScriptLogicProvider.SendChatMessage(text, "Shipyard", identityId);
+
+    // An amount in its item's unit: whole components, kg of ore and ingots
+    private static string Units(string item, long raw)
+    {
+        var units = (decimal)raw / LedgerBook.Unit;
+        return item.StartsWith("Component/")
+            ? units.ToString("N0", CultureInfo.InvariantCulture)
+            : units.ToString("N0", CultureInfo.InvariantCulture) + " kg";
+    }
 
     private static string Meters(Vector3D size) => $"{size.X:0} x {size.Y:0} x {size.Z:0} m";
 }

@@ -37,12 +37,12 @@ public sealed class Commands : CommandModule
 
     [Command(
         "order",
-        "Orders the blueprint loaded into the nearest station hologram table from the station's shipyard",
+        "Presses the shipyard button of the nearest station hologram table for you",
         "!oct order [table name]: stand by a station's hologram table with a blueprint loaded. "
-            + "The station's shipyard builds the ship for you."
+            + "Shows your quote, orders the blueprint or cancels your queue entry, as the button next to the table does."
     )]
-    [Permission(MyPromoteLevel.None)]
-    public CommandReply Order(params string[] table) =>
+    [Permission(MyPromoteLevel.Admin)]
+    public string Order(params string[] table) =>
         ShipyardOrders.Request(
             Context.Caller.IdentityId,
             table.Length == 0 ? null : string.Join(" ", table)

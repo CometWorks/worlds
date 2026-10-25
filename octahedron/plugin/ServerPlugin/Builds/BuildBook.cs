@@ -221,10 +221,15 @@ public sealed class BuildBook
     {
         var quote = new BuildQuote { Fee = fee, Balance = w.Balance(payer) };
         var free = w.Ledger.FreeOf(station, payer);
-        foreach (var item in needed.Where(n => n.Value > 0).OrderBy(n => n.Key, StringComparer.Ordinal))
+        foreach (
+            var item in needed.Where(n => n.Value > 0).OrderBy(n => n.Key, StringComparer.Ordinal)
+        )
         {
             var line = new QuoteLine { Item = item.Key, Needed = item.Value };
-            line.Ledger = Math.Min(item.Value, free.TryGetValue(item.Key, out long have) ? have : 0);
+            line.Ledger = Math.Min(
+                item.Value,
+                free.TryGetValue(item.Key, out long have) ? have : 0
+            );
             long rest = item.Value - line.Ledger;
             if (rest > 0 && market != null)
                 foreach (var fill in market.PlanBuy(station, payer, item.Key, rest))
@@ -334,7 +339,13 @@ public sealed class BuildBook
 
         foreach (var l in quote.Lines.Where(l => l.Bought > 0))
         {
-            var bought = market.Buy(order.Station, order.Payer, l.Item, l.Bought, order.Reservation);
+            var bought = market.Buy(
+                order.Station,
+                order.Payer,
+                l.Item,
+                l.Bought,
+                order.Reservation
+            );
             if (!bought.Ok)
                 return Undo(w, order, $"Buying {l.Item} failed: {bought.Message}");
         }
@@ -622,15 +633,179 @@ public sealed class BuildBook
                     + (l.Missing > 0 ? $"  {units(l.Item, l.Missing)} not for sale" : "")
             );
         if (hydrogenFromShip > 0)
-            text.AppendLine($"Hydrogen: {units(hydrogenItem, hydrogenFromShip)} ice worth from your ship");
+            text.AppendLine(
+                $"Hydrogen: {units(hydrogenItem, hydrogenFromShip)} ice worth from your ship"
+            );
         long listings = quote.Lines.Sum(l => l.ListingsCost),
             oct = quote.Lines.Sum(l => l.OctCost);
         text.AppendLine($"Components: {listings:N0} SC from listings, {oct:N0} SC from OCT");
         text.AppendLine($"Labor fee: {quote.Fee:N0} SC");
-        text.AppendLine($"Total: {quote.Total:N0} SC, the account has {Math.Max(0, quote.Balance):N0} SC");
+        text.AppendLine(
+            $"Total: {quote.Total:N0} SC, the account has {Math.Max(0, quote.Balance):N0} SC"
+        );
         return text.ToString();
     }
 
     private static string Cut(string text, int length) =>
         text.Length <= length ? text : text.Substring(0, length - 1) + ".";
+}
+
+public enum BuildVerb
+{
+    /// <summary>Read: the quote of Needed for the payer at the station.</summary>
+    Quote,
+
+    /// <summary>Read: the station's queue, without blueprints.</summary>
+    Queue,
+
+    /// <summary>Read: the next order to build at the station, with its blueprint.</summary>
+    Next,
+    Order,
+    Cancel,
+    Start,
+
+    /// <summary>Needed: the leftovers.</summary>
+    Finish,
+}
+
+/// <summary>
+/// A request a node sends the authority: a line of tab-separated fields, then a line each with
+/// the needed and the provided items, item and raw amount pairs.
+/// </summary>
+public sealed class BuildRequest
+{
+    public BuildVerb Verb;
+    public string Station = "";
+    public long Player;
+    public LedgerOwner Payer;
+    public string Id = "";
+    public long Fee;
+    public int Pcu;
+    public string Ship = "";
+    public string Blueprint = "";
+    public long MaxTotal;
+    public long HydrogenUsed;
+    public bool Refund;
+    public Dictionary<string, long> Needed = new();
+    public Dictionary<string, long> Provided = new();
+
+    public bool Reads => Verb is BuildVerb.Quote or BuildVerb.Queue or BuildVerb.Next;
+
+    public string Encode() =>
+        string.Join(
+            "\t",
+            Verb.ToString(),
+            Station,
+            BuildQuote.N(Player),
+            Payer.IsSet ? Payer.ToString() : "",
+            Id ?? "",
+            BuildQuote.N(Fee),
+            Pcu.ToString(CultureInfo.InvariantCulture),
+            (Ship ?? "").Replace('\t', ' ').Replace('\n', ' ').Replace('\r', ' '),
+            Blueprint ?? "",
+            BuildQuote.N(MaxTotal),
+            BuildQuote.N(HydrogenUsed),
+            Refund ? "1" : "0"
+        )
+        + "\n"
+        + Items(Needed)
+        + "\n"
+        + Items(Provided);
+
+    private static string Items(Dictionary<string, long> items) =>
+        string.Join(
+            "\t",
+            items
+                .OrderBy(i => i.Key, StringComparer.Ordinal)
+                .Select(i => i.Key + "\t" + BuildQuote.N(i.Value))
+        );
+
+    private static Dictionary<string, long> Items(string line)
+    {
+        var f = line.Split('\t');
+        var items = new Dictionary<string, long>();
+        for (int i = 0; i + 1 < f.Length; i += 2)
+            items[f[i]] = BuildQuote.L(f[i + 1]);
+        return items;
+    }
+
+    public static BuildRequest Decode(string text)
+    {
+        var lines = text.Split('\n');
+        var f = lines[0].Split('\t');
+        if (lines.Length != 3 || f.Length != 12)
+            throw new FormatException("Malformed build request");
+        var r = new BuildRequest
+        {
+            Verb = (BuildVerb)Enum.Parse(typeof(BuildVerb), f[0]),
+            Station = f[1],
+            Player = BuildQuote.L(f[2]),
+            Id = f[4],
+            Fee = BuildQuote.L(f[5]),
+            Pcu = int.Parse(f[6], CultureInfo.InvariantCulture),
+            Ship = f[7],
+            Blueprint = f[8],
+            MaxTotal = BuildQuote.L(f[9]),
+            HydrogenUsed = BuildQuote.L(f[10]),
+            Refund = f[11] == "1",
+            Needed = Items(lines[1]),
+            Provided = Items(lines[2]),
+        };
+        if (f[3].Length > 0 && !LedgerOwner.TryParse(f[3], out r.Payer))
+            throw new FormatException("Malformed build payer");
+        return r;
+    }
+
+    /// <summary>
+    /// Does the request on the authority's book. Changes answer "1" or "0", a tab and the
+    /// message, Start with the order on the next line; reads answer their data.
+    /// </summary>
+    public string Run(BuildBook book, IMarketWorld w, IBuildMarket market, BuildSettings s)
+    {
+        switch (Verb)
+        {
+            case BuildVerb.Quote:
+                return BuildBook.Quote(w, market, Station, Payer, Needed, Fee).Encode();
+            case BuildVerb.Queue:
+                return string.Join(
+                    "\n",
+                    book.Queue(Station).Select(o => BuildBook.EncodeOrder(o, blueprint: false))
+                );
+            case BuildVerb.Next:
+                var next = book.Next(Station);
+                return next == null ? "" : BuildBook.EncodeOrder(next, blueprint: true);
+        }
+        BuildResult r = Verb switch
+        {
+            BuildVerb.Order => book.Order(
+                w,
+                market,
+                s,
+                new BuildOrder
+                {
+                    Station = Station,
+                    Player = Player,
+                    Payer = Payer,
+                    Fee = Payer.IsSet ? Fee : 0,
+                    Pcu = Pcu,
+                    Ship = Ship,
+                    Blueprint = Blueprint,
+                },
+                Needed,
+                Provided,
+                MaxTotal
+            ),
+            BuildVerb.Cancel => book.Cancel(w, Station, Player),
+            BuildVerb.Start => book.Start(w, s, Id),
+            BuildVerb.Finish => book.Finish(w, s, Id, Needed, HydrogenUsed, Refund),
+            _ => BuildResult.No("Unknown request."),
+        };
+        return (r.Ok ? "1\t" : "0\t")
+            + r.Message.Replace('\n', ' ')
+            + (
+                r.Ok && r.Order != null
+                    ? "\n" + BuildBook.EncodeOrder(r.Order, blueprint: false)
+                    : ""
+            );
+    }
 }
