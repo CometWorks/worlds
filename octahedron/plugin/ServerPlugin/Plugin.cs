@@ -48,7 +48,11 @@ public class Plugin : IPlugin
         LoadConfig();
         new Harmony(Name).PatchAll(Assembly.GetExecutingAssembly());
         MesCluster.Init();
-        ServerCommands.Register(Assembly.GetExecutingAssembly(), typeof(Commands));
+        ServerCommands.Register(
+            Assembly.GetExecutingAssembly(),
+            typeof(Commands),
+            typeof(LedgerCommands)
+        );
     }
 
     // Called by Magnetar with the manifest's AssetFolder, the Encounters folder
@@ -72,6 +76,7 @@ public class Plugin : IPlugin
             worldEdge.Update();
             TableHologram.Update();
             ShipyardOrders.Update();
+            Ledgers.Update();
         }
         catch (Exception e)
         {

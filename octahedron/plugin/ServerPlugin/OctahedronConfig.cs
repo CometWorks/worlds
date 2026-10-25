@@ -17,6 +17,7 @@ namespace ServerPlugin;
 [Section("drops", caption: "Container Drops")]
 [Section("encounters", caption: "Encounters")]
 [Section("mes", caption: "MES Spawn Pattern")]
+[Section("ledgers", caption: "Station Ledgers")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -591,6 +592,30 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = "b6de8061483bbd9a";
+
+    [DoubleOption(
+        0,
+        description: "The most a player may keep in one station's warehouse ledger, free and listed items together, in tonnes. "
+            + "0: no limit.",
+        Parent = "ledgers"
+    )]
+    public double LedgerPlayerLimitTonnes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
+
+    [DoubleOption(
+        0,
+        description: "The most a faction may keep in one station's warehouse ledger, free and listed items together, in tonnes. "
+            + "0: no limit.",
+        Parent = "ledgers"
+    )]
+    public double LedgerFactionLimitTonnes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
 }
 
 public struct RefillContainer

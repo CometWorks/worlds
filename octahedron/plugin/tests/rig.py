@@ -30,7 +30,7 @@ from pathlib import Path
 
 HOME = Path.home()
 PLUGIN = Path(__file__).resolve().parent.parent
-# A world built by build_world.py can stand in for the committed one
+# OCT_WORLD_SOURCE: a world folder built by build_world.py instead of the repo's
 WORLD_SOURCE = Path(os.environ.get("OCT_WORLD_SOURCE", PLUGIN.parent / "server"))
 CONFIG_SOURCE = PLUGIN.parent / "config" / "octahedron.cfg"
 WORKSPACE = Path(os.environ.get("OCT_WORKSPACE", HOME / "ws/se"))

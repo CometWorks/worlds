@@ -295,6 +295,48 @@ the state. `!oct payday` (admin) makes the hour's payout at once, `!oct taxday`
 collects the day's tax and closes the day at once. On a cluster node they answer that
 the rules run on the World Authority.
 
+### Station ledgers
+
+Each trade station keeps a warehouse ledger: how much of each item every player
+and every faction owns there. The items exist only in the ledger, not in a
+container. A station is a faction station entry of the world, by its name
+(`Alpha Station`), so a new station blueprint keeps its ledger as long as its
+entry keeps the name. The kiosks, the market and paid builds use the ledgers;
+players have no command for them.
+
+- An owner's items are free or reserved. A reservation has an id, holds items
+  of one owner and is released back to them, given to another owner (a sale) or
+  taken out (a build uses them). Market listings reserve items, build orders
+  put their components into a reservation.
+- A player may keep `LedgerPlayerLimitTonnes` (100 t) at each station, a faction
+  `LedgerFactionLimitTonnes` (100 t), by the items' mass. Free items and listing
+  reservations count; a build's reservation doesn't, since a big ship needs more
+  components than that. A change that would put the owner over the limit is
+  refused, so are taking more than there is, a fraction of a component, and an
+  unknown item, station or owner. Leftovers of a build come back even past the
+  limit; the owner then can only take items out until under it.
+- Changes come in batches that apply all or none, so a sale can move the items
+  and the payment together.
+
+The server keeps the ledgers, on a cluster the World Authority. Other nodes send
+their changes there as cluster-wide commands, each run once per operation id, so
+a node that lost the answer sends the same change again without applying it
+twice. The ledgers are saved with the world, as the sandbox variable
+`Octahedron.Ledgers` in `Sandbox.sbc`, and on a cluster with the World
+Authority's global saves. Every applied change is logged.
+
+Admin commands, for tests and support (`!oct help` for the details):
+`!oct ledger stations`, `show`, `deposit`, `withdraw`, `transfer`, `reserve`,
+`fill`, `release`, `give` and `take`. An owner is `me`, a player's name,
+`faction:TAG`, or `P<identity id>` / `F<faction id>`; a station is its name or
+the start of it, and amounts are in units:
+
+```
+!oct ledger deposit Alpha me Ingot/Iron 1000
+!oct ledger transfer Alpha me faction:OCT Component/SteelPlate 10
+!oct ledger show Alpha
+```
+
 ### Container drops
 
 The game's drop pods (world setting `EnableContainerDrops`) come in two kinds.
@@ -601,6 +643,12 @@ runs the same with the cluster's NPC census on a local test cluster;
 the timer's first space cargo ship, each spawn type spawned by command in space, on
 EarthLike, high above it and on the Moon, the client seeing the spawned grids, and
 the mods' shares of 2,000 spawn attempts per type and place.
+`tests/ledgers/LedgerTests` checks the ledgers' bookkeeping without the game
+(`dotnet run -c Release --project tests/ledgers/LedgerTests`): limits, reservations,
+batches that apply all or none, and the saved and wire formats.
+`tests/test_ledgers.py` checks them in game with the client's admin commands, the
+game's item masses and the config, then restarts the server and finds them as they
+were saved.
 `tests/test_hologram.py` takes screenshots of fitted holograms, a blueprint with
 a cockpit and one without, from the side, the front and above, on a bench of two
 tables in open space; it needs a rendering client.
