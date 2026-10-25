@@ -154,7 +154,7 @@ internal static class MesSpawnGate
         Log.Info(
             $"MES spawn placements gated: cell {Pattern.CellSize} m, gap {Pattern.Gap} m ({gapSource}), jitter {Pattern.Jitter}, seed {Pattern.Seed}, "
                 + $"pattern fingerprint {Pattern.Fingerprint}, "
-                + $"at most {config.MesMaxNpcGridsInRadius} NPC grids within {config.MesDensityRadius} m, cluster cap {config.MesMaxClusterNpcGrids}, "
+                + $"at most {config.MesMaxNpcGridsInRadius} NPC grids within {config.MesDensityRadius} m, cluster cap {config.MesMaxClusterNpcGrids} ({(NpcCensus.OnlineCounted ? "online grids" : "offline partitions included")}), "
                 + $"census {(NpcCensus.ClusterWide ? "cluster-wide" : "this process only")}"
         );
     }
@@ -317,7 +317,7 @@ internal static class MesSpawnGate
 
         if (config.MesMaxClusterNpcGrids > 0)
         {
-            int total = NpcCensus.Count(start, double.PositiveInfinity);
+            int total = NpcCensus.Count(start, double.PositiveInfinity, onlineOnly: true);
             if (total < 0)
                 return Verdict.Unknown;
             if (total >= config.MesMaxClusterNpcGrids)
