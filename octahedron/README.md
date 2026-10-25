@@ -71,8 +71,7 @@ station and shipyard blueprints are in `blueprints/`.
   the shipyard behind, out in space. Otherwise the sun shines sideways through
   the deck all day: bad shadows and unreadable LCDs. North and South Station
   stay level with the equator, both with their up toward EarthLike: North
-  Station is upside down, so its lobby looks down on the ring, and its
-  shipyard sits as South Station's does, below the station out in space. The
+  Station is upside down, so its lobby looks down on the ring. The
   lanes don't turn. Moon Station's up is square to the line between EarthLike and the
   Moon, the one such direction nearest to where Delta Station was before the
   turn. Its shipyard is placed as if it faced away from the Moon, then the
@@ -89,24 +88,30 @@ station and shipyard blueprints are in `blueprints/`.
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half: straight behind the equatorial stations,
-  away from EarthLike, 45 degrees between behind and away from EarthLike at
-  the pole stations, and on the Moon side of Moon Station. The lanes leave the
-  stations the other way and still start from the zone's center.
+  away from EarthLike, and on the Moon side of Moon Station. The lanes leave
+  the stations the other way and still start from the zone's center.
   - The shipyard's side faces the lobby, rolled 30 degrees about its long axis
     with its top toward the station, lifted 50 m along the station's up and
     turned 17.5 degrees about it, so more of the build volume shows past its
     near wall and the wall's middle beam doesn't hide its center.
   - The station and its shipyard are centered on the safe zone together and
     spread apart as far as their block bounds stay 10 m inside the zone's edge:
-    100 m between them (less at the pole stations), the farthest block 227 m
-    from the zone's center.
+    100 m between them, the farthest block 227 m from the zone's center.
   - Then the shipyard is raised (`SHIPYARD_RAISE`) along its own up, the side
-    with its cargo containers: 30 m at the equatorial stations, 150 m at South
-    Station, none at North Station; Moon Station's 125 m along the station's
-    up. Each is then pulled straight toward its station by as little as keeps
-    its block bounds 10 m inside the zone's edge again. Their farthest blocks
-    end up 211 to 226 m from the zone's center, and 76 m or more from the
-    station's blocks.
+    with its cargo containers: 30 m at the equatorial stations; Moon Station's
+    125 m along the station's up. Each is then pulled straight toward its
+    station by as little as keeps its block bounds 10 m inside the zone's edge
+    again. Their farthest blocks end up 211 to 221 m from the zone's center,
+    and 92 m or more from the station's blocks.
+  - The pole stations' shipyards follow Viktor's placement at South Station in
+    game (`POLE_SHIPYARD`, in the station's own axes): off the side of the
+    lobby with the ship build holo table, above its floor and on EarthLike's
+    side, turned so the windows look down into the middle of the shipyard.
+    North Station, upside down, sits like South Station, so its shipyard takes
+    the same place. Along that direction the pair is centered on the zone and
+    spread apart as far as it fits 10 m inside the edge: 257 m between their
+    centers, the farthest block 224 m from the zone's center, the shipyard's
+    nearest block 140 m from the station's.
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries. Those start with 10 uranium ingots each and full charge, and on
     the server the Octahedron plugin tops them back up every 10 minutes

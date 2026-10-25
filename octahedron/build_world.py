@@ -109,12 +109,22 @@ FREE_TOOLS_COUNT = 4
 SAFE_ZONE_MARGIN = 10.0
 # The shipyard sits this much higher than the station, along the station's up
 SHIPYARD_LIFT = 50.0
+# The pole stations' shipyards by Viktor's placement at South Station in game (2026-10-25),
+# in the station's (right, up, forward): the direction from the station's block bounds
+# center to the shipyard's, and the shipyard's forward and up. Off the station's side with
+# the ship build holo table, above the lobby floor, so the windows look down into the middle
+# of the shipyard. North Station, upside down, sits like South Station, so its shipyard takes
+# the same place. spread_pair centers the pair on the zone along that direction.
+POLE_SHIPYARD = (
+    (121.3, 72.4, 4.6),
+    (0.32292, 0.22092, 0.92028),
+    (-0.56464, 0.82534, 0.0),
+)
 # Then raised this much more, along its own up (the side with its cargo containers), Moon
 # Station's along the station's up; then pulled toward its station until it fits the safe zone
 # again
 SHIPYARD_RAISE = {
     "Moon Station": 125.0,
-    "South Station": 150.0,
     "Alpha Station": 30.0,
     "Beta Station": 30.0,
     "Gamma Station": 30.0,
@@ -665,17 +675,9 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
     the space side (the Moon side for Moon Station): straight behind the equatorial stations
     and Moon Station, 45 degrees off for the pole stations. The view from the lobby falls on
     its side, along its local X, through its open frame, rolled by SHIPYARD_ROLL_DEGREES.
-    Along that side the pair's block bounds are centered on the zone's center, the shipyard
-    then lifted by SHIPYARD_LIFT along the station's up, and the gap between them is the
-    largest that keeps every corner of both bounds SAFE_ZONE_MARGIN inside the zone."""
+    spread_pair places the pair along that side, the shipyard lifted by SHIPYARD_LIFT.
+    """
     side = norm(add(mul(forward, -1), away))
-    right = cross(forward, up)
-    lo, hi = grid_bounds(station_grid)
-    # How far the station's block bounds reach toward side
-    reach = sum(
-        (hi[i] - lo[i] + 1) * 1.25 * abs(dot(side, axis))
-        for i, axis in enumerate((right, up, mul(forward, -1)))
-    )
     level = norm(perpendicular_part(up, side))
     roll = math.radians(SHIPYARD_ROLL_DEGREES)
     yard_right = add(mul(side, math.cos(roll)), mul(level, math.sin(roll)))
@@ -687,6 +689,24 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
     yard_right, yard_up, yard_forward = (
         rotate(v, up, yaw) for v in (yard_right, yard_up, yard_forward)
     )
+    return spread_pair(
+        station_grid, zone, forward, up, side, yard_forward, yard_up, SHIPYARD_LIFT
+    )
+
+
+def spread_pair(station_grid, zone, forward, up, side, yard_forward, yard_up, lift):
+    """(station center, (shipyard center, forward, up)): the station and its shipyard, as
+    oriented, apart along side, the pair's block bounds centered on the zone's center along
+    it, the shipyard then lifted by lift along the station's up, and the gap between them the
+    largest that keeps every corner of both bounds SAFE_ZONE_MARGIN inside the zone."""
+    right = cross(forward, up)
+    lo, hi = grid_bounds(station_grid)
+    # How far the station's block bounds reach toward side
+    reach = sum(
+        (hi[i] - lo[i] + 1) * 1.25 * abs(dot(side, axis))
+        for i, axis in enumerate((right, up, mul(forward, -1)))
+    )
+    yard_right = cross(yard_forward, yard_up)
     yard = shipyard_template()
     lo, hi = grid_bounds(yard)
     # How far the shipyard's block bounds reach toward side from their center
@@ -700,7 +720,7 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
         extent = (2 * reach + gap + 2 * half) / 2
         station_center = add(zone, mul(side, reach - extent))
         yard_center = add(zone, mul(side, extent - half))
-        return station_center, add(yard_center, mul(up, SHIPYARD_LIFT))
+        return station_center, add(yard_center, mul(up, lift))
 
     def fits(gap):
         station_center, yard_center = place(gap)
@@ -1345,7 +1365,19 @@ def main():
             # down on the ring, and its shipyard below it on the station, out in space
             up = mul(up, -1)
         # The station and its shipyard share the safe zone around the station's place
-        station_center, yard = station_and_shipyard(template, center, forward, up, away)
+        if name in ("North Station", "South Station"):
+            right = cross(forward, up)
+            local = lambda v: add(
+                add(mul(right, v[0]), mul(up, v[1])), mul(forward, v[2])
+            )
+            offset, yard_forward, yard_up = map(local, POLE_SHIPYARD)
+            station_center, yard = spread_pair(
+                template, center, forward, up, norm(offset), yard_forward, yard_up, 0
+            )
+        else:
+            station_center, yard = station_and_shipyard(
+                template, center, forward, up, away
+            )
         if name in EQUATOR_STATIONS:
             # Turn the pair about the zone's center until the station's deck lies parallel to
             # the asteroid ring (up along the ring's axis, the north side), so the sun doesn't
