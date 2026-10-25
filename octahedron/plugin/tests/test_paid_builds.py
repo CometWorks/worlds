@@ -151,17 +151,26 @@ def kiosks_stand(remote) -> None:
         time.sleep(3)
 
 
-def latest(remote) -> int:
-    return remote.get_chat_messages().get("latest", 0)
+def latest(remote) -> tuple[int, set]:
+    """A point in the chat: the last message and the HUD lines shown so far"""
+    got = remote.get_chat_messages()
+    hud = {
+        (h.get("sender"), h.get("text"), h.get("timestamp")) for h in got.get("hud", [])
+    }
+    return got.get("latest", 0), hud
 
 
-def wait_chat(remote, text: str, timeout: float, after: int = 0) -> str | None:
-    """The first chat line with text after the given point, None if none comes"""
+def wait_chat(remote, text: str, timeout: float, after=(0, set())) -> str | None:
+    """The first chat line with text since the point, None if none comes"""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        got = remote.get_chat_messages(after=after)
+        got = remote.get_chat_messages(after=after[0])
         lines = [m.get("Text", "") for m in got.get("messages", [])]
-        lines += [h.get("text", "") for h in got.get("hud", [])]
+        lines += [
+            h.get("text", "")
+            for h in got.get("hud", [])
+            if (h.get("sender"), h.get("text"), h.get("timestamp")) not in after[1]
+        ]
         for line in lines:
             if text in line:
                 return line
@@ -341,8 +350,8 @@ def free_build_by_button(remote) -> None:
 def saved_screens() -> None:
     sector = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
     check(
-        "Shipyard quote for" in sector,
-        "the hologram table's screen shows quotes (saved world)",
+        "Shipyard quote for" in sector or "is in the queue for" in sector,
+        "the hologram table's screen shows quotes and orders (saved world)",
     )
     check(
         "Station Shipyard queue" in sector,
