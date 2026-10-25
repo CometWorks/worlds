@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+  <!-- Test-only server plugin of the ledger cluster test. Never published to a hub. -->
+  <Id>3B8E1F52-6C47-4D0A-9E21-5A7C0D1553AA</Id>
+  <RepoId>CometWorks/worlds</RepoId>
+  <FriendlyName>Ledger Probe</FriendlyName>
+  <Author>CometWorks</Author>
+  <Tooltip>Runs admin chat commands from a plan file, for the ledger cluster test</Tooltip>
+  <Commit>TODO Git commit hash</Commit>
+</PluginData>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Test-only server plugin of the ledger cluster test; never published -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>LedgerProbe</RootNamespace>
+    <AssemblyName>LedgerProbe</AssemblyName>
+    <LangVersion>14</LangVersion>
+    <TargetFramework>net10.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <DefineConstants>$(DefineConstants);LOCAL_BUILD</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="PluginSdk">
+      <HintPath>$(MagnetarBinDir)PluginSdk.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Sandbox.Game">
+      <HintPath>$(Dedicated64Dir)Sandbox.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage">
+      <HintPath>$(Dedicated64Dir)VRage.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage.Game">
+      <HintPath>$(Dedicated64Dir)VRage.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage.Library">
+      <HintPath>$(Dedicated64Dir)VRage.Library.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage.Math">
+      <HintPath>$(Dedicated64Dir)VRage.Math.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
