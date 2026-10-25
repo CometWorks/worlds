@@ -121,7 +121,8 @@ internal static class Builds
     {
         if (!request.Reads)
         {
-            if (Market.OctId == 0)
+            // OCT gets the fees and sells components; a free build needs neither
+            if (request.Verb == BuildVerb.Order && request.Payer.IsSet && Market.OctId == 0)
                 return $"0\tNo faction tagged {Config.MoneyAuthorityFactionTag}.";
             if (
                 request.Verb is BuildVerb.Order or BuildVerb.Cancel

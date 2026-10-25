@@ -2,13 +2,14 @@
 headless client, at Alpha Station, with OmniArc, ToolCore and Multigrid Projector
 as on the Octahedron servers, and the kiosk mods and probe of tests/test_kiosks.py.
 
-The tables hold "Paid Test": armor, a control seat and a small H2 tank (1,000,000 L).
+The tables hold "Paid Test": armor and a small H2 tank (1,000,000 L).
 With FreeBuildPcuLimit 0 every build is paid. The client uses !oct order, which
 presses the hologram table's button for an admin (the button itself is pressed
 once at the end).
 
-- Quote, then order: the first press shows the quote (the plates in the player's
-  ledger first, the rest from OCT, the labor fee), the second orders it. The
+- Quote, then order: the first press shows the quote (the components in the
+  player's ledger first, the 55 plates missing from OCT, the labor fee), the second
+  orders it. The
   player pays the quoted total, the hydrogen comes from the H2 tank of the
   player's ship docked at Alpha (half of it drained), and the build starts at
   once with the components loaded from the build ledger.
@@ -50,7 +51,6 @@ BLUEPRINT = rig.grid(
     SHIP,
     777000685000100,
     [
-        rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpitSeat", (0, 1, 0)),
         rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, 0)),
         rig.block("MyObjectBuilder_OxygenTank", "LargeHydrogenTankSmall", (0, 0, 1)),
     ]
@@ -60,6 +60,14 @@ BLUEPRINT = rig.grid(
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
+# What the player brings: the tank's components but its plates, and 150 of the 205 plates
+DEPOSIT = {
+    "Component/LargeTube": 40,
+    "Component/SmallTube": 60,
+    "Component/Computer": 8,
+    "Component/Construction": 40,
+    PLATE: 150,
+}
 HYDROGEN = 500_000
 check = kiosks.check
 
@@ -151,7 +159,8 @@ def total(reply: str) -> int:
 def paid_build(remote) -> None:
     with_config(remote, FreeBuildPcuLimit=0)
     me = re.search(r"\(P(\d+)\)", ledger(remote, "me"))
-    admin(remote, f"!oct ledger deposit Alpha me {PLATE} 50")
+    for item, count in DEPOSIT.items():
+        admin(remote, f"!oct ledger deposit Alpha me {item} {count}")
     docked = re.search(r"SHIP (\d+)", kiosks.probe(remote, "dock Alpha mine H2=1"))
     check(docked is not None, "a ship with a full H2 tank docked at Alpha")
     ship = docked[1] if docked else "0"
@@ -204,7 +213,8 @@ def faction_build(remote) -> tuple[int, float]:
     """Queues a faction-paid order behind the finished ship; returns the faction's
     balance before it and the faction's plates"""
     kiosks.probe(remote, "faction KME leader")
-    admin(remote, f"!oct ledger deposit Alpha faction:KME {PLATE} 30")
+    for item, count in {**DEPOSIT, PLATE: 30}.items():
+        admin(remote, f"!oct ledger deposit Alpha faction:KME {item} {count}")
     kiosks_stand(remote)
     time.sleep(0.6)
     rig.chat(remote, "/kiosk state faction", 3)
