@@ -891,6 +891,35 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 2;
 
+    [StringOption(
+        description: "Stations where OCT sells zone chips at ZoneChipPrice, comma separated; empty: nowhere. "
+            + "A chip keeps a player safe zone up for an hour.",
+        Parent = "market"
+    )]
+    public string ZoneChipStations
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Moon Station";
+
+    [IntOption(1, description: "OCT's price of a zone chip (SC).", Parent = "market")]
+    public int ZoneChipPrice
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1000;
+
+    [IntOption(
+        1,
+        description: "OCT keeps this many zone chips in stock at each of ZoneChipStations, the most one purchase can take.",
+        Parent = "market"
+    )]
+    public int ZoneChipStock
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
+
     [BoolOption(
         "OCT posts the stations' contracts instead of the game: hauling between stations, acquisitions of what its ledger at a "
             + "station lacks, bounties on NPC grids near a station and salvage of derelicts towed to a station's shipyard. "

@@ -5,11 +5,13 @@ using System.Linq;
 using System.Reflection;
 using PluginSdk.Commands;
 using Sandbox.Common.ObjectBuilders;
+using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
+using SpaceEngineers.Game.Definitions.SafeZone;
 using VRage;
 using VRage.Game;
 using VRage.Game.ModAPI;
@@ -65,6 +67,23 @@ public sealed class ProbeCommands : CommandModule
         var stand = m.Translation + m.Right * 2.2 - m.Up * 0.3;
         return $"KIOSK {kiosk.EntityId} {V(m.Translation)} STAND {V(stand)} SCRIPT {((Sandbox.ModAPI.Ingame.IMyTextSurface)kiosk).Script}";
     }
+
+    [Command(
+        "safezone",
+        "The safe zone blocks' upkeep: SAFEZONE subtype chips minutes, one per block",
+        "!kprobe safezone"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string SafeZone() =>
+        string.Join(
+            " ",
+            MyDefinitionManager
+                .Static.GetAllDefinitions()
+                .OfType<MySafeZoneBlockDefinition>()
+                .Select(d =>
+                    $"SAFEZONE {d.Id.SubtypeName} {d.SafeZoneUpkeep} {d.SafeZoneUpkeepTimeM}"
+                )
+        );
 
     [Command(
         "dock",

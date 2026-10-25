@@ -19,6 +19,9 @@
       <HintPath>$(Dedicated64Dir)Sandbox.Common.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="SpaceEngineers.Game">
+      <HintPath>$(Dedicated64Dir)SpaceEngineers.Game.dll</HintPath>
+    </Reference>
     <Reference Include="SpaceEngineers.ObjectBuilders">
       <HintPath>$(Dedicated64Dir)SpaceEngineers.ObjectBuilders.dll</HintPath>
       <Private>False</Private>
