@@ -82,6 +82,7 @@ public class Plugin : IPlugin
             Ledgers.Update();
             Kiosks.Update();
             Market.Update();
+            Builds.Update();
             HangarFee.Bind();
             Contracts.Update();
         }

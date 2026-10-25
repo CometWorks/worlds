@@ -21,6 +21,7 @@
     </Reference>
     <Reference Include="SpaceEngineers.Game">
       <HintPath>$(Dedicated64Dir)SpaceEngineers.Game.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="SpaceEngineers.ObjectBuilders">
       <HintPath>$(Dedicated64Dir)SpaceEngineers.ObjectBuilders.dll</HintPath>

@@ -5,13 +5,13 @@ builds (FreeBuildCooldownMinutes, 60) and the blocks a free build can't have
 
 Three server starts on one world copy, the tables loaded with another blueprint
 before each:
-- "Order Test" (10 blocks): the order completes, and the next one is refused with
-  the 60 minute cool-down.
+- "Order Test" (10 blocks): the order completes, and the next one is a paid build
+  for the 60 minute cool-down.
 - "Free Limits Blocked" (a jump drive, a large ion thruster and a prototech
-  battery): the order is still refused with the cool-down, the world kept it
-  over the restart. With the cool-down at 0 it is refused for the three blocks.
-- "Order Big" (1,536 blocks), the cool-down at 0: a second order while the first
-  one builds is refused, one free ship at a time.
+  battery): the quote is still paid for the cool-down, the world kept it over the
+  restart. With the cool-down at 0 it is paid for the three blocks.
+- "Order Big" (1,536 blocks), the cool-down at 0: pressing again while it builds
+  doesn't cancel it.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> \\
     uv run --no-project --with httpx python tests/test_free_limits.py
@@ -44,7 +44,7 @@ BLOCKED = rig.grid(
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
-COOLDOWN = "next free ship in"
+COOLDOWN = "next free ship is in"
 started = time.monotonic()
 
 
@@ -119,8 +119,7 @@ def completed_ship() -> None:
     config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
     assert "FreeBuild" not in config, "the world's config sets no free-build option"
     remote = start()
-    reply = order(remote)
-    assert "builds 'Order Test' for you" in reply, reply
+    so.place(remote, "Order Test")
     wait_chat_count(remote, "is ready", 1, 900)
     reply = order(remote)
     assert f"{COOLDOWN} 60 min" in reply, reply
@@ -139,7 +138,8 @@ def blocked_blocks() -> None:
     assert COOLDOWN in reply, f"the cool-down survives the restart: {reply}"
     tc.with_config(remote, FreeBuildCooldownMinutes=0)
     reply = order(remote)
-    assert "A free ship can't have" in reply, reply
+    # The screen may show the new quote already, then the press tries to order it
+    assert "paid build (a free ship can't have" in reply, reply
     for name in ("Jump Drive", "Ion Thruster", "Prototech Battery"):
         assert name in reply, (name, reply)
     stop()
@@ -151,10 +151,9 @@ def one_at_a_time() -> None:
     set_tables(so.BIG, remove="Order Test")
     remote = start()
     tc.with_config(remote, FreeBuildCooldownMinutes=0)
+    so.place(remote, "Order Big")
     reply = order(remote)
-    assert "builds 'Order Big' for you" in reply, reply
-    reply = order(remote)
-    assert "one free ship at a time" in reply, reply
+    assert "can't be canceled now" in reply, reply
     stop()
 
 

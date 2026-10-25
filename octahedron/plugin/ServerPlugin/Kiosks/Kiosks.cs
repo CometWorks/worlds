@@ -43,6 +43,13 @@ internal static class Kiosks
     private static readonly HashSet<ulong> busy = new();
     private static readonly Encoding Utf8 = Encoding.UTF8;
 
+    // The Faction switch each player last had on at a kiosk, by identity; the shipyard pays with it
+    private static readonly Dictionary<long, bool> factionSwitch = new();
+
+    /// <summary>Whether the player's last kiosk request had the Faction switch on.</summary>
+    public static bool FactionSwitch(long identityId) =>
+        factionSwitch.TryGetValue(identityId, out bool on) && on;
+
     public static void Update()
     {
         var session = MySession.Static;
@@ -210,6 +217,7 @@ internal static class Kiosks
         lastRequest[visit.Sender] = now;
 
         visit.Identity = player.Identity.IdentityId;
+        factionSwitch[visit.Identity] = visit.Request.Faction;
         var grids = new List<MyCubeGrid>();
         if (
             !MyEntities.TryGetEntityById(visit.Request.Kiosk, out MyTerminalBlock block)
