@@ -505,6 +505,31 @@ others; `!oct contracts post` checks and posts at once. `!oct contract accept <i
 inventory; `fill` adds an acquisition's items first) and complete (a bounty or
 salvage) a contract as the caller, for tests and support.
 
+### Leaderboard
+
+The station panels named `LeaderboardBlockName` ("Curved LCD Panel - Station Lounge
+Leaderboard", 8 at every station) rank the factions by their value in SC: the cash in
+the faction's bank account, with the money held for its market orders, plus its grids.
+They also show each faction's PCU. A grid is the faction's when its biggest owner is a
+member. Its value is what its blocks are built of, their mounted components, plus its
+inventories, each item at the stations' price: the middle of OCT's bid and ask as
+the station's market shows them (the specialty price while the day's quota lasts),
+averaged over the stations that trade it. Items OCT doesn't trade count for nothing.
+OCT and the NPC factions are left out. The panels show the first `LeaderboardRows` (15)
+in Monospace at `LeaderboardFontSize` (0.45), 45 characters a line.
+
+Every `LeaderboardIntervalSeconds` (300) the server counts the world's grids, a few
+per tick (2 ms at most), and then writes the board to the panels. The log has the
+count: `Leaderboard: counted N grids in T ticks, X ms of work`. On a cluster every
+node counts the grids it simulates: it asks the World Authority for the prices, sends
+it the totals per faction and gets the ranked factions back, summed over the latest
+totals of every node. The World Authority adds the bank accounts and the market's
+held money, and forgets a node's totals after three intervals without news. Grids
+stored in Hangar don't count.
+
+`!oct leaderboard` (admin) counts now and lists every faction with its cash, grids
+and PCU; on a cluster, run it on a node.
+
 ### Container drops
 
 The game's drop pods (world setting `EnableContainerDrops`) come in two kinds.
@@ -845,6 +870,14 @@ acquisition handed in and paid by OCT with the items in OCT's ledger, the dereli
 finished at the shipyard by the plugin, the bounty completed, and after a restart the
 same open contracts. `tests/contracts/ContractTests` checks the rewards, time limits
 and amounts alone (`dotnet run -c Release --project tests/contracts/ContractTests`).
+`tests/leaderboard/LeaderboardTests` checks the leaderboard's arithmetic, ranking,
+text and wire formats alone (`dotnet run -c Release --project tests/leaderboard/LeaderboardTests`).
+`tests/test_leaderboard.py` checks it in game with the client and the kiosk probe: two
+players' factions and no NPC ones ranked, a faction's cash, a docked ship's value and
+PCU against the game's block definitions and OCT's prices at every station, money held
+for a market order, the station panels and their refresh, and how long a count of the
+world takes. `tests/leaderboard/leaderboard_cluster.py` checks it on a local test
+cluster with the World Authority and a node.
 `tests/test_hologram.py` takes screenshots of fitted holograms, a blueprint with
 a cockpit and one without, from the side, the front and above, on a bench of two
 tables in open space; it needs a rendering client.
