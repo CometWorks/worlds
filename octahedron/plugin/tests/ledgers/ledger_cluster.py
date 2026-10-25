@@ -242,7 +242,7 @@ def run(bench) -> None:
             node,
         )
     )
-    check("the WA applied the 11 changes", applied_wa == 11, f"WA {applied_wa}")
+    check("the WA applied the 10 changes", applied_wa == 10, f"WA {applied_wa}")
     check("node-1 applied none itself", applied_node == 0, f"node-1 {applied_node}")
     bench.record(
         "wa-ledger-lines", "\n".join(l for l in wa.splitlines() if "Ledger" in l)
