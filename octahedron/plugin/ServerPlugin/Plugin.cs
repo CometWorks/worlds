@@ -77,6 +77,7 @@ public class Plugin : IPlugin
             TableHologram.Update();
             ShipyardOrders.Update();
             Ledgers.Update();
+            Contracts.Update();
         }
         catch (Exception e)
         {

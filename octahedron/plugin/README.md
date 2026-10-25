@@ -337,6 +337,62 @@ the start of it, and amounts are in units:
 !oct ledger show Alpha
 ```
 
+### Contracts
+
+With `ContractsEnabled` on, OCT (`MoneyAuthorityFactionTag`) posts the stations'
+contracts in the game's own contract system and the game's contract generator stays
+off. They are station contracts: every contract block of the station lists them, and
+players take and hand them in there as usual. OCT pays every reward. The game pays the
+reward out when a contract finishes, and the plugin takes the same amount from OCT's
+account; a contract that fails or runs out costs OCT nothing. There is no collateral.
+Every minute the plugin fills each station up again:
+
+- Hauling: `ContractHaulingPerStation` (3) open package deliveries to a random other
+  station. A delivery pays `ContractHaulingBaseReward` (2,000 SC) plus
+  `ContractHaulingRewardPerKm` (20 SC) per km between the stations, and has
+  `ContractHaulingMinutes` (20) plus a minute for every 3 km to arrive. The package
+  is the game's: it goes into the player's inventory when they take the contract.
+- Acquisitions: `ContractAcquisitionItems` lists what OCT keeps in stock at each
+  station (`Ingot/Iron=20000,...`). For an item its ledger there holds less of, OCT
+  posts one acquisition for the rest, less what open and taken acquisitions bring
+  already, at most `ContractAcquisitionMaxAmount` (5,000) items, paying
+  `ContractAcquisitionPricePercent` (100 %) of the reference price (the game's
+  minimal price / 10). The player delivers the items at the station's contract
+  block from their docked ship or inventory, and they go into OCT's ledger there,
+  not into the station's containers. An acquisition that would take OCT's ledger
+  past `LedgerFactionLimitTonnes` isn't posted. The market's catalog (SE-684) will
+  take over the stock list.
+- Bounties: up to `ContractBountiesPerStation` (3) on the NPC grids within
+  `ContractBountyRangeKm` (30 km) of the station with a threat score (MES's, as the
+  spawn gate counts it) of at least `ContractBountyMinThreat` (50), the highest
+  first, at `ContractBountyRewardPerThreat` (20 SC) per point. OCT's own grids and the
+  wreck factions' are no targets. A bounty is done when the target's threat score
+  drops to a quarter of what it was when posted, or the target stops being an NPC
+  grid, or it is gone while the player who took the bounty is within 5 km of where
+  it was last seen; gone otherwise, it fails. A bounty nobody took is withdrawn when
+  its target is gone. `ContractBountyMinutes` (120) to do it.
+- Salvage: up to `ContractSalvagePerStation` (2) on derelicts within the bounty
+  range: movable grids of at least `ContractSalvageMinBlocks` (20) blocks that belong
+  to nobody or to a wreck faction (`ContractSalvageFactionTags`, `WRECKS`). It pays
+  `ContractSalvageRewardPerTonne` (100 SC) per tonne. Delivered when the derelict is
+  within `ContractSalvageRadius` (150 m) of the station's shipyard grid, center to
+  center; the plugin then finishes the contract and scraps the derelict.
+  `ContractSalvageMinutes` (180) to tow it.
+
+The bounties' and salvage's targets are a world variable (`Octahedron-Contracts`); the
+contracts themselves are saved by the game. The plugin checks them every 10 seconds.
+
+The contract system is kept on the World Authority of a cluster, so the plugin posts
+there; the nodes carry the deliveries, and OCT's payment and an acquisition's ledger
+deposit happen where the contract finishes, through the World Authority. The World
+Authority has no grids, so a cluster gets no bounties or salvage.
+
+`!oct contracts` (admin) lists OCT's contracts at every station and counts the
+others; `!oct contracts post` checks and posts at once. `!oct contract accept <id>`,
+`deliver <id> [fill]` and `complete <id>` take, hand in (from the caller's
+inventory; `fill` adds an acquisition's items first) and complete (a bounty or
+salvage) a contract as the caller, for tests and support.
+
 ### Container drops
 
 The game's drop pods (world setting `EnableContainerDrops`) come in two kinds.
@@ -649,6 +705,13 @@ batches that apply all or none, and the saved and wire formats.
 `tests/test_ledgers.py` checks them in game with the client's admin commands, the
 game's item masses and the config, then restarts the server and finds them as they
 were saved.
+`tests/test_contracts.py` checks the contracts with the client's admin commands: three
+hauling contracts and an acquisition at every station and none of the game's, a bounty
+on an NPC grid and salvage of a derelict placed near Alpha Station, a hauling and an
+acquisition handed in and paid by OCT with the items in OCT's ledger, the derelict
+finished at the shipyard by the plugin, the bounty completed, and after a restart the
+same open contracts. `tests/contracts/ContractTests` checks the rewards, time limits
+and stock list alone (`dotnet run -c Release --project tests/contracts/ContractTests`).
 `tests/test_hologram.py` takes screenshots of fitted holograms, a blueprint with
 a cockpit and one without, from the side, the front and above, on a bench of two
 tables in open space; it needs a rendering client.

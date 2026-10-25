@@ -38,7 +38,7 @@ internal static class ThreatScore
     private static bool PlayerOwned(MyCubeGrid grid) =>
         grid.BigOwners.Count > 0 && !MySession.Static.Players.IdentityIsNpc(grid.BigOwners[0]);
 
-    private static float Grid(MyCubeGrid grid)
+    internal static float Grid(MyCubeGrid grid)
     {
         if (grid.BlocksCount <= 1)
             return 0;
