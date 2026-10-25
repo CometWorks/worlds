@@ -72,6 +72,7 @@ public class Plugin : IPlugin
             worldEdge.Update();
             TableHologram.Update();
             ShipyardOrders.Update();
+            FreePrints.Update();
         }
         catch (Exception e)
         {
