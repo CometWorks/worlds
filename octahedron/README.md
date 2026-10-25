@@ -63,11 +63,17 @@ station and shipyard blueprints are in `blueprints/`.
   over the bisector of Delta and Alpha Station, 12 degrees from that normal.
   Moon Station stays where it was before the turn, between the directions to
   where Delta and Alpha Station were then. The 6
-  Earth stations are placed with EarthLike's north as up, then each is tilted together with its shipyard about its safe
-  zone's center, so its deck lies parallel to the asteroid ring (up along the
-  ring's axis, 25 degrees from north). Otherwise the sun shines sideways
-  through the deck all day: bad shadows and unreadable LCDs. The lanes don't
-  tilt. Moon Station's up is square to the line between EarthLike and the
+  Earth stations are placed with EarthLike's north as up and their front toward
+  its axis, each with its shipyard. The 4 equatorial ones are then turned
+  together with their shipyards about the safe zone's center, so the deck lies
+  parallel to the asteroid ring (up along the ring's axis, its north side, 25
+  degrees from north) and the front faces EarthLike in the ring's plane, with
+  the shipyard behind, out in space. Otherwise the sun shines sideways through
+  the deck all day: bad shadows and unreadable LCDs. North and South Station
+  stay level with the equator, both with their up toward EarthLike: North
+  Station is upside down, so its lobby looks down on the ring, and its
+  shipyard sits as South Station's does, below the station out in space. The
+  lanes don't turn. Moon Station's up is square to the line between EarthLike and the
   Moon, the one such direction nearest to where Delta Station was before the
   turn, and it faces away
   from the Moon. Each station sits in a 250 m admin safe zone, owned by the

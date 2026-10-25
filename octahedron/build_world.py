@@ -884,6 +884,16 @@ def rotate(v, axis, angle):
     )
 
 
+def reframe(v, frame, target):
+    """v turned by the rotation that takes frame's (forward, up) to target's"""
+    (forward, up), (forward2, up2) = frame, target
+    right, right2 = cross(forward, up), cross(forward2, up2)
+    return add(
+        add(mul(forward2, dot(v, forward)), mul(up2, dot(v, up))),
+        mul(right2, dot(v, right)),
+    )
+
+
 def perpendicular_part(v, axis):
     """v without its component along the unit vector axis"""
     return sub(v, mul(axis, dot(v, axis)))
@@ -1293,22 +1303,28 @@ def main():
         away = norm(sub(center, planet.center))
         if planet is moon:
             away = mul(away, -1)
+        if name == "North Station":
+            # Upside down, like South Station: its up toward EarthLike, so the lobby looks
+            # down on the ring, and its shipyard below it on the station, out in space
+            up = mul(up, -1)
         # The station and its shipyard share the safe zone around the station's place
         station_center, yard = station_and_shipyard(template, center, forward, up, away)
-        if planet is earth:
-            # Tilt the pair about the zone's center until the station's deck lies parallel
-            # to the asteroid ring, so the sun doesn't shine sideways through it all day
-            turn = norm(cross(up, axis))
-            angle = math.acos(max(-1.0, min(1.0, dot(up, axis))))
-            tilt = lambda v: rotate(v, turn, angle)
-            station_center = add(center, tilt(sub(station_center, center)))
+        if name in EQUATOR_STATIONS:
+            # Turn the pair about the zone's center until the station's deck lies parallel to
+            # the asteroid ring (up along the ring's axis, the north side), so the sun doesn't
+            # shine sideways through it all day, and its front faces EarthLike in the ring's
+            # plane, with the shipyard behind it out in space. The pole stations stay level
+            # with the equator.
+            level = norm(perpendicular_part(sub(earth.center, center), axis))
+            turn = lambda v: reframe(v, (forward, up), (level, axis))
+            station_center = add(center, turn(sub(station_center, center)))
             yard_center, yard_forward, yard_up = yard
             yard = (
-                add(center, tilt(sub(yard_center, center))),
-                tilt(yard_forward),
-                tilt(yard_up),
+                add(center, turn(sub(yard_center, center))),
+                turn(yard_forward),
+                turn(yard_up),
             )
-            forward, up = tilt(forward), tilt(up)
+            forward, up = level, axis
         shipyards[name] = yard
         grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)
