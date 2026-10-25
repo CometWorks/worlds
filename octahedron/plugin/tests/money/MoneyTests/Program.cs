@@ -87,5 +87,12 @@ catch (OverflowException)
     Check(true, "tax total overflow throws");
 }
 
+// Hangar's fee for another station: 1 SC per 10 PCU, rounded up
+Check(MoneyMath.RetrieveFee(60_000, 1) == 6_000, "60k PCU costs 6,000 SC");
+Check(MoneyMath.RetrieveFee(1, 1) == 1 && MoneyMath.RetrieveFee(11, 1) == 2, "rounded up");
+Check(MoneyMath.RetrieveFee(10, 3) == 3, "3 SC per 10 PCU");
+Check(MoneyMath.RetrieveFee(0, 1) == 0 && MoneyMath.RetrieveFee(500, 0) == 0, "free");
+Check(MoneyMath.RetrieveFee(int.MaxValue, 1) == 214_748_365, "no overflow at int.MaxValue PCU");
+
 Console.WriteLine(failures == 0 ? $"PASS {checks} checks" : $"FAIL {failures} of {checks} checks");
 return failures == 0 ? 0 : 1;

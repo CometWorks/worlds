@@ -72,6 +72,7 @@ public class Plugin : IPlugin
             worldEdge.Update();
             TableHologram.Update();
             ShipyardOrders.Update();
+            HangarFee.Bind();
         }
         catch (Exception e)
         {
