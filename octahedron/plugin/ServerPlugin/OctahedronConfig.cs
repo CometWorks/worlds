@@ -315,8 +315,9 @@ public class OctahedronConfig : PluginConfig
     } = 60;
 
     [BoolOption(
-        "OCT's account is real, without the economy's top-up toward 1e9: new money comes only from the daily subsidy and OCT's floor, "
-            + "and once a day (00:00 UTC) the wealth tax, the subsidy and OCT's balance above its cap are split between the active players. "
+        "OCT's account is real, without the economy's top-up toward 1e9: new money comes only from the subsidy and OCT's floor. "
+            + "Once a day (00:00 UTC) the wealth tax goes into a pool; once an hour a part of it, the subsidy and OCT's balance above its cap "
+            + "are split between the active players. "
             + "Runs on the World Authority of a cluster.",
         Parent = "money"
     )]
@@ -345,7 +346,7 @@ public class OctahedronConfig : PluginConfig
 
     [LongOption(
         0,
-        description: "New money per active player each day, into the day's pool (SC).",
+        description: "New money per active player each day, paid out a 24th each hour (SC).",
         Parent = "money"
     )]
     public long MoneySubsidyPerActivePlayer
@@ -367,7 +368,7 @@ public class OctahedronConfig : PluginConfig
 
     [LongOption(
         0,
-        description: "OCT's balance above this goes into the day's pool (SC).",
+        description: "OCT's balance above this is paid out to the active players each hour (SC).",
         Parent = "money"
     )]
     public long MoneyOctCap
@@ -412,15 +413,15 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         1,
-        365,
-        description: "A player online at any time in this many last days is active: gets a share of the day's pool and counts for the subsidy.",
+        8_760,
+        description: "A player online at any time in this many last hours is active: gets a share of each hourly payout and counts for the subsidy.",
         Parent = "money"
     )]
-    public int MoneyActiveDays
+    public int MoneyActiveHours
     {
         get;
         set => SetField(ref field, value);
-    } = 7;
+    } = 24;
 
     [BoolOption(
         "Spawn the game's personal drop pods (Unknown Signal), each only for its player. Off: only the strong ones "

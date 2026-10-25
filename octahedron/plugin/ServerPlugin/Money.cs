@@ -12,13 +12,15 @@ using Sandbox.ModAPI;
 namespace ServerPlugin;
 
 // OCT's account is real: the economy no longer tops it back up toward 1e9 every economy tick.
-// New money comes only from the daily subsidy per active player and from topping OCT up to its
-// floor. Once a UTC day the wealth tax, the subsidy and OCT's balance above its cap make a pool
-// split equally between the players active in the last days.
+// New money comes only from the subsidy per active player and from topping OCT up to its floor.
+// Once a UTC day every rich account pays the wealth tax into a held pool. Once a UTC hour a part
+// of that pool, the hour's subsidy and OCT's balance above its cap are split equally between the
+// players online at any time in the last day.
 //
 // It runs where the bank accounts are authoritative: a plain server, or the World Authority of a
-// cluster, whose banking the nodes forward to. Its state (the last day settled, when each player
-// was last online) is a world variable there, so it is saved and restored with the accounts.
+// cluster, whose banking the nodes forward to. Its state (the tax day, the payout hour, the held
+// tax, when each player was last online) is a world variable there, so it is saved and restored
+// with the accounts.
 internal static class Money
 {
     private const string VariableName = "Octahedron-Money";
@@ -40,21 +42,21 @@ internal static class Money
         if (MySession.Static?.Ready != true || MyBankingSystem.Static == null || !Authority)
             return;
         nextUpdate = DateTime.UtcNow + Interval;
-        Run(force: false);
+        Run(tax: false, pay: false);
     }
 
-    // !oct payday: settles now, as if a new day had started
-    public static string Payday()
+    // !oct taxday and !oct payday: collect the tax or pay the hour out now
+    public static string Force(bool tax)
     {
         if (!On)
             return "The money rules are off.";
         if (!Authority)
-            return "The money rules run on the World Authority, at 00:00 UTC.";
-        return Run(force: true) ?? "Settled, see the server log.";
+            return "The money rules run on the World Authority.";
+        return Run(tax, pay: !tax) ?? "Done, see the server log.";
     }
 
     // Returns why nothing ran, or null
-    private static string Run(bool force)
+    private static string Run(bool tax, bool pay)
     {
         var session = MySession.Static;
         var oct = session.Factions.TryGetFactionByTag(Config.MoneyAuthorityFactionTag);
@@ -71,10 +73,11 @@ internal static class Money
 
         var state = State.Load();
         var now = DateTime.UtcNow;
+        var hour = now.Date.AddHours(now.Hour);
         var nowSeconds = new DateTimeOffset(now).ToUnixTimeSeconds();
         foreach (var identity in OnlinePlayers())
             state.Seen[identity] = nowSeconds;
-        var oldest = nowSeconds - (long)Config.MoneyActiveDays * 86_400;
+        var oldest = nowSeconds - (long)Config.MoneyActiveHours * 3_600;
         foreach (var gone in state.Seen.Where(p => p.Value < oldest).Select(p => p.Key).ToList())
             state.Seen.Remove(gone);
 
@@ -90,12 +93,21 @@ internal static class Money
                 );
             }
             state.Day = now.Date;
+            state.Hour = hour;
         }
-        else if (force || state.Day < now.Date)
+        else
         {
-            Settle(session, oct.FactionId, state);
-            state.Day = now.Date;
-            state.TopUps = 0;
+            if (tax || state.Day < now.Date)
+            {
+                CloseDay(oct.FactionId, state);
+                CollectTax(session, oct.FactionId, state);
+                state.Day = now.Date;
+            }
+            if (pay || state.Hour < hour)
+            {
+                Pay(session, oct.FactionId, state, 24 - now.Hour);
+                state.Hour = hour;
+            }
         }
 
         var octBalance = Balance(oct.FactionId);
@@ -110,7 +122,20 @@ internal static class Money
         return null;
     }
 
-    private static void Settle(MySession session, long octId, State state)
+    // The day's totals, logged once when the next day starts
+    private static void CloseDay(long octId, State state)
+    {
+        Plugin.Log.Info(
+            $"Money day {state.Day:yyyy-MM-dd} closed: paid out {Sc(state.Paid)} in {state.Payouts} hourly payouts "
+                + $"(tax {Sc(state.PaidTax)}, subsidy {Sc(state.Subsidy)}, OCT above its cap {Sc(state.OctExcess)}); "
+                + $"OCT topped up {Sc(state.TopUps)}; tax held {Sc(state.Held)}; OCT now {Sc(Balance(octId))}, "
+                + $"all accounts {Sc(MyBankingSystem.Static.OverallBalance)}"
+        );
+        state.Paid = state.PaidTax = state.Subsidy = state.OctExcess = state.TopUps = 0;
+        state.Payouts = 0;
+    }
+
+    private static void CollectTax(MySession session, long octId, State state)
     {
         var factions = session
             .Factions.Select(p => p.Value)
@@ -125,13 +150,36 @@ internal static class Money
             .Concat(factions.Select(id => (Id: id, Threshold: Config.MoneyFactionTaxThreshold)))
             .Where(a => HasAccount(a.Id))
             .Select(a => (a.Id, Balance(a.Id), a.Threshold));
+        var (taxes, total) = MoneyMath.Taxes(taxed, Config.MoneyWealthTaxBasisPoints);
+        var held = checked(state.Held + total);
+
+        var failed = 0;
+        long collected = 0;
+        foreach (var (id, amount) in taxes)
+            if (Change(id, -amount))
+                collected += amount;
+            else
+                failed++;
+        state.Held = held - (total - collected);
+
+        var factionTax = taxes.Where(t => factions.Contains(t.Id)).ToList();
+        var factionTotal = factionTax.Sum(t => t.Amount);
+        Plugin.Log.Info(
+            $"Money tax {DateTime.UtcNow:yyyy-MM-dd}: {Sc(total - factionTotal)} from {taxes.Count - factionTax.Count} players "
+                + $"and {Sc(factionTotal)} from {factionTax.Count} factions; tax held {Sc(state.Held)}"
+                + (failed > 0 ? $"; {failed} balance changes FAILED" : "")
+        );
+    }
+
+    private static void Pay(MySession session, long octId, State state, int hoursLeft)
+    {
         var recipients = state
             .Seen.Keys.Where(id => HasAccount(id) && !session.Players.IdentityIsNpc(id))
             .OrderBy(id => id)
             .ToList();
-        var s = MoneyMath.Settle(
-            taxed,
-            Config.MoneyWealthTaxBasisPoints,
+        var p = MoneyMath.Pay(
+            state.Held,
+            hoursLeft,
             Balance(octId),
             Config.MoneyOctCap,
             Config.MoneySubsidyPerActivePlayer,
@@ -139,23 +187,24 @@ internal static class Money
         );
 
         var failed = 0;
-        foreach (var (id, amount) in s.Taxes)
-            failed += Change(id, -amount) ? 0 : 1;
-        failed += Change(octId, s.ToOct - s.OctExcess) ? 0 : 1;
-        if (s.Share > 0)
-            foreach (var id in s.Recipients)
-                failed += Change(id, s.Share) ? 0 : 1;
+        failed += Change(octId, -p.OctExcess) ? 0 : 1;
+        if (p.Share > 0)
+            foreach (var id in recipients)
+                failed += Change(id, p.Share) ? 0 : 1;
+        checked
+        {
+            state.Held = state.Held - p.Tax + p.Rest;
+            state.Paid += p.Share * recipients.Count;
+            state.PaidTax += p.Tax;
+            state.Subsidy += p.Subsidy;
+            state.OctExcess += p.OctExcess;
+        }
+        state.Payouts++;
 
-        var factionTax = s.Taxes.Where(t => factions.Contains(t.Id)).ToList();
-        var factionTotal = factionTax.Sum(t => t.Amount);
         Plugin.Log.Info(
-            $"Money day {state.Day:yyyy-MM-dd} settled: "
-                + $"tax {Sc(s.TaxTotal - factionTotal)} from {s.Taxes.Count - factionTax.Count} players "
-                + $"and {Sc(factionTotal)} from {factionTax.Count} factions, "
-                + $"OCT above its cap {Sc(s.OctExcess)}, subsidy {Sc(s.Subsidy)}, "
-                + $"pool {Sc(s.Pool)} to {s.Recipients.Count} active players at {Sc(s.Share)} each, "
-                + $"{Sc(s.ToOct)} left to OCT; OCT topped up {Sc(state.TopUps)} during the day; "
-                + $"OCT now {Sc(Balance(octId))}, all accounts {Sc(MyBankingSystem.Static.OverallBalance)}"
+            $"Money hour {DateTime.UtcNow:yyyy-MM-dd HH}:00: tax {Sc(p.Tax)}, subsidy {Sc(p.Subsidy)}, "
+                + $"OCT above its cap {Sc(p.OctExcess)}, pool {Sc(p.Pool)} to {recipients.Count} active players "
+                + $"at {Sc(p.Share)} each; tax held {Sc(state.Held)}"
                 + (failed > 0 ? $"; {failed} balance changes FAILED" : "")
         );
     }
@@ -182,13 +231,14 @@ internal static class Money
         yield return $"All accounts: {Sc(MyBankingSystem.Static.OverallBalance)}";
         if (!Authority)
         {
-            yield return "Settled on the World Authority at 00:00 UTC.";
+            yield return "Run on the World Authority.";
             yield break;
         }
         var state = State.Load();
-        yield return $"Last day settled: {state.Day?.ToString("yyyy-MM-dd") ?? "none"}, the next at 00:00 UTC";
-        yield return $"Active players (last {Config.MoneyActiveDays} days): {state.Seen.Count}";
-        yield return $"OCT topped up since: {Sc(state.TopUps)}";
+        yield return $"Tax day: {state.Day?.ToString("yyyy-MM-dd") ?? "none"}, tax held: {Sc(state.Held)}";
+        yield return $"Last payout hour: {state.Hour?.ToString("yyyy-MM-dd HH") ?? "none"}, paid out today: {Sc(state.Paid)}";
+        yield return $"Active players (last {Config.MoneyActiveHours} hours): {state.Seen.Count}";
+        yield return $"OCT topped up today: {Sc(state.TopUps)}";
     }
 
     private static bool HasAccount(long id) => MyBankingSystem.Static.TryGetAccountInfo(id, out _);
@@ -202,12 +252,31 @@ internal static class Money
     private static string Sc(long amount) =>
         amount.ToString("N0", CultureInfo.InvariantCulture) + " SC";
 
-    // day=2026-10-25;topups=0;seen=<identity>:<unix seconds>,...
+    // day=2026-10-25;hour=2026-10-25T13;held=0;paid=0;...;seen=<identity>:<unix seconds>,...
     private sealed class State
     {
+        private const string DayFormat = "yyyy-MM-dd";
+        private const string HourFormat = "yyyy-MM-dd'T'HH";
+
         public DateTime? Day;
+        public DateTime? Hour;
+
+        // Tax collected and not paid out yet
+        public long Held;
+
+        // The day's totals, for its log line
+        public long Paid;
+        public long PaidTax;
+        public long Subsidy;
+        public long OctExcess;
         public long TopUps;
+        public long Payouts;
         public readonly Dictionary<long, long> Seen = new();
+
+        private static long Number(string text) => long.Parse(text, CultureInfo.InvariantCulture);
+
+        private static DateTime Time(string text, string format) =>
+            DateTime.ParseExact(text, format, CultureInfo.InvariantCulture);
 
         public static State Load()
         {
@@ -220,40 +289,70 @@ internal static class Money
                 {
                     var split = part.IndexOf('=');
                     var (key, value) = (part.Substring(0, split), part.Substring(split + 1));
-                    if (key == "day")
-                        state.Day = DateTime.ParseExact(
-                            value,
-                            "yyyy-MM-dd",
-                            CultureInfo.InvariantCulture
-                        );
-                    else if (key == "topups")
-                        state.TopUps = long.Parse(value, CultureInfo.InvariantCulture);
-                    else if (key == "seen")
-                        foreach (
-                            var seen in value.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        )
-                        {
-                            var pair = seen.Split(':');
-                            state.Seen[long.Parse(pair[0], CultureInfo.InvariantCulture)] =
-                                long.Parse(pair[1], CultureInfo.InvariantCulture);
-                        }
+                    if (value.Length == 0)
+                        continue;
+                    switch (key)
+                    {
+                        case "day":
+                            state.Day = Time(value, DayFormat);
+                            break;
+                        case "hour":
+                            state.Hour = Time(value, HourFormat);
+                            break;
+                        case "held":
+                            state.Held = Number(value);
+                            break;
+                        case "paid":
+                            state.Paid = Number(value);
+                            break;
+                        case "paidtax":
+                            state.PaidTax = Number(value);
+                            break;
+                        case "subsidy":
+                            state.Subsidy = Number(value);
+                            break;
+                        case "octexcess":
+                            state.OctExcess = Number(value);
+                            break;
+                        case "topups":
+                            state.TopUps = Number(value);
+                            break;
+                        case "payouts":
+                            state.Payouts = Number(value);
+                            break;
+                        case "seen":
+                            foreach (
+                                var seen in value.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            )
+                            {
+                                var pair = seen.Split(':');
+                                state.Seen[Number(pair[0])] = Number(pair[1]);
+                            }
+                            break;
+                    }
                 }
             }
             catch (Exception e) when (e is FormatException or ArgumentException)
             {
-                // A fresh state settles nothing for a day and pays nobody seen before
+                // A fresh state pays nobody seen before; the log keeps the held tax it loses
                 Plugin.Log.Error($"Money: unreadable state, starting over: {text}", e);
                 return new State();
             }
             return state;
         }
 
-        public void Save() =>
+        public void Save()
+        {
+            string N(long value) => value.ToString(CultureInfo.InvariantCulture);
             MyAPIGateway.Utilities.SetVariable(
                 VariableName,
-                $"day={Day:yyyy-MM-dd};topups={TopUps.ToString(CultureInfo.InvariantCulture)};seen="
-                    + string.Join(",", Seen.Select(p => $"{p.Key}:{p.Value}"))
+                $"day={Day?.ToString(DayFormat, CultureInfo.InvariantCulture)};"
+                    + $"hour={Hour?.ToString(HourFormat, CultureInfo.InvariantCulture)};"
+                    + $"held={N(Held)};paid={N(Paid)};paidtax={N(PaidTax)};subsidy={N(Subsidy)};"
+                    + $"octexcess={N(OctExcess)};topups={N(TopUps)};payouts={N(Payouts)};seen="
+                    + string.Join(",", Seen.Select(p => $"{N(p.Key)}:{N(p.Value)}"))
             );
+        }
     }
 
     // The economy moves every station owner's balance 40 % toward 1e9 each economy tick

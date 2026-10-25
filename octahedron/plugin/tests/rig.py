@@ -30,7 +30,8 @@ from pathlib import Path
 
 HOME = Path.home()
 PLUGIN = Path(__file__).resolve().parent.parent
-WORLD_SOURCE = PLUGIN.parent / "server"
+# A world built by build_world.py can stand in for the committed one
+WORLD_SOURCE = Path(os.environ.get("OCT_WORLD_SOURCE", PLUGIN.parent / "server"))
 CONFIG_SOURCE = PLUGIN.parent / "config" / "octahedron.cfg"
 WORKSPACE = Path(os.environ.get("OCT_WORKSPACE", HOME / "ws/se"))
 PARALLEL = WORKSPACE / "testing" / "parallel-test-work"
