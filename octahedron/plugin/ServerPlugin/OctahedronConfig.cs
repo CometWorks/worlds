@@ -421,6 +421,78 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 20;
 
+    [StringOption(
+        description: "Names of the shipyard's rotors, comma-separated, whose rotor heads carry the support arm "
+            + "of a build. A shipyard without them builds the ship from a projector on the ship itself.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardArmRotors
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "Advanced Rotor Top Arm Large, Advanced Rotor Top Arm Small, Advanced Rotor Bottom Arm Large, Advanced Rotor Bottom Arm Small";
+
+    [StringOption(
+        description: "The support arm's blocks on a large grid rotor head, as piece=subtype: End (on the rotor head), "
+            + "Straight, Corner, Tee (the last pipe), Cap, Connector, Support (holds the projector next to the connector), Projector.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardArmLargeBlocks
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "End=LargeBlockConveyorPipeEnd, Straight=LargeBlockConveyorPipeSeamless, Corner=LargeBlockConveyorPipeCorner, "
+        + "Tee=LargeBlockConveyorPipeT, Cap=LargeBlockConveyorPipeCap, Connector=Connector, Support=LargeBlockArmorBlock, "
+        + "Projector=LargeProjector";
+
+    [StringOption(
+        description: "The support arm's blocks on a small grid rotor head, as ShipyardArmLargeBlocks.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardArmSmallBlocks
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "End=ConveyorTubeSmall, Straight=ConveyorTubeSmall, Corner=ConveyorTubeSmallCurved, Tee=ConveyorTubeSmallT, "
+        + "Cap=SmallBlockConveyorCap, Connector=ConnectorSmall, Support=SmallBlockArmorBlock, Projector=SmallProjector";
+
+    [IntOption(
+        0,
+        description: "The support arm's route trades length against turns: a turn costs as much as this many pipes.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardArmTurnCost
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 3;
+
+    [StringOption(
+        description: "Blocks the support arm's projector may take the place of when it can't reach the ship otherwise, "
+            + "as Type/Subtype with * wildcards, comma-separated; the lightest is given up and the player builds it later.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardArmGiveUpBlocks
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "CubeBlock/*Armor*, CubeBlock/*Plating*";
+
+    [DoubleOption(
+        0,
+        description: "Seconds the support arm's connector has to lock onto the finished ship's before the plugin "
+            + "fills its H2 tanks itself.",
+        Parent = "shipyard"
+    )]
+    public double ShipyardArmDockSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1;
+
     [BoolOption(
         "OCT's account is real, without the economy's top-up toward 1e9: new money comes only from the subsidy and OCT's floor. "
             + "Once a day (00:00 UTC) the wealth tax goes into a pool; once an hour a part of it, the subsidy and OCT's balance above its cap "

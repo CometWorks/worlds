@@ -42,9 +42,12 @@ internal static class GroupPcuLimit
         var group = MyCubeGridGroups.Static.Mechanical.GetGroup(grid);
         if (group == null)
             return grid.BlocksPCU;
+        // A ship the shipyard builds on its support arm is in the shipyard's group: the shipyard
+        // and the arm don't count toward the ship
         var pcu = 0;
         foreach (var node in group.Nodes)
-            pcu += node.NodeData.BlocksPCU;
+            if (!ShipyardZoneWelding.IsShipyard(node.NodeData))
+                pcu += node.NodeData.BlocksPCU - ShipyardOrders.ArmPcu(node.NodeData);
         return pcu;
     }
 
