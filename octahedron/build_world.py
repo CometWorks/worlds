@@ -83,7 +83,9 @@ LANE_RING_INTERVAL = 10_000
 LANE_CLEARANCE = 1_000.0
 
 NPC_NAME = "Octahedron Authority"
-# Topped back up every economy tick; buying from a station needs nothing from its cargo
+# The game tops it back up every economy tick; with the Octahedron plugin's money rules
+# (MoneyEnabled) it is cut to MoneyOctCap at their first run and stays real money. Buying from
+# a station needs nothing from its cargo.
 NPC_BALANCE = 1_000_000_000
 NPC_TAG = "OCT"
 # Blocks players use on a station, shared with everyone; everything else stays with the owner's faction

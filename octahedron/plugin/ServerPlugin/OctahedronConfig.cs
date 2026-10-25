@@ -13,6 +13,7 @@ namespace ServerPlugin;
 [Section("projections", caption: "Projections")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
+[Section("money", caption: "Money")]
 [Section("drops", caption: "Container Drops")]
 [Section("encounters", caption: "Encounters")]
 [Section("mes", caption: "MES Spawn Pattern")]
@@ -313,6 +314,139 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 60;
+
+    [IntOption(
+        0,
+        description: "Minutes a player waits between two free shipyard builds. It starts when a free build ends with the ship "
+            + "handed over, finished or not; a ship removed before that starts none. Kept in the world, on a cluster on the World Authority.",
+        Parent = "shipyard"
+    )]
+    public int FreeBuildCooldownMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60;
+
+    [StringOption(
+        description: "Blocks a free shipyard build can't have, comma separated, as type/subtype, where * matches any text: "
+            + "prototech blocks, large ion thrusters and jump drives. The type is without MyObjectBuilder_.",
+        Parent = "shipyard"
+    )]
+    public string FreeBuildBlockedBlocks
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "*/*Prototech*, JumpDrive/*, Thrust/*LargeThrust, Thrust/*LargeThrustSciFi, Thrust/*LargeModularThruster";
+
+    [BoolOption(
+        "OCT's account is real, without the economy's top-up toward 1e9: new money comes only from the subsidy and OCT's floor. "
+            + "Once a day (00:00 UTC) the wealth tax goes into a pool; once an hour a part of it, the subsidy and OCT's balance above its cap "
+            + "are split between the active players. "
+            + "Runs on the World Authority of a cluster.",
+        Parent = "money"
+    )]
+    public bool MoneyEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [StringOption(
+        description: "Tag of the NPC faction that runs the stations, OCT.",
+        Parent = "money"
+    )]
+    public string MoneyAuthorityFactionTag
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "OCT";
+
+    [LongOption(0, description: "Balance of a new player account (SC).", Parent = "money")]
+    public long MoneyStartingBalance
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 25_000;
+
+    [LongOption(
+        0,
+        description: "New money per active player each day, paid out a 24th each hour (SC).",
+        Parent = "money"
+    )]
+    public long MoneySubsidyPerActivePlayer
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5_000;
+
+    [LongOption(
+        0,
+        description: "OCT's account is topped up to this whenever it drops below (checked every minute, SC).",
+        Parent = "money"
+    )]
+    public long MoneyOctFloor
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 2_000_000;
+
+    [LongOption(
+        0,
+        description: "OCT's balance above this is paid out to the active players each hour (SC).",
+        Parent = "money"
+    )]
+    public long MoneyOctCap
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20_000_000;
+
+    [IntOption(
+        0,
+        10_000,
+        description: "Daily wealth tax on the part of a balance above its threshold, in hundredths of a percent: 100 = 1 %.",
+        Parent = "money"
+    )]
+    public int MoneyWealthTaxBasisPoints
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
+
+    [LongOption(
+        0,
+        description: "Player balances above this pay the wealth tax (SC).",
+        Parent = "money"
+    )]
+    public long MoneyPlayerTaxThreshold
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 200_000;
+
+    [LongOption(
+        0,
+        description: "Faction balances above this pay the wealth tax (SC). OCT pays none, its cap applies instead.",
+        Parent = "money"
+    )]
+    public long MoneyFactionTaxThreshold
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1_000_000;
+
+    [IntOption(
+        1,
+        8_760,
+        description: "A player online at any time in this many last hours is active: gets a share of each hourly payout and counts for the subsidy.",
+        Parent = "money"
+    )]
+    public int MoneyActiveHours
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 24;
 
     [BoolOption(
         "Spawn the game's personal drop pods (Unknown Signal), each only for its player. Off: only the strong ones "
