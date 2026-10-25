@@ -219,6 +219,15 @@ the ship for them, for at most `ShipyardOrderMinutes` (60; 0 turns orders off).
 - It is free, so only a player with less than `FreeBuildPcuLimit` (10,000) PCU
   may order, counted as for the starter ship, and the blueprint may have at most
   `GroupPcuLimit` PCU, the cap of a ship.
+- A player gets one free ship at a time, then waits `FreeBuildCooldownMinutes`
+  (60) for the next. The wait starts when an order ends with the ship handed
+  over, finished or not; an order whose ship was removed starts none. The plugin
+  keeps the times in the world variable `Octahedron-FreePrints`, on a cluster in
+  the World Authority's world: the node ending an order sends the time to every
+  process, and a starting node asks the World Authority for the list.
+- A free ship can't have the blocks `FreeBuildBlockedBlocks` names (by default
+  prototech blocks, large ion thrusters and jump drives). Such a ship is a paid
+  build; the shipyard refuses it, naming the blocks, until paid builds come.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
   shipyard. The space must be empty: a ship left there has to fly out first.
@@ -244,6 +253,56 @@ the ship for them, for at most `ShipyardOrderMinutes` (60; 0 turns orders off).
 The order is kept in the world, in the projector's custom data, so it goes on
 after a restart. Every 10 seconds the node that simulates a shipyard checks it,
 so on a cluster the node owning the station's partition runs the order.
+
+### Money
+
+With `MoneyEnabled` on, the account of the stations' NPC faction, OCT
+(`MoneyAuthorityFactionTag`), is real money. The game moves the balance of every
+faction with stations 40 % of the way to 1e9 SC at every economy tick; the plugin stops
+that for OCT. New money then comes from two places only: a subsidy of
+`MoneySubsidyPerActivePlayer` (5,000 SC) per active player a day, and a top-up of
+OCT's account to `MoneyOctFloor` (2M SC) whenever it drops below it, checked every
+minute. A new player account starts with `MoneyStartingBalance` (25,000 SC) instead of
+the game's 10,000. Player factions still start with nothing.
+
+A player who was online at any time in the last `MoneyActiveHours` (24) hours is
+active; the plugin keeps a "last seen" time for each player.
+
+- At 00:00 UTC every player account pays `MoneyWealthTaxBasisPoints` (100, that is
+  1 %) of its balance above `MoneyPlayerTaxThreshold` (200k SC), and every player
+  faction the same share of its balance above `MoneyFactionTaxThreshold` (1M SC). NPC
+  identities and NPC factions pay nothing. The tax is held in a pool, outside any
+  account.
+- At the top of every UTC hour the plugin pays out an even part of the held tax (what
+  is held divided by the hours left in the day, so the last hour pays the rest), a
+  24th of the daily subsidy per active player, and OCT's balance above `MoneyOctCap`
+  (20M SC). The sum is split equally between the active players; what the division
+  leaves stays held. An hour with nobody active pays nothing: the tax stays held and
+  OCT keeps its balance.
+
+The server log gets a line for every payout, one for the day's tax (from players and
+from factions) and one when a day closes with its totals: what was paid out in how
+many payouts, split into tax, subsidy and OCT's part, OCT's top-ups, the tax still
+held, OCT's balance and the money in all accounts. All of it is integer math in SC
+with overflow checks; an overflow stops the money rules before any balance changes. A
+server that was down collects one day's tax and makes one payout when it comes back,
+however many it missed.
+
+The first time the rules run in a world, OCT's balance is cut to its cap without
+being paid out: the world starts OCT with the game's 1e9 SC.
+
+The rules run where the bank accounts are kept: on a plain server, or on the World
+Authority of a cluster, whose bank the nodes forward every change to. The plugin must
+be loaded there too, as a Quasar cluster does. The state (the tax day, the last
+payout hour, the held tax, the day's totals and when each player was last online) is
+a world variable (`Octahedron-Money`) there, so it is saved with the accounts and goes
+back with them when a save is restored. The new account balance applies on every
+node.
+
+`!oct money` (admin) shows OCT's balance, the caller's, the money in all accounts and
+the state. `!oct payday` (admin) makes the hour's payout at once, `!oct taxday`
+collects the day's tax and closes the day at once. On a cluster node they answer that
+the rules run on the World Authority.
 
 ### Station ledgers
 
@@ -615,6 +674,14 @@ screenshots of the welding from among the welders.
 the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
 refused, and a player who reaches 10,000 PCU gets no more starter ships or
 shipyard orders.
+`tests/test_money.py` checks the money rules with the client: OCT cut to its cap at
+the first run, a new account's balance, no economy top-up of OCT while the rules are
+on (and the game's with them off), the tax by `!oct taxday`, two payouts by
+`!oct payday`, OCT topped up to its floor, the day's totals and the state read back
+after a restart. `OCT_WORLD_SOURCE` points the rig at a world built by
+`build_world.py` instead of `octahedron/server`. `tests/money/MoneyTests` checks the
+arithmetic of the tax and the payout alone
+(`dotnet run -c Release --project tests/money/MoneyTests`).
 `tests/mes/` holds MesCluster's tests for the MES spawn gate:
 `CellPatternTests` checks the cell pattern against a brute-force definition
 (`dotnet run -c Release --project tests/mes/CellPatternTests`); `ds/run.py PLAN [cfg]`
