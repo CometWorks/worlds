@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using PluginSdk.Commands;
+using Sandbox.Game.SessionComponents;
+using Sandbox.Game.World;
 using VRage.Game.ModAPI;
 
 namespace ServerPlugin;
@@ -170,6 +172,29 @@ public sealed class MarketCommands : CommandModule
     [Permission(MyPromoteLevel.Admin)]
     public string Tick(string force = null) =>
         Market.On ? Market.Tick(force != null) : "The market is closed.";
+
+    [Command(
+        "market stores",
+        "Counts the game's store items of OCT's stations; with tick runs the game's economy tick first",
+        "!oct market stores [tick]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Stores(string tick = null)
+    {
+        if (tick != null)
+            MySession.Static.GetComponent<MySessionComponentEconomy>()?.ForceEconomyTick();
+        var oct = MySession.Static.Factions.TryGetFactionByTag(
+            Plugin.Config.MoneyAuthorityFactionTag
+        );
+        if (oct == null)
+            return $"No faction tagged {Plugin.Config.MoneyAuthorityFactionTag}.";
+        return string.Join(
+            "\n",
+            oct.Stations.OfType<MyFactionStation>()
+                .OrderBy(s => s.Name)
+                .Select(s => $"STORE {s.Name.Split(' ')[0]} {s.StoreItems.Count}")
+        );
+    }
 
     [Command(
         "market age",

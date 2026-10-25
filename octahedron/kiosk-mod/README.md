@@ -2,10 +2,10 @@
 
 The client mod of the Octahedron stations' kiosks: the touch screens on which
 players store items in the station warehouses and share them with their
-faction. The Octahedron server plugin (`../plugin`, "Station kiosks" in its
-README) owns the ledgers and does every operation; this mod draws the screens
-and sends the player's requests to it. The market screens come later and get
-their own tab.
+faction, and trade on the station's market. The Octahedron server plugin
+(`../plugin`, "Station kiosks" and "Station market" in its README) owns the
+ledgers and the market and does every operation; this mod draws the screens and
+sends the player's requests to it.
 
 It is built on [TouchScreenAPI](https://steamcommunity.com/sharedfiles/filedetails/?id=2668820525)
 by Adriano Lima ([GitHub](https://github.com/adrianulima/TouchScreenAPI)),
@@ -21,17 +21,20 @@ consuming mods to do.
 - `KioskApp.cs`: the screens. Storage moves items between the docked ship you
   pick, or From hand your character, and your ledger or, with the Faction switch,
   the faction's. Transfer gives items to the faction and, with the trading rank,
-  takes them; leaders also set whether every member may trade. Market is a
-  placeholder.
+  takes them; leaders also set whether every member may trade. Market shows
+  OCT's prices and stock and the best offer and order of every item; Buy and Sell
+  trade the chosen amount at once, Offer and Order list it at the chosen percent of
+  the reference price, and My listings cancels them.
 - `KioskSession.cs`: the mod messages to and from the plugin (channel 40683),
   and `/kiosk`, the same requests as a chat command for admins and tests.
 - `KioskState.cs`: reads the plugin's answers. The format is the plugin's
   `KioskProtocol.cs`; change both together.
 
-`/kiosk <state|deposit|withdraw|give|take|members> [faction] [hand|ship=ID]
-[item=Type/Subtype] [amount=N|all] [kiosk=ID]` works on the nearest kiosk
-within 20 m and prints the answer into the chat, for example
-`/kiosk deposit item=Ingot/Iron amount=100`.
+`/kiosk <state|deposit|withdraw|give|take|members|market|buy|sell|offer|order|cancel>
+[faction] [hand|ship=ID] [item=Type/Subtype] [amount=N|all] [price=SC|N%]
+[id=listing] [kiosk=ID]` works on the nearest kiosk within 20 m and prints the
+answer into the chat, for example `/kiosk deposit item=Ingot/Iron amount=100` or
+`/kiosk offer item=Ingot/Iron amount=50 price=90%`.
 
 ## Building and testing
 
