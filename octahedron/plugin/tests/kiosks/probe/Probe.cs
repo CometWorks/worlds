@@ -235,6 +235,24 @@ public sealed class ProbeCommands : CommandModule
         return $"PAID {tag} {account.Balance}";
     }
 
+    [Command(
+        "buttons",
+        "The first toolbar slot of the station's button panels: BUTTON id name slot0",
+        "!kprobe buttons <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Buttons(string station) =>
+        string.Join(
+            " ",
+            StationGrids(station)
+                .SelectMany(g =>
+                    g.GetFatBlocks<SpaceEngineers.Game.Entities.Blocks.MyButtonPanel>()
+                )
+                .Select(b =>
+                    $"BUTTON {b.EntityId} '{b.CustomName}' {b.Toolbar.GetItemAtIndex(0)?.GetType().Name ?? "empty"}"
+                )
+        );
+
     [Command("undock", "Disconnects and deletes the probe's ships", "!kprobe undock")]
     [Permission(MyPromoteLevel.Admin)]
     public string Undock()

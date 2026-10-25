@@ -21,13 +21,17 @@ once at the end).
   still there, and pressing again cancels it: the components are in the faction's
   ledger and the fee is back.
 - A free build (FreeBuildPcuLimit back at 10,000) queues behind the ship too and is
-  canceled with the button panel itself, by the character's use key.
+  canceled by pressing again. The confirm button has the toolbar item the plugin
+  gives it (checked through the probe).
 
     OCT_TASK=SE-685 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_paid_builds.py
 
 Prints one line per check and a pass/fail summary; exit code 0 = all passed.
-Not covered: a cluster.
+Not covered: a cluster, and pressing the button panel itself: the headless
+client's use-object detection doesn't hit it (character_use and F answered
+nothing_to_use, rendering or not), so the test uses !oct order, which calls
+the same press handler as the server's patch of the button.
 """
 
 from __future__ import annotations
@@ -312,7 +316,7 @@ def cancel_after_restart(remote, before: int, components: int) -> None:
     )
 
 
-def free_build_by_button(remote) -> None:
+def free_build(remote) -> None:
     with_config(remote, FreeBuildPcuLimit=10000)
     kiosks_stand(remote)
     balances(remote)  # the Faction switch off
@@ -321,30 +325,20 @@ def free_build_by_button(remote) -> None:
     check(not quote or "a free build" in quote, f"a free build: {quote}")
     check("is in the queue, a free build" in queued, f"the free order queues: {queued}")
 
-    buttons = remote.find_nearby_blocks(
-        subtype="LargeButtonPanelPedestal", max_distance=50, limit=5
+    armed = kiosks.probe(remote, "buttons Alpha")
+    check(
+        re.search(
+            r"'Button Panel - Station ShipyardConfirm' MyToolbarItemTerminalBlock",
+            armed,
+        )
+        is not None,
+        f"the confirm button has a toolbar item, so clients offer it: {armed}",
     )
-    check(len(buttons) > 0, f"the confirm button is near the table: {len(buttons)}")
-    if not buttons:
-        return
-    button = min(buttons, key=lambda b: b["distance"])
-    position = button["worldPosition"]
-    character = remote.get_character()["position"]
-    # 1.5 m from the button on the character's side, looking at its top
-    away = [c - p for c, p in zip(character, position)]
-    length = max(1e-6, sum(a * a for a in away) ** 0.5)
-    remote.character_teleport(*(p + 1.5 * a / length for p, a in zip(position, away)))
-    time.sleep(3)
-    canceled = None
-    for lift in (0.4, 0.2, 0.6, 0.0):
-        mark = latest(remote)
-        remote.character_look_at(position[0], position[1] + lift, position[2])
-        time.sleep(1)
-        remote.character_use()
-        canceled = wait_chat(remote, "left the queue", 8, mark)
-        if canceled:
-            break
-    check(canceled is not None, f"the button itself cancels the free order: {canceled}")
+    canceled = press(remote)
+    check(
+        "left the queue" in canceled,
+        f"pressing again cancels the free order: {canceled}",
+    )
 
 
 def saved_screens() -> None:
@@ -381,7 +375,7 @@ def main() -> int:
     try:
         if before is not None:
             cancel_after_restart(remote, before, components)
-        free_build_by_button(remote)
+        free_build(remote)
     finally:
         rig.stop_client()
         rig.stop_server()
