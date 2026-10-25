@@ -313,6 +313,30 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 60;
 
+    [IntOption(
+        0,
+        description: "Minutes a player waits between two free shipyard builds. It starts when a free build ends with the ship "
+            + "handed over, finished or not; a ship removed before that starts none. Kept in the world, on a cluster on the World Authority.",
+        Parent = "shipyard"
+    )]
+    public int FreeBuildCooldownMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60;
+
+    [StringOption(
+        description: "Blocks a free shipyard build can't have, comma separated, as type/subtype, where * matches any text: "
+            + "prototech blocks, large ion thrusters and jump drives. The type is without MyObjectBuilder_.",
+        Parent = "shipyard"
+    )]
+    public string FreeBuildBlockedBlocks
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "*/*Prototech*, JumpDrive/*, Thrust/*LargeThrust, Thrust/*LargeThrustSciFi, Thrust/*LargeModularThruster";
+
     [BoolOption(
         "Spawn the game's personal drop pods (Unknown Signal), each only for its player. Off: only the strong ones "
             + "(Strong Unknown Signal), the game's 5 % share of the drops, still spawn. Needs EnableContainerDrops in the world settings.",
