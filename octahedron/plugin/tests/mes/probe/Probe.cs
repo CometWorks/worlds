@@ -53,7 +53,10 @@ public class Probe : IPlugin
             return;
         this.planPath = planPath;
         plan = Array.Empty<string>();
-        output = new StreamWriter(outPath.Replace("{node}", node ?? "standalone"), append: true) { AutoFlush = true };
+        output = new StreamWriter(outPath.Replace("{node}", node ?? "standalone"), append: true)
+        {
+            AutoFlush = true,
+        };
     }
 
     public void Update()
@@ -66,7 +69,9 @@ public class Probe : IPlugin
             if (length == planLength)
                 return;
             planLength = length;
-            plan = File.ReadAllLines(planPath).Where(l => l.Trim().Length > 0 && !l.StartsWith("#")).ToArray();
+            plan = File.ReadAllLines(planPath)
+                .Where(l => l.Trim().Length > 0 && !l.StartsWith("#"))
+                .ToArray();
             if (step >= plan.Length)
                 return;
         }
@@ -80,18 +85,34 @@ public class Probe : IPlugin
         {
             switch (words[0])
             {
-                case "spawn": Spawn(words); break;
-                case "wait": resumeAt = DateTime.UtcNow.AddSeconds(D(words[1])); break;
-                case "census": Census(words[1]); break;
-                case "count": CountSlot(words); break;
-                case "owners": Owners(words[1]); break;
-                case "save": MyAsyncSaving.Start(() => output.WriteLine("saved")); break;
-                case "freeze": Freeze(); break;
+                case "spawn":
+                    Spawn(words);
+                    break;
+                case "wait":
+                    resumeAt = DateTime.UtcNow.AddSeconds(D(words[1]));
+                    break;
+                case "census":
+                    Census(words[1]);
+                    break;
+                case "count":
+                    CountSlot(words);
+                    break;
+                case "owners":
+                    Owners(words[1]);
+                    break;
+                case "save":
+                    MyAsyncSaving.Start(() => output.WriteLine("saved"));
+                    break;
+                case "freeze":
+                    Freeze();
+                    break;
                 case "census-off":
                     AppDomain.CurrentDomain.SetData("CometWorks.Cluster.NpcCensus.v1", null);
                     output.WriteLine("census-off");
                     break;
-                case "done": output.WriteLine("done"); break;
+                case "done":
+                    output.WriteLine("done");
+                    break;
             }
         }
         catch (Exception e)
@@ -104,10 +125,15 @@ public class Probe : IPlugin
 
     private void Spawn(string[] words)
     {
-        var assembly = MyScriptManager.Static.Scripts.Values.First(a => a.GetType("ModularEncountersSystems.Spawning.SpawnRequest") != null);
+        var assembly = MyScriptManager.Static.Scripts.Values.First(a =>
+            a.GetType("ModularEncountersSystems.Spawning.SpawnRequest") != null
+        );
         var request = assembly.GetType("ModularEncountersSystems.Spawning.SpawnRequest");
         var spawningType = assembly.GetType("ModularEncountersSystems.Spawning.SpawningType");
-        var calculate = request.GetMethod("CalculateSpawn", BindingFlags.Public | BindingFlags.Static);
+        var calculate = request.GetMethod(
+            "CalculateSpawn",
+            BindingFlags.Public | BindingFlags.Static
+        );
         var type = Enum.Parse(spawningType, words[1]);
         int count = int.Parse(words[2]);
         var center = new Vector3D(D(words[3]), D(words[4]), D(words[5]));
@@ -115,8 +141,18 @@ public class Probe : IPlugin
 
         for (int i = 0; i < count; i++)
         {
-            var position = center + spread * new Vector3D(random.NextDouble() * 2 - 1, random.NextDouble() * 2 - 1, random.NextDouble() * 2 - 1);
-            var args = calculate.GetParameters().Select(p => p.HasDefaultValue ? p.DefaultValue : null).ToArray();
+            var position =
+                center
+                + spread
+                    * new Vector3D(
+                        random.NextDouble() * 2 - 1,
+                        random.NextDouble() * 2 - 1,
+                        random.NextDouble() * 2 - 1
+                    );
+            var args = calculate
+                .GetParameters()
+                .Select(p => p.HasDefaultValue ? p.DefaultValue : null)
+                .ToArray();
             args[0] = position;
             args[1] = "MesClusterProbe";
             args[2] = type;
@@ -129,18 +165,29 @@ public class Probe : IPlugin
 
     private void Census(string label)
     {
-        var inGap = AppDomain.CurrentDomain.GetData("CometWorks.ModMes.InGap.v1") as Func<double, double, double, bool>;
+        var inGap =
+            AppDomain.CurrentDomain.GetData("CometWorks.ModMes.InGap.v1")
+            as Func<double, double, double, bool>;
         var text = new StringBuilder();
         foreach (var entity in MyEntities.GetEntities())
         {
-            if (entity is not MyCubeGrid grid || grid.Closed || MyGridPhysicalHierarchy.Static.GetRoot(grid) != grid)
+            if (
+                entity is not MyCubeGrid grid
+                || grid.Closed
+                || MyGridPhysicalHierarchy.Static.GetRoot(grid) != grid
+            )
                 continue;
             var owners = grid.BigOwners;
             if (owners.Count == 0 || owners.Any(o => !MySession.Static.Players.IdentityIsNpc(o)))
                 continue;
             var c = grid.PositionComp.WorldAABB.Center;
-            string gap = inGap == null ? "na" : inGap(c.X, c.Y, c.Z) ? "gap" : "core";
-            text.AppendLine($"census {label} {grid.EntityId} {F(c)} {gap} {grid.DisplayName?.Replace(' ', '_')}");
+            string gap =
+                inGap == null ? "na"
+                : inGap(c.X, c.Y, c.Z) ? "gap"
+                : "core";
+            text.AppendLine(
+                $"census {label} {grid.EntityId} {F(c)} {gap} {grid.DisplayName?.Replace(' ', '_')}"
+            );
         }
         output.Write(text.ToString());
         output.WriteLine($"census-end {label}");
@@ -151,7 +198,12 @@ public class Probe : IPlugin
         int frozen = 0;
         foreach (var entity in MyEntities.GetEntities().ToList())
         {
-            if (entity is not MyCubeGrid grid || grid.Closed || grid.IsStatic || grid.Physics == null)
+            if (
+                entity is not MyCubeGrid grid
+                || grid.Closed
+                || grid.IsStatic
+                || grid.Physics == null
+            )
                 continue;
             var owners = grid.BigOwners;
             if (owners.Count == 0 || owners.Any(o => !MySession.Static.Players.IdentityIsNpc(o)))
@@ -170,7 +222,11 @@ public class Probe : IPlugin
         var text = new StringBuilder();
         foreach (var entity in MyEntities.GetEntities())
         {
-            if (entity is not MyCubeGrid grid || grid.Closed || MyGridPhysicalHierarchy.Static.GetRoot(grid) != grid)
+            if (
+                entity is not MyCubeGrid grid
+                || grid.Closed
+                || MyGridPhysicalHierarchy.Static.GetRoot(grid) != grid
+            )
                 continue;
             var owners = grid.BigOwners.Select(o =>
             {
@@ -178,7 +234,9 @@ public class Probe : IPlugin
                 var faction = MySession.Static.Factions.TryGetPlayerFaction(o);
                 return $"{o}:{(MySession.Static.Players.IdentityIsNpc(o) ? "npc" : "-")}:{identity?.DisplayName?.Replace(' ', '_') ?? "?"}:{faction?.Tag ?? "-"}";
             });
-            text.AppendLine($"owners {label} {grid.EntityId} {grid.DisplayName?.Replace(' ', '_')} [{string.Join(",", owners)}]");
+            text.AppendLine(
+                $"owners {label} {grid.EntityId} {grid.DisplayName?.Replace(' ', '_')} [{string.Join(",", owners)}]"
+            );
         }
         output.Write(text.ToString());
         output.WriteLine($"owners-end {label}");
@@ -186,12 +244,19 @@ public class Probe : IPlugin
 
     private void CountSlot(string[] words)
     {
-        var census = AppDomain.CurrentDomain.GetData("CometWorks.Cluster.NpcCensus.v1") as Func<double, double, double, double, int>;
-        string n = census == null ? "n/a" : census(D(words[2]), D(words[3]), D(words[4]), D(words[5])).ToString(CultureInfo.InvariantCulture);
+        var census =
+            AppDomain.CurrentDomain.GetData("CometWorks.Cluster.NpcCensus.v1")
+            as Func<double, double, double, double, int>;
+        string n =
+            census == null
+                ? "n/a"
+                : census(D(words[2]), D(words[3]), D(words[4]), D(words[5]))
+                    .ToString(CultureInfo.InvariantCulture);
         output.WriteLine($"count {words[1]} {n}");
     }
 
     private static double D(string s) => double.Parse(s, CultureInfo.InvariantCulture);
 
-    private static string F(Vector3D v) => string.Format(CultureInfo.InvariantCulture, "{0:F1} {1:F1} {2:F1}", v.X, v.Y, v.Z);
+    private static string F(Vector3D v) =>
+        string.Format(CultureInfo.InvariantCulture, "{0:F1} {1:F1} {2:F1}", v.X, v.Y, v.Z);
 }

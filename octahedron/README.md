@@ -44,10 +44,9 @@ uv run ore_stats.py server OctahedronOres ORES.md --seed 42
 
 `build_world.py` needs only the Python standard library. `make_ore_mod.py` and
 `ore_stats.py` declare their packages (numpy, pillow, scipy) for `uv run`. All
-three read the game's content and the station blueprint from the Steam folders
-on Linux (`~/.steam/steam/steamapps`), so Steam must have the game and the
-blueprint ([3816368704](https://steamcommunity.com/sharedfiles/filedetails/?id=3816368704))
-downloaded.
+three read the game's content from the Steam folder on Linux
+(`~/.steam/steam/steamapps`), so Steam must have the game downloaded. The
+station and shipyard blueprints are in `blueprints/`.
 
 ## The world
 
