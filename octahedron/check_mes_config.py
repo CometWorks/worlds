@@ -30,7 +30,9 @@ def fields(source: Path) -> dict[str, str]:
     return dict(
         (name, kind)
         for kind, name in re.findall(
-            r"^\s*public\s+([\w<>\[\]]+)\s+(\w+)\s*;", source.read_text(encoding="utf-8-sig"), re.M
+            r"^\s*public\s+([\w<>\[\]]+)\s+(\w+)\s*;",
+            source.read_text(encoding="utf-8-sig"),
+            re.M,
         )
     )
 
@@ -44,22 +46,35 @@ def main(mes: Path) -> int:
         root = ET.parse(path).getroot()
         source = config / f"{root.tag}.cs"
         expected = "Config" + path.stem.removeprefix("Config-")
-        if root.tag != expected.replace("ConfigConfig", "Config") or not source.exists():
-            problems.append(f"{path.name}: root <{root.tag}> is not the class this file loads")
+        if (
+            root.tag != expected.replace("ConfigConfig", "Config")
+            or not source.exists()
+        ):
+            problems.append(
+                f"{path.name}: root <{root.tag}> is not the class this file loads"
+            )
             continue
         known = base | fields(source)
         for element in root:
             kind = known.get(element.tag)
             if kind is None:
-                problems.append(f"{path.name}: <{element.tag}> is not a field of {root.tag}")
+                problems.append(
+                    f"{path.name}: <{element.tag}> is not a field of {root.tag}"
+                )
             elif kind in PARSERS and not PARSERS[kind]((element.text or "").strip()):
-                problems.append(f"{path.name}: <{element.tag}> = {element.text!r} is not a {kind}")
+                problems.append(
+                    f"{path.name}: <{element.tag}> = {element.text!r} is not a {kind}"
+                )
         deployed = HERE / "server/Storage" / FOLDER / path.name
         if not deployed.exists() or deployed.read_bytes() != path.read_bytes():
-            problems.append(f"{path.name}: server/Storage copy differs, run build_world.py or copy it")
+            problems.append(
+                f"{path.name}: server/Storage copy differs, run build_world.py or copy it"
+            )
     for line in problems:
         print("FAIL", line)
-    print(f"{'FAIL' if problems else 'PASS'}: {len(shipped)} MES config files, {len(problems)} problems")
+    print(
+        f"{'FAIL' if problems else 'PASS'}: {len(shipped)} MES config files, {len(problems)} problems"
+    )
     return 1 if problems else 0
 
 

@@ -29,7 +29,8 @@ var patterns = new[]
 
 foreach (var pattern in patterns)
 {
-    string name = $"cell={pattern.CellSize} gap={pattern.Gap} jitter={pattern.Jitter} seed={pattern.Seed}";
+    string name =
+        $"cell={pattern.CellSize} gap={pattern.Gap} jitter={pattern.Jitter} seed={pattern.Seed}";
     double span = 3e6; // 3000 km around the origin, both signs
     int inCore = 0;
 
@@ -41,7 +42,10 @@ foreach (var pattern in patterns)
         var core = pattern.CoreOf(x, y, z);
 
         // 1. Same answer as a brute force over a much wider neighbourhood
-        Check(Equals(core, BruteCore(pattern, x, y, z)), $"{name}: CoreOf differs from brute force at ({x},{y},{z})");
+        Check(
+            Equals(core, BruteCore(pattern, x, y, z)),
+            $"{name}: CoreOf differs from brute force at ({x},{y},{z})"
+        );
 
         // 2. Deterministic
         Check(Equals(core, pattern.CoreOf(x, y, z)), $"{name}: not deterministic at ({x},{y},{z})");
@@ -54,14 +58,22 @@ foreach (var pattern in patterns)
         var dir = RandomUnit(rng);
         double r = rng.NextDouble() * pattern.Gap * 0.999;
         var other = pattern.CoreOf(x + dir.X * r, y + dir.Y * r, z + dir.Z * r);
-        Check(other == null || other.Equals(core), $"{name}: cores {core} and {other} only {r:F0} m apart");
+        Check(
+            other == null || other.Equals(core),
+            $"{name}: cores {core} and {other} only {r:F0} m apart"
+        );
 
         // 4. Convex: the midpoint of two points of one core is in that core
         double far = rng.NextDouble() * pattern.CellSize;
         var dir2 = RandomUnit(rng);
-        double qx = x + dir2.X * far, qy = y + dir2.Y * far, qz = z + dir2.Z * far;
+        double qx = x + dir2.X * far,
+            qy = y + dir2.Y * far,
+            qz = z + dir2.Z * far;
         if (core.Equals(pattern.CoreOf(qx, qy, qz)))
-            Check(core.Equals(pattern.CoreOf((x + qx) / 2, (y + qy) / 2, (z + qz) / 2)), $"{name}: core {core} not convex");
+            Check(
+                core.Equals(pattern.CoreOf((x + qx) / 2, (y + qy) / 2, (z + qz) / 2)),
+                $"{name}: core {core} not convex"
+            );
     }
 
     Console.WriteLine($"{name}: core fraction {(double)inCore / samples:P1}");
@@ -72,25 +84,52 @@ foreach (var pattern in patterns)
 }
 
 // Config: every pattern parameter comes from the plugin's settings, the gap absolute or in sync distances
-Check(CellPattern.FromSettings(40000, 0, 4, 3000, 0.5, 1321).Gap == 12000, "default gap is 4 x the 3000 m sync distance");
-Check(CellPattern.FromSettings(40000, 0, 2.5, 3000, 0.5, 1321).Gap == 7500, "gap of 2.5 sync distances");
-Check(CellPattern.FromSettings(40000, 9000, 4, 3000, 0.5, 1321).Gap == 9000, "an absolute gap overrides the multiple");
+Check(
+    CellPattern.FromSettings(40000, 0, 4, 3000, 0.5, 1321).Gap == 12000,
+    "default gap is 4 x the 3000 m sync distance"
+);
+Check(
+    CellPattern.FromSettings(40000, 0, 2.5, 3000, 0.5, 1321).Gap == 7500,
+    "gap of 2.5 sync distances"
+);
+Check(
+    CellPattern.FromSettings(40000, 9000, 4, 3000, 0.5, 1321).Gap == 9000,
+    "an absolute gap overrides the multiple"
+);
 var configured = CellPattern.FromSettings(30000, 0, 3, 2000, 0.25, 77);
-Check(configured.CellSize == 30000 && configured.Gap == 6000 && configured.Jitter == 0.25 && configured.Seed == 77,
-    "cell size, gap, jitter and seed reach the pattern");
-Check(CellPattern.FromSettings(40000, 0, 4, 3000, 0.5, 1321).Fingerprint == new CellPattern(40000, 12000, 0.5, 1321).Fingerprint,
-    "equal settings, equal fingerprint");
+Check(
+    configured.CellSize == 30000
+        && configured.Gap == 6000
+        && configured.Jitter == 0.25
+        && configured.Seed == 77,
+    "cell size, gap, jitter and seed reach the pattern"
+);
+Check(
+    CellPattern.FromSettings(40000, 0, 4, 3000, 0.5, 1321).Fingerprint
+        == new CellPattern(40000, 12000, 0.5, 1321).Fingerprint,
+    "equal settings, equal fingerprint"
+);
 
 // Changing the seed moves the cores; changing the gap shrinks or grows them around the same sites
 {
     var baseline = new CellPattern(40000, 12000, 0.5, 1321);
     var reseeded = new CellPattern(40000, 12000, 0.5, 1322);
     var wider = new CellPattern(40000, 20000, 0.5, 1321);
-    var fingerprints = new[] { baseline, reseeded, wider, new CellPattern(41000, 12000, 0.5, 1321), new CellPattern(40000, 12000, 0.6, 1321) }
-        .Select(p => p.Fingerprint).Distinct().Count();
+    var fingerprints = new[]
+    {
+        baseline,
+        reseeded,
+        wider,
+        new CellPattern(41000, 12000, 0.5, 1321),
+        new CellPattern(40000, 12000, 0.6, 1321),
+    }
+        .Select(p => p.Fingerprint)
+        .Distinct()
+        .Count();
     Check(fingerprints == 5, "every parameter changes the fingerprint");
 
-    int movedSites = 0, sites = 0;
+    int movedSites = 0,
+        sites = 0;
     for (long i = -5; i <= 5; i++)
     for (long j = -5; j <= 5; j++)
     for (long k = -5; k <= 5; k++)
@@ -103,10 +142,17 @@ Check(CellPattern.FromSettings(40000, 0, 4, 3000, 0.5, 1321).Fingerprint == new 
     }
     Check(movedSites == sites, $"a new seed moves every site ({movedSites}/{sites})");
 
-    int coreChanged = 0, inAnyCore = 0, baseCore = 0, widerCore = 0, wideButNotBase = 0, gapGrew = 0;
+    int coreChanged = 0,
+        inAnyCore = 0,
+        baseCore = 0,
+        widerCore = 0,
+        wideButNotBase = 0,
+        gapGrew = 0;
     for (int n = 0; n < samples; n++)
     {
-        double x = (rng.NextDouble() * 2 - 1) * 1e6, y = (rng.NextDouble() * 2 - 1) * 1e6, z = (rng.NextDouble() * 2 - 1) * 1e6;
+        double x = (rng.NextDouble() * 2 - 1) * 1e6,
+            y = (rng.NextDouble() * 2 - 1) * 1e6,
+            z = (rng.NextDouble() * 2 - 1) * 1e6;
         var a = baseline.CoreOf(x, y, z);
         var b = reseeded.CoreOf(x, y, z);
         var w = wider.CoreOf(x, y, z);
@@ -127,10 +173,18 @@ Check(CellPattern.FromSettings(40000, 0, 4, 3000, 0.5, 1321).Fingerprint == new 
         if (a != null && w == null)
             gapGrew++;
     }
-    Console.WriteLine($"seed 1321 -> 1322: {(double)coreChanged / inAnyCore:P1} of the points in a core under either seed change core or fall into a gap; " +
-                      $"gap 12 km -> 20 km: core fraction {(double)baseCore / samples:P1} -> {(double)widerCore / samples:P1}");
-    Check(coreChanged > inAnyCore / 2, $"a new seed moves the cores ({coreChanged}/{inAnyCore} core points changed)");
-    Check(wideButNotBase == 0, $"a wider gap only shrinks each core around the same site ({wideButNotBase} points broke that)");
+    Console.WriteLine(
+        $"seed 1321 -> 1322: {(double)coreChanged / inAnyCore:P1} of the points in a core under either seed change core or fall into a gap; "
+            + $"gap 12 km -> 20 km: core fraction {(double)baseCore / samples:P1} -> {(double)widerCore / samples:P1}"
+    );
+    Check(
+        coreChanged > inAnyCore / 2,
+        $"a new seed moves the cores ({coreChanged}/{inAnyCore} core points changed)"
+    );
+    Check(
+        wideButNotBase == 0,
+        $"a wider gap only shrinks each core around the same site ({wideButNotBase} points broke that)"
+    );
     Check(gapGrew > 0 && widerCore < baseCore, "a wider gap turns core points into gap points");
 }
 
@@ -141,7 +195,9 @@ static (double X, double Y, double Z) RandomUnit(Random rng)
 {
     while (true)
     {
-        double x = rng.NextDouble() * 2 - 1, y = rng.NextDouble() * 2 - 1, z = rng.NextDouble() * 2 - 1;
+        double x = rng.NextDouble() * 2 - 1,
+            y = rng.NextDouble() * 2 - 1,
+            z = rng.NextDouble() * 2 - 1;
         double l = Math.Sqrt(x * x + y * y + z * z);
         if (l > 1e-3 && l <= 1)
             return (x / l, y / l, z / l);
@@ -152,10 +208,14 @@ static (double X, double Y, double Z) RandomUnit(Random rng)
 static (long, long, long)? BruteCore(CellPattern p, double x, double y, double z)
 {
     const int reach = 6;
-    long ci = (long)Math.Floor(x / p.CellSize), cj = (long)Math.Floor(y / p.CellSize), ck = (long)Math.Floor(z / p.CellSize);
+    long ci = (long)Math.Floor(x / p.CellSize),
+        cj = (long)Math.Floor(y / p.CellSize),
+        ck = (long)Math.Floor(z / p.CellSize);
     double best = double.MaxValue;
     (long, long, long) key = default;
-    double bx = 0, by = 0, bz = 0;
+    double bx = 0,
+        by = 0,
+        bz = 0;
     for (long i = ci - reach; i <= ci + reach; i++)
     for (long j = cj - reach; j <= cj + reach; j++)
     for (long k = ck - reach; k <= ck + reach; k++)
@@ -166,7 +226,9 @@ static (long, long, long)? BruteCore(CellPattern p, double x, double y, double z
         {
             best = d;
             key = (i, j, k);
-            bx = sx; by = sy; bz = sz;
+            bx = sx;
+            by = sy;
+            bz = sz;
         }
     }
     for (long i = ci - reach; i <= ci + reach; i++)
@@ -177,9 +239,13 @@ static (long, long, long)? BruteCore(CellPattern p, double x, double y, double z
             continue;
         p.Site(i, j, k, out var sx, out var sy, out var sz);
         // Signed distance of the point from the bisector plane, measured along the site-to-site axis
-        double nx = sx - bx, ny = sy - by, nz = sz - bz;
+        double nx = sx - bx,
+            ny = sy - by,
+            nz = sz - bz;
         double len = Math.Sqrt(nx * nx + ny * ny + nz * nz);
-        double mx = (sx + bx) / 2, my = (sy + by) / 2, mz = (sz + bz) / 2;
+        double mx = (sx + bx) / 2,
+            my = (sy + by) / 2,
+            mz = (sz + bz) / 2;
         double dist = -((x - mx) * nx + (y - my) * ny + (z - mz) * nz) / len;
         if (dist < p.Gap / 2)
             return null;

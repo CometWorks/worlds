@@ -152,7 +152,7 @@ SHIPYARD_REACTOR_URANIUM = 10
 ZONE_CHIPS = 75
 
 # Players a server admits (on a cluster: each node)
-MAX_PLAYERS = 255   # Viktor 2026-10-23 (#1191 run 3 hit 200 with ~200 pilots)
+MAX_PLAYERS = 255  # Viktor 2026-10-23 (#1191 run 3 hit 200 with ~200 pilots)
 
 SETTINGS = {
     "GameMode": "Survival",
