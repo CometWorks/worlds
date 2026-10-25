@@ -34,8 +34,8 @@ from pathlib import Path
 
 STEAM = Path.home() / ".steam/steam/steamapps"
 SCENARIO = STEAM / "common/SpaceEngineers/Content/CustomWorlds/Star System"
-STATION_BLUEPRINT = STEAM / "workshop/content/244850/3816368704/bp.sbc"
 CONFIG = Path(__file__).parent / "config"
+STATION_BLUEPRINT = Path(__file__).parent / "blueprints/octahedron-station.sbc"
 SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/omni-arc-beam-shipyard.sbc"
 MES_MODS = CONFIG / "mes-mods.xml"
 MES_STORAGE = CONFIG / "storage"
@@ -152,7 +152,7 @@ SHIPYARD_REACTOR_URANIUM = 10
 ZONE_CHIPS = 75
 
 # Players a server admits (on a cluster: each node)
-MAX_PLAYERS = 255   # Viktor 2026-10-23 (#1191 run 3 hit 200 with ~200 pilots)
+MAX_PLAYERS = 255  # Viktor 2026-10-23 (#1191 run 3 hit 200 with ~200 pilots)
 
 SETTINGS = {
     "GameMode": "Survival",

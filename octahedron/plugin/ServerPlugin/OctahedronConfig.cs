@@ -211,7 +211,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = 20_000;
+    } = 10_000;
 
     [IntOption(
         0,
@@ -292,7 +292,7 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "Players get a ship built for free, the starter ship, only while they have less PCU than this. "
+        description: "Players get a ship built for free, a starter ship or a shipyard order, only while they have less PCU than this. "
             + "Counts the blocks the player built on every cluster node and their ships in Hangar.",
         Parent = "pcu"
     )]
@@ -300,7 +300,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = 20_000;
+    } = 10_000;
 
     [IntOption(
         0,

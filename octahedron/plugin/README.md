@@ -86,9 +86,9 @@ switched on and with a blueprint loaded into it types `!oct ship`, or
 as a ship. The stations' tables start switched off, and a projector that is off
 holds no blueprint for the server.
 
-- It must be a single grid of at most `StarterShipMaxShipPcu` (20,000) PCU, and
+- It must be a single grid of at most `StarterShipMaxShipPcu` (10,000) PCU, and
   of no more than `GroupPcuLimit`.
-- Only a player with less than `FreeBuildPcuLimit` (20,000) PCU gets one; the
+- Only a player with less than `FreeBuildPcuLimit` (10,000) PCU gets one; the
   others are told to build at the station's shipyard. It counts the blocks the
   player built, on every cluster node through the cluster plugin's PCU ledger,
   and the player's ships in Hangar, read from Hangar's storage when the Hangar
@@ -216,8 +216,8 @@ A player who stands by a station's hologram table with a blueprint loaded into i
 types `!oct order`, or `!oct order <table name>`, and the station's shipyard builds
 the ship for them, for at most `ShipyardOrderMinutes` (60; 0 turns orders off).
 
-- It is free, so only a player with less than `FreeBuildPcuLimit` PCU may
-  order, counted as for the starter ship, and the blueprint may have at most
+- It is free, so only a player with less than `FreeBuildPcuLimit` (10,000) PCU
+  may order, counted as for the starter ship, and the blueprint may have at most
   `GroupPcuLimit` PCU, the cap of a ship.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
@@ -570,6 +570,10 @@ with the zones holding every test grid from the start, and off.
 and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
+`tests/test_free_build.py` checks the free-build limits at their defaults with
+the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
+refused, and a player who reaches 10,000 PCU gets no more starter ships or
+shipyard orders.
 `tests/mes/` holds MesCluster's tests for the MES spawn gate:
 `CellPatternTests` checks the cell pattern against a brute-force definition
 (`dotnet run -c Release --project tests/mes/CellPatternTests`); `ds/run.py PLAN [cfg]`
