@@ -747,14 +747,22 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
 
 
 EQUATOR_STATIONS = {"Alpha Station", "Beta Station", "Gamma Station", "Delta Station"}
+POLAR_STATIONS = {"Beta Station", "North Station", "Delta Station", "South Station"}
 
 
-def lane_up(direction, home, target, north):
+def lane_up(direction, home, target, north, polar_normal):
     """Up of a lane's computers, the same at both ends. The Trade Lanes mod puts a lane's two
     rings side by side along the computers' right axis: level with the equator on the lanes
-    of the equatorial square, one above the other on all others (to the poles and the Moon)."""
+    of the equatorial square, one above the other on all others (to the poles and the Moon).
+    Each computer's rings toward the other end lie on its right (Forward x Up). On the
+    equatorial square (up north) and the polar ring through Beta, North, Delta and South
+    (up toward Alpha Station, polar_normal) the inner track runs Alpha, Beta, Gamma, Delta
+    and Beta, North, Delta, South, the outer one the other way, so a ship going around keeps
+    its track at every station."""
     if {home, target} <= EQUATOR_STATIONS:
         return norm(perpendicular_part(north, direction))
+    if {home, target} <= POLAR_STATIONS:
+        return norm(perpendicular_part(polar_normal, direction))
     return norm(cross(direction, north))
 
 
@@ -1293,9 +1301,10 @@ def main():
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
         objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
 
+    polar_normal = norm(sub(places["Alpha Station"][0], earth.center))
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
-        up = lane_up(direction, home, target, earth.up)
+        up = lane_up(direction, home, target, earth.up, polar_normal)
         for position, here, there, facing, partner in (
             (start, home, target, direction, end),
             (end, target, home, mul(direction, -1), start),

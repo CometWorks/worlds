@@ -259324,7 +259324,7 @@ Target:GPS:TL 08 Beta Station:0.00:-707.11:139292.89:</Value>
       <PositionAndOrientation>
         <Position x="0.0" y="-707.1067811865476" z="-139292.89321881346" />
         <Forward x="0.0" y="-0.7071067811865475" z="0.7071067811865475" />
-        <Up x="-1.0" y="0.0" z="0.0" />
+        <Up x="1.0" y="0.0" z="0.0" />
       </PositionAndOrientation>
       <EntityId>97643593048209382</EntityId>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
@@ -259373,7 +259373,7 @@ Target:GPS:TL 09 South Station:0.00:-139292.89:-707.11:</Value>
       <PositionAndOrientation>
         <Position x="0.0" y="-139292.89321881346" z="-707.1067811865476" />
         <Forward x="-0.0" y="0.7071067811865475" z="-0.7071067811865475" />
-        <Up x="-1.0" y="0.0" z="0.0" />
+        <Up x="1.0" y="0.0" z="0.0" />
       </PositionAndOrientation>
       <EntityId>127712463232286230</EntityId>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
@@ -259422,7 +259422,7 @@ Target:GPS:TL 09 Delta Station:0.00:-707.11:-139292.89:</Value>
       <PositionAndOrientation>
         <Position x="0.0" y="707.1067811865476" z="-139292.89321881346" />
         <Forward x="0.0" y="0.7071067811865475" z="0.7071067811865475" />
-        <Up x="-1.0" y="0.0" z="0.0" />
+        <Up x="1.0" y="0.0" z="0.0" />
       </PositionAndOrientation>
       <EntityId>140736078043738968</EntityId>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
@@ -259471,7 +259471,7 @@ Target:GPS:TL 10 North Station:0.00:139292.89:-707.11:</Value>
       <PositionAndOrientation>
         <Position x="0.0" y="139292.89321881346" z="-707.1067811865476" />
         <Forward x="-0.0" y="-0.7071067811865475" z="-0.7071067811865475" />
-        <Up x="-1.0" y="0.0" z="0.0" />
+        <Up x="1.0" y="0.0" z="0.0" />
       </PositionAndOrientation>
       <EntityId>109947052170239122</EntityId>
       <PersistentFlags>CastShadows InScene</PersistentFlags>
