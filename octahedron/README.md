@@ -57,13 +57,19 @@ station and shipyard blueprints are in `blueprints/`.
   `MODS` in the script, MES and its encounter mods from `config/mes-mods.xml`).
 - Places the 6 stations of the octahedron 80 km above EarthLike, over the poles
   and on the equator, and one 15 km from the Moon's center, just outside its
-  gravity (12.3 km), between the directions to Delta and Alpha Station. The 6
+  gravity (12.3 km). The octahedron is turned about the poles (by 36.8 degrees
+  from EarthLike's own forward and right) so that the outward normal of its
+  North, Delta, Alpha face points as near to the Moon as it can: the Moon lies
+  over the bisector of Delta and Alpha Station, 12 degrees from that normal.
+  Moon Station stays where it was before the turn, between the directions to
+  where Delta and Alpha Station were then. The 6
   Earth stations are placed with EarthLike's north as up, then each is tilted together with its shipyard about its safe
   zone's center, so its deck lies parallel to the asteroid ring (up along the
   ring's axis, 25 degrees from north). Otherwise the sun shines sideways
   through the deck all day: bad shadows and unreadable LCDs. The lanes don't
   tilt. Moon Station's up is square to the line between EarthLike and the
-  Moon, the one such direction nearest to Delta Station, and it faces away
+  Moon, the one such direction nearest to where Delta Station was before the
+  turn, and it faces away
   from the Moon. Each station sits in a 250 m admin safe zone, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
   zone allows only drilling and landing gear locks: no welding, grinding or
@@ -104,16 +110,18 @@ station and shipyard blueprints are in `blueprints/`.
   The entries name no safe zone (`SafeZoneEntityId` 0); with one, the economy
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
-- Places 10 Trade Lanes: one along each edge of the equatorial square
-  (Alpha-Beta-Gamma-Delta), from Moon Station to Delta and to North Station,
-  and from Beta and Delta Station to both North and South Station. The
-  North-Moon lane passes 138 km from EarthLike's center, clear of its gravity,
-  and 15 km from the Moon's; the lanes between two EarthLike stations pass
-  99 km from its center. No two lanes come closer than 0.8 km, and only near a
-  station they share; there the closest gates of two lanes are 369 m apart. A
+- Places 11 Trade Lanes: one along each edge of the equatorial square
+  (Alpha-Beta-Gamma-Delta), from Beta and Delta Station to both North and South
+  Station, and from Moon Station to the three stations of the face toward the
+  Moon: Delta, North and Alpha. The Moon lanes pass 129 km (Delta), 138 km
+  (North) and 130 km (Alpha) from EarthLike's center, clear of its gravity, and
+  15 km from the Moon's; the lanes between two EarthLike stations pass 99 km
+  from its center. No two lanes come closer than 0.8 km, and only near a
+  station they share; there the closest gates of two lanes, placed the way
+  Trade Lanes MP places them, are 728 m apart (Delta-Moon and Delta-North). A
   lane goes both ways: each end is an entry toward the other. Every end is a
   one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
-  Delta and North Station for the Moon lanes, clear of their other lane ends),
+  the Earth stations for the Moon lanes, clear of their other lane ends),
   indestructible and not editable. Its Custom Data ends with a Target GPS at
   the other end's computer, so a computer the cluster loads before its partner
   still knows where its lane leads. `GpsMarkers:false` in it keeps the lanes
@@ -121,12 +129,16 @@ station and shipyard blueprints are in `blueprints/`.
   needs Trade Lanes MP with that switch, older versions ignore the line). The
   ends have no safe zone; the lane's
   rings have no physics. The two rings of a tunnel sit side by side, level with
-  the equator, on the lanes of the equatorial square, and one above the other
-  on all others (to the poles and the Moon). Each ring of a tunnel goes one way.
+  the equator, on the lanes of the equatorial square and from Delta and Alpha
+  Station to the Moon, and one above the other on the others (to the poles and
+  from North Station to the Moon). Each ring of a tunnel goes one way.
   Around the equatorial square and around the polar ring (Beta, North, Delta,
   South), the inner track runs Alpha, Beta, Gamma, Delta and Beta, North, Delta,
   South, the outer one the other way, so a ship going around stays on its track
-  at every station.
+  at every station. A Moon lane follows the circle of its Earth station: the
+  equator's at Delta and Alpha, the polar ring's at North. A ship that turns off
+  toward the Moon keeps its side: Delta to Moon to Alpha takes the same track
+  as Delta to Alpha, and North to Moon the same as North to Delta.
 - Places 2,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays
@@ -136,8 +148,8 @@ station and shipyard blueprints are in `blueprints/`.
   Aurora plugin (se-aurora) draws it when the sun is where the world starts it:
   the north pole tilted 25 degrees (the plugin's default `MagneticAxisTilt`)
   away from the sun. So the band is tilted against the equator: its nearest
-  asteroids are 6 to 9 km from Alpha and Gamma Station, but about 58 km from
-  Beta and Delta. The plugin's axis follows the sun as it moves, the band doesn't.
+  asteroids are about 35 km from Alpha and Gamma Station and 47 km from Beta
+  and Delta. The plugin's axis follows the sun as it moves, the band doesn't.
   The ring's asteroids are dealt out evenly to 24 sectors of 15 degrees,
   counted from Alpha Station's direction, 83 or 84 in each; `ORES.md` counts
   them per sector.

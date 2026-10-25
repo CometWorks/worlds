@@ -746,17 +746,21 @@ POLAR_STATIONS = {"Beta Station", "North Station", "Delta Station", "South Stati
 def lane_up(direction, home, target, north, polar_normal):
     """Up of a lane's computers, the same at both ends. The Trade Lanes mod puts a lane's two
     rings side by side along the computers' right axis: level with the equator on the lanes
-    of the equatorial square, one above the other on all others (to the poles and the Moon).
-    Each computer's rings toward the other end lie on its right (Forward x Up). On the
-    equatorial square (up north) and the polar ring through Beta, North, Delta and South
-    (up toward Alpha Station, polar_normal) the inner track runs Alpha, Beta, Gamma, Delta
-    and Beta, North, Delta, South, the outer one the other way, so a ship going around keeps
-    its track at every station."""
-    if {home, target} <= EQUATOR_STATIONS:
+    of the equatorial square and from Alpha and Delta Station to the Moon, one above the
+    other on the others (to the poles and from North Station to the Moon). Each computer's
+    rings toward the other end lie on its right (Forward x Up). On the equatorial square (up
+    north) and the polar ring through Beta, North, Delta and South (up toward Alpha Station,
+    polar_normal) the inner track runs Alpha, Beta, Gamma, Delta and Beta, North, Delta,
+    South, the outer one the other way, so a ship going around keeps its track at every
+    station. A Moon lane takes the up of its Earth station's circle: the equator's from Alpha
+    and Delta, the polar ring's from North, so a ship that turns off toward the Moon keeps
+    the side of the track it was on."""
+    # A Moon lane follows its Earth station's circle (Delta's: the equator's)
+    ends = {home, target} - {"Moon Station"}
+    if ends <= EQUATOR_STATIONS:
         return norm(perpendicular_part(north, direction))
-    if {home, target} <= POLAR_STATIONS:
-        return norm(perpendicular_part(polar_normal, direction))
-    return norm(cross(direction, north))
+    assert ends <= POLAR_STATIONS, ends
+    return norm(perpendicular_part(polar_normal, direction))
 
 
 def lane_computer(ids, position, forward, up, lane_id, home, target, partner):
@@ -885,18 +889,26 @@ def perpendicular_part(v, axis):
     return sub(v, mul(axis, dot(v, axis)))
 
 
-def facing(planet, center):
-    """(forward, up) for a station: up is the planet's north, forward faces the planet's axis if it can."""
+def facing(planet, center, pole_forward):
+    """(forward, up) for a station: up is the planet's north, forward faces the planet's axis
+    if it can, pole_forward over the poles."""
     inward = sub(planet.center, center)
     level = sub(inward, mul(planet.up, dot(inward, planet.up)))
-    forward = norm(level) if dot(level, level) > 1 else planet.forward
+    forward = norm(level) if dot(level, level) > 1 else pole_forward
     return forward, planet.up
 
 
 def layout(earth, moon):
     """Station name -> (center, forward, up), and the lane edges. Directions are in EarthLike's
     frame."""
-    north, front = earth.up, earth.forward
+    north = earth.up
+    # The octahedron turned about the poles so that the outward normal of the North, Delta,
+    # Alpha face points as near to the Moon as it can: Delta and Alpha Station's bisector
+    # lies over the Moon. That face's three stations have the Moon's lanes.
+    bisector = norm(add(earth.forward, cross(earth.forward, north)))
+    over_moon = norm(perpendicular_part(sub(moon.center, earth.center), north))
+    turn = math.atan2(dot(cross(bisector, over_moon), north), dot(bisector, over_moon))
+    front = rotate(earth.forward, north, turn)
     right = cross(front, north)
     stations = {
         "North": north,
@@ -909,25 +921,24 @@ def layout(earth, moon):
     places = {}
     for name, direction in stations.items():
         center = add(earth.center, mul(direction, STATION_DISTANCE))
-        places[f"{name} Station"] = (center, *facing(earth, center))
-    # Moon Station sits halfway between the directions to Delta and Alpha Station, where it
-    # was placed when those two had its lanes
-    toward = norm(
-        add(
-            *(
-                norm(sub(places[f"{name} Station"][0], moon.center))
-                for name in ("Delta", "Alpha")
-            )
-        )
+        places[f"{name} Station"] = (center, *facing(earth, center, front))
+    # Moon Station stays where it was before the turn: halfway between the directions to
+    # where Delta and Alpha Station were then (along EarthLike's own forward and right)
+    delta, alpha = (
+        add(earth.center, mul(direction, STATION_DISTANCE))
+        for direction in (earth.forward, cross(earth.forward, north))
     )
+    toward = norm(add(*(norm(sub(place, moon.center)) for place in (delta, alpha))))
     center = add(moon.center, mul(toward, MOON_STATION_DISTANCE))
-    # Its up is square to the Earth-Moon line, the one of those directions nearest to Delta
-    # Station; it faces away from the Moon, so its lobby and its shipyard are on the Moon side
+    # Its up is square to the Earth-Moon line, the one of those directions nearest to where
+    # Delta Station was; it faces away from the Moon, so its lobby and its shipyard are on the
+    # Moon side
     axis = norm(sub(moon.center, earth.center))
-    up = norm(perpendicular_part(sub(places["Delta Station"][0], center), axis))
+    up = norm(perpendicular_part(sub(delta, center), axis))
     forward = norm(perpendicular_part(sub(center, moon.center), up))
     places["Moon Station"] = (center, forward, up)
-    # Around the equator, then the Moon's two, then Beta and Delta to both poles
+    # Around the equator, then the Moon's, then Beta and Delta to both poles, then the Moon's
+    # third (last, so the other lanes keep their ids)
     edges = [
         ("Alpha Station", "Beta Station"),
         ("Alpha Station", "Delta Station"),
@@ -939,6 +950,7 @@ def layout(earth, moon):
         ("Beta Station", "South Station"),
         ("Delta Station", "South Station"),
         ("Delta Station", "North Station"),
+        ("Alpha Station", "Moon Station"),
     ]
     return places, edges
 
