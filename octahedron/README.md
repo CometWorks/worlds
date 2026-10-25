@@ -75,8 +75,9 @@ station and shipyard blueprints are in `blueprints/`.
   shipyard sits as South Station's does, below the station out in space. The
   lanes don't turn. Moon Station's up is square to the line between EarthLike and the
   Moon, the one such direction nearest to where Delta Station was before the
-  turn, and it faces away
-  from the Moon. Each station sits in a 250 m admin safe zone, owned by the
+  turn. Its shipyard is placed as if it faced away from the Moon, then the
+  station alone is turned 180 degrees about its up: it faces the Moon, its
+  lobby toward EarthLike. Each station sits in a 250 m admin safe zone, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
   zone allows only drilling and landing gear locks: no welding, grinding or
   block placing, also not by the shipyard's welders until the Octahedron plugin
@@ -99,6 +100,13 @@ station and shipyard blueprints are in `blueprints/`.
     spread apart as far as their block bounds stay 10 m inside the zone's edge:
     100 m between them (less at the pole stations), the farthest block 227 m
     from the zone's center.
+  - Then the shipyard is raised (`SHIPYARD_RAISE`) along its own up, the side
+    with its cargo containers: 30 m at the equatorial stations, 150 m at South
+    Station, none at North Station; Moon Station's 125 m along the station's
+    up. Each is then pulled straight toward its station by as little as keeps
+    its block bounds 10 m inside the zone's edge again. Their farthest blocks
+    end up 211 to 226 m from the zone's center, and 76 m or more from the
+    station's blocks.
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries. Those start with 10 uranium ingots each and full charge, and on
     the server the Octahedron plugin tops them back up every 10 minutes

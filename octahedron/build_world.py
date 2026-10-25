@@ -109,6 +109,17 @@ FREE_TOOLS_COUNT = 4
 SAFE_ZONE_MARGIN = 10.0
 # The shipyard sits this much higher than the station, along the station's up
 SHIPYARD_LIFT = 50.0
+# Then raised this much more, along its own up (the side with its cargo containers), Moon
+# Station's along the station's up; then pulled toward its station until it fits the safe zone
+# again
+SHIPYARD_RAISE = {
+    "Moon Station": 125.0,
+    "South Station": 150.0,
+    "Alpha Station": 30.0,
+    "Beta Station": 30.0,
+    "Gamma Station": 30.0,
+    "Delta Station": 30.0,
+}
 # Rolled about its long axis, its top leaning toward the station, so the view from the lobby
 # passes the near wall into the build volume. Raycast in game from Alpha Station, 5 spots by
 # 9 points between the welder walls: 13 m above the station's middle, 33 of 45 clear at +30,
@@ -710,6 +721,32 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
             high = (low + high) / 2
     station_center, yard_center = place(math.floor(low))
     return station_center, (yard_center, yard_forward, yard_up)
+
+
+def raise_shipyard(yard, station_center, zone, height, up):
+    """(center, forward, up) of the shipyard moved height along up, then pulled straight
+    toward the station's center by as little as keeps every corner of its block bounds
+    SAFE_ZONE_MARGIN inside the zone."""
+    center, forward, yard_up = yard
+    center = add(center, mul(up, height))
+    toward = norm(sub(station_center, center))
+    template = shipyard_template()
+
+    def fits(pull):
+        corners = box_corners(
+            template, add(center, mul(toward, pull)), forward, yard_up
+        )
+        return (
+            max(dist(c, zone) for c in corners)
+            <= STATION_SAFE_ZONE_RADIUS - SAFE_ZONE_MARGIN
+        )
+
+    # The fit gets worse again past the zone's center, so step out from no pull
+    pull = next(
+        (p for p in range(int(dist(center, station_center)) + 1) if fits(p)), None
+    )
+    assert pull is not None, "the raised shipyard doesn't fit the safe zone"
+    return add(center, mul(toward, pull)), forward, yard_up
 
 
 def shipyard_template():
@@ -1325,6 +1362,17 @@ def main():
                 turn(yard_up),
             )
             forward, up = level, axis
+        if name == "Moon Station":
+            # Turned about its up, its front toward the Moon and the lobby toward EarthLike
+            forward = mul(forward, -1)
+        if name in SHIPYARD_RAISE:
+            yard = raise_shipyard(
+                yard,
+                station_center,
+                center,
+                SHIPYARD_RAISE[name],
+                up if name == "Moon Station" else yard[2],
+            )
         shipyards[name] = yard
         grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)
