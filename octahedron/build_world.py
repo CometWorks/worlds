@@ -898,17 +898,22 @@ def facing(planet, center, pole_forward):
     return forward, planet.up
 
 
+def moon_turn(earth, moon):
+    """The angle (radians, about EarthLike's north) the octahedron and the asteroid ring are
+    turned by, so that the outward normal of the North, Delta, Alpha face points as near to
+    the Moon as it can: Delta and Alpha Station's bisector lies over the Moon. That face's
+    three stations have the Moon's lanes."""
+    north = earth.up
+    bisector = norm(add(earth.forward, cross(earth.forward, north)))
+    over_moon = norm(perpendicular_part(sub(moon.center, earth.center), north))
+    return math.atan2(dot(cross(bisector, over_moon), north), dot(bisector, over_moon))
+
+
 def layout(earth, moon):
     """Station name -> (center, forward, up), and the lane edges. Directions are in EarthLike's
     frame."""
     north = earth.up
-    # The octahedron turned about the poles so that the outward normal of the North, Delta,
-    # Alpha face points as near to the Moon as it can: Delta and Alpha Station's bisector
-    # lies over the Moon. That face's three stations have the Moon's lanes.
-    bisector = norm(add(earth.forward, cross(earth.forward, north)))
-    over_moon = norm(perpendicular_part(sub(moon.center, earth.center), north))
-    turn = math.atan2(dot(cross(bisector, over_moon), north), dot(bisector, over_moon))
-    front = rotate(earth.forward, north, turn)
+    front = rotate(earth.forward, north, moon_turn(earth, moon))
     right = cross(front, north)
     stations = {
         "North": north,
@@ -1266,7 +1271,11 @@ def main():
     ids = Ids(random.Random(args.seed))
     places, edges = layout(earth, moon)
     lane_list = lanes(places, edges)
-    axis = magnetic_axis(earth, sun_direction(sector))
+    # The ring's axis turns with the octahedron, so the ring still passes Beta and Delta
+    # Station on the same sides
+    axis = rotate(
+        magnetic_axis(earth, sun_direction(sector)), earth.up, moon_turn(earth, moon)
+    )
     # The asteroids take the first ids, so stations and grids added later leave their ids as
     # they are; their places come from their own generators (asteroid_ring)
     for storage, center, size, forward, up, data in asteroid_ring(

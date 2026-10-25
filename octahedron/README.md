@@ -144,12 +144,15 @@ station and shipyard blueprints are in `blueprints/`.
   asteroids 120 km out, halfway between the equatorial stations. The band stays
   out of EarthLike's gravity (it ends about 103 km from the center), clear of
   Alpha and Gamma Station at 140 km, and every asteroid stays 1 km from the
-  Trade Lanes. Its plane is perpendicular to EarthLike's magnetic axis as the
-  Aurora plugin (se-aurora) draws it when the sun is where the world starts it:
-  the north pole tilted 25 degrees (the plugin's default `MagneticAxisTilt`)
-  away from the sun. So the band is tilted against the equator: its nearest
-  asteroids are about 35 km from Alpha and Gamma Station and 47 km from Beta
-  and Delta. The plugin's axis follows the sun as it moves, the band doesn't.
+  Trade Lanes. Its axis is EarthLike's magnetic axis as the Aurora plugin
+  (se-aurora) draws it when the sun is where the world starts it, the north
+  pole tilted 25 degrees (the plugin's default `MagneticAxisTilt`) away from
+  the sun, then turned about the poles together with the octahedron. So the
+  band keeps its place among the stations, tilted against the equator: its
+  nearest asteroids are 6 to 9 km from Alpha and Gamma Station, but about
+  58 km from Beta and Delta. It no longer lines up with the plugin's axis at
+  the start, which is 36.8 degrees around from it; that axis follows the sun as
+  it moves anyway, the band doesn't.
   The ring's asteroids are dealt out evenly to 24 sectors of 15 degrees,
   counted from Alpha Station's direction, 83 or 84 in each; `ORES.md` counts
   them per sector.
