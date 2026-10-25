@@ -177,13 +177,19 @@ def main() -> None:
     # Closing the day logs its totals: the payouts since the first tax day, OCT's top-up.
     # It taxes the client again.
     ledger.payouts()
+    second_tax = (ledger.balance - 10_000) // 100
+    marks = log_marks()
     closed = command(remote, "!oct taxday", CLOSED)
     day = ledger.shares[day_start:]
     assert number(closed[2]) == len(day) and number(closed[1]) == sum(day), closed[0]
     assert "OCT topped up 5,000,000 SC" in closed[0], closed[0]
-    second = list(TAX.finditer(plugin_log(ledger.marks)))[-1]
-    log(second[0])
-    ledger.balance -= number(second[1])
+    deadline = time.monotonic() + 120
+    while not (taxes := [number(m[1]) for m in TAX.finditer(plugin_log(marks))]):
+        assert time.monotonic() < deadline, "no tax logged by the second tax day"
+        time.sleep(5)
+    assert taxes[-1] == second_tax, (taxes, second_tax)
+    log(f"second tax day: {second_tax:,} SC")
+    ledger.balance -= second_tax
     ledger.payouts()
     assert money(remote)["You"] == ledger.balance, "after the second tax day"
 
