@@ -125,8 +125,9 @@ internal static class ShipyardOrders
         public int Pcu;
         public bool Free;
 
-        // Why it is a paid build
+        // Why it is a paid build, and which rule: pcu, blocked or cooldown
         public string Paid;
+        public string PaidRule = "";
         public LedgerOwner Payer;
         public string PayerName = "";
         public long Fee;
@@ -139,7 +140,7 @@ internal static class ShipyardOrders
         public double ShipHydrogen;
 
         public string Key =>
-            $"{Ship}|{Pcu}|{Blueprint?.Sum(g => g.CubeBlocks.Count)}|{Free}|{Payer}|{Error}";
+            $"{Ship}|{Pcu}|{Blueprint?.Sum(g => g.CubeBlocks.Count)}|{Free}|{PaidRule}|{Payer}|{Error}";
     }
 
     private sealed class TableQuote
@@ -177,14 +178,22 @@ internal static class ShipyardOrders
         var blocked = Blocked(blueprint, Config.FreeBuildBlockedBlocks);
         var wait = FreePrints.Wait(identityId);
         if (playerPcu >= Config.FreeBuildPcuLimit)
-            plan.Paid =
-                $"you have {playerPcu:N0} PCU, free builds are for players under {Config.FreeBuildPcuLimit:N0}";
+            (plan.PaidRule, plan.Paid) = (
+                "pcu",
+                $"you have {playerPcu:N0} PCU, free builds are for players under {Config.FreeBuildPcuLimit:N0}"
+            );
         else if (blocked.Count > 0)
-            plan.Paid = $"a free ship can't have {string.Join(", ", blocked)}";
+            (plan.PaidRule, plan.Paid) = (
+                "blocked",
+                $"a free ship can't have {string.Join(", ", blocked)}"
+            );
         else if (!FreePrints.Ready)
             return Fail(plan, "The shipyard is busy, try again in a few seconds.");
         else if (wait > TimeSpan.Zero)
-            plan.Paid = $"your next free ship is in {Math.Ceiling(wait.TotalMinutes)} min";
+            (plan.PaidRule, plan.Paid) = (
+                "cooldown",
+                $"your next free ship is in {Math.Ceiling(wait.TotalMinutes)} min"
+            );
         plan.Free = plan.Paid == null;
         if (plan.Free)
             return plan;

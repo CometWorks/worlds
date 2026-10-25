@@ -100,7 +100,9 @@ def ledger(remote, owner: str) -> str:
 
 def amount(shown: str, item: str) -> float:
     """The free amount of the item in a ledger show reply, 0 if none"""
-    match = re.search(rf"(?<!: ){re.escape(item)} ([\d,.]+)", shown.split("reserved")[0])
+    match = re.search(
+        rf"(?<!: ){re.escape(item)} ([\d,.]+)", shown.split("reserved")[0]
+    )
     return float(match[1].replace(",", "")) if match else 0.0
 
 
@@ -171,15 +173,26 @@ def paid_build(remote) -> None:
     check(builds is not None, f"the build starts at once: {builds}")
     now, _ = balances(remote)
     check(now == mine - cost, f"the player paid the quote: {mine} -> {now}, {cost}")
-    check(gas(remote, ship) == 500_000, "half the docked ship's hydrogen went into the build")
+    check(
+        gas(remote, ship) == 500_000,
+        "half the docked ship's hydrogen went into the build",
+    )
     shown = ledger(remote, "me")
-    check(amount(shown, PLATE) == 0, f"the ledger's plates went into the build: {shown}")
-    check("reserved build" not in shown or "Ore/Ice" in shown, f"only the ice stays reserved: {shown}")
+    check(
+        amount(shown, PLATE) == 0, f"the ledger's plates went into the build: {shown}"
+    )
+    check(
+        "reserved build" not in shown or "Ore/Ice" in shown,
+        f"only the ice stays reserved: {shown}",
+    )
 
     busy = press(remote)
     check("can't be canceled now" in busy, f"a press while it builds: {busy}")
     ready = wait_chat(remote, "is ready", 900)
-    check(ready is not None and "500,000 L" in ready, f"the ship is ready, its H2 filled: {ready}")
+    check(
+        ready is not None and "500,000 L" in ready,
+        f"the ship is ready, its H2 filled: {ready}",
+    )
     check(gas(remote, SHIP) == HYDROGEN, f"the new ship's H2 tank holds {HYDROGEN:,} L")
     shown = ledger(remote, "me")
     check("reserved build" not in shown, f"the build ledger is gone: {shown}")
@@ -199,7 +212,10 @@ def faction_build(remote) -> tuple[int, float]:
     rig.chat(remote, "/kiosk state faction", 3)
     at_table(remote)
     quote = press(remote)
-    check("paid by your faction KME" in quote, f"the Faction switch: the faction pays: {quote}")
+    check(
+        "paid by your faction KME" in quote,
+        f"the Faction switch: the faction pays: {quote}",
+    )
     cost = total(quote)
     queued = press(remote, 8)
     check("is in the queue" in queued, f"the faction's order: {queued}")
@@ -220,12 +236,16 @@ def faction_build(remote) -> tuple[int, float]:
 def cancel_after_restart(remote, before: int) -> None:
     at_table(remote)
     canceled = press(remote)
-    check("left the queue" in canceled, f"after the restart the press cancels: {canceled}")
+    check(
+        "left the queue" in canceled, f"after the restart the press cancels: {canceled}"
+    )
     _, after = balances(remote)
     shown = ledger(remote, "faction:KME")
     check("reserved build" not in shown, f"the build ledger is gone: {shown}")
     check(amount(shown, PLATE) >= 30, f"the plates are back, bought ones too: {shown}")
-    log(f"faction balance {before} -> {after} (the purchases stay bought, the fee is back)")
+    log(
+        f"faction balance {before} -> {after} (the purchases stay bought, the fee is back)"
+    )
     check(after < before, "the faction kept what it bought, as items")
 
 
@@ -250,9 +270,7 @@ def free_build_by_button(remote) -> None:
     # 1.5 m from the button on the character's side, looking at its top
     away = [c - p for c, p in zip(character, position)]
     length = max(1e-6, sum(a * a for a in away) ** 0.5)
-    remote.character_teleport(
-        *(p + 1.5 * a / length for p, a in zip(position, away))
-    )
+    remote.character_teleport(*(p + 1.5 * a / length for p, a in zip(position, away)))
     time.sleep(3)
     canceled = None
     for lift in (0.4, 0.2, 0.6, 0.0):
@@ -267,8 +285,14 @@ def free_build_by_button(remote) -> None:
 
 def saved_screens() -> None:
     sector = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
-    check("Shipyard quote for" in sector, "the hologram table's screen shows quotes (saved world)")
-    check("Station Shipyard queue" in sector, "the queue panel shows the queue (saved world)")
+    check(
+        "Shipyard quote for" in sector,
+        "the hologram table's screen shows quotes (saved world)",
+    )
+    check(
+        "Station Shipyard queue" in sector,
+        "the queue panel shows the queue (saved world)",
+    )
 
 
 def main() -> int:
