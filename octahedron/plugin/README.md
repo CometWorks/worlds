@@ -261,15 +261,16 @@ toolbar item (its own On switch) so that clients offer it; the item never runs.
   `GroupPcuLimit` PCU, the cap of a ship. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back.
 - The next order starts when the shipyard's free space is empty: a ship left
-  there has to fly out first. The ship starts as a static grid of one of its
-  blocks, built complete and the player's, centered in the free space. Next to
-  it, outside the ship's bounds, an NPC-owned projector and battery named
-  `Shipyard Order` project the blueprint (Multigrid Projector builds its
-  subgrids). The components of the other blocks go into the shipyard's cargo
-  containers, from the build ledger for a paid build, and its OmniArc welders
-  are switched on through their terminal switches. Clients don't see the beams
-  in a no-welding safe zone: ToolCore turns the tools off there on the client,
-  which doesn't have the shipyard exception above (SE1-0259).
+  there has to fly out first. The ship is built centered in the free space, from
+  a support arm (below) on a shipyard with arm rotors. A shipyard without them
+  starts the ship as a static grid of one of its blocks, built complete and the
+  player's, with an NPC-owned projector and battery named `Shipyard Order` next
+  to it, outside the ship's bounds. Either way the projector projects the
+  blueprint (Multigrid Projector builds its subgrids), the components go into the
+  shipyard's cargo containers, from the build ledger for a paid build, and its
+  OmniArc welders are switched on through their terminal switches. Clients don't
+  see the beams in a no-welding safe zone: ToolCore turns the tools off there on
+  the client, which doesn't have the shipyard exception above (SE1-0259).
 - Every projected block welded onto the ship or its subgrids is the player's,
   owner and `BuiltBy`, so it counts toward the player's PCU and the projection
   limits check it for them.
@@ -280,6 +281,50 @@ toolbar item (its own On switch) so that clients offer it; the item never runs.
   build's hydrogen goes into the ship's H2 tanks (the ice of what doesn't fit
   goes back, with a warning when none does), and the ship, finished or not,
   becomes the player's dynamic ship. The player gets a chat message either way.
+
+#### Support arm
+
+The shipyard's rotors named in `ShipyardArmRotors` ("Advanced Rotor Top Arm
+Large", "... Top Arm Small", "... Bottom Arm Large", "... Bottom Arm Small") carry
+the support arm of a build on their rotor heads. The ship's main grid is built
+onto the head's grid, so only the rotors whose head has the ship's grid size
+take part. The plugin plans an arm on each and takes the best:
+
+- It starts with a pipe end on the head and runs in pipes to the ship, around the
+  cells every block of the blueprint will take, the subgrids included, and around
+  the shipyard. A turn costs `ShipyardArmTurnCost` (3) pipes, so the arm trades
+  length against turns. The pipes are plain unit-tested code
+  (`Builds/ArmPlanner.cs`): an A* search over cells and the direction of travel.
+- Its last pipe is a tee, and the arm ends in a new projector (`Shipyard Order`,
+  owned by the station's NPC) next to a block of the ship's main grid whose face
+  mounts to the projector's. The projection is anchored on that block. If no such
+  spot can be reached, the projector takes the place of the lightest block that
+  `ShipyardArmGiveUpBlocks` names (armor and plating); the ship lacks that block
+  at the end and the player is told to build it.
+- With a connector of the ship's main grid within reach, the tee carries a
+  connector facing it and the projector hangs on a support block next to it. The
+  ship's connectors are tried by how many blocks with an inventory or conveyor
+  touch them, in a chain. Without one the tee's branch ends in a cap.
+- The pieces are `ShipyardArmLargeBlocks` and `ShipyardArmSmallBlocks`, each
+  turned so its mount points face its neighbors in the arm.
+
+The quote checks that an arm can be planned. At build start the arm's blocks are
+placed as frames from the rotor head, and the head's grid turns static for the
+build. The arm's components go into the shipyard's containers on top of the
+ship's, for free: OCT pays for the arm. When the welders have completed the
+projector, the plugin switches it on and the projection appears. When the ship
+is complete, or its time is up, the ship's blocks split off the arm's grid as
+the player's ship. With a connector the arm's connector locks onto the ship's;
+docked within `ShipyardArmDockSeconds` (1), the ship's H2 tanks get the build's
+hydrogen and its batteries are charged. Without a dock the plugin fills the
+tanks itself. Then the plugin destroys the arm and its projector, never the
+rotor head, turns the head's grid dynamic again and hands the ship over. What
+the arm didn't use of its components is removed with the ship's leftovers, and
+only the ship's go back to the ledger. The `!oct shipyards` admin command lists
+the shipyards, their arm rotors and the running builds with their arm.
+
+The ship's PCU cap (`GroupPcuLimit`) leaves out the shipyard and the arm, which
+are in one mechanical group with the ship while it is built.
 
 The queues and build ledgers live where the ledgers do, on a plain server or the
 World Authority, saved as the sandbox variable `Octahedron.Builds`, the

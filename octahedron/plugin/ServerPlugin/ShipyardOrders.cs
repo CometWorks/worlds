@@ -1270,6 +1270,53 @@ internal static class ShipyardOrders
         }
     }
 
+    /// <summary>The shipyards this node simulates, their arm rotors and running builds.</summary>
+    public static IEnumerable<string> Describe()
+    {
+        foreach (
+            var shipyard in MyEntities
+                .GetEntities()
+                .OfType<MyCubeGrid>()
+                .Where(ShipyardZoneWelding.IsShipyard)
+                .Where(Plugin.Simulated)
+        )
+        {
+            var rotors = ShipyardArm.Rotors(shipyard);
+            yield return $"{shipyard.DisplayName}: "
+                + (
+                    rotors.Count == 0
+                        ? "no arm rotors"
+                        : string.Join(
+                            ", ",
+                            rotors.Select(r =>
+                                $"'{r.CustomName}' head {r.TopGrid.BlocksCount} blocks{(r.TopGrid.IsStatic ? " static" : "")}"
+                            )
+                        )
+                );
+            if (docks.TryGetValue(shipyard.EntityId, out var dock))
+                yield return $"  '{dock.Order.Name}' docking, {dock.Ticks} ticks left";
+            if (!orders.TryGetValue(shipyard.EntityId, out var order))
+                continue;
+            var text = $"  '{order.Name}' for {Name(order.Player)} until {order.Ends:HH:mm:ss}";
+            if (order.Arm.Count > 0)
+            {
+                var grid = order.Projector.CubeGrid;
+                var built = order.Arm.Count(c => grid.GetCubeBlock(c)?.IsFullIntegrity == true);
+                text +=
+                    $": arm {built}/{order.Arm.Count} complete on {grid.EntityId}, projector "
+                    + (order.Projector.Enabled ? "on" : "off")
+                    + $", ship {ShipBlocks(shipyard, order).Count(b => b.IsFullIntegrity)}/{order.Blocks}"
+                    + (order.Connector != null ? ", connector" : ", cap")
+                    + (
+                        order.GivenUp != null ? $", gives up {order.GivenUp.Value.SubtypeName}" : ""
+                    );
+            }
+            else
+                text += $": {Built(order.Projector.CubeGrid)}/{order.Blocks} without an arm";
+            yield return text;
+        }
+    }
+
     // --- the support arm ---
 
     private static string CreateWithArm(
@@ -1475,6 +1522,9 @@ internal static class ShipyardOrders
             if (blocks.Count > 0)
                 ship = MyCubeGrid.CreateSplit(grid, blocks);
             ship?.ChangeDisplayNameRequest(order.Name);
+            // A split of the static arm grid is static: a dynamic ship docks to the arm
+            if (ship?.IsStatic == true)
+                MyMultiplayer.RaiseEvent(ship, x => x.OnConvertToDynamic);
         }
         var connector =
             order.Connector is { } cell && !grid.MarkedForClose
