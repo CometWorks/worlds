@@ -94,13 +94,13 @@ def run(remote) -> None:
         message="Only 100",
     )
 
-    expect(
+    kiosks.expect(
         remote,
         f"withdraw hand item={CHIP} amount=2",
         "withdraw the chips into the character's inventory",
         amounts={(CHIP, "mine"): 0},
     )
-    hand = expect(remote, "state hand", "From hand shows the inventory")
+    hand = kiosks.expect(remote, "state hand", "From hand shows the inventory")
     check(
         hand.amount(CHIP, "source") >= 2,
         f"the character carries the chips: {hand.amount(CHIP, 'source')}",
