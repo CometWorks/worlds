@@ -123,7 +123,11 @@ downloaded.
   ends have no safe zone; the lane's
   rings have no physics. The two rings of a tunnel sit side by side, level with
   the equator, on the lanes of the equatorial square, and one above the other
-  on all others (to the poles and the Moon).
+  on all others (to the poles and the Moon). Each ring of a tunnel goes one way.
+  Around the equatorial square and around the polar ring (Beta, North, Delta,
+  South), the inner track runs Alpha, Beta, Gamma, Delta and Beta, North, Delta,
+  South, the outer one the other way, so a ship going around stays on its track
+  at every station.
 - Places 2,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays
