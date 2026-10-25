@@ -497,7 +497,7 @@ internal static class ShipyardOrders
                 if (!ok)
                     foreach (var (tank, liters) in drained)
                         AddHydrogen(tank, liters);
-                tell(message.Split('\n')[0]);
+                tell(message);
                 if (ok)
                 {
                     quotes.Remove(plan.Table.EntityId);

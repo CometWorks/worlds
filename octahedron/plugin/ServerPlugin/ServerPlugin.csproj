@@ -7,7 +7,8 @@
     <LangVersion>14</LangVersion>
 
     <!-- Target platforms on Windows and Linux -->
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net48;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))"
+      >net48;net10.0</TargetFrameworks>
     <TargetFramework Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net10.0</TargetFramework>
 
     <!-- Ensure SDK generates assembly attributes (no need for AssemblyInfo) -->
@@ -310,11 +311,17 @@
   </ItemGroup>
 
   <Target Name="ValidateProps" BeforeTargets="PrepareForBuild">
-    <Error Condition="'$(Dedicated64)' == ''"
-           Text="Could not locate the Dedicated Server DedicatedServer64 folder. Set &lt;Dedicated64&gt; in &quot;$(RepoRoot)Directory.Build.props.user&quot;." />
-    <Error Condition="!Exists('$(Dedicated64)')"
-           Text="Invalid Dedicated64 path &quot;$(Dedicated64)&quot; in &quot;$(RepoRoot)Directory.Build.props[.user]&quot;." />
-    <Error Condition="'$(MagnetarBinDir)' == '' Or !Exists('$(MagnetarBinDir)PluginSdk.dll')"
-           Text="Could not locate PluginSdk.dll under &quot;$(MagnetarBinDir)&quot;. Set &lt;Magnetar&gt; to your Magnetar installation folder in &quot;$(RepoRoot)Directory.Build.props.user&quot;." />
+    <Error
+      Condition="'$(Dedicated64)' == ''"
+      Text="Could not locate the Dedicated Server DedicatedServer64 folder. Set &lt;Dedicated64&gt; in &quot;$(RepoRoot)Directory.Build.props.user&quot;."
+    />
+    <Error
+      Condition="!Exists('$(Dedicated64)')"
+      Text="Invalid Dedicated64 path &quot;$(Dedicated64)&quot; in &quot;$(RepoRoot)Directory.Build.props[.user]&quot;."
+    />
+    <Error
+      Condition="'$(MagnetarBinDir)' == '' Or !Exists('$(MagnetarBinDir)PluginSdk.dll')"
+      Text="Could not locate PluginSdk.dll under &quot;$(MagnetarBinDir)&quot;. Set &lt;Magnetar&gt; to your Magnetar installation folder in &quot;$(RepoRoot)Directory.Build.props.user&quot;."
+    />
   </Target>
 </Project>

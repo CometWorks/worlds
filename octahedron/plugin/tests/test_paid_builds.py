@@ -2,7 +2,7 @@
 headless client, at Alpha Station, with OmniArc, ToolCore and Multigrid Projector
 as on the Octahedron servers, and the kiosk mods and probe of tests/test_kiosks.py.
 
-The tables hold "Paid Test": armor and a small H2 tank (1,000,000 L).
+The tables hold "PaidTest": 45 armor blocks and a small H2 tank (1,000,000 L).
 With FreeBuildPcuLimit 0 every build is paid. The client uses !oct order, which
 presses the hologram table's button for an admin (the button itself is pressed
 once at the end).
@@ -46,7 +46,7 @@ import test_shipyard_order as so  # noqa: E402
 from test_client import log, with_config  # noqa: E402
 
 PLATE = "Component/SteelPlate"
-SHIP = "Paid Test"
+SHIP = "PaidTest"
 BLUEPRINT = rig.grid(
     SHIP,
     777000685000100,
@@ -57,16 +57,22 @@ BLUEPRINT = rig.grid(
     + [
         rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, z))
         for z in range(2, 6)
+    ]
+    # Enough blocks to keep the welders busy for a while
+    + [
+        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
+        for x in range(1, 5)
+        for z in range(0, 10)
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
-# What the player brings: the tank's components but its plates, and 150 of the 205 plates
+# What the player brings: the tank's components but its plates, and 1,150 of the 1,205 plates
 DEPOSIT = {
     "Component/LargeTube": 40,
     "Component/SmallTube": 60,
     "Component/Computer": 8,
     "Component/Construction": 40,
-    PLATE: 150,
+    PLATE: 1150,
 }
 HYDROGEN = 500_000
 check = kiosks.check
@@ -114,10 +120,11 @@ def amount(shown: str, item: str) -> float:
     return float(match[1].replace(",", "")) if match else 0.0
 
 
-def balances(remote) -> tuple[int, int]:
-    """The player's and their faction's balance, from the kiosk"""
+def balances(remote, faction: bool = False) -> tuple[int, int]:
+    """The player's and their faction's balance, from the kiosk; the request sets the
+    kiosk's Faction switch too"""
     time.sleep(0.6)
-    lines = rig.chat(remote, "/kiosk market", 4)
+    lines = rig.chat(remote, "/kiosk market" + (" faction" if faction else ""), 4)
     for line in lines:
         if line.startswith("balance "):
             fields = dict(w.split("=", 1) for w in line.split(" ") if "=" in w)
@@ -144,16 +151,44 @@ def kiosks_stand(remote) -> None:
         time.sleep(3)
 
 
-def wait_chat(remote, text: str, timeout: float) -> str | None:
-    try:
-        return so.wait_chat(remote, text, timeout)
-    except TimeoutError:
-        return None
+def latest(remote) -> int:
+    return remote.get_chat_messages().get("latest", 0)
+
+
+def wait_chat(remote, text: str, timeout: float, after: int = 0) -> str | None:
+    """The first chat line with text after the given point, None if none comes"""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        got = remote.get_chat_messages(after=after)
+        lines = [m.get("Text", "") for m in got.get("messages", [])]
+        lines += [h.get("text", "") for h in got.get("hud", [])]
+        for line in lines:
+            if text in line:
+                return line
+        time.sleep(3)
+    return None
 
 
 def total(reply: str) -> int:
     match = re.search(r"([\d,]+) SC paid by", reply)
     return int(match[1].replace(",", "")) if match else -1
+
+
+def paid(reply: str) -> tuple[int, int]:
+    """What an order paid: the components and the labor fee"""
+    match = re.search(r"([\d,]+) SC for the components and ([\d,]+) SC labor", reply)
+    if not match:
+        return -1, -1
+    return int(match[1].replace(",", "")), int(match[2].replace(",", ""))
+
+
+def order(remote) -> tuple[str, str]:
+    """Presses until the order is placed: the quote's reply (empty when the screen
+    showed the player's quote already) and the order's"""
+    reply = press(remote, 8)
+    if "Your quote for" not in reply:
+        return "", reply
+    return reply, press(remote, 8)
 
 
 def paid_build(remote) -> None:
@@ -176,10 +211,13 @@ def paid_build(remote) -> None:
         f"the first press shows the quote: {quote}",
     )
     check(cost > 0, f"the quote's total: {cost}")
+    mark = latest(remote)
     started = press(remote, 8)
     check("is in the queue" in started, f"the second press orders: {started}")
-    builds = wait_chat(remote, f"builds '{SHIP}' for you now", 60)
+    builds = wait_chat(remote, f"builds '{SHIP}' for you now", 60, mark)
     check(builds is not None, f"the build starts at once: {builds}")
+    busy = press(remote)
+    check("can't be canceled now" in busy, f"a press while it builds: {busy}")
     now, _ = balances(remote)
     check(now == mine - cost, f"the player paid the quote: {mine} -> {now}, {cost}")
     check(
@@ -195,9 +233,7 @@ def paid_build(remote) -> None:
         f"only the ice stays reserved: {shown}",
     )
 
-    busy = press(remote)
-    check("can't be canceled now" in busy, f"a press while it builds: {busy}")
-    ready = wait_chat(remote, "is ready", 900)
+    ready = wait_chat(remote, "is ready", 900, mark)
     check(
         ready is not None and "500,000 L" in ready,
         f"the ship is ready, its H2 filled: {ready}",
@@ -209,63 +245,71 @@ def paid_build(remote) -> None:
         log(f"player P{me[1]}")
 
 
-def faction_build(remote) -> tuple[int, float]:
+def faction_build(remote) -> tuple[int, int]:
     """Queues a faction-paid order behind the finished ship; returns the faction's
-    balance before it and the faction's plates"""
+    balance before it and what the components cost"""
     kiosks.probe(remote, "faction KME leader")
-    for item, count in {**DEPOSIT, PLATE: 30}.items():
+    kiosks.probe(remote, "pay KME 100000")
+    for item, count in DEPOSIT.items():
         admin(remote, f"!oct ledger deposit Alpha faction:KME {item} {count}")
     kiosks_stand(remote)
-    time.sleep(0.6)
-    rig.chat(remote, "/kiosk state faction", 3)
-    _, before = balances(remote)
-    rig.chat(remote, "/kiosk state faction", 3)
+    _, before = balances(remote, faction=True)
     at_table(remote)
-    quote = press(remote)
+    mark = latest(remote)
+    quote, queued = order(remote)
+    log(f"faction quote: {quote or 'on the screen already'}")
     check(
-        "paid by your faction KME" in quote,
+        not quote or "paid by your faction KME" in quote,
         f"the Faction switch: the faction pays: {quote}",
     )
-    cost = total(quote)
-    queued = press(remote, 8)
     check("is in the queue" in queued, f"the faction's order: {queued}")
+    components, fee = paid(queued)
     check(
-        wait_chat(remote, f"builds '{SHIP}' for you now", 25) is None,
+        wait_chat(remote, f"builds '{SHIP}' for you now", 25, mark) is None,
         "it waits: the finished ship is still in the shipyard",
     )
-    _, after = balances(remote)
-    check(after == before - cost, f"the faction paid: {before} -> {after}, {cost}")
+    kiosks_stand(remote)
+    _, after = balances(remote, faction=True)
+    check(
+        components > 0 and after == before - components - fee,
+        f"the faction paid: {before} -> {after}, {components} + {fee}",
+    )
     shown = ledger(remote, "faction:KME")
     check(
         amount(shown, PLATE) == 0 and "reserved build" in shown,
         f"the faction's plates are in its build ledger: {shown}",
     )
-    return before, 30.0
+    return before, components
 
 
-def cancel_after_restart(remote, before: int) -> None:
+def cancel_after_restart(remote, before: int, components: int) -> None:
+    kiosks_stand(remote)
+    balances(remote, faction=True)
     at_table(remote)
     canceled = press(remote)
     check(
         "left the queue" in canceled, f"after the restart the press cancels: {canceled}"
     )
-    _, after = balances(remote)
+    kiosks_stand(remote)
+    _, after = balances(remote, faction=True)
     shown = ledger(remote, "faction:KME")
     check("reserved build" not in shown, f"the build ledger is gone: {shown}")
-    check(amount(shown, PLATE) >= 30, f"the plates are back, bought ones too: {shown}")
-    log(
-        f"faction balance {before} -> {after} (the purchases stay bought, the fee is back)"
+    check(
+        amount(shown, PLATE) == 1205, f"the plates are back, bought ones too: {shown}"
     )
-    check(after < before, "the faction kept what it bought, as items")
+    check(
+        after == before - components,
+        f"the fee is back, the bought components stay bought: {before} -> {after}",
+    )
 
 
 def free_build_by_button(remote) -> None:
     with_config(remote, FreeBuildPcuLimit=10000)
-    rig.chat(remote, "/kiosk state", 3)  # the Faction switch off
+    kiosks_stand(remote)
+    balances(remote)  # the Faction switch off
     at_table(remote)
-    quote = press(remote)
-    check("a free build" in quote, f"a free build: {quote}")
-    queued = press(remote, 8)
+    quote, queued = order(remote)
+    check(not quote or "a free build" in quote, f"a free build: {quote}")
     check("is in the queue, a free build" in queued, f"the free order queues: {queued}")
 
     buttons = remote.find_nearby_blocks(
@@ -284,10 +328,11 @@ def free_build_by_button(remote) -> None:
     time.sleep(3)
     canceled = None
     for lift in (0.4, 0.2, 0.6, 0.0):
+        mark = latest(remote)
         remote.character_look_at(position[0], position[1] + lift, position[2])
         time.sleep(1)
         remote.character_use()
-        canceled = wait_chat(remote, "left the queue", 8)
+        canceled = wait_chat(remote, "left the queue", 8, mark)
         if canceled:
             break
     check(canceled is not None, f"the button itself cancels the free order: {canceled}")
@@ -312,10 +357,10 @@ def main() -> int:
     rig.start_server()
     remote = rig.start_client()
     log("joined")
-    before = None
+    before = components = None
     try:
         paid_build(remote)
-        before, _ = faction_build(remote)
+        before, components = faction_build(remote)
     finally:
         rig.stop_client()
         rig.stop_server()
@@ -326,7 +371,7 @@ def main() -> int:
     remote = rig.start_client()
     try:
         if before is not None:
-            cancel_after_restart(remote, before)
+            cancel_after_restart(remote, before, components)
         free_build_by_button(remote)
     finally:
         rig.stop_client()

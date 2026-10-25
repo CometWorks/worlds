@@ -8,6 +8,7 @@ using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using VRage;
@@ -217,6 +218,21 @@ public sealed class ProbeCommands : CommandModule
             liters,
             tanks.Count
         );
+    }
+
+    [Command(
+        "pay",
+        "Adds money to a faction's account, by its tag: PAID tag balance",
+        "!kprobe pay <tag> <SC>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Pay(string tag, long amount)
+    {
+        var faction = MySession.Static.Factions.TryGetFactionByTag(tag);
+        if (faction == null || !MyBankingSystem.ChangeBalance(faction.FactionId, amount))
+            return $"NOPAY {tag}";
+        MyBankingSystem.Static.TryGetAccountInfo(faction.FactionId, out var account);
+        return $"PAID {tag} {account.Balance}";
     }
 
     [Command("undock", "Disconnects and deletes the probe's ships", "!kprobe undock")]

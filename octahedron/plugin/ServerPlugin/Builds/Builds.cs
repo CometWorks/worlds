@@ -169,14 +169,14 @@ internal static class Builds
 
     /// <summary>
     /// A change wherever the queues are kept; <paramref name="done"/> gets whether it worked and
-    /// the answer's message and data, on the game thread.
+    /// the message for the player, on the game thread.
     /// </summary>
     public static void Execute(Guid operationId, BuildRequest request, Action<bool, string> done)
     {
         if (Ledgers.IsAuthority)
         {
             var answer = Run(request);
-            done(answer.StartsWith("1"), answer.Substring(Math.Min(2, answer.Length)));
+            done(answer.StartsWith("1"), Message(answer));
             return;
         }
         Ledgers.Call(
@@ -195,10 +195,14 @@ internal static class Builds
                     );
                     return;
                 }
-                done(text.StartsWith("1"), text.Length > 2 ? text.Substring(2) : "");
+                done(text.StartsWith("1"), Message(text));
             }
         );
     }
+
+    // The message of a change's answer, without the order that may follow it
+    private static string Message(string answer) =>
+        answer.Length > 2 ? answer.Substring(2).Split('\n')[0] : "";
 
     /// <summary>A read wherever the queues are kept: the answer, or null with why, on the game thread.</summary>
     public static void Read(BuildRequest request, Action<string, string> done)
