@@ -245,6 +245,50 @@ The order is kept in the world, in the projector's custom data, so it goes on
 after a restart. Every 10 seconds the node that simulates a shipyard checks it,
 so on a cluster the node owning the station's partition runs the order.
 
+### Money
+
+With `MoneyEnabled` on, the account of the stations' NPC faction, OCT
+(`MoneyAuthorityFactionTag`), is real money. The game moves the balance of every
+faction with stations 40 % of the way to 1e9 SC at every economy tick; the plugin stops
+that for OCT. New money then comes from two places only: a daily subsidy of
+`MoneySubsidyPerActivePlayer` (5,000 SC) per active player, and a top-up of OCT's
+account to `MoneyOctFloor` (2M SC) whenever it drops below it, checked every minute.
+A new player account starts with `MoneyStartingBalance` (25,000 SC) instead of the
+game's 10,000. Player factions still start with nothing.
+
+A player who was online at any time in the last `MoneyActiveDays` (7) days is
+active. At 00:00 UTC the plugin settles the day:
+
+- Every player account pays `MoneyWealthTaxBasisPoints` (100, that is 1 %) of its
+  balance above `MoneyPlayerTaxThreshold` (200k SC), and every player faction the same
+  share of its balance above `MoneyFactionTaxThreshold` (1M SC). NPC identities and
+  NPC factions pay nothing.
+- OCT gives up its balance above `MoneyOctCap` (20M SC).
+- The tax, OCT's part and the subsidy make a pool, split equally between the active
+  players. What the division leaves, and the whole pool on a day with nobody active,
+  goes to OCT.
+
+The server log gets one line per day with the totals: the tax from players and from
+factions, OCT's part, the subsidy, the pool and each player's share, OCT's top-ups
+during the day, OCT's balance and the money in all accounts. All of it is integer
+math in SC with overflow checks; an overflow stops the money rules before any balance
+changes. A server that was down at midnight settles one day when it comes back,
+however many it missed.
+
+The first time the rules run in a world, OCT's balance is cut to its cap without
+going into the pool: the world starts OCT with the game's 1e9 SC.
+
+The rules run where the bank accounts are kept: on a plain server, or on the World
+Authority of a cluster, whose bank the nodes forward every change to. The plugin must
+be loaded there too, as a Quasar cluster does. The state, the last day settled and
+when each player was last online, is a world variable (`Octahedron-Money`) there, so
+it is saved with the accounts and goes back with them when a save is restored. The
+new account balance applies on every node.
+
+`!oct money` (admin) shows OCT's balance, the caller's, the money in all accounts,
+the last day settled and the number of active players. `!oct payday` (admin) settles
+a day at once; on a cluster it answers that the World Authority settles at 00:00 UTC.
+
 ### Container drops
 
 The game's drop pods (world setting `EnableContainerDrops`) come in two kinds.
@@ -528,6 +572,11 @@ with the zones holding every test grid from the start, and off.
 and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
+`tests/test_money.py` checks the money rules with the client: OCT cut to its cap at
+the first run, a new account's balance, no economy top-up of OCT while the rules are
+on (and the game's with them off), two settlements by `!oct payday`, OCT topped up to
+its floor and the state read back after a restart. `tests/money/MoneyTests` checks
+the settlement's arithmetic alone (`dotnet run -c Release --project tests/money/MoneyTests`).
 `tests/mes/` holds MesCluster's tests for the MES spawn gate:
 `CellPatternTests` checks the cell pattern against a brute-force definition
 (`dotnet run -c Release --project tests/mes/CellPatternTests`); `ds/run.py PLAN [cfg]`

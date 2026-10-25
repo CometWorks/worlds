@@ -41,6 +41,7 @@ public class Plugin : IPlugin
     private readonly WorldEdge worldEdge = new();
     private bool failed;
     private bool encountersFailed;
+    private bool moneyFailed;
 
     public void Init(object gameInstance)
     {
@@ -82,6 +83,20 @@ public class Plugin : IPlugin
         if (!failed && Config.Enabled)
             MesCluster.Update();
 
+        // Money stops on its own too, so a broken settlement leaves the other rules running
+        if (!moneyFailed)
+        {
+            try
+            {
+                Money.Update();
+            }
+            catch (Exception e)
+            {
+                Log.Critical("The money rules failed and stop", e);
+                moneyFailed = true;
+            }
+        }
+
         // Encounters stop on their own, so a broken spawn leaves the other rules running
         if (encountersFailed)
             return;
@@ -96,7 +111,7 @@ public class Plugin : IPlugin
         }
     }
 
-    private static readonly PluginClusterClient Cluster = PluginCluster.IsClusterProcess
+    internal static readonly PluginClusterClient Cluster = PluginCluster.IsClusterProcess
         ? PluginCluster.ForPlugin(Id)
         : null;
 

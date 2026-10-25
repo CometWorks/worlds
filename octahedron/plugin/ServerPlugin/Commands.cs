@@ -94,6 +94,18 @@ public sealed class Commands : CommandModule
     private MyCharacter CallerCharacter() =>
         MySession.Static.Players.TryGetIdentity(Context.Caller.IdentityId)?.Character;
 
+    [Command("money", "Shows OCT's balance, yours and the state of the daily settlement")]
+    [Permission(MyPromoteLevel.Admin)]
+    public IEnumerable<string> MoneyStatus() => Money.Describe(Context.Caller.IdentityId);
+
+    [Command(
+        "payday",
+        "Settles the wealth tax, subsidy and dividend now, as if a new day had started",
+        "!oct payday: a plain server only; a cluster settles on its World Authority at 00:00 UTC."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Payday() => Money.Payday();
+
     [Command("holograms", "Fits the blueprints in the station hologram tables to the tables again")]
     [Permission(MyPromoteLevel.Admin)]
     public string Holograms() => $"Fitted {TableHologram.FitAll()} hologram tables.";
