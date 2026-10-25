@@ -260,7 +260,11 @@ public static class KioskRules
             && !LedgerBook.ValidName(request.Item)
         )
             return "No item chosen.";
-        if (request.Verb is KioskVerb.Offer or KioskVerb.Order && request.Price <= 0 && request.PricePercent <= 0)
+        if (
+            request.Verb is KioskVerb.Offer or KioskVerb.Order
+            && request.Price <= 0
+            && request.PricePercent <= 0
+        )
             return "No price given.";
         if (request.Verb is KioskVerb.Buy or KioskVerb.Order && request.Amount <= 0)
             return "No amount given.";

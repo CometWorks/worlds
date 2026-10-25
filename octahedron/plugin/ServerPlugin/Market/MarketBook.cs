@@ -197,7 +197,13 @@ public sealed class MarketBook
         drift[key] = (had + kg, now);
     }
 
-    private long OctPrice(IMarketWorld w, MarketSettings s, string station, string item, int percent)
+    private long OctPrice(
+        IMarketWorld w,
+        MarketSettings s,
+        string station,
+        string item,
+        int percent
+    )
     {
         long reference = w.Reference(station, item);
         if (reference <= 0)
@@ -280,13 +286,7 @@ public sealed class MarketBook
         long ask = OctAsk(w, s, station, item);
         long stock = Free(w, station, w.Oct, item);
         if (ask > 0 && stock > 0 && !buyer.Equals(w.Oct))
-            sources.Add(
-                new MarketFill
-                {
-                    Amount = stock,
-                    Price = ask,
-                }
-            );
+            sources.Add(new MarketFill { Amount = stock, Price = ask });
         return Take(sources.OrderBy(f => f.Price).ThenBy(Order), raw, up: true);
     }
 
@@ -457,13 +457,7 @@ public sealed class MarketBook
                     }
                 );
             }
-            sources.Add(
-                new MarketFill
-                {
-                    Amount = capacity - special,
-                    Price = bid,
-                }
-            );
+            sources.Add(new MarketFill { Amount = capacity - special, Price = bid });
         }
         return Take(sources.OrderByDescending(f => f.Price).ThenBy(Order), raw, up: false);
     }
@@ -610,7 +604,9 @@ public sealed class MarketBook
             long escrow = Cost(raw, price, up: true);
             long balance = w.Balance(owner);
             if (balance < escrow)
-                return MarketResult.No($"That order holds {Sc(escrow)}, the account has {Sc(balance)}.");
+                return MarketResult.No(
+                    $"That order holds {Sc(escrow)}, the account has {Sc(balance)}."
+                );
             if (escrow > 0 && !w.ChangeBalance(owner, -escrow))
                 return MarketResult.No("The payment failed.");
             listing.Escrow = escrow;
@@ -945,9 +941,7 @@ public sealed class MarketBook
         foreach (var p in specialtyKg.OrderBy(p => p.Key, StringComparer.Ordinal))
             text.Append("B\t").Append(p.Key).Append('\t').Append(D(p.Value)).Append('\n');
         foreach (var p in drift.OrderBy(p => p.Key.Station + "\t" + p.Key.Item))
-            text.Append(
-                    $"D\t{p.Key.Station}\t{p.Key.Item}\t{D(p.Value.Kg)}\t{N(p.Value.At)}"
-                )
+            text.Append($"D\t{p.Key.Station}\t{p.Key.Item}\t{D(p.Value.Kg)}\t{N(p.Value.At)}")
                 .Append('\n');
         return text.ToString();
     }

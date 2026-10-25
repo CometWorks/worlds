@@ -26,6 +26,8 @@ namespace ServerPlugin;
 /// requests here as mod messages; this side checks them and does the work, so a modified
 /// client can do no more than the screens allow.
 ///
+/// The Market tab trades through <see cref="Market"/>, which moves the items in the ledgers.
+///
 /// A kiosk is a text panel named <see cref="OctahedronConfig.KioskBlockName"/> on a station's
 /// grids. The plugin selects the mod's screen script on it. A ship is docked when one of
 /// the station's connectors holds it; its items are in the cargo containers and connectors of
@@ -294,6 +296,27 @@ internal static class Kiosks
             return;
         }
         var opId = Guid.NewGuid();
+        if (KioskRules.IsMarket(request.Verb))
+        {
+            if (request.Verb == KioskVerb.Market)
+            {
+                Done(visit, true, "");
+                return;
+            }
+            var trade = new MarketRequest
+            {
+                Verb = request.Verb,
+                Station = visit.Station,
+                Owner = visit.Owner,
+                Item = request.Item,
+                Amount = request.Amount,
+                Price = request.Price,
+                PricePercent = request.PricePercent,
+                Listing = request.Listing,
+            };
+            Market.Execute(opId, trade, (ok, message) => Done(visit, ok, message));
+            return;
+        }
         switch (request.Verb)
         {
             case KioskVerb.State:
@@ -685,7 +708,8 @@ internal static class Kiosks
         return reply;
     }
 
-    // Ends the request: the ledgers read again, so the reply shows what the change did
+    // Ends the request: the ledgers read again, so the reply shows what the change did, and
+    // after a market request the market
     private static void Done(Visit visit, bool ok, string message, bool read = true)
     {
         visit.Reply.With(ok, message);
@@ -694,7 +718,28 @@ internal static class Kiosks
             Finish(visit);
             return;
         }
-        ReadLedgers(visit, () => Finish(visit));
+        ReadLedgers(visit, () => ReadMarket(visit, () => Finish(visit)));
+    }
+
+    private static void ReadMarket(Visit visit, Action next)
+    {
+        if (!KioskRules.IsMarket(visit.Request.Verb))
+        {
+            next();
+            return;
+        }
+        Market.Read(
+            visit.Station,
+            visit.Me,
+            visit.Faction != null ? visit.FactionOwner : null,
+            (text, error) =>
+            {
+                visit.Reply.Market = text ?? "";
+                if (text == null && visit.Reply.Message.Length == 0)
+                    visit.Reply.Message = error ?? "";
+                next();
+            }
+        );
     }
 
     private static void Finish(Visit visit)

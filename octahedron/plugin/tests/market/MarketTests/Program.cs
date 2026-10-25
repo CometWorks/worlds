@@ -84,7 +84,10 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     Check(m.OctAsk(w, s, A, Gold) == 0 && m.OctBid(w, s, A, Gold) == 0, "gold: not in the catalog");
 
     Check(m.Restock(w, s, [A, B], daily) != null, "first restock");
-    Check(Free(w, oct, Iron) == 2000 * U && Free(w, oct, Plate, B) == 300 * U, "restock: both stations");
+    Check(
+        Free(w, oct, Iron) == 2000 * U && Free(w, oct, Plate, B) == 300 * U,
+        "restock: both stations"
+    );
     Check(m.Restock(w, s, [A, B], daily) == null, "restock: once a day");
     w.Now += 86_400;
     m.Restock(w, s, [A, B], daily);
@@ -112,18 +115,33 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     Check(Free(w, p1, Iron) == 100 * U && Free(w, oct, Iron) == 1900 * U, "iron moved");
 
     Deposit(w, p2, Iron, 500 * U);
-    Ok(w, m, "p2 offers 200 iron at 12 SC", () => m.List(w, s, A, p2, ListingKind.Offer, Iron, 200 * U, 12_000));
+    Ok(
+        w,
+        m,
+        "p2 offers 200 iron at 12 SC",
+        () => m.List(w, s, A, p2, ListingKind.Offer, Iron, 200 * U, 12_000)
+    );
     var offer = m.At(A, Iron, ListingKind.Offer).Single();
     Check(Free(w, p2, Iron) == 300 * U, "offer: the items are reserved");
-    Check(Math.Abs(w.Ledger.MassKg(A, p2) - 500) < 1e-9, "offer: they still count toward the limit");
-    Refused(w, m, "p2 can't buy from its own offer only", () => m.Buy(w, s, A, p2, Iron, 2000 * U), "Only");
+    Check(
+        Math.Abs(w.Ledger.MassKg(A, p2) - 500) < 1e-9,
+        "offer: they still count toward the limit"
+    );
+    Refused(
+        w,
+        m,
+        "p2 can't buy from its own offer only",
+        () => m.Buy(w, s, A, p2, Iron, 2000 * U),
+        "Only"
+    );
 
     var plan = m.PlanBuy(w, s, A, p1, Iron, 250 * U);
     Check(
         plan.Count == 2 && plan[0].Listing == offer && plan[0].Amount == 200 * U && plan[1].Oct,
         "plan: the cheaper offer first, then OCT"
     );
-    long p2Before = w.Balances[p2], octBefore = w.Balances[oct];
+    long p2Before = w.Balances[p2],
+        octBefore = w.Balances[oct];
     Ok(w, m, "buy 250 iron", () => m.Buy(w, s, A, p1, Iron, 250 * U));
     Check(w.Balances[p1] == 25_000 - 1_400 - 2_400 - 700, "paid 200 at 12 and 50 at 14");
     Check(w.Balances[p2] == p2Before + 2_400 - 120, "the seller gets the price less the 5 % fee");
@@ -140,9 +158,20 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     w.Balances[p3] = 1_000_000;
     w.Start = w.Total();
     Deposit(w, p3, Iron, 99_990 * U);
-    Refused(w, m, "over the buyer's ledger limit, the money stays", () => m.Buy(w, s, A, p3, Plate, 10 * U), "limit");
+    Refused(
+        w,
+        m,
+        "over the buyer's ledger limit, the money stays",
+        () => m.Buy(w, s, A, p3, Plate, 10 * U),
+        "limit"
+    );
 
-    Ok(w, m, "a build buys into its reservation", () => m.Buy(w, s, A, p1, Plate, 10 * U, "build 1"));
+    Ok(
+        w,
+        m,
+        "a build buys into its reservation",
+        () => m.Buy(w, s, A, p1, Plate, 10 * U, "build 1")
+    );
     var build = w.Ledger.ReservationsOf(A, p1).Single();
     Check(
         build.Key == "build 1" && !build.Value.Counted && build.Value.Items[Plate] == 10 * U,
@@ -156,10 +185,21 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     var w = new FakeWorld();
     var m = new MarketBook();
     var s = Exact();
-    Ok(w, m, "p1 orders 100 plates at 60 SC", () => m.List(w, s, A, p1, ListingKind.Order, Plate, 100 * U, 60_000));
+    Ok(
+        w,
+        m,
+        "p1 orders 100 plates at 60 SC",
+        () => m.List(w, s, A, p1, ListingKind.Order, Plate, 100 * U, 60_000)
+    );
     Check(w.Balances[p1] == 25_000 - 6_000, "order: the money is held");
     Check(m.Escrow(p1) == 6_000, "order: escrow");
-    Refused(w, m, "an order without the money", () => m.List(w, s, A, p3, ListingKind.Order, Plate, 1000 * U, 60_000), "holds");
+    Refused(
+        w,
+        m,
+        "an order without the money",
+        () => m.List(w, s, A, p3, ListingKind.Order, Plate, 1000 * U, 60_000),
+        "holds"
+    );
     Refused(w, m, "sell what isn't there", () => m.Sell(w, s, A, p2, Plate, 30 * U), "Only 0");
 
     Deposit(w, p2, Plate, 200 * U);
@@ -183,7 +223,12 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     Deposit(w, p3, Iron, 99_990 * U);
     w.Balances[p3] = 1_000_000;
     w.Start = w.Total();
-    Ok(w, m, "p3 orders plates", () => m.List(w, s, A, p3, ListingKind.Order, Plate, 10 * U, 100_000));
+    Ok(
+        w,
+        m,
+        "p3 orders plates",
+        () => m.List(w, s, A, p3, ListingKind.Order, Plate, 10 * U, 100_000)
+    );
     var fills = m.PlanSell(w, s, A, p2, Plate, 10 * U);
     Check(fills.Count == 1 && fills[0].Oct, "an order over its owner's limit is skipped");
 
@@ -199,7 +244,13 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     poor.Start = poor.Total();
     Deposit(poor, p1, Plate, 10 * U);
     var none = new MarketBook();
-    Refused(poor, none, "OCT without money", () => none.Sell(poor, s, A, p1, Plate, 10 * U), "can't pay");
+    Refused(
+        poor,
+        none,
+        "OCT without money",
+        () => none.Sell(poor, s, A, p1, Plate, 10 * U),
+        "can't pay"
+    );
 }
 
 // The specialty: 80 % for 50 t a day, then 60 %
@@ -210,7 +261,10 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     Deposit(w, p2, Platinum, 80_000 * U);
     w.Limit = false;
     Ok(w, m, "sell 60 t of platinum at Alpha", () => m.Sell(w, s, A, p2, Platinum, 60_000 * U));
-    Check(w.Balances[p2] == 25_000 + 50_000 * 28 + 10_000 * 21, "50 t at 28 SC and 10 t at 21 SC: " + w.Balances[p2]);
+    Check(
+        w.Balances[p2] == 25_000 + 50_000 * 28 + 10_000 * 21,
+        "50 t at 28 SC and 10 t at 21 SC: " + w.Balances[p2]
+    );
     Check(Math.Abs(m.SpecialtyBoughtKg(A) - 50_000) < 1e-6, "specialty: 50 t counted");
     Check(m.OctBid(w, s, A, Platinum) == 21_000, "after it, the normal price");
     long before = w.Balances[p2];
@@ -229,9 +283,26 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     Deposit(w, p1, Iron, 100 * U);
     for (int i = 0; i < 20; i++)
         Ok(w, m, $"offer {i + 1}", () => m.List(w, s, A, p1, ListingKind.Offer, Iron, U, 20_000));
-    Refused(w, m, "the 21st listing", () => m.List(w, s, A, p1, ListingKind.Order, Iron, U, 1_000), "20 listings");
-    Ok(w, m, "another station has its own 20", () => m.List(w, s, B, p1, ListingKind.Order, Iron, U, 1_000));
-    Refused(w, m, "offer more than there is", () => m.List(w, s, B, p1, ListingKind.Offer, Iron, U, 1_000), "Only");
+    Refused(
+        w,
+        m,
+        "the 21st listing",
+        () => m.List(w, s, A, p1, ListingKind.Order, Iron, U, 1_000),
+        "20 listings"
+    );
+    Ok(
+        w,
+        m,
+        "another station has its own 20",
+        () => m.List(w, s, B, p1, ListingKind.Order, Iron, U, 1_000)
+    );
+    Refused(
+        w,
+        m,
+        "offer more than there is",
+        () => m.List(w, s, B, p1, ListingKind.Offer, Iron, U, 1_000),
+        "Only"
+    );
     Refused(w, m, "no price", () => m.List(w, s, A, p2, ListingKind.Order, Iron, U, 0), "price");
 
     var first = m.At(A).OrderBy(l => l.Created).First();
@@ -242,13 +313,21 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     Ok(w, m, "cancel an order", () => m.Cancel(w, p1, order.Id));
     Check(w.Balances[p1] == 25_000, "the order's money is back");
 
-    Ok(w, m, "an order to expire", () => m.List(w, s, A, f10, ListingKind.Order, Plate, 2 * U, 10_000));
+    Ok(
+        w,
+        m,
+        "an order to expire",
+        () => m.List(w, s, A, f10, ListingKind.Order, Plate, 2 * U, 10_000)
+    );
     w.Now += 7 * 86_400 - 1;
     Check(m.Expire(w, s).Count == 0, "nothing expires before 7 days");
     w.Now += 1;
     var expired = m.Expire(w, s);
     Check(expired.Count == 20 && !m.Listings.Any(), "after 7 days all expire: " + expired.Count);
-    Check(Free(w, p1, Iron) == 100 * U && w.Balances[f10] == 1_000_000, "expired: items and money back");
+    Check(
+        Free(w, p1, Iron) == 100 * U && w.Balances[f10] == 1_000_000,
+        "expired: items and money back"
+    );
     Check(w.Total() == w.Start, "expired: no money made or lost");
 }
 
@@ -263,11 +342,17 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     w.Balances[p1] = 10_000_000;
     w.Start = w.Total();
     Ok(w, m, "buy 100 t of iron", () => m.Buy(w, s, A, p1, Iron, 100_000 * U));
-    Check(m.OctAsk(w, s, A, Iron) == 2 * ask, "100 t bought: twice the price " + m.OctAsk(w, s, A, Iron));
+    Check(
+        m.OctAsk(w, s, A, Iron) == 2 * ask,
+        "100 t bought: twice the price " + m.OctAsk(w, s, A, Iron)
+    );
     Check(m.OctBid(w, s, A, Iron) == 12_000, "OCT also pays more");
     Check(m.OctAsk(w, s, B, Iron) == ask, "other stations keep theirs");
     w.Now += 24 * 3600;
-    Check(Math.Abs(m.OctAsk(w, s, A, Iron) - ask * Math.Sqrt(2)) < 2, "a day later half of it is gone");
+    Check(
+        Math.Abs(m.OctAsk(w, s, A, Iron) - ask * Math.Sqrt(2)) < 2,
+        "a day later half of it is gone"
+    );
     Ok(w, m, "sell it back", () => m.Sell(w, s, A, p1, Iron, 100_000 * U));
     Check(m.OctAsk(w, s, A, Iron) < ask, "sold: below the reference");
     w.Now += 365 * 86_400;
@@ -290,8 +375,14 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     string saved = m.Serialize();
     var loaded = MarketBook.Deserialize(saved);
     Check(loaded.Serialize() == saved, "round trip");
-    Check(loaded.Get("M1").Amount == 5_500_000 && loaded.Get("M2").Escrow == 210, "round trip: listings");
-    Check(Math.Abs(loaded.SpecialtyBoughtKg(A) - 10) < 1e-9 && loaded.Day == m.Day, "round trip: day");
+    Check(
+        loaded.Get("M1").Amount == 5_500_000 && loaded.Get("M2").Escrow == 210,
+        "round trip: listings"
+    );
+    Check(
+        Math.Abs(loaded.SpecialtyBoughtKg(A) - 10) < 1e-9 && loaded.Day == m.Day,
+        "round trip: day"
+    );
     try
     {
         MarketBook.Deserialize("octahedron-ledgers 1\n");
@@ -300,12 +391,23 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     catch (FormatException) { }
 
     var request = KioskRequest.Parse("offer\t7\t99\t1\t\tIngot/Iron\t2.5\t80%");
-    Check(request.Verb == KioskVerb.Offer && request.PricePercent == 80 && request.Amount == 2_500_000, "kiosk: offer at 80 %");
+    Check(
+        request.Verb == KioskVerb.Offer
+            && request.PricePercent == 80
+            && request.Amount == 2_500_000,
+        "kiosk: offer at 80 %"
+    );
     request = KioskRequest.Parse("order\t8\t99\t0\t\tIngot/Iron\t1\t12.3456");
     Check(request.Price == 12_346, "kiosk: price in SC, milli-SC rounded up: " + request.Price);
     request = KioskRequest.Parse("cancel\t9\t99\t0\t\t\t\t\tM7");
     Check(request.Listing == "M7", "kiosk: listing id");
-    foreach (var bad in new[] { "offer\t1\t2\t0\t\tIngot/Iron\t1\t-5", "offer\t1\t2\t0\t\tIngot/Iron\t1\tx%" })
+    foreach (
+        var bad in new[]
+        {
+            "offer\t1\t2\t0\t\tIngot/Iron\t1\t-5",
+            "offer\t1\t2\t0\t\tIngot/Iron\t1\tx%",
+        }
+    )
         try
         {
             KioskRequest.Parse(bad);
@@ -313,7 +415,14 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
         }
         catch (FormatException) { }
 
-    KioskRequest Req(KioskVerb verb, bool faction = false, string item = Iron, long amount = U, long price = 1, string listing = "") =>
+    KioskRequest Req(
+        KioskVerb verb,
+        bool faction = false,
+        string item = Iron,
+        long amount = U,
+        long price = 1,
+        string listing = ""
+    ) =>
         new()
         {
             Verb = verb,
@@ -323,15 +432,44 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
             Price = price,
             Listing = listing,
         };
-    Check(KioskRules.Refusal(Req(KioskVerb.Market, item: ""), false, false, false) == null, "rules: anyone sees the market");
-    Check(KioskRules.Refusal(Req(KioskVerb.Buy), false, false, false) == null, "rules: anyone buys");
-    Check(KioskRules.Refusal(Req(KioskVerb.Buy, true), true, false, false) != null, "rules: buying for the faction needs the rank");
-    Check(KioskRules.Refusal(Req(KioskVerb.Sell, true), true, true, false) == null, "rules: a trader sells for the faction");
-    Check(KioskRules.Refusal(Req(KioskVerb.Offer, price: 0), false, false, false) == "No price given.", "rules: an offer needs a price");
-    Check(KioskRules.Refusal(Req(KioskVerb.Buy, amount: 0), false, false, false) != null, "rules: buy needs an amount");
-    Check(KioskRules.Refusal(Req(KioskVerb.Sell, amount: 0), false, false, false) == null, "rules: sell all");
-    Check(KioskRules.Refusal(Req(KioskVerb.Cancel, item: ""), false, false, false) != null, "rules: cancel needs a listing");
-    Check(KioskRules.Refusal(Req(KioskVerb.Cancel, item: "", listing: "M1"), false, false, false) == null, "rules: cancel");
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Market, item: ""), false, false, false) == null,
+        "rules: anyone sees the market"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Buy), false, false, false) == null,
+        "rules: anyone buys"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Buy, true), true, false, false) != null,
+        "rules: buying for the faction needs the rank"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Sell, true), true, true, false) == null,
+        "rules: a trader sells for the faction"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Offer, price: 0), false, false, false)
+            == "No price given.",
+        "rules: an offer needs a price"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Buy, amount: 0), false, false, false) != null,
+        "rules: buy needs an amount"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Sell, amount: 0), false, false, false) == null,
+        "rules: sell all"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Cancel, item: ""), false, false, false) != null,
+        "rules: cancel needs a listing"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Cancel, item: "", listing: "M1"), false, false, false)
+            == null,
+        "rules: cancel"
+    );
 
     var wire = new MarketRequest
     {
@@ -343,11 +481,44 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
         PricePercent = 50,
     };
     var decoded = MarketRequest.Decode(wire.Encode());
-    Check(decoded.Encode() == wire.Encode() && decoded.Reservation == null, "market request: wire round trip");
+    Check(
+        decoded.Encode() == wire.Encode() && decoded.Reservation == null,
+        "market request: wire round trip"
+    );
     var r = m.Run(w, s, decoded);
-    Check(r.Ok && m.Listings.Last().Price == 25_000, "market request: an order at 50 % of the reference: " + r.Message);
-    Check(!m.Run(w, s, new MarketRequest { Verb = KioskVerb.Offer, Station = A, Owner = p1, Item = Gold, Amount = U, PricePercent = 50 }).Ok, "market request: no percent without a reference");
-    Check(m.Run(w, s, new MarketRequest { Verb = KioskVerb.Cancel, Owner = f10, Listing = "M2" }).Ok, "market request: cancel");
+    Check(
+        r.Ok && m.Listings.Last().Price == 25_000,
+        "market request: an order at 50 % of the reference: " + r.Message
+    );
+    Check(
+        !m.Run(
+            w,
+            s,
+            new MarketRequest
+            {
+                Verb = KioskVerb.Offer,
+                Station = A,
+                Owner = p1,
+                Item = Gold,
+                Amount = U,
+                PricePercent = 50,
+            }
+        ).Ok,
+        "market request: no percent without a reference"
+    );
+    Check(
+        m.Run(
+            w,
+            s,
+            new MarketRequest
+            {
+                Verb = KioskVerb.Cancel,
+                Owner = f10,
+                Listing = "M2",
+            }
+        ).Ok,
+        "market request: cancel"
+    );
 
     string view = m.View(w, s, A, p1, f10, item => item.Split('/')[1]);
     var lines = view.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -355,9 +526,21 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
         lines.Contains($"market\t{Iron}\tIron\t6000\t14000\t{2000 * U}\t12345\t5500000\t0\t0\t0"),
         "view: iron with OCT's prices and stock and the offer: " + view
     );
-    Check(lines.Any(l => l.StartsWith($"market\t{Platinum}\tPlatinum\t28000\t49000\t{10 * U}\t")) && lines.Any(l => l.StartsWith($"market\t{Platinum}") && l.EndsWith("\t1")), "view: platinum at the specialty price");
-    Check(lines.Any(l => l.StartsWith("listing\tM1\toffer\tIngot/Iron\tIron\t5500000\t12345\tmine\t")), "view: my listing");
-    Check(lines.Any(l => l.StartsWith("listing\tM3\torder\t") && l.Contains("\tfaction\t")), "view: the faction's listing");
+    Check(
+        lines.Any(l => l.StartsWith($"market\t{Platinum}\tPlatinum\t28000\t49000\t{10 * U}\t"))
+            && lines.Any(l => l.StartsWith($"market\t{Platinum}") && l.EndsWith("\t1")),
+        "view: platinum at the specialty price"
+    );
+    Check(
+        lines.Any(l =>
+            l.StartsWith("listing\tM1\toffer\tIngot/Iron\tIron\t5500000\t12345\tmine\t")
+        ),
+        "view: my listing"
+    );
+    Check(
+        lines.Any(l => l.StartsWith("listing\tM3\torder\t") && l.Contains("\tfaction\t")),
+        "view: the faction's listing"
+    );
     Check(lines.Last() == $"balance\t{w.Balances[p1]}\t{w.Balances[f10]}", "view: balances");
     Check(!lines.Any(l => l.Contains(Gold)), "view: only the catalog and listed items");
 }
@@ -396,7 +579,11 @@ sealed class FakeWorld : IMarketWorld
     public long Total() => Balances.Values.Sum();
 
     public string Snapshot() =>
-        Ledger.Serialize() + string.Join(",", Balances.OrderBy(b => b.Key.ToString()).Select(b => $"{b.Key}={b.Value}"));
+        Ledger.Serialize()
+        + string.Join(
+            ",",
+            Balances.OrderBy(b => b.Key.ToString()).Select(b => $"{b.Key}={b.Value}")
+        );
 
     public bool Item(string item, out double massKg, out bool integral)
     {

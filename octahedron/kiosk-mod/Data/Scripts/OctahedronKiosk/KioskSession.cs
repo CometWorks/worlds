@@ -64,7 +64,9 @@ namespace OctahedronKiosk
             bool faction = false,
             string source = "",
             string item = "",
-            string amount = ""
+            string amount = "",
+            string price = "",
+            string listing = ""
         )
         {
             long number = ++sequence;
@@ -76,7 +78,9 @@ namespace OctahedronKiosk
                 faction ? "1" : "0",
                 source ?? "",
                 item ?? "",
-                amount ?? ""
+                amount ?? "",
+                price ?? "",
+                listing ?? ""
             );
             MyAPIGateway.Multiplayer.SendMessageToServer(Channel, Encoding.UTF8.GetBytes(line));
             return number;
@@ -99,7 +103,8 @@ namespace OctahedronKiosk
             }
         }
 
-        // /kiosk <state|deposit|withdraw|give|take|members> [faction] [hand|ship=ID] [item=Type/Subtype] [amount=N|all] [kiosk=ID]
+        // /kiosk <state|deposit|withdraw|give|take|members|market|buy|sell|offer|order|cancel> [faction] [hand|ship=ID]
+        //   [item=Type/Subtype] [amount=N|all] [price=SC|N%] [id=listing] [kiosk=ID]
         // The kiosk is the nearest one within 20 m unless given.
         private void OnChat(ulong sender, string text, ref bool sendToOthers)
         {
@@ -118,7 +123,9 @@ namespace OctahedronKiosk
             bool faction = false;
             string source = "",
                 item = "",
-                amount = "";
+                amount = "",
+                price = "",
+                listing = "";
             long kiosk = 0;
             foreach (var word in words.Skip(1))
             {
@@ -132,6 +139,10 @@ namespace OctahedronKiosk
                     item = word.Substring(5);
                 else if (word.StartsWith("amount="))
                     amount = word.Substring(7);
+                else if (word.StartsWith("price="))
+                    price = word.Substring(6);
+                else if (word.StartsWith("id="))
+                    listing = word.Substring(3);
                 else if (word.StartsWith("kiosk="))
                     long.TryParse(word.Substring(6), out kiosk);
             }
@@ -142,7 +153,7 @@ namespace OctahedronKiosk
                 MyAPIGateway.Utilities.ShowMessage("Kiosk", "No kiosk near.");
                 return;
             }
-            chatRequests.Add(Send(verb, kiosk, faction, source, item, amount));
+            chatRequests.Add(Send(verb, kiosk, faction, source, item, amount, price, listing));
         }
 
         // A kiosk is a text panel showing this mod's screen; the server plugin selects it
@@ -196,6 +207,19 @@ namespace OctahedronKiosk
             foreach (var row in state.Items)
                 say(
                     $"item {row.Item} mine={KioskState.Amount(row.Mine)} faction={KioskState.Amount(row.Faction)} source={KioskState.Amount(row.Source)}"
+                );
+            if (state.HasMarket)
+                say($"balance mine={state.Balance} faction={state.FactionBalance}");
+            // Only the rows with something to trade, so the chat stays short
+            foreach (var row in state.Market)
+                if (row.OctStock > 0 || row.OfferAmount > 0 || row.OrderAmount > 0)
+                    say(
+                        $"market {row.Item} buys={row.OctBuys} sells={row.OctSells} stock={KioskState.Amount(row.OctStock)} "
+                            + $"offer={row.Offer}x{KioskState.Amount(row.OfferAmount)} order={row.Order}x{KioskState.Amount(row.OrderAmount)} special={(row.Specialty ? 1 : 0)}"
+                    );
+            foreach (var l in state.Listings)
+                say(
+                    $"listing {l.Id} {l.Kind} {l.Item} amount={KioskState.Amount(l.Amount)} price={l.Price} owner={(l.Mine ? "mine" : "faction")}"
                 );
         }
     }
