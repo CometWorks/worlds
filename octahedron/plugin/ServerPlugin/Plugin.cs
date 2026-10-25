@@ -48,7 +48,13 @@ public class Plugin : IPlugin
         LoadConfig();
         new Harmony(Name).PatchAll(Assembly.GetExecutingAssembly());
         MesCluster.Init();
-        ServerCommands.Register(Assembly.GetExecutingAssembly(), typeof(Commands));
+        ServerCommands.Register(
+            Assembly.GetExecutingAssembly(),
+            typeof(Commands),
+            typeof(LedgerCommands),
+            typeof(KioskCommands),
+            typeof(MarketCommands)
+        );
     }
 
     // Called by Magnetar with the manifest's AssetFolder, the Encounters folder
@@ -73,6 +79,9 @@ public class Plugin : IPlugin
             TableHologram.Update();
             ShipyardOrders.Update();
             FreePrints.Update();
+            Ledgers.Update();
+            Kiosks.Update();
+            Market.Update();
             HangarFee.Bind();
         }
         catch (Exception e)
@@ -130,6 +139,7 @@ public class Plugin : IPlugin
     public void Dispose()
     {
         MesCluster.Dispose();
+        Kiosks.Dispose();
         // Harmony patches stay: unpatching all may break other plugins
     }
 }
