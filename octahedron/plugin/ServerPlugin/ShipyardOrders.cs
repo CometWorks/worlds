@@ -439,7 +439,11 @@ internal static class ShipyardOrders
                         quote == null && !plan.Free
                             ? "The station's market did not answer, try again."
                             : $"Your quote for '{plan.Ship}' is on the hologram table's screen"
-                                + (plan.Free ? ", a free build." : $": {quote.Total:N0} SC.")
+                                + (
+                                    plan.Free
+                                        ? ", a free build."
+                                        : $": a paid build ({plan.Paid}), {quote.Total:N0} SC paid by {plan.PayerName}."
+                                )
                                 + " Press the button again to order."
                     )
             );

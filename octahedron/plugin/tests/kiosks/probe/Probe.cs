@@ -137,10 +137,26 @@ public sealed class ProbeCommands : CommandModule
                 ownerId
             )
         );
+        // H2=<fill ratio>: a small hydrogen tank, filled that far
+        var h2 = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("H2="));
+        if (h2 != null)
+        {
+            var tank = Block<MyObjectBuilder_OxygenTank>(
+                "LargeHydrogenTankSmall",
+                new Vector3I(0, 0, 2),
+                ownerId
+            );
+            tank.FilledRatio = float.Parse(h2.Substring(3), CultureInfo.InvariantCulture);
+            grid.CubeBlocks.Add(tank);
+        }
         var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
         var cargo = entity.GetFatBlocks<MyCargoContainer>().First();
         foreach (var pair in items.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
+            if (pair.StartsWith("H2="))
+                continue;
             var f = pair.Split('=');
             if (!MyDefinitionId.TryParse("MyObjectBuilder_" + f[0], out var id))
                 return $"BADITEM {f[0]}";
@@ -171,6 +187,36 @@ public sealed class ProbeCommands : CommandModule
         var c = grid.GetFatBlocks<MyShipConnector>().First();
         var status = ((Sandbox.ModAPI.Ingame.IMyShipConnector)c).Status;
         return $"DOCKED {gridId} {(c.Connected ? "yes" : "no")} status {status} at {V(c.PositionComp.GetPosition())}";
+    }
+
+    [Command(
+        "gas",
+        "The hydrogen in the H2 tanks of a grid and its subgrids: GAS grid-id liters tanks",
+        "!kprobe gas <grid id|grid name>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Gas(string grid)
+    {
+        var found = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .FirstOrDefault(g => g.EntityId.ToString() == grid || g.DisplayName == grid);
+        if (found == null)
+            return $"NOGRID {grid}";
+        var group = MyCubeGridGroups.Static.Mechanical.GetGroup(found);
+        var grids = group == null ? [found] : group.Nodes.Select(n => n.NodeData).ToList();
+        var tanks = grids
+            .SelectMany(g => g.GetFatBlocks<MyGasTank>())
+            .Where(t => t.BlockDefinition.Id.SubtypeName.Contains("Hydrogen"))
+            .ToList();
+        var liters = tanks.Sum(t => t.FilledRatio * t.Capacity);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "GAS {0} {1:0} {2}",
+            found.EntityId,
+            liters,
+            tanks.Count
+        );
     }
 
     [Command("undock", "Disconnects and deletes the probe's ships", "!kprobe undock")]
