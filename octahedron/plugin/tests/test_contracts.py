@@ -230,6 +230,15 @@ def main() -> int:
 
     rig.stop_client()
     rig.stop_server()
+    # The restarted server starts its log anew
+    log_text = "".join(
+        p.read_text(errors="replace")
+        for p in [rig.SERVER_LOG, rig.SERVER_CONFIG / "info.log"]
+        + sorted(rig.SERVER_DATA.glob("SpaceEngineersDedicated*.log"))
+        if p.exists()
+    )
+    check("OCT paid" in log_text, "the server log has the payments")
+    check("OCT could NOT pay" not in log_text, "OCT paid every contract")
     log("restarting")
     rig.start_server()
     remote = rig.start_client()
@@ -245,14 +254,6 @@ def main() -> int:
 
     rig.stop_client()
     rig.stop_server()
-    log_text = "".join(
-        p.read_text(errors="replace")
-        for p in [rig.SERVER_LOG, rig.SERVER_CONFIG / "info.log"]
-        + sorted(rig.SERVER_DATA.glob("SpaceEngineersDedicated*.log"))
-        if p.exists()
-    )
-    check("OCT paid" in log_text, "the server log has the payments")
-    check("OCT could NOT pay" not in log_text, "OCT paid every contract")
     failed = [what for passed, what in checks if not passed]
     print(
         f"{len(checks) - len(failed)}/{len(checks)} contract checks passed", flush=True
