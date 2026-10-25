@@ -235,33 +235,26 @@ MODS = [
     (3415912276, "Skybox: SE1 Alpha Release"),
     (1359618037, "Relative Top Speed"),
     (3816175430, "Trade Lanes MP"),
+    # Blocks for the new station
+    (1359954841, "Rotary Airlock"),
     # Workshop dependencies directly before the mods that need them
     (3040438530, "ToolCore"),
     (3412657089, "OmniCorp The OmniArc Project: Adv Tools"),
-    # Quality of life, mostly client side; the HUD frameworks before the mods using them
-    (1965654081, "Rich HUD Master"),
+    # Quality of life, mostly client side; the HUD framework before the mods using it
     (3237260730, "Block Culling"),
-    (1475392343, "Build Colors"),
     (758597413, "Text HUD API"),
-    (1697184408, "Build Vision 3.0"),
     (3170315974, "Leak Finder"),
     (514062285, "Build Info"),
-    (2923698329, "Camera - Over The Shoulder"),
     (
         806331071,
         "Camera Panning - rotate camera view (+reset 1st person character view)",
     ),
-    (801185519, "Colorful Icons"),
     (2958267813, "GPS Extended"),
-    (2950011596, "Flight Vector"),
-    (2979392197, "Hide Platform Icons"),
-    (2626059962, "HUD - Modern and Fancy"),
     (1469072169, "HUD Compass"),
     (
         3032417765,
         "MultiplayerPredictionSwitcher (Interpolated serverside grid control)",
     ),
-    (2947081810, "Projector Highlighter"),
     (2360788836, "Welder Eyestrain Reduction"),
     # Visuals: meteor effects, and the Grass voxel material's textures (not EarthLike's definition)
     (3685862625, "Enhanced Meteor Visuals"),
