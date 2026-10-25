@@ -109,13 +109,14 @@ def definitions() -> dict[tuple[str, str], tuple[dict[str, int], int]]:
     return found
 
 
-def expected(price: dict[str, int], iron: int) -> tuple[int, int]:
-    """The probe's ship with the iron: its value in SC and its PCU"""
+def expected(price: dict[str, int], iron: int, ships: int = 1) -> tuple[int, int]:
+    """The probe's ships with the iron in all: their value in SC, rounded down once as
+    the plugin does for a faction, and their PCU"""
     milli = iron * price.get(IRON, 0)
     pcu = 0
     for counts, block_pcu in definitions().values():
-        milli += sum(n * price.get(item, 0) for item, n in counts.items())
-        pcu += block_pcu
+        milli += ships * sum(n * price.get(item, 0) for item, n in counts.items())
+        pcu += ships * block_pcu
     log(f"expected: {milli // 1000:,} SC, {pcu} PCU; iron {price.get(IRON)} milli-SC")
     return milli // 1000, pcu
 

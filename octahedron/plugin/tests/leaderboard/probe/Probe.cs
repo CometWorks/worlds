@@ -120,7 +120,7 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "faction",
-        "Makes a faction of a new identity: FACTION tag faction-id founder-id",
+        "Makes a faction of a new identity: FACTION tag faction-id founder-id, or FACTION tag requested",
         "!lbprobe faction <tag>"
     )]
     [Permission(MyPromoteLevel.Admin)]
@@ -139,18 +139,19 @@ public sealed class ProbeCommands : CommandModule
             MyFactionTypes.None
         );
         var faction = factions.TryGetFactionByTag(tag);
+        // On a cluster node the World Authority makes it, a moment later
         return faction == null
-            ? $"FACTION {tag} not created"
+            ? $"FACTION {tag} requested"
             : $"FACTION {tag} {faction.FactionId} {founder}";
     }
 
     [Command(
         "ship",
-        "Builds a ship of the faction's founder 200 m from the station, a connector and a small cargo container with the items: SHIP grid-id",
-        "!lbprobe ship <tag> <station> [Type/Subtype=amount,...]"
+        "Builds a ship of the faction's founder off the station, a connector and a small cargo container with the items: SHIP grid-id",
+        "!lbprobe ship <tag> <station> [Type/Subtype=amount,...] [meters to the station's right, 200]"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string Ship(string tag, string station, string items = "")
+    public string Ship(string tag, string station, string items = "", double offset = 200)
     {
         var faction = MyAPIGateway.Session.Factions.TryGetFactionByTag(tag);
         if (faction == null)
@@ -158,7 +159,7 @@ public sealed class ProbeCommands : CommandModule
         if (StationGrid(station) is not { } grid)
             return "NOSTATION";
         long owner = faction.FounderId;
-        var position = grid.PositionComp.WorldAABB.Center + grid.WorldMatrix.Right * 200;
+        var position = grid.PositionComp.WorldAABB.Center + grid.WorldMatrix.Right * offset;
         var ship = new MyObjectBuilder_CubeGrid
         {
             EntityId = 0,
@@ -199,14 +200,26 @@ public sealed class ProbeCommands : CommandModule
         return $"SHIP {entity.EntityId}";
     }
 
-    [Command("close", "Deletes a grid", "!lbprobe close <grid id>")]
+    [Command(
+        "grids",
+        "The grids whose biggest owner is in the faction: GRID id name blocks x y z",
+        "!lbprobe grids <tag>"
+    )]
     [Permission(MyPromoteLevel.Admin)]
-    public string Close(long id)
+    public string Grids(string tag)
     {
-        if (!MyEntities.TryGetEntityById(id, out MyCubeGrid grid))
-            return "NOGRID";
-        grid.Close();
-        return "CLOSED " + id;
+        var lines = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .Where(g =>
+                g.BigOwners.Count > 0
+                && MySession.Static.Factions.GetPlayerFaction(g.BigOwners[0])?.Tag == tag
+            )
+            .Select(g =>
+                $"GRID {g.EntityId} {g.DisplayName} {g.BlocksCount} {V(g.PositionComp.GetPosition())}"
+            )
+            .ToList();
+        return lines.Count == 0 ? "GRIDS none" : string.Join("\n", lines);
     }
 
     [Command(

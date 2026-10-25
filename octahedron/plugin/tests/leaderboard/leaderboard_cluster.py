@@ -9,13 +9,14 @@ CLUSTER_TEST_DIR is the Test/ folder of a CometWorks/cluster checkout with its h
 `uv sync` done; run this with that folder's virtualenv python. One regular node + WA, no client.
 The world is the Octahedron world as tests/rig.py prepares it. The Octahedron plugin, built from
 this working copy against MAGNETAR_HOME's PluginSdk, runs on both; the probe
-(tests/leaderboard/probe) on node-1 makes two factions of fresh identities, LBC and LBD, a ship of
-LBC's near Alpha Station, and runs the admin commands as the server console.
+(tests/leaderboard/probe) on node-1 makes two factions of fresh identities, LBC and LBD, ships of
+LBC's near Alpha Station, and runs the admin commands as the server console. LBD sells iron to OCT
+for some cash.
 
 Checks: the WA serves the leaderboard and counts no grids; both factions ranked with their
 accounts, the NPC factions and OCT not; the ship's value and PCU as worked out from the game's
 block definitions and OCT's prices (test_leaderboard.py); money held for a market order counted;
-Alpha's 8 panels written on node-1 in Monospace; the ship gone, the next count drops it.
+Alpha's 8 panels written on node-1 in Monospace; a second ship, and the panel refreshes with both.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ TEST_DIR = Path(sys.argv[1]).resolve()
 sys.path[:0] = [str(TEST_DIR), str(TEST_DIR.parent / "Cli"), str(PLUGIN / "tests")]
 os.environ.setdefault("OCT_TASK", "SE-698")
 
+import hostenv  # noqa: E402,F401  (loads host.env: MAGNETAR_HOME for the build)
 import rig  # noqa: E402  (the world copy; claims the task's slot, starts nothing)
 import test_leaderboard as lb  # noqa: E402
 
@@ -120,6 +122,12 @@ class Probe:
         return [l.split("\t", 1)[1] for l in lines if l.split("\t", 1)[0] == str(step)]
 
     def run(self, line: str, timeout: float = 120, settle: float = 3) -> str:
+        if line.startswith("wait "):
+            # The probe waits without a step of its own
+            with PLAN.open("a") as plan:
+                plan.write(line + "\n")
+            time.sleep(float(line.split()[1]) + 2)
+            return ""
         step = self.step
         self.step += 1
         with PLAN.open("a") as plan:
@@ -131,6 +139,15 @@ class Probe:
             time.sleep(1)
         time.sleep(settle)
         return " | ".join(self.replies(step))
+
+    def ask(self, line: str, settle: float = 3) -> str:
+        """run, again when the World Authority turned the request away for a moment (Fenced)"""
+        for _ in range(4):
+            reply = self.run(line, settle=settle)
+            if "did not answer" not in reply:
+                return reply
+            self.run("wait 10")
+        return reply
 
 
 def run(bench) -> None:
@@ -151,7 +168,7 @@ def run(bench) -> None:
     probe = Probe()
 
     def board() -> dict[str, dict]:
-        reply = probe.run("!oct leaderboard", settle=4)
+        reply = probe.ask("!oct leaderboard", settle=4)
         rows = lb.rows_of(reply)
         bench.record(f"board-{probe.step}", reply)
         return rows
@@ -163,27 +180,37 @@ def run(bench) -> None:
         "Ranking the leaderboard on the World Authority" in log("wa-1"),
     )
 
+    # A node asks the WA for a new faction; it comes back a moment later
     for tag in ("LBC", "LBD"):
-        reply = probe.run(f"!lbprobe faction {tag}")
-        check(f"faction {tag} made on node-1", f"FACTION {tag} " in reply, reply)
-    probe.run("wait 5")
+        probe.run(f"!lbprobe faction {tag}")
+    deadline = time.monotonic() + 120
     rows = board()
+    while set(rows) != {"LBC", "LBD"} and time.monotonic() < deadline:
+        probe.run("wait 5")
+        rows = board()
     check("only the players' factions", set(rows) == {"LBC", "LBD"}, rows)
     lbc, lbd = rows.get("LBC", {}), rows.get("LBD", {})
-    cash = lbc.get("cash", -1)
-    check("LBC has its new account", cash > 0 and lbd.get("cash") == cash, rows)
+    check("new factions have 0 SC", lbc.get("cash") == lbd.get("cash") == 0, rows)
     check("no grids yet", lbc.get("grids") == 0 and lbc.get("pcu") == 0, lbc)
-    reply = probe.run("!oct market show Alpha faction:LBC")
+    # LBD sells iron to OCT for some cash, through the WA
+    probe.run(f"!oct ledger deposit Alpha faction:LBD {lb.IRON} 500")
+    probe.run(f"!oct market do sell Alpha faction:LBD {lb.IRON} 500")
+    reply = probe.ask("!oct market show Alpha faction:LBD")
     m = re.search(r"balance ([\d,]+) SC", reply)
-    check("the cash is the account the WA keeps", m and lb.number(m[1]) == cash, reply)
+    cash = lb.number(m[1]) if m else -1
+    rows = board()
+    check(
+        "LBD's cash is the account the WA keeps",
+        cash > 0 and rows.get("LBD", {}).get("cash") == cash,
+        f"{cash} {rows}",
+    )
 
     reply = probe.run(f"!lbprobe ship LBC Alpha {lb.IRON}=1000")
-    ship = re.search(r"SHIP (\d+)", reply)
-    check("the probe built LBC's ship near Alpha", ship, reply)
+    check("the probe built LBC's ship near Alpha", "SHIP " in reply, reply)
     names = [s.strip() for s in probe.run("!oct ledger stations").split(",")]
     check("7 stations", len(names) == 7, names)
     price = lb.prices(
-        lambda station: probe.run(f'!oct market show "{station}" faction:LBC all'),
+        lambda station: probe.ask(f'!oct market show "{station}" faction:LBC all'),
         names,
     )
     value, pcu = lb.expected(price, iron=1000)
@@ -191,48 +218,65 @@ def run(bench) -> None:
     lbc, lbd = rows.get("LBC", {}), rows.get("LBD", {})
     check("the ship's value", lbc.get("grids") == value, f"{lbc} vs {value}")
     check("the ship's PCU", lbc.get("pcu") == pcu, f"{lbc} vs {pcu}")
-    check("LBC ranks first", lbc.get("rank") == 1 and lbd.get("rank") == 2, rows)
+    first = "LBC" if value > cash else "LBD"
+    check(f"{first} ranks first", rows.get(first, {}).get("rank") == 1, rows)
 
-    reply = probe.run("!oct market do order Alpha faction:LBC Ingot/Gold 1000 1")
+    reply = probe.run("!oct market do order Alpha faction:LBD Ingot/Gold 1000 1")
+    after = re.search(
+        r"balance ([\d,]+) SC", probe.ask("!oct market show Alpha faction:LBD")
+    )
     rows = board()
     check(
         "money held for an order still counts",
-        rows.get("LBC", {}).get("cash") == cash,
-        f"{reply} -> {rows}",
+        after
+        and lb.number(after[1]) == cash - 1000
+        and rows.get("LBD", {}).get("cash") == cash,
+        f"{reply} {after and after[1]} -> {rows}",
     )
 
     reply = probe.run("!lbprobe panel Alpha")
     check(
         "Alpha's 8 panels in Monospace",
-        "PANEL 8 TEXT_AND_IMAGE Monospace" in reply,
+        re.match(r"PANEL 8 TEXT_AND_IMAGE \S*Monospace ", reply) is not None,
         reply,
     )
+    rank = rows.get("LBC", {}).get("rank", 0)
     line = next((l for l in reply.split(" | ") if " LBC " in l), "")
     check(
         "LBC's row on the panel",
-        line.startswith(" 1  LBC") and line.endswith(f"{cash + value:,} {pcu:>7,}"),
+        line.startswith(f"{rank:>2}  LBC") and line.endswith(f"{value:,} {pcu:>7,}"),
         reply,
     )
 
-    probe.run(f"!lbprobe close {ship[1] if ship else 0}")
-    probe.run(f"wait {2 * INTERVAL}")
-    reply = probe.run("!lbprobe panel Alpha")
-    line = next((l for l in reply.split(" | ") if " LBC " in l), "")
+    # A second ship: the panel refreshes on its own with both
+    both, both_pcu = lb.expected(price, iron=1500, ships=2)
+    bench.record("grids-before-second", probe.run("!lbprobe grids LBC"))
+    probe.run(f"!lbprobe ship LBC Alpha {lb.IRON}=500 -200")
+    ending = f"{both:,} {both_pcu:>7,}"
+    deadline = time.monotonic() + 6 * INTERVAL
+    line = ""
+    while not line.endswith(ending) and time.monotonic() < deadline:
+        probe.run("wait 3")
+        reply = probe.run("!lbprobe panel Alpha")
+        line = next((l for l in reply.split(" | ") if " LBC " in l), "")
     check(
-        "the panel refreshed without the ship", line.endswith(f"{cash:,} {0:>7}"), reply
+        "the panel refreshed with both ships",
+        line.endswith(ending),
+        f"{line!r} vs {ending}; {probe.run('!lbprobe grids LBC')}",
     )
 
     wa, node = log("wa-1"), log(NODE)
-    counted = re.findall(lb.COUNTED, node)
-    check("node-1 counts its grids", counted, counted[-3:])
+    counted = [tuple(map(int, c)) for c in lb.COUNTED.findall(node)]
+    check("node-1 counts its grids", counted and counted[-1][0] > 0, counted[-3:])
     check("the WA counts none", "Leaderboard: counted" not in wa)
+    written = re.findall(r"factions on (\d+) of (\d+) panels", node)
     check(
-        "no leaderboard errors",
-        not re.search(
-            r"Leaderboard: (no prices|the World Authority did not)|leaderboard failed",
-            wa + node,
-        ),
+        "every panel node-1 has written",
+        written and all(int(a) == int(b) > 0 for a, b in written),
+        written[-3:],
     )
+    # Before the WA is up a node's first count finds no prices and retries
+    check("the leaderboard never failed", "leaderboard failed" not in wa + node)
     bench.record(
         "leaderboard-lines",
         "\n".join(l for l in (wa + node).splitlines() if "eaderboard" in l)[-20000:],
