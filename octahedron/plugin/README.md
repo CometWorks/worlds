@@ -219,6 +219,15 @@ the ship for them, for at most `ShipyardOrderMinutes` (60; 0 turns orders off).
 - It is free, so only a player with less than `FreeBuildPcuLimit` (10,000) PCU
   may order, counted as for the starter ship, and the blueprint may have at most
   `GroupPcuLimit` PCU, the cap of a ship.
+- A player gets one free ship at a time, then waits `FreeBuildCooldownMinutes`
+  (60) for the next. The wait starts when an order ends with the ship handed
+  over, finished or not; an order whose ship was removed starts none. The plugin
+  keeps the times in the world variable `Octahedron-FreePrints`, on a cluster in
+  the World Authority's world: the node ending an order sends the time to every
+  process, and a starting node asks the World Authority for the list.
+- A free ship can't have the blocks `FreeBuildBlockedBlocks` names (by default
+  prototech blocks, large ion thrusters and jump drives). Such a ship is a paid
+  build; the shipyard refuses it, naming the blocks, until paid builds come.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
   shipyard. The space must be empty: a ship left there has to fly out first.

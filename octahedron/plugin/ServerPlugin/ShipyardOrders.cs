@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using HarmonyLib;
 using PluginSdk.Commands;
 using Sandbox;
@@ -35,6 +36,10 @@ namespace ServerPlugin;
 // and the leftover components are removed, and the ship, finished or not, becomes the
 // player's dynamic ship.
 //
+// Orders are free builds, for players under FreeBuildPcuLimit. A player gets one at a time and
+// waits FreeBuildCooldownMinutes after one ends before the next (FreePrints), and a free
+// build can't have the blocks in FreeBuildBlockedBlocks.
+//
 // The order lives in the world, in the scaffold projector's CustomData, so it survives a
 // restart and moves with the station's partition on a cluster: every node checks the
 // shipyards it simulates every 10 s.
@@ -62,6 +67,9 @@ internal static class ShipyardOrders
 
     private static int ticks;
 
+    private static string blockedPatterns;
+    private static Regex blockedRegex;
+
     public static CommandReply Request(long identityId, string tableName)
     {
         var config = Plugin.Config;
@@ -79,6 +87,18 @@ internal static class ShipyardOrders
             return CommandReply.Error(
                 $"You have {pcu:N0} PCU. The shipyard builds for free only for players under {config.FreeBuildPcuLimit:N0} PCU."
             );
+        var building = orders.Values.FirstOrDefault(o => o.Player == identityId);
+        if (building != null)
+            return CommandReply.Error(
+                $"The shipyard is building '{building.Projector.CubeGrid.DisplayName}' for you, one free ship at a time."
+            );
+        if (!FreePrints.Ready)
+            return CommandReply.Error("The shipyard is busy, try again in a few seconds.");
+        var wait = FreePrints.Wait(identityId);
+        if (wait > TimeSpan.Zero)
+            return CommandReply.Error(
+                $"The shipyard builds your next free ship in {Math.Ceiling(wait.TotalMinutes)} min."
+            );
 
         var table = StarterShip.FindTable(character, tableName, config);
         if (table == null)
@@ -91,6 +111,12 @@ internal static class ShipyardOrders
         if (blueprint == null || blueprint.Count == 0)
             return CommandReply.Error(
                 "Switch the hologram table on and load a blueprint into it first."
+            );
+        var blocked = Blocked(blueprint, config.FreeBuildBlockedBlocks);
+        if (blocked.Count > 0)
+            return CommandReply.Error(
+                $"A free ship can't have {string.Join(", ", blocked)}. Such a ship is a paid build, "
+                    + "and the shipyard doesn't take paid orders yet."
             );
 
         // The ordered ship is the player's, so GroupPcuLimit would stop welding it there
@@ -319,6 +345,7 @@ internal static class ShipyardOrders
             ship.RazeGeneratedBlocks(scaffold);
             MyMultiplayer.RaiseEvent(ship, x => x.RazeBlocksClient, scaffold);
             HandOver(ship, order.Player);
+            FreePrints.Ended(order.Player);
             if (ship.IsStatic)
                 MyMultiplayer.RaiseEvent(ship, x => x.OnConvertToDynamic);
         }
@@ -511,6 +538,46 @@ internal static class ShipyardOrders
             }
         }
         return start != null;
+    }
+
+    // The blueprint's blocks matching FreeBuildBlockedBlocks, counted by name: "2 Jump Drive"
+    private static List<string> Blocked(List<MyObjectBuilder_CubeGrid> grids, string patterns)
+    {
+        if (blockedPatterns != patterns)
+        {
+            blockedPatterns = patterns;
+            var globs = patterns
+                .Split(',')
+                .Select(p => p.Trim())
+                .Where(p => p.Length > 0)
+                .Select(p => Regex.Escape(p).Replace(@"\*", ".*"))
+                .ToList();
+            blockedRegex =
+                globs.Count == 0
+                    ? null
+                    : new Regex(
+                        $"^(?:{string.Join("|", globs)})$",
+                        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase
+                    );
+        }
+        if (blockedRegex == null)
+            return [];
+        return grids
+            .SelectMany(g => g.CubeBlocks)
+            .Select(b => b.GetId())
+            .Where(id =>
+                blockedRegex.IsMatch(
+                    $"{id.TypeId.ToString().Replace("MyObjectBuilder_", "")}/{id.SubtypeName}"
+                )
+            )
+            .GroupBy(id =>
+                MyDefinitionManager.Static.TryGetCubeBlockDefinition(id, out var definition)
+                    ? definition.DisplayNameText
+                    : id.SubtypeName
+            )
+            .OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Count()} {g.Key}")
+            .ToList();
     }
 
     private static MyObjectBuilder_Projector Projector(
