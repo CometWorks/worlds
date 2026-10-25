@@ -346,6 +346,112 @@ the start of it, and amounts are in units:
 !oct ledger show Alpha
 ```
 
+### Station kiosks
+
+Players use the station services on the station's kiosk, a touch screen; the
+chat commands are for admins. A kiosk is a text panel on a station's grids named
+`KioskBlockName` (`LCD Panel - Station Lounge StationStorefront`, one per
+station in the current blueprint). The station blueprints must keep the kiosks
+clear of the landing pads, so landing ships hit neither the screen nor the
+player in front of it.
+
+The screens come from the Octahedron Kiosk client mod (`../kiosk-mod`), built on
+TouchScreenAPI (Workshop 2668820525); both must be in the world's mods. The
+plugin selects the mod's screen script, `KioskScript`, on every kiosk. The mod
+only draws and sends the player's requests as mod messages; the plugin checks
+each one and does the work:
+
+- The player must stand within `KioskReachMeters` (5 m) of the kiosk, and makes
+  one request at a time, at most one every `KioskCooldownSeconds` (0.5 s).
+- Deposit and withdraw move items between a docked ship and the ledger. A ship
+  is docked when a connector of the station holds it; the kiosk lists every such
+  ship the player has inventory access to, by the game's ownership and share
+  rules, and works on the one they pick. Its items are those in the cargo
+  containers and connectors of its mechanical group (rotors, pistons and hinges
+  included) that the player may open; withdrawn items go into the cargo
+  containers first. Only what fits is withdrawn. Gas bottles are not taken.
+- From hand works on the player's character inventory instead of a ship.
+- The Faction switch works on the faction's ledger. It needs a rank allowed to
+  trade: leaders and the founder, or every member when a leader or the founder
+  turned that on at the kiosk. The setting is kept with the ledgers.
+- Transfer moves items between the player's and their faction's ledger at the
+  station. Any member gives; taking needs the trading rank.
+
+Items leave the ship before they enter the ledger, and the ledger gives them
+before they arrive, so nothing is ever in both. A refused deposit puts the items
+back. A withdrawal that no longer fits when it arrives goes back into the
+ledger. If the World Authority of a cluster doesn't answer a deposit, the items
+stay taken and the operation id is logged for an admin. Each client draws its
+own screen, so several players can use one kiosk at once.
+
+`!oct kiosks` (admin) lists the kiosks the plugin found, with their station and
+screen script.
+
+### Station market
+
+With `MarketEnabled` on, the kiosks' Market tab trades items in the station ledgers
+for money in the bank accounts. The operator trades for their own ledger and
+account, or with the Faction switch and the trading rank for the faction's. Items
+and money move in one step: a sale that can't move both moves neither.
+
+- Buy takes the cheapest offers at the station first and OCT's stock at its price
+  among them; Sell goes to the best orders first, then to OCT. Nobody trades with
+  their own listings. Every sale between players pays `MarketFeePercent` (5 %) of
+  its price to OCT.
+- Offer lists items of the ledger at a price per unit; they stay reserved in the
+  ledger and still count toward its limit. Order lists items wanted at a price; the
+  money for them leaves the account until the order is filled, canceled or expires.
+  A price is in SC or a percent of the station's reference price ("80%"). Listings
+  expire after `MarketListingDays` (7), which gives the items or the money back. A
+  player or faction may have `MarketMaxListings` (20) listings at a station. An
+  order is passed over while its owner's ledger has no room for the items.
+- OCT (`MoneyAuthorityFactionTag`) is the market maker of last resort. Its catalog
+  is the same at every station: the items matching `MarketCatalog` but not
+  `MarketCatalogExcluded` with a reference price, the game's minimal price / 10
+  (`MarketPrices` sets one where the game has none). It sells what its ledger at the
+  station holds at `MarketOctSellPercent` (140 %) of the reference and buys at
+  `MarketOctBuyPercent` (60 %) until it holds `MarketOctMaxStockTonnes` (200 t) of
+  the item there. Its ledger has no other limit.
+- Each UTC day OCT adds `MarketDailyStock` (20 t of components and basic
+  materials) to its ledger at every station, up to the same 200 t. Its
+  acquisition contracts ask for what it lacks of that list (`Market.Missing`).
+- `MarketSpecialties` names what each station buys at `MarketSpecialtyPercent`
+  (80 %), up to `MarketSpecialtyDailyTonnes` (50 t) a UTC day per station; past
+  that OCT pays its normal price. Alpha: platinum and magnesium, Gamma: iron,
+  nickel and gravel, Beta: gold, silver and organics, Delta: cobalt and silicon,
+  Moon: uranium, ore and ingots alike. North and South have none.
+- OCT's prices are per station and drift with the volume: the net tonnes bought of
+  an item at a station (sales count negative) raise its price there, doubling it
+  at `MarketPriceDriftTonnes` (100 t), or lower it the same way, at most
+  `MarketPriceDriftMax` (2) times either way. Half of the drift wears off in
+  `MarketPriceDriftHalfLifeHours` (24 h).
+- OCT's stations have no generated store items: the plugin stops the game's
+  generator for OCT and empties what its stations had. Players' own store blocks
+  work as before.
+
+The market is kept with the ledgers, by the server or the World Authority of a
+cluster, as the sandbox variable `Octahedron.Market`: the listings, the money held
+for orders, the day's specialty purchases and the price drift. Nodes send their
+requests there as cluster-wide commands, once per operation id. Every trade is
+logged.
+
+Admin commands, for tests and support: `!oct market show <station> [owner] [all]`,
+`!oct market do <buy|sell|offer|order|cancel> <station> <owner> <item|listing>
+[amount] [price]`, `!oct market tick [force]` (expire listings, and with force
+restock OCT now), `!oct market stores [tick]` (the game's store items of OCT's
+stations, after an economy tick) and `!oct market age <listing> <days>`.
+
+### Hangar fee
+
+With Hangar 1.1.0 or later on the server, set to `AdminSafeZonesOnly`, players store
+and retrieve their ships only inside a station's safe zone, the world's only admin
+safe zones, and Hangar records the zone on each stored ship. A ship comes back free at
+the station it was stored at. At another station it costs `HangarRetrieveFeePer10Pcu`
+(1) SC per 10 PCU, rounded up, paid to OCT: the labor fee of building it, with no wait,
+and the ship keeps its inventory. A player who can't pay is told the price and the
+ship stays stored. The plugin hooks Hangar by reflection, so it still runs without
+Hangar, or with an older one, where retrieval is free.
+
 ### Contracts
 
 With `ContractsEnabled` on, OCT (`MoneyAuthorityFactionTag`) posts the stations'
@@ -361,16 +467,13 @@ Every minute the plugin fills each station up again:
   `ContractHaulingRewardPerKm` (20 SC) per km between the stations, and has
   `ContractHaulingMinutes` (20) plus a minute for every 3 km to arrive. The package
   is the game's: it goes into the player's inventory when they take the contract.
-- Acquisitions: `ContractAcquisitionItems` lists what OCT keeps in stock at each
-  station (`Ingot/Iron=20000,...`). For an item its ledger there holds less of, OCT
-  posts one acquisition for the rest, less what open and taken acquisitions bring
-  already, at most `ContractAcquisitionMaxAmount` (5,000) items, paying
-  `ContractAcquisitionPricePercent` (100 %) of the reference price (the game's
-  minimal price / 10). The player delivers the items at the station's contract
-  block from their docked ship or inventory, and they go into OCT's ledger there,
-  not into the station's containers. An acquisition that would take OCT's ledger
-  past `LedgerFactionLimitTonnes` isn't posted. The market's catalog (SE-684) will
-  take over the stock list.
+- Acquisitions: for each item of the market's daily stock (`MarketDailyStock`) that
+  OCT's ledger at a station holds less of, OCT posts one acquisition for the rest,
+  less what open and taken acquisitions bring already, at most
+  `ContractAcquisitionMaxAmount` (5,000) items, paying `ContractAcquisitionPricePercent`
+  (100 %) of the market's reference price. The player delivers the items at the
+  station's contract block from their docked ship or inventory, and they go into
+  OCT's ledger there, not into the station's containers.
 - Bounties: up to `ContractBountiesPerStation` (3) on the NPC grids within
   `ContractBountyRangeKm` (30 km) of the station with a threat score (MES's, as the
   spawn gate counts it) of at least `ContractBountyMinThreat` (50), the highest
@@ -695,8 +798,12 @@ on (and the game's with them off), the tax by `!oct taxday`, two payouts by
 `!oct payday`, OCT topped up to its floor, the day's totals and the state read back
 after a restart. `OCT_WORLD_SOURCE` points the rig at a world built by
 `build_world.py` instead of `octahedron/server`. `tests/money/MoneyTests` checks the
-arithmetic of the tax and the payout alone
+arithmetic of the tax, the payout and Hangar's retrieval fee alone
 (`dotnet run -c Release --project tests/money/MoneyTests`).
+`tests/test_hangar_fee.py` checks the Hangar fee with the client and a Hangar working
+copy (`OCT_HANGAR_REPO`) on the server holding ships stored at the stations: a load
+outside the safe zones refused, the same station free, another station 100 SC for
+1,000 PCU paid to OCT, a fee the player can't pay refused, and a fee of 0 free.
 `tests/mes/` holds MesCluster's tests for the MES spawn gate:
 `CellPatternTests` checks the cell pattern against a brute-force definition
 (`dotnet run -c Release --project tests/mes/CellPatternTests`); `ds/run.py PLAN [cfg]`
@@ -711,6 +818,23 @@ the mods' shares of 2,000 spawn attempts per type and place.
 `tests/ledgers/LedgerTests` checks the ledgers' bookkeeping without the game
 (`dotnet run -c Release --project tests/ledgers/LedgerTests`): limits, reservations,
 batches that apply all or none, and the saved and wire formats.
+`LedgerTests` also checks the kiosks' requests, replies and trading rules.
+`tests/test_kiosks.py` checks the kiosks with the client and both mods loaded:
+the probe plugin in `tests/kiosks/probe` docks ships at Alpha Station and sets
+the player's faction rank, and the client sends the kiosk mod's requests with
+its admin command `/kiosk`, through the same mod messages as the touch screens.
+It covers reach, the ship list by access, deposit and withdraw with a ship and
+from hand, the ledger limit, the Faction switch, Transfer and the members
+setting; not the touch input itself.
+`tests/market/MarketTests` checks the market's bookkeeping without the game
+(`dotnet run -c Release --project tests/market/MarketTests`): OCT's prices, stock,
+specialty and drift, buying and selling through listings and OCT all or none, the
+fee, limits, cancel and expiry, the formats, and that no money is made or lost.
+`tests/test_market.py` checks the market in game with the client and both mods,
+through the kiosk mod's `/kiosk` requests at Alpha Station: OCT's daily stock and
+prices, the game's store items gone, buying from OCT, Alpha's specialty and its
+quota, a faction offer and a player's order with the fee, the trading rank, the
+listing limit and expiry, and the market after a restart.
 `tests/test_ledgers.py` checks them in game with the client's admin commands, the
 game's item masses and the config, then restarts the server and finds them as they
 were saved.
@@ -720,7 +844,7 @@ on an NPC grid and salvage of a derelict placed near Alpha Station, a hauling an
 acquisition handed in and paid by OCT with the items in OCT's ledger, the derelict
 finished at the shipyard by the plugin, the bounty completed, and after a restart the
 same open contracts. `tests/contracts/ContractTests` checks the rewards, time limits
-and stock list alone (`dotnet run -c Release --project tests/contracts/ContractTests`).
+and amounts alone (`dotnet run -c Release --project tests/contracts/ContractTests`).
 `tests/test_hologram.py` takes screenshots of fitted holograms, a blueprint with
 a cockpit and one without, from the side, the front and above, on a bench of two
 tables in open space; it needs a rendering client.

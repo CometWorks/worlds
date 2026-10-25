@@ -24,9 +24,11 @@ from test_client import log
 
 checks: list[tuple[bool, str]] = []
 # Options of the test on top of the world's config: a gold stock a character can carry,
+# without the market's daily restock, which would fill it before the first contracts;
 # a low threat for the small test grid
 OPTIONS = {
-    "ContractAcquisitionItems": "Ingot/Gold=10",
+    "MarketEnabled": "false",
+    "MarketDailyStock": "Ingot/Gold=10",
     "ContractAcquisitionMaxAmount": 10,
     "ContractBountyMinThreat": 1,
     "ContractSalvageRadius": 3000,

@@ -179,17 +179,40 @@ internal static class Ledgers
             );
             return;
         }
-        var payload = Encoding.UTF8.GetBytes(LedgerOp.EncodeBatch(ops));
-        _ = ExecuteRemote(operationId, payload, done);
+        Call(
+            Command,
+            operationId,
+            LedgerOp.EncodeBatch(ops),
+            (outcome, text) =>
+                done(
+                    outcome == LedgerOutcome.Applied && text != Applied
+                        ? new LedgerResult(LedgerOutcome.Refused, text)
+                        : new LedgerResult(outcome, outcome == LedgerOutcome.Applied ? null : text)
+                )
+        );
     }
 
-    private static async Task ExecuteRemote(
+    /// <summary>
+    /// Runs a global command of this plugin on the World Authority, retried with the same
+    /// operation id. <paramref name="done"/> gets, on the game thread, Applied with the command's
+    /// answer, Refused with why, or Unknown when the World Authority didn't answer.
+    /// </summary>
+    public static void Call(
+        string command,
+        Guid operationId,
+        string payload,
+        Action<LedgerOutcome, string> done
+    ) => _ = CallRemote(command, operationId, Encoding.UTF8.GetBytes(payload), done);
+
+    private static async Task CallRemote(
+        string command,
         Guid operationId,
         byte[] payload,
-        Action<LedgerResult> done
+        Action<LedgerOutcome, string> done
     )
     {
-        var result = new LedgerResult(LedgerOutcome.Unknown, "The World Authority did not answer.");
+        var outcome = LedgerOutcome.Unknown;
+        string text = "The World Authority did not answer.";
         try
         {
             for (int attempt = 0; attempt < Attempts; attempt++)
@@ -197,36 +220,28 @@ internal static class Ledgers
                 if (attempt > 0)
                     await Task.Delay(TimeSpan.FromSeconds(1 << attempt)).ConfigureAwait(false);
                 var reply = await Plugin
-                    .Cluster.ExecuteGlobalAsync(Command, payload, operationId, Timeout)
+                    .Cluster.ExecuteGlobalAsync(command, payload, operationId, Timeout)
                     .ConfigureAwait(false);
                 if (reply.Code == PluginResultCode.Success)
                 {
-                    string text = Encoding.UTF8.GetString(reply.Payload ?? []);
-                    result =
-                        text == Applied
-                            ? new LedgerResult(LedgerOutcome.Applied, null)
-                            : new LedgerResult(LedgerOutcome.Refused, text);
+                    outcome = LedgerOutcome.Applied;
+                    text = Encoding.UTF8.GetString(reply.Payload ?? []);
                     break;
                 }
                 if (reply.Code is PluginResultCode.Invalid or PluginResultCode.Conflict)
                 {
-                    result = new LedgerResult(
-                        LedgerOutcome.Refused,
-                        reply.Error ?? reply.Code.ToString()
-                    );
+                    outcome = LedgerOutcome.Refused;
+                    text = reply.Error ?? reply.Code.ToString();
                     break;
                 }
-                result = new LedgerResult(
-                    LedgerOutcome.Unknown,
-                    $"The World Authority did not answer ({reply.Code})."
-                );
+                text = $"The World Authority did not answer ({reply.Code}).";
             }
         }
         catch (Exception e)
         {
-            Plugin.Log.Error("Ledger command failed", e);
+            Plugin.Log.Error($"Global command {command} failed", e);
         }
-        OnGameThread(() => done(result));
+        OnGameThread(() => done(outcome, text));
     }
 
     /// <summary>
@@ -240,39 +255,63 @@ internal static class Ledgers
             done(Book.Extract(station, owner), null);
             return;
         }
-        _ = ReadRemote(station, owner, done);
+        Ask(
+            ReadTopic,
+            station + "\t" + owner,
+            (text, error) =>
+            {
+                if (text == null)
+                {
+                    done(null, error);
+                    return;
+                }
+                LedgerBook copy = null;
+                try
+                {
+                    copy = LedgerBook.Deserialize(text, GameRules);
+                }
+                catch (FormatException e)
+                {
+                    Plugin.Log.Error("Ledger read failed", e);
+                }
+                done(copy, copy == null ? "The ledger could not be read." : null);
+            }
+        );
     }
 
-    private static async Task ReadRemote(
-        string station,
-        LedgerOwner? owner,
-        Action<LedgerBook, string> done
-    )
+    /// <summary>
+    /// Asks the World Authority for something one of this plugin's handlers answers: the answer, or
+    /// null with the reason, to <paramref name="done"/> on the game thread.
+    /// </summary>
+    public static void Ask(string topic, string payload, Action<string, string> done) =>
+        _ = AskRemote(topic, Encoding.UTF8.GetBytes(payload), done);
+
+    private static async Task AskRemote(string topic, byte[] payload, Action<string, string> done)
     {
-        LedgerBook copy = null;
+        string text = null;
         string error = null;
         try
         {
             var reply = await Plugin
                 .Cluster.RequestAsync(
                     new PluginTarget { Kind = PluginTargetKind.WorldAuthority },
-                    ReadTopic,
-                    Encoding.UTF8.GetBytes(station + "\t" + owner),
+                    topic,
+                    payload,
                     Guid.NewGuid(),
                     Timeout
                 )
                 .ConfigureAwait(false);
             if (reply.Code == PluginResultCode.Success)
-                copy = LedgerBook.Deserialize(Encoding.UTF8.GetString(reply.Payload), GameRules);
+                text = Encoding.UTF8.GetString(reply.Payload ?? []);
             else
                 error = $"The World Authority did not answer ({reply.Code}).";
         }
         catch (Exception e)
         {
-            Plugin.Log.Error("Ledger read failed", e);
-            error = "The ledger could not be read.";
+            Plugin.Log.Error($"Request {topic} failed", e);
+            error = "The World Authority could not be asked.";
         }
-        OnGameThread(() => done(copy, error));
+        OnGameThread(() => done(text, error));
     }
 
     private static void OnGameThread(Action action) =>
@@ -373,13 +412,16 @@ internal static class Ledgers
             return true;
         }
 
+        // OCT, the market maker, keeps up to the market's stock limit of each item instead
         public double LimitKg(LedgerOwner owner) =>
-            1000
-            * (
-                owner.Faction
-                    ? Plugin.Config.LedgerFactionLimitTonnes
-                    : Plugin.Config.LedgerPlayerLimitTonnes
-            );
+            Market.On && owner.Faction && owner.Id == Market.OctId
+                ? 0
+                : 1000
+                    * (
+                        owner.Faction
+                            ? Plugin.Config.LedgerFactionLimitTonnes
+                            : Plugin.Config.LedgerPlayerLimitTonnes
+                    );
 
         public bool KnownStation(string station) => StationNames().Contains(station);
 

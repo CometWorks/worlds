@@ -25,7 +25,7 @@ namespace ServerPlugin;
 // OCT posts the stations' contracts in the game's own contract system, in place of the game's
 // generator, and pays every reward from its account:
 // - hauling: a package to another station, the game's delivery contract;
-// - acquisition: items OCT's ledger at the station lacks (ContractAcquisitionItems), delivered at
+// - acquisition: items OCT's ledger at the station lacks (the market's daily stock), delivered at
 //   the station's contract block into OCT's ledger there;
 // - bounty: an NPC grid near the station, done when its threat score drops to a quarter or it is
 //   gone while the hunter is near;
@@ -68,7 +68,6 @@ internal static class Contracts
     private static readonly Random Random = new();
     private static DateTime nextPost;
     private static DateTime nextTrack;
-    private static string badStock;
 
     private static OctahedronConfig Config => Plugin.Config;
     public static bool On => Config.Enabled && Config.ContractsEnabled;
@@ -128,7 +127,6 @@ internal static class Contracts
             .ActiveContracts.OfType<MyContract>()
             .Where(c => Ours(c, oct.FactionId))
             .ToList();
-        var stock = Stock();
         int hauling = 0,
             acquisitions = 0,
             bounties = 0,
@@ -141,7 +139,7 @@ internal static class Contracts
                 .Where(c => Ours(c, oct.FactionId))
                 .ToList();
             hauling += Haul(system, station, stations, open);
-            acquisitions += Acquire(system, station, oct.FactionId, stock, open, active);
+            acquisitions += Acquire(system, station, open, active);
             if (EntityContracts)
             {
                 bounties += Bounties(system, station, oct.FactionId, state);
@@ -154,22 +152,6 @@ internal static class Contracts
         if (hauling + acquisitions + bounties + salvage > 0)
             Plugin.Log.Info(text);
         return text + ".";
-    }
-
-    private static List<KeyValuePair<string, long>> Stock()
-    {
-        try
-        {
-            badStock = null;
-            return ContractMath.ParseStock(Config.ContractAcquisitionItems);
-        }
-        catch (FormatException e)
-        {
-            if (badStock != e.Message)
-                Plugin.Log.Error($"ContractAcquisitionItems: {e.Message}, no acquisitions");
-            badStock = e.Message;
-            return [];
-        }
     }
 
     private static bool Add(
@@ -226,62 +208,37 @@ internal static class Contracts
     private static int Acquire(
         MySessionComponentContractSystem system,
         IMyFactionStation station,
-        long octId,
-        List<KeyValuePair<string, long>> stock,
         List<MyContract> open,
         List<MyContract> active
     )
     {
-        if (stock.Count == 0 || !LedgerBook.ValidName(station.Name))
+        if (!LedgerBook.ValidName(station.Name))
             return 0;
-        var owner = LedgerOwner.OfFaction(octId);
-        var free = Ledgers.Book.FreeOf(station.Name, owner);
-        var limitKg = Config.LedgerFactionLimitTonnes * 1000;
-        var massKg = Ledgers.Book.MassKg(station.Name, owner);
         var pending = open.Concat(active.Where(c => c.StartStation == station.Id))
             .Select(Items)
             .Where(i => i != null)
             .ToList();
-        massKg += pending.Sum(i => i.ItemAmount * Mass(i.ItemType));
-
         var posted = 0;
-        foreach (var (item, target) in stock)
+        // The market's daily stock is OCT's target at every station
+        foreach (var (item, missing) in Market.Missing(station.Name))
         {
-            if (
-                !Ledgers.TryItemId(item, out var id)
-                || !MyDefinitionManager.Static.TryGetPhysicalItemDefinition(id, out var definition)
-            )
-            {
-                if (badStock != item)
-                    Plugin.Log.Error($"ContractAcquisitionItems: unknown item {item}");
-                badStock = item;
+            if (!Ledgers.TryItemId(item, out var id) || open.Any(c => Items(c)?.ItemType == id))
                 continue;
-            }
-            if (open.Any(c => Items(c)?.ItemType == id))
-                continue;
-            var have = free.TryGetValue(item, out var raw) ? raw / LedgerBook.Unit : 0;
             var amount = ContractMath.AcquisitionAmount(
-                target,
-                have,
+                missing / LedgerBook.Unit,
                 pending.Where(i => i.ItemType == id).Sum(i => (long)i.ItemAmount),
                 Config.ContractAcquisitionMaxAmount
             );
-            if (amount <= 0 || (limitKg > 0 && massKg + amount * definition.Mass > limitKg))
+            var price = Market.ReferencePrice(item);
+            if (amount <= 0 || price <= 0)
                 continue;
-            // The definition's own price is -1 for items the economy prices from their recipe
-            var price =
-                MySession.Static.GetComponent<MySessionComponentEconomy>()?.GetMinimumItemPrice(id)
-                ?? 0;
-            if (price <= 0)
-                continue;
-            var reward = ContractMath.AcquisitionReward(
-                amount,
-                price,
-                Config.ContractAcquisitionPricePercent
-            );
             var contract = new Api.MyContractAcquisition(
                 0,
-                reward,
+                ContractMath.AcquisitionReward(
+                    amount,
+                    price,
+                    Config.ContractAcquisitionPricePercent
+                ),
                 0,
                 Config.ContractAcquisitionMinutes,
                 0,
@@ -292,20 +249,14 @@ internal static class Contracts
                 continue;
             // The items go into OCT's ledger, not into the station's containers
             if (
-                system.GetContractById(contractId) is MyContract posted1
-                && Items(posted1) is { } condition
+                system.GetContractById(contractId) is MyContract added
+                && Items(added) is { } condition
             )
                 TransferItems.SetValue(condition, false);
-            massKg += amount * definition.Mass;
             posted++;
         }
         return posted;
     }
-
-    private static double Mass(MyDefinitionId id) =>
-        MyDefinitionManager.Static.TryGetPhysicalItemDefinition(id, out var definition)
-            ? definition.Mass
-            : 0;
 
     private static List<MyCubeGrid> GridsNear(Vector3D position, double meters)
     {

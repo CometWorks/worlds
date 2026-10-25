@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- For the IDE and compile checks only: the game compiles Data/Scripts itself when the
+       mod loads, as .NET Framework, C# 6 code against the assemblies below
+       (MySpaceGameDefaultIlCompiler.InitIlCompiler). The DLL built here is never used.
+         dotnet build octahedron/kiosk-mod/KioskMod.csproj -p:Bin64=<game Bin64> -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>6</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Bin64 Condition="'$(Bin64)' == ''"
+      >$(HOME)/.steam/steam/steamapps/common/SpaceEngineers/Bin64</Bin64>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Data/Scripts/**/*.cs" />
+    <Reference Include="netstandard;ProtoBuf.Net.Core;Sandbox.Common;Sandbox.Game;Sandbox.Graphics;SpaceEngineers.Game;SpaceEngineers.ObjectBuilders;System.Collections.Immutable;VRage;VRage.Game;VRage.Input;VRage.Library;VRage.Math;VRage.Render">
+      <HintPath>$(Bin64)/%(Identity).dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

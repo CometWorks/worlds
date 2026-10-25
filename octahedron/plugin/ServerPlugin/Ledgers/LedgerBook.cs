@@ -77,6 +77,12 @@ public enum LedgerAction
 
     /// <summary>Items out of the reservation, used up. No items: all of it.</summary>
     Take,
+
+    /// <summary>
+    /// Sets whether every member of the faction Owner may trade with its ledger, not only its
+    /// leaders and founder: Counted. Station and items are not used.
+    /// </summary>
+    MembersTrade,
 }
 
 /// <summary>
@@ -214,6 +220,9 @@ public sealed class LedgerBook
     private readonly ILedgerRules rules;
     private readonly Dictionary<string, Station> stations = new();
 
+    // Factions whose members may all trade with the faction's ledger
+    private HashSet<long> membersTrade = new();
+
     public LedgerBook(ILedgerRules rules)
     {
         this.rules = rules;
@@ -222,6 +231,9 @@ public sealed class LedgerBook
     public IReadOnlyDictionary<string, Station> Stations => stations;
 
     public Station Get(string station) => stations.TryGetValue(station, out var s) ? s : null;
+
+    /// <summary>Whether every member of the faction may trade with its ledger, not only its leaders and founder.</summary>
+    public bool MembersTrade(long factionId) => membersTrade.Contains(factionId);
 
     /// <summary>The owner's free items at the station; empty if none.</summary>
     public IReadOnlyDictionary<string, long> FreeOf(string station, LedgerOwner owner) =>
@@ -270,6 +282,7 @@ public sealed class LedgerBook
 
         // A copy of every station the ops touch, put back if one fails
         var backup = new Dictionary<string, Station>();
+        var membersTradeBefore = new HashSet<long>(membersTrade);
         foreach (var op in ops)
             if (op.Station != null && !backup.ContainsKey(op.Station))
                 backup[op.Station] = Get(op.Station)?.Clone();
@@ -291,6 +304,7 @@ public sealed class LedgerBook
                     stations.Remove(b.Key);
                 else
                     stations[b.Key] = b.Value;
+            membersTrade = membersTradeBefore;
             return error;
         }
 
@@ -334,6 +348,10 @@ public sealed class LedgerBook
 
     private string Check(LedgerOp op)
     {
+        if (op.Action == LedgerAction.MembersTrade)
+            return op.Owner.Faction && rules.KnownOwner(op.Owner)
+                ? null
+                : $"Unknown faction {op.Owner}.";
         if (!ValidName(op.Station) || !rules.KnownStation(op.Station))
             return $"Unknown station '{op.Station}'.";
         if (!op.Owner.IsSet || !rules.KnownOwner(op.Owner))
@@ -373,6 +391,15 @@ public sealed class LedgerBook
 
     private string Apply(LedgerOp op, HashSet<(string, LedgerOwner)> raised)
     {
+        if (op.Action == LedgerAction.MembersTrade)
+        {
+            if (op.Counted)
+                membersTrade.Add(op.Owner.Id);
+            else
+                membersTrade.Remove(op.Owner.Id);
+            return null;
+        }
+
         if (!stations.TryGetValue(op.Station, out var station))
             stations[op.Station] = station = new Station();
 
@@ -485,7 +512,7 @@ public sealed class LedgerBook
     /// <summary>A copy of one station's ledger, all of it or only one owner's part.</summary>
     public LedgerBook Extract(string station, LedgerOwner? owner)
     {
-        var copy = new LedgerBook(rules);
+        var copy = new LedgerBook(rules) { membersTrade = new HashSet<long>(membersTrade) };
         var s = Get(station)?.Clone();
         if (s == null)
             return copy;
@@ -510,7 +537,8 @@ public sealed class LedgerBook
         return s.Free.Keys.Concat(s.Reservations.Values.Select(r => r.Owner)).Distinct();
     }
 
-    // --- persistence: one line per station, free stock and reservation, tab-separated ---
+    // --- persistence: one line per station, free stock and reservation, and per faction whose
+    // members all trade, tab-separated ---
 
     public string Serialize()
     {
@@ -536,6 +564,8 @@ public sealed class LedgerBook
                 AppendItems(text, r.Value.Items);
             }
         }
+        foreach (long faction in membersTrade.OrderBy(f => f))
+            text.Append("T\t").Append(faction.ToString(CultureInfo.InvariantCulture)).Append('\n');
         return text.ToString();
     }
 
@@ -564,6 +594,9 @@ public sealed class LedgerBook
             var f = line.Split('\t');
             switch (f[0])
             {
+                case "T":
+                    book.membersTrade.Add(long.Parse(f[1], CultureInfo.InvariantCulture));
+                    break;
                 case "S":
                     book.stations[f[1]] = station = new Station();
                     break;

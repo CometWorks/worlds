@@ -167,7 +167,8 @@ Dashboard, **Create Cluster**, **Create and deploy**:
    PluginSdk pin matches Magnetar, converts a copy of the world with
    MagnetarWorld, and leaves the cluster stopped.
 4. In the cluster's plugin configuration editor, set the plugin configs: Hangar
-   and Multigrid Projector as their defaults suit, Essentials as the cluster
+   with `AdminSafeZonesOnly` on (ships are stored and retrieved only at the stations),
+   Multigrid Projector as its defaults suit, Essentials as the cluster
    needs, and the Octahedron plugin to the values in `config/octahedron.cfg`.
 5. **Start.** Watch the nodes come up on the cluster page.
 
