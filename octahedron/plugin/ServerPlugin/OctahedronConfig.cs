@@ -17,6 +17,7 @@ namespace ServerPlugin;
 [Section("encounters", caption: "Encounters")]
 [Section("mes", caption: "MES Spawn Pattern")]
 [Section("ledgers", caption: "Station Ledgers")]
+[Section("kiosks", caption: "Station Kiosks")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -506,6 +507,51 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 100;
+
+    [StringOption(
+        description: "Name of the station text panels that are kiosks (case-insensitive). The blueprints must keep them clear of the landing pads. "
+            + "Empty: no kiosks.",
+        Parent = "kiosks"
+    )]
+    public string KioskBlockName
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "LCD Panel - Station Lounge StationStorefront";
+
+    [StringOption(
+        description: "Screen script of the kiosk client mod the plugin selects on every kiosk. Empty: the kiosks keep what they show.",
+        Parent = "kiosks"
+    )]
+    public string KioskScript
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Octahedron_Kiosk";
+
+    [DoubleOption(
+        1,
+        20,
+        "A player must stand this close to a kiosk to use it (m).",
+        Parent = "kiosks"
+    )]
+    public double KioskReachMeters
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
+
+    [DoubleOption(
+        0,
+        10,
+        "The least time between two requests of a player at the kiosks (s).",
+        Parent = "kiosks"
+    )]
+    public double KioskCooldownSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 0.5;
 }
 
 public struct RefillContainer

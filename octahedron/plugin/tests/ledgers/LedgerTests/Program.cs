@@ -4,7 +4,7 @@ using System.Linq;
 using ServerPlugin;
 
 // Checks of the station ledger bookkeeping (ServerPlugin/Ledgers/LedgerBook.cs) against fake
-// world rules. Prints one line per failed check and a summary; exit code 0 = all pass.
+// world rules, and of the kiosk requests, replies and rules (ServerPlugin/Kiosks/KioskProtocol.cs). Prints one line per failed check and a summary; exit code 0 = all pass.
 // Usage: dotnet run -c Release --project tests/ledgers/LedgerTests
 
 int checks = 0;
@@ -366,6 +366,208 @@ LedgerOp Fill(LedgerOwner owner, string id, bool counted, params (string, long)[
     Check(
         !LedgerOwner.TryParse("X5", out _) && !LedgerOwner.TryParse("P", out _),
         "owner parse refuses"
+    );
+}
+
+// Whether a faction's members all trade: set, saved, copied and undone with a failed batch
+{
+    var book = New();
+    LedgerOp Members(LedgerOwner faction, bool on) =>
+        new()
+        {
+            Action = LedgerAction.MembersTrade,
+            Owner = faction,
+            Counted = on,
+        };
+    Check(!book.MembersTrade(10), "members trade: off by default");
+    Applied(book, "members trade on", Members(f10, true));
+    Check(book.MembersTrade(10), "members trade: on");
+    Refused(book, "members trade of a player", Members(p1, true));
+    Refused(book, "members trade of an unknown faction", Members(LedgerOwner.OfFaction(11), true));
+    Refused(
+        book,
+        "members trade off in a failed batch",
+        Members(f10, false),
+        Op(LedgerAction.Withdraw, p1, (Iron, U))
+    );
+    Check(book.MembersTrade(10), "members trade: a failed batch leaves it on");
+    Applied(book, "a deposit", Op(LedgerAction.Deposit, p1, (Iron, U)));
+    var saved = LedgerBook.Deserialize(book.Serialize(), rules);
+    Check(saved.MembersTrade(10) && saved.Serialize() == book.Serialize(), "members trade: saved");
+    Check(book.Extract(A, p1).MembersTrade(10), "members trade: in an owner's copy");
+    var wire = LedgerOp.DecodeBatch(LedgerOp.EncodeBatch([Members(f10, false)]));
+    Applied(book, "members trade off over the wire", wire.ToArray());
+    Check(!book.MembersTrade(10), "members trade: off");
+    Check(!book.Serialize().Contains("\nT\t"), "members trade: off is not saved");
+}
+
+// Kiosk requests
+{
+    var r = KioskRequest.Parse("deposit\t7\t123\t1\thand\tIngot/Iron\t1.5\n");
+    Check(
+        r.Verb == KioskVerb.Deposit
+            && r.Sequence == 7
+            && r.Kiosk == 123
+            && r.Faction
+            && r.FromHand
+            && r.Item == Iron
+            && r.Amount == 3 * U / 2,
+        "kiosk request: fields"
+    );
+    var state = KioskRequest.Parse("State\t1\t5");
+    Check(
+        state.Verb == KioskVerb.State && !state.Faction && state.Source == "" && state.Amount == 0,
+        "kiosk request: short"
+    );
+    Check(
+        KioskRequest.Parse("withdraw\t1\t5\t0\t99\tIngot/Iron\tall").Amount == 0,
+        "kiosk request: all"
+    );
+    foreach (
+        var bad in new[]
+        {
+            "",
+            "state\t1",
+            "steal\t1\t5",
+            "1\t1\t5",
+            "state\tx\t5",
+            "deposit\t1\t5\t0\t\tIngot/Iron\t-1",
+            "deposit\t1\t5\t0\t\tIngot/Iron\t0",
+            "deposit\t1\t5\t0\t\tIngot/Iron\tlots",
+        }
+    )
+    {
+        try
+        {
+            KioskRequest.Parse(bad);
+            Check(false, "kiosk request refused: " + bad.Replace("\t", "|"));
+        }
+        catch (FormatException) { }
+    }
+}
+
+// Kiosk replies
+{
+    var reply = new KioskReply
+    {
+        Sequence = 3,
+        Ok = true,
+        Message = "Stored\t2\nplates",
+        Kiosk = 9,
+        Station = A,
+        Reach = 4.5,
+        FactionTag = "OCT",
+        MayTrade = true,
+        Ships = { new(77, "Hauler") },
+        Source = "77",
+        Items =
+        {
+            new KioskItem
+            {
+                Item = Plate,
+                Name = "Steel Plate",
+                Mine = 2 * U,
+                Source = 5 * U,
+            },
+            new KioskItem
+            {
+                Item = Iron,
+                Name = "Iron Ingot",
+                Faction = U / 2,
+            },
+        },
+    };
+    var lines = reply.Encode().Split('\n');
+    Check(
+        lines[0] == "reply\t3\t1\tStored 2 plates",
+        "kiosk reply: outcome, separators cleaned: " + lines[0]
+    );
+    Check(lines[1] == "kiosk\t9\tAlpha Station\t4.5", "kiosk reply: kiosk " + lines[1]);
+    Check(lines[2] == "faction\tOCT\t1\t0\t0", "kiosk reply: faction " + lines[2]);
+    Check(
+        lines[3] == "ship\t77\tHauler" && lines[4] == "source\t77",
+        "kiosk reply: ship and source"
+    );
+    Check(
+        lines[5] == "item\tIngot/Iron\tIron Ingot\t0\t500000\t0",
+        "kiosk reply: items by name " + lines[5]
+    );
+    Check(
+        lines[6] == $"item\t{Plate}\tSteel Plate\t{2 * U}\t0\t{5 * U}",
+        "kiosk reply: item " + lines[6]
+    );
+    Check(
+        !new KioskReply().Encode().Contains("faction"),
+        "kiosk reply: no faction line without one"
+    );
+}
+
+// Kiosk rules
+{
+    KioskRequest Req(KioskVerb verb, bool faction = false, string item = Iron) =>
+        new()
+        {
+            Verb = verb,
+            Faction = faction,
+            Item = item,
+        };
+    Check(
+        KioskRules.MayTrade(true, false)
+            && KioskRules.MayTrade(false, true)
+            && !KioskRules.MayTrade(false, false),
+        "kiosk: who trades"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.State), false, false, false) == null,
+        "kiosk: anyone sees the state"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Deposit), false, false, false) == null,
+        "kiosk: anyone deposits for themselves"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Withdraw), false, false, false) == null,
+        "kiosk: anyone withdraws for themselves"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Deposit, item: ""), false, false, false) != null,
+        "kiosk: an item is needed"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Deposit, true), false, false, false) != null,
+        "kiosk: faction switch without a faction"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Deposit, true), true, false, false) != null,
+        "kiosk: faction switch needs the rank"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Withdraw, true), true, true, false) == null,
+        "kiosk: faction switch with the rank"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Give), true, false, false) == null,
+        "kiosk: any member gives"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Give), false, false, false) != null,
+        "kiosk: giving needs a faction"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Take), true, false, false) != null,
+        "kiosk: taking needs the rank"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Take), true, true, false) == null,
+        "kiosk: taking with the rank"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Members, item: ""), true, true, false) != null,
+        "kiosk: members setting needs a leader"
+    );
+    Check(
+        KioskRules.Refusal(Req(KioskVerb.Members, item: ""), true, true, true) == null,
+        "kiosk: a leader sets it"
     );
 }
 
