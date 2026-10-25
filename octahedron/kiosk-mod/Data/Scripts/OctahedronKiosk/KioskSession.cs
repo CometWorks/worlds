@@ -210,9 +210,9 @@ namespace OctahedronKiosk
                 );
             if (state.HasMarket)
                 say($"balance mine={state.Balance} faction={state.FactionBalance}");
-            // Only the rows with something to trade, so the chat stays short
+            // Only the rows with something to trade and the specialties, so the chat stays short
             foreach (var row in state.Market)
-                if (row.OctStock > 0 || row.OfferAmount > 0 || row.OrderAmount > 0)
+                if (row.OctStock > 0 || row.OfferAmount > 0 || row.OrderAmount > 0 || row.Specialty)
                     say(
                         $"market {row.Item} buys={row.OctBuys} sells={row.OctSells} stock={KioskState.Amount(row.OctStock)} "
                             + $"offer={row.Offer}x{KioskState.Amount(row.OfferAmount)} order={row.Order}x{KioskState.Amount(row.OrderAmount)} special={(row.Specialty ? 1 : 0)}"
