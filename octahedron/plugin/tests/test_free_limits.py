@@ -138,7 +138,8 @@ def blocked_blocks() -> None:
     assert COOLDOWN in reply, f"the cool-down survives the restart: {reply}"
     tc.with_config(remote, FreeBuildCooldownMinutes=0)
     reply = order(remote)
-    assert "a paid build (a free ship can't have" in reply, reply
+    # The screen may show the new quote already, then the press tries to order it
+    assert "paid build (a free ship can't have" in reply, reply
     for name in ("Jump Drive", "Ion Thruster", "Prototech Battery"):
         assert name in reply, (name, reply)
     stop()

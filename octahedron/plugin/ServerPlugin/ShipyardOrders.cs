@@ -475,7 +475,8 @@ internal static class ShipyardOrders
             if (missing != null)
             {
                 tell(
-                    $"This station has {Units(missing.Item, missing.Missing)} {Market.ItemTitle(missing.Item)} "
+                    $"'{plan.Ship}' is a paid build ({plan.Paid}), and this station has "
+                        + $"{Units(missing.Item, missing.Missing)} {Market.ItemTitle(missing.Item)} "
                         + "too few for sale. Deposit them into the ledger first."
                 );
                 return;
