@@ -70,6 +70,10 @@ public sealed class BuildQuote
     public long Total => Cost + Fee;
     public bool Complete => Lines.All(l => l.Missing == 0);
 
+    /// <summary>The first item nobody has enough of, the hydrogen left out: a ship gets less of that.</summary>
+    public QuoteLine Short(string hydrogenItem) =>
+        Lines.FirstOrDefault(l => l.Missing > 0 && l.Item != hydrogenItem);
+
     // One line per item, then the totals, tab-separated
     public string Encode()
     {
@@ -299,7 +303,7 @@ public sealed class BuildBook
                 rest[n.Key] = n.Value - given;
         }
         var quote = Quote(w, market, order.Station, order.Payer, rest, order.Fee);
-        var missing = quote.Lines.FirstOrDefault(l => l.Missing > 0);
+        var missing = quote.Short(s.HydrogenItem);
         if (missing != null)
             return BuildResult.No(
                 $"{LedgerBook.Units(missing.Missing)} {missing.Item} more than this station has for sale."
@@ -368,8 +372,12 @@ public sealed class BuildBook
         if (fill.Items.Count > 0)
             w.ApplyLedger([fill]);
 
+        // The hydrogen the station doesn't have is left out: the ship's tanks get less
         foreach (var n in needed.Where(n => n.Value > 0))
-            order.Items[n.Key] = n.Value;
+            order.Items[n.Key] =
+                n.Value - (quote.Lines.FirstOrDefault(l => l.Item == n.Key)?.Missing ?? 0);
+        if (order.Items.TryGetValue(s.HydrogenItem, out long ice) && ice <= 0)
+            order.Items.Remove(s.HydrogenItem);
         nextId++;
         orders[order.Id] = order;
         return new BuildResult(

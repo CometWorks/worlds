@@ -371,6 +371,40 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     );
 }
 
+// Too little ice for sale: the order goes ahead with the ice there is
+{
+    var (w, m, market, b) = Setup();
+    var needed = Needs((Plate, 1 * U), (Ice, 150_000 * U));
+    var q = BuildBook.Quote(w, market, A, f10, needed, 0);
+    Check(q.Short(Ice) == null && !q.Complete, "short of ice: not short of anything else");
+    var order = Ok(
+        w,
+        "order short of ice",
+        () => b.Order(w, market, s, Paid(f10, fee: 0), needed, none, long.MaxValue)
+    ).Order;
+    Check(
+        order.Items[Ice] == 100_000 * U && Reserved(w, order).Items[Ice] == 100_000 * U,
+        "short of ice: what OCT had"
+    );
+    Refused(
+        w,
+        b,
+        m,
+        "short of plates",
+        () =>
+            b.Order(
+                w,
+                market,
+                s,
+                Paid(p2, player: 2),
+                Needs((Plate, 2000 * U)),
+                none,
+                long.MaxValue
+            ),
+        "more than this station has"
+    );
+}
+
 // The faction pays from its ledger and account
 {
     var (w, m, market, b) = Setup();
@@ -479,6 +513,75 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         () => loaded.Order(w, market, s, new BuildOrder { Station = B, Player = 3 }, none, none, 0)
     );
     Check(next.Order.Id == "b4", "saved format: the next id " + next.Order.Id);
+}
+
+// The requests a node sends, and the book answering them
+{
+    var (w, m, market, b) = Setup();
+    var request = new BuildRequest
+    {
+        Verb = BuildVerb.Order,
+        Station = A,
+        Player = 1,
+        Payer = p1,
+        Fee = 100,
+        Pcu = 1000,
+        Ship = "A\tShip",
+        Blueprint = "QUJD",
+        MaxTotal = 99_999,
+        Needed = Needs((Plate, 3 * U), (Ice, 10 * U)),
+        Provided = Needs((Ice, 4 * U)),
+    };
+    var back = BuildRequest.Decode(request.Encode());
+    Check(
+        back.Encode() == request.Encode() && back.Ship == "A Ship" && back.Provided[Ice] == 4 * U,
+        "request: wire format"
+    );
+    string answer = back.Run(b, w, market, s);
+    Check(
+        answer.StartsWith("1\t") && answer.Contains("\nO\tb1\t"),
+        "request: order answered with the order: " + answer
+    );
+    string queue = new BuildRequest { Verb = BuildVerb.Queue, Station = A }.Run(b, w, market, s);
+    Check(BuildBook.DecodeOrder(queue).Blueprint == "", "request: the queue without blueprints");
+    string next = new BuildRequest { Verb = BuildVerb.Next, Station = A }.Run(b, w, market, s);
+    Check(BuildBook.DecodeOrder(next).Blueprint == "QUJD", "request: next with its blueprint");
+    string quote = new BuildRequest
+    {
+        Verb = BuildVerb.Quote,
+        Station = A,
+        Payer = p1,
+        Needed = Needs((Plate, 3 * U)),
+    }.Run(b, w, market, s);
+    Check(BuildQuote.Decode(quote).Lines[0].OctCost == 210, "request: a quote");
+    string cancel = new BuildRequest
+    {
+        Verb = BuildVerb.Cancel,
+        Station = A,
+        Player = 2,
+    }.Run(b, w, market, s);
+    Check(cancel.StartsWith("0\t"), "request: a refusal answers 0");
+    Check(
+        new BuildRequest { Verb = BuildVerb.Start, Id = "b1" }
+            .Run(b, w, market, s)
+            .StartsWith("1"),
+        "request: start"
+    );
+    Check(
+        new BuildRequest
+        {
+            Verb = BuildVerb.Finish,
+            Id = "b1",
+            HydrogenUsed = 10 * U,
+        }
+            .Run(b, w, market, s)
+            .StartsWith("1"),
+        "request: finish"
+    );
+    Check(
+        b.Orders.Count() == 0 && w.Total() == w.Start,
+        "request: all done, no money made or lost"
+    );
 }
 
 Console.WriteLine($"{checks - failures}/{checks} checks passed");

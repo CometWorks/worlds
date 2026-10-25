@@ -458,9 +458,9 @@ internal static class ShipyardOrders
         var drained = new List<(MyGasTank Tank, double Liters)>();
         if (!plan.Free)
         {
-            if (!shown.Quote.Complete)
+            var missing = shown.Quote.Short(Hydrogen);
+            if (missing != null)
             {
-                var missing = shown.Quote.Lines.First(l => l.Missing > 0);
                 tell(
                     $"This station has {Units(missing.Item, missing.Missing)} {Market.ItemTitle(missing.Item)} "
                         + "too few for sale. Deposit them into the ledger first."
@@ -593,9 +593,11 @@ internal static class ShipyardOrders
                 text.AppendLine(
                     $"Hydrogen: {plan.HydrogenLiters:N0} L for the H2 tanks, as {Config.ShipyardHydrogenLitersPerIce:0.##} L per kg of ice"
                 );
+            if (quote.Lines.Any(l => l.Item == Hydrogen && l.Missing > 0))
+                text.AppendLine("Too little ice for sale here: the H2 tanks get less hydrogen.");
             text.AppendLine();
             text.AppendLine(
-                quote.Complete
+                quote.Short(Hydrogen) == null
                     ? "Press the button to order, again to cancel."
                     : "Not everything is for sale here: deposit it into the ledger first."
             );
