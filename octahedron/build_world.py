@@ -111,6 +111,27 @@ FREE_TOOLS_COUNT = 4
 SAFE_ZONE_MARGIN = 10.0
 # The shipyard sits this much higher than the station, along the station's up
 SHIPYARD_LIFT = 50.0
+# The pole stations' shipyards by Viktor's placement at South Station in game (2026-10-25),
+# in the station's (right, up, forward): the direction from the station's block bounds
+# center to the shipyard's, and the shipyard's forward and up. Off the station's side with
+# the ship build holo table, above the lobby floor, so the windows look down into the middle
+# of the shipyard. North Station, upside down, sits like South Station, so its shipyard takes
+# the same place. spread_pair centers the pair on the zone along that direction.
+POLE_SHIPYARD = (
+    (121.3, 72.4, 4.6),
+    (0.32292, 0.22092, 0.92028),
+    (-0.56464, 0.82534, 0.0),
+)
+# Then raised this much more, along its own up (the side with its cargo containers), Moon
+# Station's along the station's up; then pulled toward its station until it fits the safe zone
+# again
+SHIPYARD_RAISE = {
+    "Moon Station": 125.0,
+    "Alpha Station": 30.0,
+    "Beta Station": 30.0,
+    "Gamma Station": 30.0,
+    "Delta Station": 30.0,
+}
 # Rolled about its long axis, its top leaning toward the station, so the view from the lobby
 # passes the near wall into the build volume. Raycast in game from Alpha Station, 5 spots by
 # 9 points between the welder walls: 13 m above the station's middle, 33 of 45 clear at +30,
@@ -656,17 +677,9 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
     the space side (the Moon side for Moon Station): straight behind the equatorial stations
     and Moon Station, 45 degrees off for the pole stations. The view from the lobby falls on
     its side, along its local X, through its open frame, rolled by SHIPYARD_ROLL_DEGREES.
-    Along that side the pair's block bounds are centered on the zone's center, the shipyard
-    then lifted by SHIPYARD_LIFT along the station's up, and the gap between them is the
-    largest that keeps every corner of both bounds SAFE_ZONE_MARGIN inside the zone."""
+    spread_pair places the pair along that side, the shipyard lifted by SHIPYARD_LIFT.
+    """
     side = norm(add(mul(forward, -1), away))
-    right = cross(forward, up)
-    lo, hi = grid_bounds(station_grid)
-    # How far the station's block bounds reach toward side
-    reach = sum(
-        (hi[i] - lo[i] + 1) * 1.25 * abs(dot(side, axis))
-        for i, axis in enumerate((right, up, mul(forward, -1)))
-    )
     level = norm(perpendicular_part(up, side))
     roll = math.radians(SHIPYARD_ROLL_DEGREES)
     yard_right = add(mul(side, math.cos(roll)), mul(level, math.sin(roll)))
@@ -678,6 +691,24 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
     yard_right, yard_up, yard_forward = (
         rotate(v, up, yaw) for v in (yard_right, yard_up, yard_forward)
     )
+    return spread_pair(
+        station_grid, zone, forward, up, side, yard_forward, yard_up, SHIPYARD_LIFT
+    )
+
+
+def spread_pair(station_grid, zone, forward, up, side, yard_forward, yard_up, lift):
+    """(station center, (shipyard center, forward, up)): the station and its shipyard, as
+    oriented, apart along side, the pair's block bounds centered on the zone's center along
+    it, the shipyard then lifted by lift along the station's up, and the gap between them the
+    largest that keeps every corner of both bounds SAFE_ZONE_MARGIN inside the zone."""
+    right = cross(forward, up)
+    lo, hi = grid_bounds(station_grid)
+    # How far the station's block bounds reach toward side
+    reach = sum(
+        (hi[i] - lo[i] + 1) * 1.25 * abs(dot(side, axis))
+        for i, axis in enumerate((right, up, mul(forward, -1)))
+    )
+    yard_right = cross(yard_forward, yard_up)
     yard = shipyard_template()
     lo, hi = grid_bounds(yard)
     # How far the shipyard's block bounds reach toward side from their center
@@ -691,7 +722,7 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
         extent = (2 * reach + gap + 2 * half) / 2
         station_center = add(zone, mul(side, reach - extent))
         yard_center = add(zone, mul(side, extent - half))
-        return station_center, add(yard_center, mul(up, SHIPYARD_LIFT))
+        return station_center, add(yard_center, mul(up, lift))
 
     def fits(gap):
         station_center, yard_center = place(gap)
@@ -712,6 +743,32 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
             high = (low + high) / 2
     station_center, yard_center = place(math.floor(low))
     return station_center, (yard_center, yard_forward, yard_up)
+
+
+def raise_shipyard(yard, station_center, zone, height, up):
+    """(center, forward, up) of the shipyard moved height along up, then pulled straight
+    toward the station's center by as little as keeps every corner of its block bounds
+    SAFE_ZONE_MARGIN inside the zone."""
+    center, forward, yard_up = yard
+    center = add(center, mul(up, height))
+    toward = norm(sub(station_center, center))
+    template = shipyard_template()
+
+    def fits(pull):
+        corners = box_corners(
+            template, add(center, mul(toward, pull)), forward, yard_up
+        )
+        return (
+            max(dist(c, zone) for c in corners)
+            <= STATION_SAFE_ZONE_RADIUS - SAFE_ZONE_MARGIN
+        )
+
+    # The fit gets worse again past the zone's center, so step out from no pull
+    pull = next(
+        (p for p in range(int(dist(center, station_center)) + 1) if fits(p)), None
+    )
+    assert pull is not None, "the raised shipyard doesn't fit the safe zone"
+    return add(center, mul(toward, pull)), forward, yard_up
 
 
 def shipyard_template():
@@ -748,17 +805,21 @@ POLAR_STATIONS = {"Beta Station", "North Station", "Delta Station", "South Stati
 def lane_up(direction, home, target, north, polar_normal):
     """Up of a lane's computers, the same at both ends. The Trade Lanes mod puts a lane's two
     rings side by side along the computers' right axis: level with the equator on the lanes
-    of the equatorial square, one above the other on all others (to the poles and the Moon).
-    Each computer's rings toward the other end lie on its right (Forward x Up). On the
-    equatorial square (up north) and the polar ring through Beta, North, Delta and South
-    (up toward Alpha Station, polar_normal) the inner track runs Alpha, Beta, Gamma, Delta
-    and Beta, North, Delta, South, the outer one the other way, so a ship going around keeps
-    its track at every station."""
-    if {home, target} <= EQUATOR_STATIONS:
+    of the equatorial square and from Alpha and Delta Station to the Moon, one above the
+    other on the others (to the poles and from North Station to the Moon). Each computer's
+    rings toward the other end lie on its right (Forward x Up). On the equatorial square (up
+    north) and the polar ring through Beta, North, Delta and South (up toward Alpha Station,
+    polar_normal) the inner track runs Alpha, Beta, Gamma, Delta and Beta, North, Delta,
+    South, the outer one the other way, so a ship going around keeps its track at every
+    station. A Moon lane takes the up of its Earth station's circle: the equator's from Alpha
+    and Delta, the polar ring's from North, so a ship that turns off toward the Moon keeps
+    the side of the track it was on."""
+    # A Moon lane follows its Earth station's circle (Delta's: the equator's)
+    ends = {home, target} - {"Moon Station"}
+    if ends <= EQUATOR_STATIONS:
         return norm(perpendicular_part(north, direction))
-    if {home, target} <= POLAR_STATIONS:
-        return norm(perpendicular_part(polar_normal, direction))
-    return norm(cross(direction, north))
+    assert ends <= POLAR_STATIONS, ends
+    return norm(perpendicular_part(polar_normal, direction))
 
 
 def lane_computer(ids, position, forward, up, lane_id, home, target, partner):
@@ -882,23 +943,46 @@ def rotate(v, axis, angle):
     )
 
 
+def reframe(v, frame, target):
+    """v turned by the rotation that takes frame's (forward, up) to target's"""
+    (forward, up), (forward2, up2) = frame, target
+    right, right2 = cross(forward, up), cross(forward2, up2)
+    return add(
+        add(mul(forward2, dot(v, forward)), mul(up2, dot(v, up))),
+        mul(right2, dot(v, right)),
+    )
+
+
 def perpendicular_part(v, axis):
     """v without its component along the unit vector axis"""
     return sub(v, mul(axis, dot(v, axis)))
 
 
-def facing(planet, center):
-    """(forward, up) for a station: up is the planet's north, forward faces the planet's axis if it can."""
+def facing(planet, center, pole_forward):
+    """(forward, up) for a station: up is the planet's north, forward faces the planet's axis
+    if it can, pole_forward over the poles."""
     inward = sub(planet.center, center)
     level = sub(inward, mul(planet.up, dot(inward, planet.up)))
-    forward = norm(level) if dot(level, level) > 1 else planet.forward
+    forward = norm(level) if dot(level, level) > 1 else pole_forward
     return forward, planet.up
+
+
+def moon_turn(earth, moon):
+    """The angle (radians, about EarthLike's north) the octahedron and the asteroid ring are
+    turned by, so that the outward normal of the North, Delta, Alpha face points as near to
+    the Moon as it can: Delta and Alpha Station's bisector lies over the Moon. That face's
+    three stations have the Moon's lanes."""
+    north = earth.up
+    bisector = norm(add(earth.forward, cross(earth.forward, north)))
+    over_moon = norm(perpendicular_part(sub(moon.center, earth.center), north))
+    return math.atan2(dot(cross(bisector, over_moon), north), dot(bisector, over_moon))
 
 
 def layout(earth, moon):
     """Station name -> (center, forward, up), and the lane edges. Directions are in EarthLike's
     frame."""
-    north, front = earth.up, earth.forward
+    north = earth.up
+    front = rotate(earth.forward, north, moon_turn(earth, moon))
     right = cross(front, north)
     stations = {
         "North": north,
@@ -911,25 +995,24 @@ def layout(earth, moon):
     places = {}
     for name, direction in stations.items():
         center = add(earth.center, mul(direction, STATION_DISTANCE))
-        places[f"{name} Station"] = (center, *facing(earth, center))
-    # Moon Station sits halfway between the directions to Delta and Alpha Station, where it
-    # was placed when those two had its lanes
-    toward = norm(
-        add(
-            *(
-                norm(sub(places[f"{name} Station"][0], moon.center))
-                for name in ("Delta", "Alpha")
-            )
-        )
+        places[f"{name} Station"] = (center, *facing(earth, center, front))
+    # Moon Station stays where it was before the turn: halfway between the directions to
+    # where Delta and Alpha Station were then (along EarthLike's own forward and right)
+    delta, alpha = (
+        add(earth.center, mul(direction, STATION_DISTANCE))
+        for direction in (earth.forward, cross(earth.forward, north))
     )
+    toward = norm(add(*(norm(sub(place, moon.center)) for place in (delta, alpha))))
     center = add(moon.center, mul(toward, MOON_STATION_DISTANCE))
-    # Its up is square to the Earth-Moon line, the one of those directions nearest to Delta
-    # Station; it faces away from the Moon, so its lobby and its shipyard are on the Moon side
+    # Its up is square to the Earth-Moon line, the one of those directions nearest to where
+    # Delta Station was; it faces away from the Moon, so its lobby and its shipyard are on the
+    # Moon side
     axis = norm(sub(moon.center, earth.center))
-    up = norm(perpendicular_part(sub(places["Delta Station"][0], center), axis))
+    up = norm(perpendicular_part(sub(delta, center), axis))
     forward = norm(perpendicular_part(sub(center, moon.center), up))
     places["Moon Station"] = (center, forward, up)
-    # Around the equator, then the Moon's two, then Beta and Delta to both poles
+    # Around the equator, then the Moon's, then Beta and Delta to both poles, then the Moon's
+    # third (last, so the other lanes keep their ids)
     edges = [
         ("Alpha Station", "Beta Station"),
         ("Alpha Station", "Delta Station"),
@@ -941,6 +1024,7 @@ def layout(earth, moon):
         ("Beta Station", "South Station"),
         ("Delta Station", "South Station"),
         ("Delta Station", "North Station"),
+        ("Alpha Station", "Moon Station"),
     ]
     return places, edges
 
@@ -1256,7 +1340,11 @@ def main():
     ids = Ids(random.Random(args.seed))
     places, edges = layout(earth, moon)
     lane_list = lanes(places, edges)
-    axis = magnetic_axis(earth, sun_direction(sector))
+    # The ring's axis turns with the octahedron, so the ring still passes Beta and Delta
+    # Station on the same sides
+    axis = rotate(
+        magnetic_axis(earth, sun_direction(sector)), earth.up, moon_turn(earth, moon)
+    )
     # The asteroids take the first ids, so stations and grids added later leave their ids as
     # they are; their places come from their own generators (asteroid_ring)
     for storage, center, size, forward, up, data in asteroid_ring(
@@ -1274,22 +1362,51 @@ def main():
         away = norm(sub(center, planet.center))
         if planet is moon:
             away = mul(away, -1)
+        if name == "North Station":
+            # Upside down, like South Station: its up toward EarthLike, so the lobby looks
+            # down on the ring, and its shipyard below it on the station, out in space
+            up = mul(up, -1)
         # The station and its shipyard share the safe zone around the station's place
-        station_center, yard = station_and_shipyard(template, center, forward, up, away)
-        if planet is earth:
-            # Tilt the pair about the zone's center until the station's deck lies parallel
-            # to the asteroid ring, so the sun doesn't shine sideways through it all day
-            turn = norm(cross(up, axis))
-            angle = math.acos(max(-1.0, min(1.0, dot(up, axis))))
-            tilt = lambda v: rotate(v, turn, angle)
-            station_center = add(center, tilt(sub(station_center, center)))
+        if name in ("North Station", "South Station"):
+            right = cross(forward, up)
+            local = lambda v: add(
+                add(mul(right, v[0]), mul(up, v[1])), mul(forward, v[2])
+            )
+            offset, yard_forward, yard_up = map(local, POLE_SHIPYARD)
+            station_center, yard = spread_pair(
+                template, center, forward, up, norm(offset), yard_forward, yard_up, 0
+            )
+        else:
+            station_center, yard = station_and_shipyard(
+                template, center, forward, up, away
+            )
+        if name in EQUATOR_STATIONS:
+            # Turn the pair about the zone's center until the station's deck lies parallel to
+            # the asteroid ring (up along the ring's axis, the north side), so the sun doesn't
+            # shine sideways through it all day, and its front faces EarthLike in the ring's
+            # plane, with the shipyard behind it out in space. The pole stations stay level
+            # with the equator.
+            level = norm(perpendicular_part(sub(earth.center, center), axis))
+            turn = lambda v: reframe(v, (forward, up), (level, axis))
+            station_center = add(center, turn(sub(station_center, center)))
             yard_center, yard_forward, yard_up = yard
             yard = (
-                add(center, tilt(sub(yard_center, center))),
-                tilt(yard_forward),
-                tilt(yard_up),
+                add(center, turn(sub(yard_center, center))),
+                turn(yard_forward),
+                turn(yard_up),
             )
-            forward, up = tilt(forward), tilt(up)
+            forward, up = level, axis
+        if name == "Moon Station":
+            # Turned about its up, its front toward the Moon and the lobby toward EarthLike
+            forward = mul(forward, -1)
+        if name in SHIPYARD_RAISE:
+            yard = raise_shipyard(
+                yard,
+                station_center,
+                center,
+                SHIPYARD_RAISE[name],
+                up if name == "Moon Station" else yard[2],
+            )
         shipyards[name] = yard
         grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)

@@ -57,14 +57,26 @@ station and shipyard blueprints are in `blueprints/`.
   `MODS` in the script, MES and its encounter mods from `config/mes-mods.xml`).
 - Places the 6 stations of the octahedron 80 km above EarthLike, over the poles
   and on the equator, and one 15 km from the Moon's center, just outside its
-  gravity (12.3 km), between the directions to Delta and Alpha Station. The 6
-  Earth stations are placed with EarthLike's north as up, then each is tilted together with its shipyard about its safe
-  zone's center, so its deck lies parallel to the asteroid ring (up along the
-  ring's axis, 25 degrees from north). Otherwise the sun shines sideways
-  through the deck all day: bad shadows and unreadable LCDs. The lanes don't
-  tilt. Moon Station's up is square to the line between EarthLike and the
-  Moon, the one such direction nearest to Delta Station, and it faces away
-  from the Moon. Each station sits in a 250 m admin safe zone, owned by the
+  gravity (12.3 km). The octahedron is turned about the poles (by 36.8 degrees
+  from EarthLike's own forward and right) so that the outward normal of its
+  North, Delta, Alpha face points as near to the Moon as it can: the Moon lies
+  over the bisector of Delta and Alpha Station, 12 degrees from that normal.
+  Moon Station stays where it was before the turn, between the directions to
+  where Delta and Alpha Station were then. The 6
+  Earth stations are placed with EarthLike's north as up and their front toward
+  its axis, each with its shipyard. The 4 equatorial ones are then turned
+  together with their shipyards about the safe zone's center, so the deck lies
+  parallel to the asteroid ring (up along the ring's axis, its north side, 25
+  degrees from north) and the front faces EarthLike in the ring's plane, with
+  the shipyard behind, out in space. Otherwise the sun shines sideways through
+  the deck all day: bad shadows and unreadable LCDs. North and South Station
+  stay level with the equator, both with their up toward EarthLike: North
+  Station is upside down, so its lobby looks down on the ring. The
+  lanes don't turn. Moon Station's up is square to the line between EarthLike and the
+  Moon, the one such direction nearest to where Delta Station was before the
+  turn. Its shipyard is placed as if it faced away from the Moon, then the
+  station alone is turned 180 degrees about its up: it faces the Moon, its
+  lobby toward EarthLike. Each station sits in a 250 m admin safe zone, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
   zone allows only drilling and landing gear locks: no welding, grinding or
   block placing, also not by the shipyard's welders until the Octahedron plugin
@@ -76,17 +88,30 @@ station and shipyard blueprints are in `blueprints/`.
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half: straight behind the equatorial stations,
-  away from EarthLike, 45 degrees between behind and away from EarthLike at
-  the pole stations, and on the Moon side of Moon Station. The lanes leave the
-  stations the other way and still start from the zone's center.
+  away from EarthLike, and on the Moon side of Moon Station. The lanes leave
+  the stations the other way and still start from the zone's center.
   - The shipyard's side faces the lobby, rolled 30 degrees about its long axis
     with its top toward the station, lifted 50 m along the station's up and
     turned 17.5 degrees about it, so more of the build volume shows past its
     near wall and the wall's middle beam doesn't hide its center.
   - The station and its shipyard are centered on the safe zone together and
     spread apart as far as their block bounds stay 10 m inside the zone's edge:
-    100 m between them (less at the pole stations), the farthest block 227 m
-    from the zone's center.
+    100 m between them, the farthest block 227 m from the zone's center.
+  - Then the shipyard is raised (`SHIPYARD_RAISE`) along its own up, the side
+    with its cargo containers: 30 m at the equatorial stations; Moon Station's
+    125 m along the station's up. Each is then pulled straight toward its
+    station by as little as keeps its block bounds 10 m inside the zone's edge
+    again. Their farthest blocks end up 211 to 221 m from the zone's center,
+    and 92 m or more from the station's blocks.
+  - The pole stations' shipyards follow Viktor's placement at South Station in
+    game (`POLE_SHIPYARD`, in the station's own axes): off the side of the
+    lobby with the ship build holo table, above its floor and on EarthLike's
+    side, turned so the windows look down into the middle of the shipyard.
+    North Station, upside down, sits like South Station, so its shipyard takes
+    the same place. Along that direction the pair is centered on the zone and
+    spread apart as far as it fits 10 m inside the edge: 257 m between their
+    centers, the farthest block 224 m from the zone's center, the shipyard's
+    nearest block 140 m from the station's.
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries. Those start with 10 uranium ingots each and full charge, and on
     the server the Octahedron plugin tops them back up every 10 minutes
@@ -104,16 +129,18 @@ station and shipyard blueprints are in `blueprints/`.
   The entries name no safe zone (`SafeZoneEntityId` 0); with one, the economy
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
-- Places 10 Trade Lanes: one along each edge of the equatorial square
-  (Alpha-Beta-Gamma-Delta), from Moon Station to Delta and to North Station,
-  and from Beta and Delta Station to both North and South Station. The
-  North-Moon lane passes 138 km from EarthLike's center, clear of its gravity,
-  and 15 km from the Moon's; the lanes between two EarthLike stations pass
-  99 km from its center. No two lanes come closer than 0.8 km, and only near a
-  station they share; there the closest gates of two lanes are 369 m apart. A
+- Places 11 Trade Lanes: one along each edge of the equatorial square
+  (Alpha-Beta-Gamma-Delta), from Beta and Delta Station to both North and South
+  Station, and from Moon Station to the three stations of the face toward the
+  Moon: Delta, North and Alpha. The Moon lanes pass 129 km (Delta), 138 km
+  (North) and 130 km (Alpha) from EarthLike's center, clear of its gravity, and
+  15 km from the Moon's; the lanes between two EarthLike stations pass 99 km
+  from its center. No two lanes come closer than 0.8 km, and only near a
+  station they share; there the closest gates of two lanes, placed the way
+  Trade Lanes MP places them, are 728 m apart (Delta-Moon and Delta-North). A
   lane goes both ways: each end is an entry toward the other. Every end is a
   one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
-  Delta and North Station for the Moon lanes, clear of their other lane ends),
+  the Earth stations for the Moon lanes, clear of their other lane ends),
   indestructible and not editable. Its Custom Data ends with a Target GPS at
   the other end's computer, so a computer the cluster loads before its partner
   still knows where its lane leads. `GpsMarkers:false` in it keeps the lanes
@@ -121,23 +148,30 @@ station and shipyard blueprints are in `blueprints/`.
   needs Trade Lanes MP with that switch, older versions ignore the line). The
   ends have no safe zone; the lane's
   rings have no physics. The two rings of a tunnel sit side by side, level with
-  the equator, on the lanes of the equatorial square, and one above the other
-  on all others (to the poles and the Moon). Each ring of a tunnel goes one way.
+  the equator, on the lanes of the equatorial square and from Delta and Alpha
+  Station to the Moon, and one above the other on the others (to the poles and
+  from North Station to the Moon). Each ring of a tunnel goes one way.
   Around the equatorial square and around the polar ring (Beta, North, Delta,
   South), the inner track runs Alpha, Beta, Gamma, Delta and Beta, North, Delta,
   South, the outer one the other way, so a ship going around stays on its track
-  at every station.
+  at every station. A Moon lane follows the circle of its Earth station: the
+  equator's at Delta and Alpha, the polar ring's at North. A ship that turns off
+  toward the Moon keeps its side: Delta to Moon to Alpha takes the same track
+  as Delta to Alpha, and North to Moon the same as North to Delta.
 - Places 2,000 asteroids in a flat band 45 to 75 km above EarthLike (105 to
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays
   out of EarthLike's gravity (it ends about 103 km from the center), clear of
   Alpha and Gamma Station at 140 km, and every asteroid stays 1 km from the
-  Trade Lanes. Its plane is perpendicular to EarthLike's magnetic axis as the
-  Aurora plugin (se-aurora) draws it when the sun is where the world starts it:
-  the north pole tilted 25 degrees (the plugin's default `MagneticAxisTilt`)
-  away from the sun. So the band is tilted against the equator: its nearest
-  asteroids are 6 to 9 km from Alpha and Gamma Station, but about 58 km from
-  Beta and Delta. The plugin's axis follows the sun as it moves, the band doesn't.
+  Trade Lanes. Its axis is EarthLike's magnetic axis as the Aurora plugin
+  (se-aurora) draws it when the sun is where the world starts it, the north
+  pole tilted 25 degrees (the plugin's default `MagneticAxisTilt`) away from
+  the sun, then turned about the poles together with the octahedron. So the
+  band keeps its place among the stations, tilted against the equator: its
+  nearest asteroids are 6 to 9 km from Alpha and Gamma Station, but about
+  58 km from Beta and Delta. It no longer lines up with the plugin's axis at
+  the start, which is 36.8 degrees around from it; that axis follows the sun as
+  it moves anyway, the band doesn't.
   The ring's asteroids are dealt out evenly to 24 sectors of 15 degrees,
   counted from Alpha Station's direction, 83 or 84 in each; `ORES.md` counts
   them per sector.
