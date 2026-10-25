@@ -114,6 +114,31 @@ public sealed class Commands : CommandModule
     [Permission(MyPromoteLevel.Admin)]
     public string Taxday() => Money.Force(tax: true);
 
+    [Command(
+        "contracts",
+        "Lists OCT's contracts at every station",
+        "!oct contracts [post]: post also posts the missing ones and checks bounties and salvage now."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public IEnumerable<string> ContractList(string post = null) =>
+        post == "post" ? [Contracts.Run()] : Contracts.Describe();
+
+    [Command(
+        "contract",
+        "Takes, delivers or completes one of OCT's contracts as the caller, for tests and support",
+        "!oct contract accept <id> | deliver <id> [fill] | complete <id>: deliver hands in a hauling or acquisition "
+            + "contract from the caller's inventory, fill adds the items first; complete finishes a bounty or salvage."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ContractAction(string action, long id, string fill = null) =>
+        action switch
+        {
+            "accept" => Contracts.Accept(Context.Caller.IdentityId, id),
+            "deliver" => Contracts.Deliver(Context.Caller.IdentityId, id, fill == "fill"),
+            "complete" => Contracts.Complete(id),
+            _ => "accept, deliver or complete",
+        };
+
     [Command("holograms", "Fits the blueprints in the station hologram tables to the tables again")]
     [Permission(MyPromoteLevel.Admin)]
     public string Holograms() => $"Fitted {TableHologram.FitAll()} hologram tables.";

@@ -84,6 +84,7 @@ public class Plugin : IPlugin
             Market.Update();
             Builds.Update();
             HangarFee.Bind();
+            Contracts.Update();
         }
         catch (Exception e)
         {
