@@ -3,8 +3,8 @@ Projector as on the Octahedron servers, the zones restricted as in the world, an
 headless client.
 
 - "complete": the client orders a 10 block ship ("Order Test") at its station's
-  hologram table with !oct order. A second order is refused while the shipyard is
-  busy. The client reads a shipyard welder's ToolCore_Shoot switch. The order ends
+  hologram table with !oct order (the table's button for an admin): the quote, then
+  the order. Pressing again while it builds doesn't cancel it. The client reads a shipyard welder's ToolCore_Shoot switch. The order ends
   when the ship is complete; the saved world must hold it as a dynamic grid owned and
   built by the player, without the scaffold, and the shipyard without the loaded
   components and with its welders off.
@@ -77,7 +77,12 @@ def log(text: str) -> None:
     print(f"[{time.monotonic() - started:6.0f} s] {text}", flush=True)
 
 
+table_blueprint = ""
+
+
 def prepare(blueprint: str, minutes: int) -> None:
+    global table_blueprint
+    table_blueprint = blueprint
     rig.prepare_world(
         settings={"TrashRemovalEnabled": "false"}, table_blueprint=blueprint
     )
@@ -133,16 +138,26 @@ def wait_chat(remote, text: str, timeout: float) -> str:
     raise TimeoutError(f"no chat line with {text!r}")
 
 
+def place(remote, name: str) -> str:
+    """Presses the button of the nearest table twice: the quote, then the order. Returns
+    the chat line of the build's start"""
+    reply = tc.ship_reply(remote, "!oct order")
+    assert "Your quote for" in reply, reply
+    reply = tc.ship_reply(remote, "!oct order")
+    assert "is in the queue" in reply, reply
+    return wait_chat(remote, f"builds '{name}' for you now", 60)
+
+
 def order(remote) -> int:
     """Orders at the nearest table and returns the shipyard's grid id"""
     table = min(tc.tables(remote), key=lambda b: b["distance"])
     tc.stand_by(remote, table)
-    reply = tc.ship_reply(remote, "!oct order")
-    assert "builds" in reply, reply
+    name = re.search(r"<DisplayName>([^<]*)</DisplayName>", table_blueprint)[1]
+    line = place(remote, name)
     busy = tc.ship_reply(remote, "!oct order")
-    assert "is building" in busy, busy
-    name = re.search(r"(\w+ Station Shipyard) builds", reply)[1]
-    return next(g["entityId"] for g in remote.list_grids() if g["name"] == name)
+    assert "can't be canceled now" in busy, busy
+    shipyard = re.search(r"(\w+ Station Shipyard) builds", line)[1]
+    return next(g["entityId"] for g in remote.list_grids() if g["name"] == shipyard)
 
 
 def shipyard_grid(shipyard_id: int) -> ET.Element:

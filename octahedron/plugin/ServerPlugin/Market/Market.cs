@@ -22,12 +22,14 @@ namespace ServerPlugin;
 /// server itself or the World Authority of a cluster, in the world's sandbox variables. The
 /// kiosks send their market requests here (<see cref="Execute"/>, <see cref="Read"/>); on the
 /// authority the book moves the items through the ledgers and the money through the bank
-/// accounts in one go. Every minute it closes expired listings and, once a UTC day, adds OCT's
-/// daily stock. OCT's stores replace the game's generated station store items.
+/// accounts in one go. Every minute it closes expired listings, tops up the zone chips OCT sells
+/// at fixed price and, once a UTC day, adds OCT's daily stock. OCT's stores replace the game's
+/// generated station store items.
 /// </summary>
 internal static class Market
 {
     public const string Variable = "Octahedron.Market";
+    public const string ZoneChip = "Component/ZoneChip";
     private const string Command = "market";
     private const string ReadTopic = "market/read";
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
@@ -62,6 +64,16 @@ internal static class Market
             DriftKg = Config.MarketPriceDriftTonnes * 1000,
             DriftHalfLifeHours = Config.MarketPriceDriftHalfLifeHours,
             DriftMaxFactor = Config.MarketPriceDriftMax,
+            FixedAsks = (Config.ZoneChipStations ?? "")
+                .Split(',')
+                .Select(station => station.Trim())
+                .Where(station => station.Length > 0)
+                .Distinct()
+                .ToDictionary(
+                    station => (station, ZoneChip),
+                    _ => Config.ZoneChipPrice * MarketBook.MilliPerSc
+                ),
+            FixedStock = Config.ZoneChipStock * LedgerBook.Unit,
         };
 
     /// <summary>The market, on the authority only, loaded from the world on first use.</summary>
@@ -173,6 +185,9 @@ internal static class Market
         MarketResult result;
         try
         {
+            // A purchase never finds the fixed-price goods sold out between two ticks
+            if (request.Verb == KioskVerb.Buy)
+                Book.TopUp(World, Settings, Ledgers.StationNames());
             result = Book.Run(World, Settings, request);
         }
         catch (OverflowException)
@@ -235,7 +250,7 @@ internal static class Market
         Tick(false);
     }
 
-    /// <summary>On the authority: closes expired listings and restocks OCT on a new day, or now with force.</summary>
+    /// <summary>On the authority: closes expired listings, tops up OCT's zone chips and restocks OCT on a new day, or now with force.</summary>
     public static string Tick(bool force)
     {
         if (!Ledgers.IsAuthority)
@@ -246,6 +261,9 @@ internal static class Market
         var restock = Book.Restock(World, Settings, Ledgers.StationNames(), Daily(), force);
         if (restock != null)
             lines.Add(restock);
+        var topUp = Book.TopUp(World, Settings, Ledgers.StationNames());
+        if (topUp != null)
+            lines.Add(topUp);
         if (lines.Count > 0)
             dirty = true;
         foreach (var line in lines)

@@ -310,8 +310,8 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "Players order the blueprint loaded into a station's hologram table with !oct order, and the station's shipyard "
-            + "builds it for at most this many minutes. 0: no orders.",
+        description: "Players order the blueprint loaded into a station's hologram table with the button next to it, and the "
+            + "station's shipyard builds it for at most this many minutes. 0: no orders.",
         Parent = "shipyard"
     )]
     public int ShipyardOrderMinutes
@@ -343,6 +343,84 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } =
         "*/*Prototech*, JumpDrive/*, Thrust/*LargeThrust, Thrust/*LargeThrustSciFi, Thrust/*LargeModularThruster";
+
+    [LongOption(
+        0,
+        description: "Labor fee of a paid shipyard build, paid to OCT: SC per 10 PCU of the blueprint, rounded up. 0: no fee.",
+        Parent = "shipyard"
+    )]
+    public long ShipyardLaborFeePer10Pcu
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1;
+
+    [IntOption(
+        1,
+        description: "Most ships in a shipyard's queue, the one being built included.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardQueueMax
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
+    [StringOption(
+        description: "Name of the station button panel next to the hologram table. Its first button orders the blueprint "
+            + "loaded into the table, or cancels the presser's queue entry before its build starts.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardConfirmButtonName
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Button Panel - Station ShipyardConfirm";
+
+    [StringOption(
+        description: "Name of the station text panels that show the shipyard's queue.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardQueuePanelName
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Text Panel - Station ShipyardQueue";
+
+    [IntOption(
+        0,
+        description: "The hologram table's screen that shows the quote, by index: 1 is the console block's large screen.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardQuoteSurface
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1;
+
+    [IntOption(
+        0,
+        100,
+        "A paid build's materials include the hydrogen to fill the new ship's H2 tanks to this percent.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardHydrogenFillPercent
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 50;
+
+    [DoubleOption(
+        0.001,
+        description: "Liters of hydrogen per kg of ice, as a gas generator makes it. Hydrogen a paid build buys "
+            + "at the station is bought as ice, and hydrogen taken from a ship at the station counts as ice.",
+        Parent = "shipyard"
+    )]
+    public double ShipyardHydrogenLitersPerIce
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20;
 
     [BoolOption(
         "OCT's account is real, without the economy's top-up toward 1e9: new money comes only from the subsidy and OCT's floor. "
@@ -891,6 +969,35 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 2;
+
+    [StringOption(
+        description: "Stations where OCT sells zone chips at ZoneChipPrice, comma separated; empty: nowhere. "
+            + "A chip keeps a player safe zone up for an hour.",
+        Parent = "market"
+    )]
+    public string ZoneChipStations
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Moon Station";
+
+    [IntOption(1, description: "OCT's price of a zone chip (SC).", Parent = "market")]
+    public int ZoneChipPrice
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1000;
+
+    [IntOption(
+        1,
+        description: "OCT keeps this many zone chips in stock at each of ZoneChipStations, the most one purchase can take.",
+        Parent = "market"
+    )]
+    public int ZoneChipStock
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
 
     [BoolOption(
         "OCT posts the stations' contracts instead of the game: hauling between stations, acquisitions of what its ledger at a "

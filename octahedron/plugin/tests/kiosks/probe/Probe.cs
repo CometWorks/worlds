@@ -5,11 +5,14 @@ using System.Linq;
 using System.Reflection;
 using PluginSdk.Commands;
 using Sandbox.Common.ObjectBuilders;
+using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
+using SpaceEngineers.Game.Definitions.SafeZone;
 using VRage;
 using VRage.Game;
 using VRage.Game.ModAPI;
@@ -65,6 +68,23 @@ public sealed class ProbeCommands : CommandModule
         var stand = m.Translation + m.Right * 2.2 - m.Up * 0.3;
         return $"KIOSK {kiosk.EntityId} {V(m.Translation)} STAND {V(stand)} SCRIPT {((Sandbox.ModAPI.Ingame.IMyTextSurface)kiosk).Script}";
     }
+
+    [Command(
+        "safezone",
+        "The safe zone blocks' upkeep: SAFEZONE subtype chips minutes, one per block",
+        "!kprobe safezone"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string SafeZone() =>
+        string.Join(
+            " ",
+            MyDefinitionManager
+                .Static.GetAllDefinitions()
+                .OfType<MySafeZoneBlockDefinition>()
+                .Select(d =>
+                    $"SAFEZONE {d.Id.SubtypeName} {d.SafeZoneUpkeep} {d.SafeZoneUpkeepTimeM}"
+                )
+        );
 
     [Command(
         "dock",
@@ -137,10 +157,26 @@ public sealed class ProbeCommands : CommandModule
                 ownerId
             )
         );
+        // H2=<fill ratio>: a small hydrogen tank, filled that far
+        var h2 = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("H2="));
+        if (h2 != null)
+        {
+            var tank = Block<MyObjectBuilder_OxygenTank>(
+                "LargeHydrogenTankSmall",
+                new Vector3I(0, 0, 2),
+                ownerId
+            );
+            tank.FilledRatio = float.Parse(h2.Substring(3), CultureInfo.InvariantCulture);
+            grid.CubeBlocks.Add(tank);
+        }
         var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
         var cargo = entity.GetFatBlocks<MyCargoContainer>().First();
         foreach (var pair in items.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
+            if (pair.StartsWith("H2="))
+                continue;
             var f = pair.Split('=');
             if (!MyDefinitionId.TryParse("MyObjectBuilder_" + f[0], out var id))
                 return $"BADITEM {f[0]}";
@@ -172,6 +208,69 @@ public sealed class ProbeCommands : CommandModule
         var status = ((Sandbox.ModAPI.Ingame.IMyShipConnector)c).Status;
         return $"DOCKED {gridId} {(c.Connected ? "yes" : "no")} status {status} at {V(c.PositionComp.GetPosition())}";
     }
+
+    [Command(
+        "gas",
+        "The hydrogen in the H2 tanks of a grid and its subgrids: GAS grid-id liters tanks",
+        "!kprobe gas <grid id|grid name>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Gas(string grid)
+    {
+        var found = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .FirstOrDefault(g => g.EntityId.ToString() == grid || g.DisplayName == grid);
+        if (found == null)
+            return $"NOGRID {grid}";
+        var group = MyCubeGridGroups.Static.Mechanical.GetGroup(found);
+        var grids = group == null ? [found] : group.Nodes.Select(n => n.NodeData).ToList();
+        var tanks = grids
+            .SelectMany(g => g.GetFatBlocks<MyGasTank>())
+            .Where(t => t.BlockDefinition.Id.SubtypeName.Contains("Hydrogen"))
+            .ToList();
+        var liters = tanks.Sum(t => t.FilledRatio * t.Capacity);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "GAS {0} {1:0} {2}",
+            found.EntityId,
+            liters,
+            tanks.Count
+        );
+    }
+
+    [Command(
+        "pay",
+        "Adds money to a faction's account, by its tag: PAID tag balance",
+        "!kprobe pay <tag> <SC>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Pay(string tag, long amount)
+    {
+        var faction = MySession.Static.Factions.TryGetFactionByTag(tag);
+        if (faction == null || !MyBankingSystem.ChangeBalance(faction.FactionId, amount))
+            return $"NOPAY {tag}";
+        MyBankingSystem.Static.TryGetAccountInfo(faction.FactionId, out var account);
+        return $"PAID {tag} {account.Balance}";
+    }
+
+    [Command(
+        "buttons",
+        "The first toolbar slot of the station's button panels: BUTTON id name slot0",
+        "!kprobe buttons <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Buttons(string station) =>
+        string.Join(
+            " ",
+            StationGrids(station)
+                .SelectMany(g =>
+                    g.GetFatBlocks<SpaceEngineers.Game.Entities.Blocks.MyButtonPanel>()
+                )
+                .Select(b =>
+                    $"BUTTON {b.EntityId} '{b.CustomName}' {b.Toolbar.GetItemAtIndex(0)?.GetType().Name ?? "empty"}"
+                )
+        );
 
     [Command("undock", "Disconnects and deletes the probe's ships", "!kprobe undock")]
     [Permission(MyPromoteLevel.Admin)]

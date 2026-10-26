@@ -5,8 +5,9 @@ using ServerPlugin;
 
 // Checks of the station market (ServerPlugin/Market/MarketBook.cs) against a fake world: OCT's
 // prices, stock and specialty, buying and selling through listings and OCT all or none, the
-// fee, listing limits, cancel and expiry, price drift, the saved and wire formats, the kiosk's
-// market requests, and that no money is made or lost. Prints one line per failed check and a
+// fee, listing limits, cancel and expiry, price drift, the zone chips OCT sells at a fixed
+// price, the saved and wire formats, the kiosk's market requests, and that no money is made or
+// lost. Prints one line per failed check and a
 // summary; exit code 0 = all pass.
 // Usage: dotnet run -c Release --project tests/market/MarketTests
 
@@ -29,6 +30,8 @@ const string Iron = "Ingot/Iron"; // 1 kg, 10 SC
 const string Plate = "Component/SteelPlate"; // 20 kg, whole, 50 SC
 const string Platinum = "Ingot/Platinum"; // 1 kg, 35 SC, Alpha's specialty
 const string Gold = "Ingot/Gold"; // 1 kg, not in OCT's catalog
+const string Chip = "Component/ZoneChip"; // whole, not in OCT's catalog, sold at a fixed price
+const string Moon = "Moon Station";
 var p1 = LedgerOwner.Player(1);
 var p2 = LedgerOwner.Player(2);
 var p3 = LedgerOwner.Player(3);
@@ -361,6 +364,67 @@ MarketResult Ok(FakeWorld w, MarketBook m, string what, Func<MarketResult> act)
     Check(MarketBook.Deserialize(saved).Serialize() == saved, "drift: saved");
 }
 
+// Zone chips: OCT sells them at a fixed price where the settings say, from a topped-up stock
+{
+    var w = new FakeWorld();
+    var m = new MarketBook();
+    var s = Exact();
+    s.FixedAsks[(Moon, Chip)] = 1_000_000;
+    s.FixedStock = 100 * U;
+    Check(m.OctAsk(w, s, Moon, Chip) == 1_000_000, "a zone chip costs 1,000 SC at Moon");
+    Check(m.OctAsk(w, s, A, Chip) == 0, "OCT doesn't sell zone chips at Alpha");
+    Check(m.OctBid(w, s, Moon, Chip) == 0, "OCT doesn't buy zone chips");
+    Check(m.TopUp(w, s, [A, B]) == null, "top-up: only at the stations given");
+    Check(m.TopUp(w, s, [A, Moon])?.Contains(Moon) == true, "top-up at Moon");
+    Check(
+        Free(w, oct, Chip, Moon) == 100 * U && Free(w, oct, Chip) == 0,
+        "top-up: 100 chips at Moon, none at Alpha"
+    );
+    Check(m.TopUp(w, s, [Moon]) == null, "top-up: nothing missing");
+
+    Refused(w, m, "nobody sells chips at Alpha", () => m.Buy(w, s, A, p1, Chip, U), "Nobody");
+    Ok(w, m, "buy 2 chips at Moon", () => m.Buy(w, s, Moon, p1, Chip, 2 * U));
+    Check(
+        w.Balances[p1] == 23_000 && Free(w, p1, Chip, Moon) == 2 * U,
+        "2 chips for 2,000 SC: " + w.Balances[p1]
+    );
+    Check(m.OctAsk(w, s, Moon, Chip) == 1_000_000, "the price doesn't drift");
+    Refused(
+        w,
+        m,
+        "24 chips cost more than p1 has",
+        () => m.Buy(w, s, Moon, p1, Chip, 24 * U),
+        "24,000 SC"
+    );
+    Refused(w, m, "OCT buys no chips", () => m.Sell(w, s, Moon, p1, Chip, U), "Nobody buys");
+    Check(m.TopUp(w, s, [Moon]) != null && Free(w, oct, Chip, Moon) == 100 * U, "refilled");
+    Refused(
+        w,
+        m,
+        "one purchase takes at most the stock",
+        () => m.Buy(w, s, Moon, f10, Chip, 101 * U),
+        "Only 100"
+    );
+
+    Ok(
+        w,
+        m,
+        "p1 offers a chip at 900 SC",
+        () => m.List(w, s, Moon, p1, ListingKind.Offer, Chip, U, 900_000)
+    );
+    long before = w.Balances[f10];
+    Ok(w, m, "the faction buys 2 chips", () => m.Buy(w, s, Moon, f10, Chip, 2 * U));
+    Check(w.Balances[f10] == before - 1_900, "the cheaper offer first, then OCT's chip");
+
+    var view = m.View(w, s, Moon, p1, null, item => item.Split('/')[1])
+        .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+    Check(
+        view.Contains($"market\t{Chip}\tZoneChip\t0\t1000000\t{99 * U}\t0\t0\t0\t0\t0"),
+        "view: OCT's chips at Moon: " + string.Join(" | ", view)
+    );
+    Check(!m.View(w, s, A, p1, null, item => item).Contains(Chip), "view: no chips at Alpha");
+}
+
 // Saved and wire formats, kiosk requests
 {
     var w = new FakeWorld();
@@ -557,6 +621,7 @@ sealed class FakeWorld : IMarketWorld
         ["Component/SteelPlate"] = (20, true, 50_000),
         ["Ingot/Platinum"] = (1, false, 35_000),
         ["Ingot/Gold"] = (1, false, 0),
+        ["Component/ZoneChip"] = (0.25, true, 0),
     };
 
     public long Now { get; set; } = 1_800_000_000;
@@ -631,7 +696,8 @@ sealed class FakeWorld : IMarketWorld
             : owner.Faction ? 1_000_000
             : 100_000;
 
-        public bool KnownStation(string station) => station is "Alpha Station" or "Beta Station";
+        public bool KnownStation(string station) =>
+            station is "Alpha Station" or "Beta Station" or "Moon Station";
 
         public bool KnownOwner(LedgerOwner owner) =>
             owner.Faction ? owner.Id is 10 or 1000 : owner.Id is 1 or 2 or 3;
