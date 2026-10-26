@@ -105,6 +105,8 @@ holds no blueprint for the server.
   counts toward their PCU.
 - It costs nothing. A player gets one every `StarterShipCooldownMinutes` (15);
   each cluster node counts that on its own, and a restart forgets it.
+- An admin with the game's "Ignore PCU limits" on (Alt+F10) gets one without
+  the cool-down and whatever PCU they have, as for shipyard orders below.
 - The player gets a GPS point on the ship, named after it: cyan, always shown on
   the HUD, and kept (not a temporary one). Only that player has it.
 
@@ -234,6 +236,15 @@ toolbar item (its own On switch) so that clients offer it; the item never runs.
   `Octahedron-FreePrints`, on a cluster in the World Authority's world: the node
   ending an order sends the time to every process, and a starting node asks the
   World Authority for the list. A player gets one free ship at a time.
+- An admin with the game's "Ignore PCU limits" on (Alt+F10) gets a free build
+  without the cool-down and whatever PCU they own, so a shipyard build can be
+  tested again and again. Their free builds start no cool-down, and the server
+  log says so. The other rules stay: the blocked blocks, one free ship at a
+  time, one order per queue, the shipyard's space and `GroupPcuLimit`. The
+  server that takes the order checks the flag, on a cluster the node the player
+  is on, and the node ending the build checks it again before it records a
+  cool-down: a node that doesn't have the player's flag records one, which
+  doesn't hold back that admin while the flag stays on.
 - Any other ship is a paid build. The payer is the player, or their faction when
   their last kiosk request had the Faction switch on, which needs the trading
   rank. The quote lists each component of every block with where it comes from:
@@ -924,6 +935,10 @@ are gone afterwards and the rotor heads stay.
 the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
 refused, and a player who reaches 10,000 PCU gets no more starter ships and a
 paid quote at the shipyard.
+`tests/test_ignore_pcu.py` checks the "Ignore PCU limits" exemption with the
+client: with the flag on, a free build over `FreeBuildPcuLimit` that starts no
+cool-down, a free quote during a cool-down and a starter ship past both limits;
+with it off, the same quotes are paid and the starter ship is refused.
 `tests/test_money.py` checks the money rules with the client: OCT cut to its cap at
 the first run, a new account's balance, no economy top-up of OCT while the rules are
 on (and the game's with them off), the tax by `!oct taxday`, two payouts by

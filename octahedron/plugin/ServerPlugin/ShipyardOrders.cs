@@ -42,7 +42,8 @@ namespace ServerPlugin;
 //
 // A ship is a free build for a player under FreeBuildPcuLimit, once FreeBuildCooldownMinutes
 // passed since their last free build ended (FreePrints), without the blocks in
-// FreeBuildBlockedBlocks. Any other ship is a paid build: its components, and the ice for the
+// FreeBuildBlockedBlocks; an admin with "Ignore PCU limits" on skips the PCU limit and the cool-down
+// (FreePrints.Exempt). Any other ship is a paid build: its components, and the ice for the
 // hydrogen to fill its H2 tanks to ShipyardHydrogenFillPercent, come from the payer's ledger at
 // the station (the player's, or their faction's with the kiosk's Faction switch on), then the
 // cheapest listings and OCT, plus the labor fee; hydrogen in the tanks of the player's ships
@@ -152,6 +153,9 @@ internal static class ShipyardOrders
         public int Pcu;
         public bool Free;
 
+        // The player ignores PCU limits: no cool-down or FreeBuildPcuLimit (FreePrints.Exempt)
+        public bool Exempt;
+
         // Why it is a paid build, and which rule: pcu, blocked or cooldown
         public string Paid;
         public string PaidRule = "";
@@ -204,14 +208,15 @@ internal static class ShipyardOrders
         var playerPcu = StarterShip.PlayerPcu(identity);
         var blocked = Blocked(blueprint, Config.FreeBuildBlockedBlocks);
         var wait = FreePrints.Wait(identityId);
-        if (playerPcu >= Config.FreeBuildPcuLimit)
+        plan.Exempt = FreePrints.Exempt(identityId);
+        if (!plan.Exempt && playerPcu >= Config.FreeBuildPcuLimit)
             (plan.PaidRule, plan.Paid) = (
                 "pcu",
                 $"you have {playerPcu:N0} PCU, free builds are for players under {Config.FreeBuildPcuLimit:N0}"
             );
         else if (!FreePrints.Ready)
             return Fail(plan, "The shipyard is busy, try again in a few seconds.");
-        else if (wait > TimeSpan.Zero)
+        else if (!plan.Exempt && wait > TimeSpan.Zero)
             (plan.PaidRule, plan.Paid) = (
                 "cooldown",
                 $"your next free ship is in {Math.Ceiling(wait.TotalMinutes)} min"
@@ -556,6 +561,11 @@ internal static class ShipyardOrders
                 tell(message);
                 if (ok)
                 {
+                    if (plan.Free && plan.Exempt)
+                        Plugin.Log.Info(
+                            $"Free builds: {Name(plan.Player)} ignores PCU limits, '{plan.Ship}' is free "
+                                + "without the cool-down and FreeBuildPcuLimit"
+                        );
                     quotes.Remove(plan.Table.EntityId);
                     Write(
                         plan.Table,
@@ -1203,7 +1213,11 @@ internal static class ShipyardOrders
             ship.RazeGeneratedBlocks(scaffold);
             MyMultiplayer.RaiseEvent(ship, x => x.RazeBlocksClient, scaffold);
             HandOver(ship, order.Player);
-            if (order.Free)
+            if (order.Free && FreePrints.Exempt(order.Player))
+                Plugin.Log.Info(
+                    $"Free builds: {Name(order.Player)} ignores PCU limits, no cool-down after '{name}'"
+                );
+            else if (order.Free)
                 FreePrints.Ended(order.Player);
             if (order.Hydrogen > 0)
                 filled = FillHydrogen(ship, order.Hydrogen);

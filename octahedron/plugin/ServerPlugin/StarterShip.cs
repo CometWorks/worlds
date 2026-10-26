@@ -36,7 +36,8 @@ internal static class StarterShip
             return CommandReply.Error("Spawn first, then ask at a hologram table.");
 
         var now = DateTime.UtcNow;
-        if (lastShip.TryGetValue(identityId, out var last))
+        var exempt = FreePrints.Exempt(identityId);
+        if (!exempt && lastShip.TryGetValue(identityId, out var last))
         {
             var wait = last.AddMinutes(config.StarterShipCooldownMinutes) - now;
             if (wait > TimeSpan.Zero)
@@ -46,7 +47,7 @@ internal static class StarterShip
         }
 
         var owned = PlayerPcu(identity);
-        if (owned >= config.FreeBuildPcuLimit)
+        if (!exempt && owned >= config.FreeBuildPcuLimit)
             return CommandReply.Error(
                 $"You have {owned:N0} PCU, ships in Hangar included. Starter ships are for players under "
                     + $"{config.FreeBuildPcuLimit:N0} PCU; build your ship at the station's shipyard."
@@ -113,6 +114,7 @@ internal static class StarterShip
         Plugin.Log.Info(
             $"Starter ship '{ship.DisplayName}' ({pcu} PCU, {ship.EntityId}) for {identity.DisplayName} "
                 + $"from {table.CustomName} of {table.CubeGrid.DisplayName}"
+                + (exempt ? ", ignoring PCU limits: no cool-down or FreeBuildPcuLimit" : "")
         );
         return CommandReply.Ok(
             $"Your ship '{ship.DisplayName}' ({pcu:N0} PCU) waits outside the station, see your GPS."
