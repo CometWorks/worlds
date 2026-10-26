@@ -21,6 +21,7 @@ namespace ServerPlugin;
 [Section("ledgers", caption: "Station Ledgers")]
 [Section("kiosks", caption: "Station Kiosks")]
 [Section("market", caption: "Station Market")]
+[Section("contracts", caption: "Contracts")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -889,6 +890,216 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 2;
+
+    [BoolOption(
+        "OCT posts the stations' contracts instead of the game: hauling between stations, acquisitions of what its ledger at a "
+            + "station lacks, bounties on NPC grids near a station and salvage of derelicts towed to a station's shipyard. "
+            + "OCT's account pays every reward. Runs on the World Authority of a cluster, without bounties and salvage there.",
+        Parent = "contracts"
+    )]
+    public bool ContractsEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [IntOption(
+        0,
+        description: "Open hauling contracts kept at each station.",
+        Parent = "contracts"
+    )]
+    public int ContractHaulingPerStation
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 3;
+
+    [LongOption(
+        0,
+        description: "Reward of a hauling contract, before distance (SC).",
+        Parent = "contracts"
+    )]
+    public long ContractHaulingBaseReward
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 2_000;
+
+    [LongOption(
+        0,
+        description: "Reward of a hauling contract per km between the two stations (SC).",
+        Parent = "contracts"
+    )]
+    public long ContractHaulingRewardPerKm
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20;
+
+    [IntOption(
+        1,
+        description: "Time limit of a hauling contract before distance, in minutes; it grows by a minute for every 3 km.",
+        Parent = "contracts"
+    )]
+    public int ContractHaulingMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20;
+
+    [IntOption(
+        1,
+        description: "The most items one acquisition contract asks for.",
+        Parent = "contracts"
+    )]
+    public int ContractAcquisitionMaxAmount
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5_000;
+
+    [IntOption(
+        0,
+        1_000,
+        description: "Reward of an acquisition contract in percent of the items' reference price (the game's minimal price / 10).",
+        Parent = "contracts"
+    )]
+    public int ContractAcquisitionPricePercent
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
+
+    [IntOption(
+        1,
+        description: "Time limit of an acquisition contract, in minutes.",
+        Parent = "contracts"
+    )]
+    public int ContractAcquisitionMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 240;
+
+    [IntOption(
+        0,
+        description: "Open bounty contracts kept at each station, on the most threatening NPC grids.",
+        Parent = "contracts"
+    )]
+    public int ContractBountiesPerStation
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 3;
+
+    [DoubleOption(
+        1,
+        description: "NPC grids up to this far from a station get bounties there (km).",
+        Parent = "contracts"
+    )]
+    public double ContractBountyRangeKm
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 30;
+
+    [DoubleOption(
+        0,
+        description: "Least threat score (MES's) of an NPC grid that gets a bounty.",
+        Parent = "contracts"
+    )]
+    public double ContractBountyMinThreat
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 50;
+
+    [DoubleOption(
+        0,
+        description: "Reward of a bounty per point of the target's threat score (SC).",
+        Parent = "contracts"
+    )]
+    public double ContractBountyRewardPerThreat
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20;
+
+    [IntOption(
+        1,
+        description: "Time limit of a bounty contract, in minutes.",
+        Parent = "contracts"
+    )]
+    public int ContractBountyMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 120;
+
+    [IntOption(
+        0,
+        description: "Open salvage contracts kept at each station.",
+        Parent = "contracts"
+    )]
+    public int ContractSalvagePerStation
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 2;
+
+    [IntOption(
+        1,
+        description: "Least blocks of an unowned, movable grid within the bounty range that gets a salvage contract.",
+        Parent = "contracts"
+    )]
+    public int ContractSalvageMinBlocks
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20;
+
+    [StringOption(
+        description: "Tags of the NPC factions whose grids are wrecks, comma separated: they get salvage contracts, not bounties.",
+        Parent = "contracts"
+    )]
+    public string ContractSalvageFactionTags
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "WRECKS";
+
+    [LongOption(
+        0,
+        description: "Reward of a salvage contract per tonne of the derelict (SC).",
+        Parent = "contracts"
+    )]
+    public long ContractSalvageRewardPerTonne
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
+
+    [DoubleOption(
+        1,
+        description: "A derelict this close to the station's shipyard grid (m, center to center) is delivered.",
+        Parent = "contracts"
+    )]
+    public double ContractSalvageRadius
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 150;
+
+    [IntOption(
+        1,
+        description: "Time limit of a salvage contract, in minutes.",
+        Parent = "contracts"
+    )]
+    public int ContractSalvageMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 180;
 }
 
 public struct RefillContainer
