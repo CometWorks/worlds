@@ -42,6 +42,7 @@ public class Plugin : IPlugin
     private bool failed;
     private bool encountersFailed;
     private bool moneyFailed;
+    private bool leaderboardFailed;
 
     public void Init(object gameInstance)
     {
@@ -107,6 +108,20 @@ public class Plugin : IPlugin
             {
                 Log.Critical("The money rules failed and stop", e);
                 moneyFailed = true;
+            }
+        }
+
+        // The leaderboard stops on its own too, it only shows what the other rules did
+        if (!failed && !leaderboardFailed)
+        {
+            try
+            {
+                Leaderboard.Update();
+            }
+            catch (Exception e)
+            {
+                Log.Critical("The leaderboard failed and stops", e);
+                leaderboardFailed = true;
             }
         }
 

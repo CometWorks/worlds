@@ -22,6 +22,7 @@ namespace ServerPlugin;
 [Section("kiosks", caption: "Station Kiosks")]
 [Section("market", caption: "Station Market")]
 [Section("contracts", caption: "Contracts")]
+[Section("leaderboard", caption: "Leaderboard")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -1279,6 +1280,46 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 180;
+
+    [StringOption(
+        description: "Name of the text panels that show the faction leaderboard (case-insensitive). Empty: no leaderboard.",
+        Parent = "leaderboard"
+    )]
+    public string LeaderboardBlockName
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Curved LCD Panel - Station Lounge Leaderboard";
+
+    [IntOption(
+        10,
+        description: "Seconds between two counts of the leaderboard. A count values every grid of the world, a few per tick.",
+        Parent = "leaderboard"
+    )]
+    public int LeaderboardIntervalSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 300;
+
+    [IntOption(1, 50, "Factions the leaderboard shows.", Parent = "leaderboard")]
+    public int LeaderboardRows
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 15;
+
+    [DoubleOption(
+        0.1,
+        5,
+        "Font size of the leaderboard text, Monospace, 45 characters a line.",
+        Parent = "leaderboard"
+    )]
+    public double LeaderboardFontSize
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 0.45;
 }
 
 public struct RefillContainer

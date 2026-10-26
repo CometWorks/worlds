@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<PluginData
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="GitHubPlugin"
+>
+  <!-- Test-only server plugin of the leaderboard cluster test. Never published to a hub. -->
+  <Id>6D2F4A18-9B53-4E07-8C61-2E5B1F1573AA</Id>
+  <RepoId>CometWorks/worlds</RepoId>
+  <FriendlyName>Leaderboard Probe</FriendlyName>
+  <Author>CometWorks</Author>
+  <Tooltip>Makes factions and ships and runs admin chat commands from a plan file, for the leaderboard cluster test</Tooltip>
+  <Commit>TODO Git commit hash</Commit>
+</PluginData>
