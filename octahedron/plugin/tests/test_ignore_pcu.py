@@ -6,11 +6,13 @@ client on the shipyard test server of tests/test_shipyard_order.py ("Order Test"
 Two server starts on one world copy:
 - FreeBuildPcuLimit 0. Flag off: the shipyard quotes a paid build for the PCU limit
   and !oct ship is refused. Flag on: two starter ships in a row (no PCU limit, no
-  cool-down), then a free build that completes and records no cool-down. Flag off
-  again: the starter ship waits for its cool-down, the quote is paid again, and with
-  the default config the shipyard quotes a free build. The saved world has no cool-down for the player.
+  cool-down), then a free build that completes and records no cool-down, and another
+  free order (canceled). Flag off again: the starter ship waits for its cool-down,
+  the quote is paid again, and with the default config a free order goes in (canceled).
+  The saved world has no cool-down for the player.
 - The finished ship taken out of the save. Flag off: a free build that completes,
-  then the quote is paid for the 60 minute cool-down. Flag on: a free quote.
+  then the quote is paid for the 60 minute cool-down. Flag on: a free order
+  (canceled). The saved world has the cool-down.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> \\
     uv run --no-project --with httpx python tests/test_ignore_pcu.py
@@ -23,6 +25,7 @@ from __future__ import annotations
 import os
 import re
 import time
+import xml.etree.ElementTree as ET
 
 os.environ.setdefault("OCT_TASK", "SE-719")
 import rig  # noqa: E402
@@ -32,9 +35,15 @@ import test_shipyard_order as so  # noqa: E402
 
 NAME = "Order Test"
 FREE = "a free build."
-COOLDOWN = "next free ship is in"
-EXEMPT = "ignores PCU limits"
+PCU_LIMIT = "a paid build (you have"
+COOLDOWN = "a paid build (your next free ship is in 60 min)"
+# The server's log lines of the exemption
+EXEMPT = re.compile(r"ignor(es|ing) PCU limits")
 started = time.monotonic()
+
+# The plugin quotes the table's shown quote again every 10 s, so after a rule change the
+# screen may already show the new quote, and a press orders it instead of quoting. A
+# free build ordered and canceled leaves no quote shown, so the next press quotes.
 
 
 def log(text: str) -> None:
@@ -53,11 +62,31 @@ def chat_count(remote, text: str) -> int:
     return sum(text in line for line in lines)
 
 
-def build(remote) -> None:
-    """Orders the quoted free build and waits until the ship is ready"""
-    ready = chat_count(remote, "is ready")
+def paid_quote(remote, text: str) -> None:
+    """With no quote shown, a press quotes"""
     reply = fl.order(remote)
-    assert "is in the queue" in reply, reply
+    assert "Your quote for" in reply and text in reply, reply
+
+
+def order_free(remote) -> None:
+    """Presses until a free build is in the queue"""
+    reply = fl.order(remote)
+    if "is in the queue" not in reply:
+        assert "Your quote for" in reply and FREE in reply, reply
+        reply = fl.order(remote)
+    assert f"is in the queue, {FREE}" in reply, reply
+
+
+def free_quote(remote) -> None:
+    order_free(remote)
+    reply = fl.order(remote)
+    assert "left the queue" in reply, reply
+
+
+def build(remote) -> None:
+    """Orders a free build and waits until the ship is ready"""
+    ready = chat_count(remote, "is ready")
+    order_free(remote)
     fl.wait_chat_count(remote, "is ready", ready + 1, 900)
     log("the ship is ready")
 
@@ -72,7 +101,7 @@ def free_prints() -> str:
 
 
 def exempt_lines() -> list[str]:
-    return [line for line in rig.server_game_log().splitlines() if EXEMPT in line]
+    return [line for line in rig.server_game_log().splitlines() if EXEMPT.search(line)]
 
 
 def without_limits() -> int:
@@ -82,26 +111,21 @@ def without_limits() -> int:
     tc.with_config(remote, FreeBuildPcuLimit=0)
 
     ignore_pcu(remote, False)
-    reply = fl.order(remote)
-    assert "paid build (you have" in reply, reply
+    paid_quote(remote, PCU_LIMIT)
     reply = tc.ship_reply(remote)
     assert "Starter ships are for players under" in reply, reply
 
     ignore_pcu(remote, True)
     for _ in range(2):
         assert "waits outside" in tc.ship_reply(remote), "no PCU limit or cool-down"
-    reply = fl.order(remote)
-    assert FREE in reply, reply
     build(remote)
-    assert FREE in fl.order(remote), "a free quote right after the build"
+    free_quote(remote)
 
     ignore_pcu(remote, False)
     assert "ready in" in tc.ship_reply(remote), "the starter ship's cool-down"
-    # A paid quote in between, else the press would order the free build shown
-    assert "paid build (you have" in fl.order(remote)
+    paid_quote(remote, PCU_LIMIT)
     tc.with_config(remote)
-    reply = fl.order(remote)
-    assert FREE in reply, f"the build started no cool-down: {reply}"
+    free_quote(remote)
     fl.stop()
 
     lines = exempt_lines()
@@ -114,19 +138,40 @@ def without_limits() -> int:
     return player
 
 
+def remove_ships() -> None:
+    """Takes the player's ships named NAME, the starter ships too, out of the saved world"""
+    sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
+    text = sector.read_text(encoding="utf-8")
+    ids = {
+        o.findtext("EntityId")
+        for o in ET.fromstring(text).find("SectorObjects")
+        if o.findtext("DisplayName") == NAME
+    }
+    log(f"removing {len(ids)} ships")
+    for id_ in ids:
+        text, count = re.subn(
+            r'<MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_CubeGrid">\s*'
+            r"<SubtypeName />\s*"
+            rf"<EntityId>{id_}</EntityId>.*?</MyObjectBuilder_EntityBase>\s*",
+            "",
+            text,
+            flags=re.S,
+        )
+        assert count == 1, (id_, count)
+    sector.write_text(text, encoding="utf-8")
+
+
 def cooldown(player: int) -> None:
-    fl.set_tables(so.SMALL, remove=NAME)
+    remove_ships()
+    fl.set_tables(so.SMALL)
     remote = fl.start()
 
     ignore_pcu(remote, False)
-    assert FREE in fl.order(remote)
     build(remote)
-    reply = fl.order(remote)
-    assert f"{COOLDOWN} 60 min" in reply, reply
+    paid_quote(remote, COOLDOWN)
 
     ignore_pcu(remote, True)
-    reply = fl.order(remote)
-    assert FREE in reply, f"no cool-down with the flag on: {reply}"
+    free_quote(remote)
     ignore_pcu(remote, False)
     fl.stop()
     assert (
