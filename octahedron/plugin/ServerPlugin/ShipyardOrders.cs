@@ -748,7 +748,7 @@ internal static class ShipyardOrders
                 return;
             orders[shipyard.EntityId] = order;
             Plugin.Log.Info(
-                $"Shipyard order '{projector.CubeGrid.DisplayName}' ({projector.CubeGrid.EntityId}) "
+                $"Shipyard order '{order.Name}' ({projector.CubeGrid.EntityId}) "
                     + $"of {Name(order.Player)} picked up at {shipyard.DisplayName}, until {order.Ends:u}"
             );
         }
@@ -1372,6 +1372,8 @@ internal static class ShipyardOrders
             $"Free={(next.Free ? 1 : 0)}",
             $"Hydrogen={hydrogen.ToString("R", CultureInfo.InvariantCulture)}",
             $"Arm={string.Join(";", arm.Select(Format))}",
+            // Restore names the order by it, not by the saved projection's grid
+            $"Ship={(main.DisplayName ?? "Ship").Replace('\n', ' ')}",
         };
         if (connector != null)
             data.Add($"Connector={Format(connector.Value)}");
@@ -1739,7 +1741,7 @@ internal static class ShipyardOrders
             Id = values.TryGetValue("Build", out var id) ? id : "",
             Free = !values.TryGetValue("Free", out var f) || f != "0",
             Hydrogen = hydrogen,
-            Name = grids[0].DisplayName ?? "Ship",
+            Name = values.TryGetValue("Ship", out var ship) ? ship : grids[0].DisplayName ?? "Ship",
         };
         if (values.TryGetValue("Arm", out var arm))
             foreach (var text in arm.Split(';'))
