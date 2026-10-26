@@ -50,6 +50,7 @@ server and client and checks the requests end to end.
 
 ## Publishing
 
-The mod has no Workshop item yet. Publishing it, and adding it and
-TouchScreenAPI to the world's mods, waits for a person: upload the folder with
-`Data`, `metadata.mod` and a thumbnail (not `bin`, `obj` or the project file).
+The mod is Workshop item [3827916260](https://steamcommunity.com/sharedfiles/filedetails/?id=3827916260).
+`../build_world.py` adds it and TouchScreenAPI to the world's mods. To update it,
+upload the folder with `Data`, `metadata.mod` and a thumbnail (not `bin`, `obj`
+or the project file).

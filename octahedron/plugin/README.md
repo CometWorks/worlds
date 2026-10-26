@@ -402,8 +402,8 @@ clear of the landing pads, so landing ships hit neither the screen nor the
 player in front of it.
 
 The screens come from the Octahedron Kiosk client mod (`../kiosk-mod`), built on
-TouchScreenAPI (Workshop 2668820525); both must be in the world's mods. The
-plugin selects the mod's screen script, `KioskScript`, on every kiosk. The mod
+TouchScreenAPI (Workshop 2668820525); both are in the world's mods, the kiosk
+mod as Workshop 3827916260. The plugin selects the mod's screen script, `KioskScript`, on every kiosk. The mod
 only draws and sends the player's requests as mod messages; the plugin checks
 each one and does the work:
 
