@@ -6,8 +6,8 @@ ship of the player's.
 - At a table holding a 10,725 PCU blueprint, !oct ship is refused: a starter ship
   has at most 10,000.
 - At a table holding the 62 PCU starter test blueprint the player gets the ship and
-  then has 10,012 PCU, so another !oct ship (cooldown off) and !oct order are
-  refused, both naming the 10,000 PCU limit.
+  then has 10,012 PCU, so another !oct ship (cooldown off) is refused and the
+  shipyard quotes a paid build, both naming the 10,000 PCU limit.
 
 The old defaults, 20,000 each, pass all three.
 
@@ -111,7 +111,9 @@ def main() -> None:
     reply = tc.ship_reply(remote)
     assert f"You have {owned:,} PCU" in reply and f"under {LIMIT} PCU" in reply, reply
     reply = tc.ship_reply(remote, "!oct order")
-    assert f"You have {owned:,} PCU" in reply and f"under {LIMIT} PCU" in reply, reply
+    assert (
+        f"a paid build (you have {owned:,} PCU" in reply and f"under {LIMIT})" in reply
+    ), reply
 
     errors = [
         line

@@ -212,47 +212,82 @@ without the plugin see the welded blocks.
 
 ### Shipyard orders
 
-A player who stands by a station's hologram table with a blueprint loaded into it
-types `!oct order`, or `!oct order <table name>`, and the station's shipyard builds
-the ship for them, for at most `ShipyardOrderMinutes` (60; 0 turns orders off).
+A player loads a blueprint into a station's hologram table (`Console Block -
+Station ShipyardProjection`) and reads the quote on the table's large screen
+(`ShipyardQuoteSurface`, 1). The first button of the button panel next to it
+(`ShipyardConfirmButtonName`, `Button Panel - Station ShipyardConfirm`) orders the
+ship from the station's shipyard; the same player pressing it again cancels the
+order while its build hasn't started. A press when the screen shows no quote for
+the presser, or a quote of another blueprint or more than 5 minutes old, shows
+their quote first and asks them to press again. The plugin gives the button a
+toolbar item (its own On switch) so that clients offer it; the item never runs.
+`!oct order [table name]` (admin) presses the button of the nearest table.
+`ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
 
-- It is free, so only a player with less than `FreeBuildPcuLimit` (10,000) PCU
-  may order, counted as for the starter ship, and the blueprint may have at most
-  `GroupPcuLimit` PCU, the cap of a ship.
-- A player gets one free ship at a time, then waits `FreeBuildCooldownMinutes`
-  (60) for the next. The wait starts when an order ends with the ship handed
-  over, finished or not; an order whose ship was removed starts none. The plugin
-  keeps the times in the world variable `Octahedron-FreePrints`, on a cluster in
-  the World Authority's world: the node ending an order sends the time to every
-  process, and a starting node asks the World Authority for the list.
-- A free ship can't have the blocks `FreeBuildBlockedBlocks` names (by default
-  prototech blocks, large ion thrusters and jump drives). Such a ship is a paid
-  build; the shipyard refuses it, naming the blocks, until paid builds come.
+- A ship is a free build for a player with less than `FreeBuildPcuLimit`
+  (10,000) PCU, counted as for the starter ship, once `FreeBuildCooldownMinutes`
+  (60) have passed since their last free build ended, and when it has none of
+  the blocks `FreeBuildBlockedBlocks` names (prototech blocks, large ion
+  thrusters and jump drives). The cool-down starts when a free build ends with
+  the ship handed over, finished or not; a canceled order or one whose ship was
+  removed starts none. The plugin keeps the times in the world variable
+  `Octahedron-FreePrints`, on a cluster in the World Authority's world: the node
+  ending an order sends the time to every process, and a starting node asks the
+  World Authority for the list. A player gets one free ship at a time.
+- Any other ship is a paid build. The payer is the player, or their faction when
+  their last kiosk request had the Faction switch on, which needs the trading
+  rank. The quote lists each component of every block with where it comes from:
+  the payer's ledger at the station first (free), then bought from the cheapest
+  player listings and OCT, as the market's Buy does. On top comes the labor fee,
+  `ShipyardLaborFeePer10Pcu` (1) SC per 10 PCU of the blueprint, rounded up,
+  paid to OCT on every build. The materials also include the hydrogen to fill
+  the ship's H2 tanks to `ShipyardHydrogenFillPercent` (50 %): from the H2 tanks
+  of the payer's ships docked at the station's connectors first, the rest as
+  ice (`ShipyardHydrogenLitersPerIce`, 20 L per kg) from the ledger and the
+  market. When the station has too little ice, the order goes ahead and the
+  tanks get less.
+- On order the plugin moves the components from the payer's ledger into a build
+  ledger (an uncounted reservation `build <id>` of the payer at the station),
+  buys the rest into it at the quoted price (a higher price refuses the order
+  and shows the new quote), takes the fee and queues the order. Canceling
+  releases the build ledger to the payer's ledger, the bought components and the
+  hydrogen's ice included, and OCT pays the fee back.
+- The queue of each shipyard holds at most `ShipyardQueueMax` (10) orders, one
+  per player. The station's queue panels (`ShipyardQueuePanelName`, `Text Panel -
+  Station ShipyardQueue`) show it, and which ship blocks the shipyard.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
-  shipyard. The space must be empty: a ship left there has to fly out first.
-- One order per shipyard. Another player is told whose ship it builds and
-  when it is free at the latest.
-- The ship starts as a static grid of one of its blocks, built complete and the
-  player's, centered in the free space. Next to it, outside the ship's bounds, an
-  NPC-owned projector and battery named `Shipyard Order` project the blueprint
-  (Multigrid Projector builds its subgrids). The components of the other blocks
-  go into the shipyard's cargo containers, and its OmniArc welders are switched
-  on through their terminal switches. Clients don't see the beams in a
-  no-welding safe zone: ToolCore turns the tools off there on the client, which
-  doesn't have the shipyard exception above (SE1-0259).
+  shipyard, its components the shipyard's containers, and it may have at most
+  `GroupPcuLimit` PCU, the cap of a ship. The quote checks that; an order that
+  doesn't fit when its turn comes ends with everything given back.
+- The next order starts when the shipyard's free space is empty: a ship left
+  there has to fly out first. The ship starts as a static grid of one of its
+  blocks, built complete and the player's, centered in the free space. Next to
+  it, outside the ship's bounds, an NPC-owned projector and battery named
+  `Shipyard Order` project the blueprint (Multigrid Projector builds its
+  subgrids). The components of the other blocks go into the shipyard's cargo
+  containers, from the build ledger for a paid build, and its OmniArc welders
+  are switched on through their terminal switches. Clients don't see the beams
+  in a no-welding safe zone: ToolCore turns the tools off there on the client,
+  which doesn't have the shipyard exception above (SE1-0259).
 - Every projected block welded onto the ship or its subgrids is the player's,
   owner and `BuiltBy`, so it counts toward the player's PCU and the projection
   limits check it for them.
 - The order ends when every block is complete, or when the time is up. The
   welders go off, the projector and battery are removed with the projection,
   what is left of the loaded components is taken out of the shipyard's
-  containers and welders, and the ship, finished or not, becomes the player's
-  dynamic ship. The player gets a chat message either way.
+  containers and welders (back into the payer's ledger for a paid build), a paid
+  build's hydrogen goes into the ship's H2 tanks (the ice of what doesn't fit
+  goes back, with a warning when none does), and the ship, finished or not,
+  becomes the player's dynamic ship. The player gets a chat message either way.
 
-The order is kept in the world, in the projector's custom data, so it goes on
-after a restart. Every 10 seconds the node that simulates a shipyard checks it,
-so on a cluster the node owning the station's partition runs the order.
+The queues and build ledgers live where the ledgers do, on a plain server or the
+World Authority, saved as the sandbox variable `Octahedron.Builds`, the
+blueprints included. A running build is kept in the world, in the projector's
+custom data, so it goes on after a restart. Every 10 seconds the node that
+simulates a shipyard checks it and starts the next order, so on a cluster the
+node owning the station's partition runs the builds and asks the World
+Authority for the queue.
 
 ### Money
 
@@ -785,13 +820,22 @@ OmniArc welder on a player's grid named like a shipyard do nothing, and that the
 player's tools work outside the zone. It runs with the plugin's rules on, on
 with the zones holding every test grid from the start, and off.
 `tests/test_shipyard_order.py` orders a ship at a station table with the client
-and checks the saved world after the shipyard finished it, then lets a bigger
+(the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
+`tests/builds/BuildTests` checks the queues and build ledgers without the game
+(`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
+from the ledger, listings and OCT, paid orders all or none, cancel, start and finish
+with leftovers and hydrogen, free orders, the queue, the formats, and that no money
+is made or lost. `tests/test_paid_builds.py` checks paid builds in game at Alpha
+Station with the shipyard's mods and the kiosk mods: the quote and the order, the
+hydrogen from a docked ship's tank into the new ship's, the payment, a press while
+it builds, a faction-paid order queued behind the finished ship and canceled after
+a restart, and a free order canceled with the button itself.
 `tests/test_free_build.py` checks the free-build limits at their defaults with
 the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
-refused, and a player who reaches 10,000 PCU gets no more starter ships or
-shipyard orders.
+refused, and a player who reaches 10,000 PCU gets no more starter ships and a
+paid quote at the shipyard.
 `tests/test_money.py` checks the money rules with the client: OCT cut to its cap at
 the first run, a new account's balance, no economy top-up of OCT while the rules are
 on (and the game's with them off), the tax by `!oct taxday`, two payouts by
