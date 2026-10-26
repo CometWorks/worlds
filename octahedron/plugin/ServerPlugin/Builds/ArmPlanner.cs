@@ -169,6 +169,37 @@ public static class ArmPlanner
         return null;
     }
 
+    /// <summary>Why Plan found no arm, for the log: what blocks the start, or how far it got.</summary>
+    public static string Explain(ArmProblem p)
+    {
+        var size = p.Max - p.Min + new Cell(1, 1, 1);
+        var box = $"box {p.Min}..{p.Max}, ship volume {p.Volume.Count} cells";
+        if (!Inside(p, p.Start))
+            return $"the pipe end {p.Start} is outside the {box}";
+        if (p.Volume.Contains(p.Start))
+            return $"the ship's volume covers the pipe end {p.Start}";
+        if (p.Blocked(p.Start))
+            return $"the pipe end {p.Start} is taken by the shipyard";
+        if ((long)size.X * size.Y * size.Z * 6 > p.MaxStates)
+            return $"the {box} is too large to search";
+        var spots = new HashSet<Cell>(
+            p.Touches.SelectMany(t => t.Value.Select(d => t.Key + d)).Where(c => Free(p, c))
+        );
+        // The free cells the pipe end reaches, any way round
+        var reached = new HashSet<Cell> { p.Start };
+        var todo = new Queue<Cell>(reached);
+        while (todo.Count > 0)
+        {
+            var c = todo.Dequeue();
+            foreach (var d in Cell.Directions)
+                if (Free(p, c + d) && reached.Add(c + d))
+                    todo.Enqueue(c + d);
+        }
+        return $"the pipe end {p.Start} going {p.Up} reaches {reached.Count} free cells, "
+            + $"{spots.Count(reached.Contains)} of {spots.Count} free projector spots next to "
+            + $"{p.Touches.Count} touchable blocks; {box}";
+    }
+
     private static bool Inside(ArmProblem p, Cell c) =>
         c.X >= p.Min.X
         && c.Y >= p.Min.Y

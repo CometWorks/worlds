@@ -221,6 +221,8 @@ def order(remote, case: str) -> tuple:
     check("is in the queue" in reply, f"{case}: ordered: {reply}")
     started = wait_chat(remote, f"builds '{ship}' for you now", 90, mark)
     check(started is not None, f"{case}: the build starts: {started}")
+    if started is None:
+        return None
     arm = wait_state(remote, station, rf"'{ship}'.*: arm \d+/\d+", 30)
     check(
         arm is not None and "projector off" in arm,
@@ -337,18 +339,20 @@ def saved(cases: list[str]) -> None:
         len(stators) == 28 and len(attached) == 28,
         f"saved: all 28 arm rotors keep their heads: {len(attached)}/{len(stators)}",
     )
+    # Every head grid is named "Subgrid": list them all, not by name
     heads = [
         e
-        for e in grids.values()
-        if any(
+        for e in root.iter("MyObjectBuilder_EntityBase")
+        if e.find("CubeBlocks") is not None
+        and any(
             b.findtext("SubtypeName") in ("LargeAdvancedRotor", "SmallAdvancedRotor")
             for b in e.find("CubeBlocks")
         )
         and len(list(e.find("CubeBlocks"))) == 1
     ]
     check(
-        all(e.findtext("IsStatic") != "true" for e in heads),
-        f"saved: the rotor heads are dynamic ({len(heads)} heads alone on their grids)",
+        len(heads) == 28 and all(e.findtext("IsStatic") != "true" for e in heads),
+        f"saved: the 28 rotor heads are alone on their grids and dynamic: {len(heads)}",
     )
 
 
@@ -363,6 +367,8 @@ def main() -> int:
     try:
         for case in cases:
             mark = order(remote, case)
+            if mark is None:
+                continue  # no build to follow
             if case == "dock":
                 remote = restart(remote)
                 line = wait_state(remote, "Alpha", r"'ArmDock'.*: arm \d+/\d+", 120)

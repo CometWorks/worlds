@@ -100,6 +100,7 @@ internal static class ShipyardArm
             var layout = PlanFor(shipyard, rotor, space, orientation, blueprint, out var why);
             if (layout == null)
             {
+                Note(rotor.EntityId, $"Shipyard arm on '{rotor.CustomName}': {why}");
                 error = why;
                 continue;
             }
@@ -192,6 +193,7 @@ internal static class ShipyardArm
 
         // The shipyard and the grids on its rotors and pistons; the rotor head's grid itself
         var blocked = new HashSet<Cell>();
+        var stator = new HashSet<Cell>();
         var toHead = grid.PositionComp.WorldMatrixNormalizedInv * MatrixD.CreateScale(1 / size);
         foreach (var other in Grids(shipyard))
         {
@@ -199,7 +201,13 @@ internal static class ShipyardArm
                 continue;
             var toCells = other.WorldMatrix * toHead;
             foreach (var block in other.GetBlocks())
-                Mark(blocked, block.Min, block.Max, other.GridSize, toCells);
+                Mark(
+                    block == rotor.SlimBlock ? stator : blocked,
+                    block.Min,
+                    block.Max,
+                    other.GridSize,
+                    toCells
+                );
         }
         foreach (var block in grid.GetBlocks())
             for (var x = block.Min.X; x <= block.Max.X; x++)
@@ -215,6 +223,10 @@ internal static class ShipyardArm
             start += upward;
         problem.Start = C(start);
         problem.Up = C(upward);
+        // An advanced rotor's head sits inside its stator's two cells, so the pipe end's cell
+        // is in the stator's box; the game builds it there ("... Arm Exam" blueprint)
+        stator.Remove(problem.Start);
+        blocked.UnionWith(stator);
 
         // Search around the ship and the head, with room to go around
         var margin = (int)Math.Ceiling(Math.Max(4 * size, 10) / size);
@@ -283,6 +295,16 @@ internal static class ShipyardArm
         if (plan == null)
         {
             error = $"{shipyard.DisplayName} can't reach the ship with a support arm.";
+            var offset = Vector3D.TransformNormal(
+                head.WorldMatrix.Translation - rotor.WorldMatrix.Translation,
+                MatrixD.Transpose(rotor.WorldMatrix)
+            );
+            Note(
+                -rotor.EntityId,
+                $"Shipyard arm on '{rotor.CustomName}' of {shipyard.DisplayName}: {ArmPlanner.Explain(problem)}; "
+                    + $"head {offset:F2} m from the rotor in its axes; "
+                    + $"pipe end cell taken by {Taker(shipyard, rotor, toHead, start) ?? "nothing"}"
+            );
             return null;
         }
         var layout = new Layout
@@ -490,6 +512,40 @@ internal static class ShipyardArm
         var turn = new MatrixI(Orientation(block));
         max = min + Vector3I.Abs(Vector3I.TransformNormal(definition.Size - 1, ref turn));
         return true;
+    }
+
+    private static readonly Dictionary<long, string> noted = [];
+
+    // Logs why a rotor has no arm once, not on every replan of a shown quote
+    private static void Note(long key, string text)
+    {
+        if (noted.TryGetValue(key, out var had) && had == text)
+            return;
+        noted[key] = text;
+        Plugin.Log.Info(text);
+    }
+
+    // The block whose box takes the pipe end's cell c of the head's grid, for the log; the
+    // arm's own stator may hold it
+    private static string Taker(
+        MyCubeGrid shipyard,
+        MyMotorStator rotor,
+        MatrixD toHead,
+        Vector3I c
+    )
+    {
+        foreach (var other in Grids(shipyard))
+        foreach (var block in other.GetBlocks())
+        {
+            if (block == rotor.SlimBlock)
+                continue;
+            var cells = new HashSet<Cell>();
+            Mark(cells, block.Min, block.Max, other.GridSize, other.WorldMatrix * toHead);
+            if (cells.Contains(C(c)))
+                return $"{block.BlockDefinition.Id.SubtypeName} at {block.Min} of "
+                    + (other == rotor.TopGrid ? "the head's grid" : other.DisplayName);
+        }
+        return null;
     }
 
     // Adds the cells of the arm's grid a box of cells of another grid overlaps; toCells takes

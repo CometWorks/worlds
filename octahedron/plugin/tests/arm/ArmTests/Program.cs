@@ -7,7 +7,8 @@ using ServerPlugin;
 // Checks of the support arm's path planning (ServerPlugin/Builds/ArmPlanner.cs) on made-up
 // shipyards: the pipes from the rotor head around the ship to a projector next to it, never
 // through the ship or the shipyard, the turn cost, docking at the ship's connector, the cap
-// without one, giving up the lightest armor block, and no plan when nothing is reachable.
+// without one, giving up the lightest armor block, and no plan when nothing is reachable, with
+// the reason Explain gives.
 // Prints one line per failed check and a summary; exit code 0 = all pass.
 // Usage: dotnet run -c Release --project tests/arm/ArmTests
 
@@ -255,6 +256,25 @@ int Pipes(ArmPlan plan) =>
     Console.WriteLine(
         $"large: {plan?.Blocks.Count} blocks, cost {plan?.Cost}, {watch.ElapsedMilliseconds} ms"
     );
+}
+
+// 10. Explain names why there is no plan
+{
+    var ship = Box(C(-2, 10, -2), C(2, 12, 2));
+    var p = Problem(ship, c => c == C(0, 0, 0));
+    Check(ArmPlanner.Explain(p).Contains("taken by the shipyard"), "explain: start taken");
+    p = Problem(Box(C(-1, -1, -1), C(1, 1, 1)));
+    Check(ArmPlanner.Explain(p).Contains("volume covers"), "explain: start in the ship");
+    p = Problem(ship);
+    p.Start = C(0, 40, 0);
+    Check(ArmPlanner.Explain(p).Contains("outside"), "explain: start outside the box");
+    // Walled in: the pipe end and the cell above it free, everything around them taken
+    var walls = Box(C(-1, 0, -1), C(1, 3, 1));
+    walls.ExceptWith([C(0, 1, 0), C(0, 2, 0)]);
+    p = Problem(ship, walls.Contains);
+    p.Start = C(0, 1, 0);
+    var why = ArmPlanner.Explain(p);
+    Check(why.Contains("reaches 2 free cells, 0 of "), $"explain: walled in: {why}");
 }
 
 Console.WriteLine($"{checks - failures}/{checks} arm planner checks passed");
