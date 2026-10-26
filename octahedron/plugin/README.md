@@ -346,6 +346,47 @@ the start of it, and amounts are in units:
 !oct ledger show Alpha
 ```
 
+### Station kiosks
+
+Players use the station services on the station's kiosk, a touch screen; the
+chat commands are for admins. A kiosk is a text panel on a station's grids named
+`KioskBlockName` (`LCD Panel - Station Lounge StationStorefront`, one per
+station in the current blueprint). The station blueprints must keep the kiosks
+clear of the landing pads, so landing ships hit neither the screen nor the
+player in front of it.
+
+The screens come from the Octahedron Kiosk client mod (`../kiosk-mod`), built on
+TouchScreenAPI (Workshop 2668820525); both must be in the world's mods. The
+plugin selects the mod's screen script, `KioskScript`, on every kiosk. The mod
+only draws and sends the player's requests as mod messages; the plugin checks
+each one and does the work:
+
+- The player must stand within `KioskReachMeters` (5 m) of the kiosk, and makes
+  one request at a time, at most one every `KioskCooldownSeconds` (0.5 s).
+- Deposit and withdraw move items between a docked ship and the ledger. A ship
+  is docked when a connector of the station holds it; the kiosk lists every such
+  ship the player has inventory access to, by the game's ownership and share
+  rules, and works on the one they pick. Its items are those in the cargo
+  containers and connectors of its mechanical group (rotors, pistons and hinges
+  included) that the player may open; withdrawn items go into the cargo
+  containers first. Only what fits is withdrawn. Gas bottles are not taken.
+- From hand works on the player's character inventory instead of a ship.
+- The Faction switch works on the faction's ledger. It needs a rank allowed to
+  trade: leaders and the founder, or every member when a leader or the founder
+  turned that on at the kiosk. The setting is kept with the ledgers.
+- Transfer moves items between the player's and their faction's ledger at the
+  station. Any member gives; taking needs the trading rank.
+
+Items leave the ship before they enter the ledger, and the ledger gives them
+before they arrive, so nothing is ever in both. A refused deposit puts the items
+back. A withdrawal that no longer fits when it arrives goes back into the
+ledger. If the World Authority of a cluster doesn't answer a deposit, the items
+stay taken and the operation id is logged for an admin. Each client draws its
+own screen, so several players can use one kiosk at once.
+
+`!oct kiosks` (admin) lists the kiosks the plugin found, with their station and
+screen script.
+
 ### Container drops
 
 The game's drop pods (world setting `EnableContainerDrops`) come in two kinds.
@@ -655,6 +696,14 @@ the mods' shares of 2,000 spawn attempts per type and place.
 `tests/ledgers/LedgerTests` checks the ledgers' bookkeeping without the game
 (`dotnet run -c Release --project tests/ledgers/LedgerTests`): limits, reservations,
 batches that apply all or none, and the saved and wire formats.
+`LedgerTests` also checks the kiosks' requests, replies and trading rules.
+`tests/test_kiosks.py` checks the kiosks with the client and both mods loaded:
+the probe plugin in `tests/kiosks/probe` docks ships at Alpha Station and sets
+the player's faction rank, and the client sends the kiosk mod's requests with
+its admin command `/kiosk`, through the same mod messages as the touch screens.
+It covers reach, the ship list by access, deposit and withdraw with a ship and
+from hand, the ledger limit, the Faction switch, Transfer and the members
+setting; not the touch input itself.
 `tests/test_ledgers.py` checks them in game with the client's admin commands, the
 game's item masses and the config, then restarts the server and finds them as they
 were saved.
