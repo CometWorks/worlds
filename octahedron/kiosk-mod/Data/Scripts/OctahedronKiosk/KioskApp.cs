@@ -12,7 +12,8 @@ namespace OctahedronKiosk
     /// The kiosk's screens: Storage moves items between the docked ship (or, From hand, the
     /// character) and the ledger the kiosk works on, the operator's or, with the Faction
     /// switch, the faction's; Transfer moves items between the operator's and the faction's
-    /// ledger. The server checks and does every request; the screens only show its answers.
+    /// ledger; Market buys and sells for that ledger and lists offers and orders. The server
+    /// checks and does every request; the screens only show its answers.
     /// </summary>
     public class KioskApp : TouchApp
     {
@@ -20,6 +21,18 @@ namespace OctahedronKiosk
         private const int Transfer = 1;
         private const int Market = 2;
         private static readonly string[] Amounts = { "1", "10", "100", "1000", "All" };
+        private static readonly string[] Prices =
+        {
+            "60%",
+            "70%",
+            "80%",
+            "90%",
+            "100%",
+            "110%",
+            "120%",
+            "130%",
+            "140%",
+        };
 
         private readonly long kiosk;
         private KioskState state;
@@ -32,6 +45,9 @@ namespace OctahedronKiosk
         private string ship = "";
         private string selected = "";
         private int amount;
+        private int price = 4;
+        private bool listings;
+        private string listing = "";
 
         private readonly Label title;
         private readonly Switch pages;
@@ -41,6 +57,7 @@ namespace OctahedronKiosk
         private readonly View shipRow;
         private readonly ScrollView list;
         private readonly View actions;
+        private readonly View marketActions;
         private readonly Label status;
 
         public KioskApp(IMyCubeBlock block, IMyTextSurface surface)
@@ -61,7 +78,7 @@ namespace OctahedronKiosk
                 i =>
                 {
                     page = i;
-                    Rebuild();
+                    Refresh();
                 }
             );
             pages.Pixels = new Vector2(0, 28);
@@ -110,6 +127,12 @@ namespace OctahedronKiosk
             actions.Gap = 6;
             AddChild(actions);
 
+            marketActions = new View(ViewDirection.Row);
+            marketActions.Flex = new Vector2(1, 0);
+            marketActions.Pixels = new Vector2(0, 28);
+            marketActions.Gap = 6;
+            AddChild(marketActions);
+
             status = new Label("Connecting to the station...", 0.45f, TextAlignment.LEFT);
             status.Margin = new Vector4(8, 2, 8, 4);
             AddChild(status);
@@ -136,12 +159,28 @@ namespace OctahedronKiosk
 
         private string Source => hand ? "hand" : ship;
 
-        private void Refresh() => Request("state");
+        private void Refresh() => Request(page == Market ? "market" : "state");
 
-        private void Request(string verb, string item = "", string units = "")
+        private void Request(
+            string verb,
+            string item = "",
+            string units = "",
+            string price = "",
+            string id = "",
+            bool? asFaction = null
+        )
         {
             ticksToRefresh = 30;
-            pending = KioskSession.Instance.Send(verb, kiosk, faction, Source, item, units);
+            pending = KioskSession.Instance.Send(
+                verb,
+                kiosk,
+                asFaction ?? faction,
+                Source,
+                item,
+                units,
+                price,
+                id
+            );
         }
 
         private void OnState(KioskState answer)
@@ -168,7 +207,7 @@ namespace OctahedronKiosk
             if (state == null)
                 return;
             title.Text = state.Station + (state.InFaction ? "  [" + state.FactionTag + "]" : "");
-            ledgerSwitch.Enabled = state.InFaction && page == Storage;
+            ledgerSwitch.Enabled = state.InFaction && page != Transfer;
             ledgerSwitch.Index = faction ? 1 : 0;
             sourceSwitch.Enabled = page == Storage;
             sourceSwitch.Index = hand ? 1 : 0;
@@ -176,9 +215,10 @@ namespace OctahedronKiosk
             Clear(shipRow);
             Clear(list);
             Clear(actions);
+            Clear(marketActions);
             if (page == Market)
             {
-                list.AddChild(new Label("The market opens here soon.", 0.5f));
+                BuildMarket();
                 return;
             }
             if (page == Storage)
@@ -338,6 +378,145 @@ namespace OctahedronKiosk
             button.Flex = new Vector2(0.6f, 1);
             return button;
         }
+
+        // --- the market ---
+
+        private void BuildMarket()
+        {
+            if (!state.HasMarket)
+            {
+                list.AddChild(new Label("The market is closed.", 0.5f));
+                return;
+            }
+            var views = new Switch(
+                new[] { "Prices", "My listings" },
+                listings ? 1 : 0,
+                i =>
+                {
+                    listings = i == 1;
+                    Rebuild();
+                }
+            );
+            shipRow.AddChild(views);
+            long balance = faction ? state.FactionBalance : state.Balance;
+            var money = new Label(
+                balance < 0
+                    ? "No account"
+                    : (faction ? "Faction: " : "Account: ")
+                        + KioskState.Price(balance * 1000)
+                        + " SC",
+                0.45f,
+                TextAlignment.RIGHT
+            );
+            money.Flex = new Vector2(1, 1);
+            shipRow.AddChild(money);
+            if (listings)
+                BuildListings();
+            else
+                BuildPrices();
+        }
+
+        private void BuildPrices()
+        {
+            list.AddChild(
+                Row(
+                    new[] { "Item", "OCT buys", "OCT sells", "Offer", "Order", "Ledger" },
+                    false,
+                    null
+                )
+            );
+            foreach (var row in state.Market)
+            {
+                var item = row.Item;
+                var mine = state.Items.FirstOrDefault(i => i.Item == item);
+                long ledger =
+                    mine == null ? 0
+                    : faction ? mine.Faction
+                    : mine.Mine;
+                list.AddChild(
+                    Row(
+                        new[]
+                        {
+                            row.Name + (row.Specialty ? " *" : ""),
+                            Money(row.OctBuys),
+                            row.OctStock > 0 ? Money(row.OctSells) : "-",
+                            row.OfferAmount > 0 ? Money(row.Offer) : "-",
+                            row.OrderAmount > 0 ? Money(row.Order) : "-",
+                            KioskState.Units(ledger),
+                        },
+                        item == selected,
+                        () =>
+                        {
+                            selected = item;
+                            Rebuild();
+                        }
+                    )
+                );
+            }
+
+            var choice = new Selector(Amounts.ToList(), (i, text) => amount = i);
+            choice.Selected = amount;
+            choice.Flex = new Vector2(1, 1);
+            actions.AddChild(choice);
+            string units = Amounts[amount] == "All" ? "all" : Amounts[amount];
+            actions.AddChild(Action("Buy", () => Request("buy", selected, units)));
+            actions.AddChild(Action("Sell", () => Request("sell", selected, units)));
+
+            var prices = new Selector(Prices.ToList(), (i, text) => price = i);
+            prices.Selected = price;
+            prices.Flex = new Vector2(1, 1);
+            marketActions.AddChild(prices);
+            marketActions.AddChild(
+                Action("Offer", () => Request("offer", selected, units, Prices[price]))
+            );
+            marketActions.AddChild(
+                Action("Order", () => Request("order", selected, units, Prices[price]))
+            );
+        }
+
+        private void BuildListings()
+        {
+            list.AddChild(Row(new[] { "Listing", "Kind", "Left", "Price", "Whose" }, false, null));
+            if (state.Listings.Count == 0)
+                list.AddChild(new Label("No listings here.", 0.45f));
+            foreach (var l in state.Listings)
+            {
+                var id = l.Id;
+                list.AddChild(
+                    Row(
+                        new[]
+                        {
+                            l.Name,
+                            l.Kind,
+                            KioskState.Units(l.Amount),
+                            Money(l.Price),
+                            l.Mine ? "Mine" : "Faction",
+                        },
+                        id == listing,
+                        () =>
+                        {
+                            listing = id;
+                            Rebuild();
+                        }
+                    )
+                );
+            }
+            var cancel = new Button(
+                "Cancel listing",
+                () =>
+                {
+                    var chosen = state.Listings.FirstOrDefault(l => l.Id == listing);
+                    if (chosen == null)
+                        status.Text = "Choose a listing first.";
+                    else
+                        Request("cancel", "", "", "", listing, !chosen.Mine);
+                }
+            );
+            cancel.Flex = new Vector2(1, 1);
+            actions.AddChild(cancel);
+        }
+
+        private static string Money(long milli) => KioskState.Price(milli);
 
         private static void Clear(ContainerBase view)
         {

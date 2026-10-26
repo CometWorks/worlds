@@ -52,7 +52,8 @@ public class Plugin : IPlugin
             Assembly.GetExecutingAssembly(),
             typeof(Commands),
             typeof(LedgerCommands),
-            typeof(KioskCommands)
+            typeof(KioskCommands),
+            typeof(MarketCommands)
         );
     }
 
@@ -80,6 +81,7 @@ public class Plugin : IPlugin
             FreePrints.Update();
             Ledgers.Update();
             Kiosks.Update();
+            Market.Update();
         }
         catch (Exception e)
         {

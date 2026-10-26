@@ -222,7 +222,7 @@ public sealed class LedgerCommands : CommandModule
         }
     }
 
-    private static bool Station(ref string station, out string error)
+    internal static bool Station(ref string station, out string error)
     {
         error = null;
         string given = station;
@@ -241,7 +241,16 @@ public sealed class LedgerCommands : CommandModule
         return true;
     }
 
-    private bool Owner(string text, bool optional, out LedgerOwner? owner, out string error)
+    private bool Owner(string text, bool optional, out LedgerOwner? owner, out string error) =>
+        Owner(Context.Caller.IdentityId, text, optional, out owner, out error);
+
+    internal static bool Owner(
+        long caller,
+        string text,
+        bool optional,
+        out LedgerOwner? owner,
+        out string error
+    )
     {
         owner = null;
         error = null;
@@ -254,7 +263,7 @@ public sealed class LedgerCommands : CommandModule
         }
         var session = MySession.Static;
         if (text.Equals("me", StringComparison.OrdinalIgnoreCase))
-            owner = LedgerOwner.Player(Context.Caller.IdentityId);
+            owner = LedgerOwner.Player(caller);
         else if (text.StartsWith("faction:", StringComparison.OrdinalIgnoreCase))
         {
             var faction = session.Factions.TryGetFactionByTag(text.Substring(8));

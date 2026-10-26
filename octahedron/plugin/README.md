@@ -387,6 +387,60 @@ own screen, so several players can use one kiosk at once.
 `!oct kiosks` (admin) lists the kiosks the plugin found, with their station and
 screen script.
 
+### Station market
+
+With `MarketEnabled` on, the kiosks' Market tab trades items in the station ledgers
+for money in the bank accounts. The operator trades for their own ledger and
+account, or with the Faction switch and the trading rank for the faction's. Items
+and money move in one step: a sale that can't move both moves neither.
+
+- Buy takes the cheapest offers at the station first and OCT's stock at its price
+  among them; Sell goes to the best orders first, then to OCT. Nobody trades with
+  their own listings. Every sale between players pays `MarketFeePercent` (5 %) of
+  its price to OCT.
+- Offer lists items of the ledger at a price per unit; they stay reserved in the
+  ledger and still count toward its limit. Order lists items wanted at a price; the
+  money for them leaves the account until the order is filled, canceled or expires.
+  A price is in SC or a percent of the station's reference price ("80%"). Listings
+  expire after `MarketListingDays` (7), which gives the items or the money back. A
+  player or faction may have `MarketMaxListings` (20) listings at a station. An
+  order is passed over while its owner's ledger has no room for the items.
+- OCT (`MoneyAuthorityFactionTag`) is the market maker of last resort. Its catalog
+  is the same at every station: the items matching `MarketCatalog` but not
+  `MarketCatalogExcluded` with a reference price, the game's minimal price / 10
+  (`MarketPrices` sets one where the game has none). It sells what its ledger at the
+  station holds at `MarketOctSellPercent` (140 %) of the reference and buys at
+  `MarketOctBuyPercent` (60 %) until it holds `MarketOctMaxStockTonnes` (200 t) of
+  the item there. Its ledger has no other limit.
+- Each UTC day OCT adds `MarketDailyStock` (20 t of components and basic
+  materials) to its ledger at every station, up to the same 200 t. Its
+  acquisition contracts ask for what it lacks of that list (`Market.Missing`).
+- `MarketSpecialties` names what each station buys at `MarketSpecialtyPercent`
+  (80 %), up to `MarketSpecialtyDailyTonnes` (50 t) a UTC day per station; past
+  that OCT pays its normal price. Alpha: platinum and magnesium, Gamma: iron,
+  nickel and gravel, Beta: gold, silver and organics, Delta: cobalt and silicon,
+  Moon: uranium, ore and ingots alike. North and South have none.
+- OCT's prices are per station and drift with the volume: the net tonnes bought of
+  an item at a station (sales count negative) raise its price there, doubling it
+  at `MarketPriceDriftTonnes` (100 t), or lower it the same way, at most
+  `MarketPriceDriftMax` (2) times either way. Half of the drift wears off in
+  `MarketPriceDriftHalfLifeHours` (24 h).
+- OCT's stations have no generated store items: the plugin stops the game's
+  generator for OCT and empties what its stations had. Players' own store blocks
+  work as before.
+
+The market is kept with the ledgers, by the server or the World Authority of a
+cluster, as the sandbox variable `Octahedron.Market`: the listings, the money held
+for orders, the day's specialty purchases and the price drift. Nodes send their
+requests there as cluster-wide commands, once per operation id. Every trade is
+logged.
+
+Admin commands, for tests and support: `!oct market show <station> [owner] [all]`,
+`!oct market do <buy|sell|offer|order|cancel> <station> <owner> <item|listing>
+[amount] [price]`, `!oct market tick [force]` (expire listings, and with force
+restock OCT now), `!oct market stores [tick]` (the game's store items of OCT's
+stations, after an economy tick) and `!oct market age <listing> <days>`.
+
 ### Container drops
 
 The game's drop pods (world setting `EnableContainerDrops`) come in two kinds.
@@ -704,6 +758,15 @@ its admin command `/kiosk`, through the same mod messages as the touch screens.
 It covers reach, the ship list by access, deposit and withdraw with a ship and
 from hand, the ledger limit, the Faction switch, Transfer and the members
 setting; not the touch input itself.
+`tests/market/MarketTests` checks the market's bookkeeping without the game
+(`dotnet run -c Release --project tests/market/MarketTests`): OCT's prices, stock,
+specialty and drift, buying and selling through listings and OCT all or none, the
+fee, limits, cancel and expiry, the formats, and that no money is made or lost.
+`tests/test_market.py` checks the market in game with the client and both mods,
+through the kiosk mod's `/kiosk` requests at Alpha Station: OCT's daily stock and
+prices, the game's store items gone, buying from OCT, Alpha's specialty and its
+quota, a faction offer and a player's order with the fee, the trading rank, the
+listing limit and expiry, and the market after a restart.
 `tests/test_ledgers.py` checks them in game with the client's admin commands, the
 game's item masses and the config, then restarts the server and finds them as they
 were saved.
