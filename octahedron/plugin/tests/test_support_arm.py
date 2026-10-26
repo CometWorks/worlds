@@ -240,17 +240,40 @@ def wait_chat(remote, text: str, timeout: float, after: int) -> str | None:
     return None
 
 
-def finish(remote, case: str, mark: int) -> None:
+def wait_log(pattern: str, timeout: float) -> str | None:
+    """The first server log line of the plugin matching pattern"""
+    deadline = time.monotonic() + timeout
+    while True:
+        for line in rig.server_game_log().splitlines():
+            if "[Octahedron]" in line and re.search(pattern, line):
+                return line.split("] ")[-1]
+        if time.monotonic() > deadline:
+            return None
+        time.sleep(10)
+
+
+def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
     station, ship, blocks, paid, connector, size = CASES[case]
-    line = wait_state(remote, station, rf"'{ship}'.*projector on", 1200)
-    check(
-        line is not None, f"{case}: the arm's projector completes and projects: {line}"
-    )
-    check(
-        line is not None and (", connector" in line) == connector,
-        f"{case}: the arm {'docks at a connector' if connector else 'ends in a cap'}: {line}",
-    )
-    ready = wait_chat(remote, f"'{ship}' is ready", 1800, mark)
+    if restarted:
+        # The welders finish the ship before the client is back: follow the server's log
+        line = wait_log(rf"'{ship}' at .*: (docked|no dock)", 1200)
+        check(
+            line is not None and ("docked" in line) == connector,
+            f"{case}: the ship {'docks at the arm' if connector else 'gets the admin fill'}: {line}",
+        )
+        line = wait_log(rf"'{ship}' of .* ended", 60)
+        ready = line if line and f"'{ship}' is ready" in line else None
+    else:
+        line = wait_state(remote, station, rf"'{ship}'.*projector on", 1200)
+        check(
+            line is not None,
+            f"{case}: the arm's projector completes and projects: {line}",
+        )
+        check(
+            line is not None and (", connector" in line) == connector,
+            f"{case}: the arm {'docks at a connector' if connector else 'ends in a cap'}: {line}",
+        )
+        ready = wait_chat(remote, f"'{ship}' is ready", 1800, mark)
     check(ready is not None, f"{case}: the ship is ready: {ready}")
     if paid:
         check(
@@ -279,6 +302,7 @@ def restart(remote):
     rig.stop_client()
     rig.start_server()
     remote = rig.start_client()
+    rig.ensure_character(remote)
     log("rejoined")
     return remote
 
@@ -364,10 +388,9 @@ def main() -> int:
                 continue  # no build to follow
             if case == "dock":
                 remote = restart(remote)
-                line = wait_state(remote, "Alpha", r"'ArmDock'.*: arm \d+/\d+", 120)
+                line = wait_log(r"order 'ArmDock' .*picked up", 60)
                 check(line is not None, f"dock: picked up after the restart: {line}")
-                mark = 0
-            finish(remote, case, mark)
+            finish(remote, case, mark, restarted=case == "dock")
     finally:
         rig.stop_client()
         rig.stop_server()
