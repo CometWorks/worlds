@@ -11,10 +11,10 @@
         stations' hologram tables, block limits for welded projections, a PCU cap per
         ship or station, shipyard welding in the stations' safe zones, ships ordered
         from the shipyards, a real account for the stations' faction with a daily
-        wealth tax and dividend, a partitioning-friendly spawn pattern for Modular
-        Encounters Systems, and (on hold) the NPC encounters spawned from the plugin's
-        own blueprints. Loaded from a checkout of the worlds repo as a local dev
-        folder; it has no hub entry.
+        wealth tax and dividend, station warehouse ledgers for players and factions, a
+        partitioning-friendly spawn pattern for Modular Encounters Systems, and (on
+        hold) the NPC encounters spawned from the plugin's own blueprints. Loaded from
+        a checkout of the worlds repo as a local dev folder; it has no hub entry.
     </Description>
     <SourceDirectories>
         <Directory>ServerPlugin</Directory>
