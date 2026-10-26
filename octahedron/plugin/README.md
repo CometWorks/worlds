@@ -304,11 +304,14 @@ take part. The plugin plans an arm on each and takes the best:
 - With a connector of the ship's main grid within reach, the tee carries a
   connector facing it and the projector hangs on a support block next to it. The
   ship's connectors are tried by how many blocks with an inventory or conveyor
-  touch them, in a chain. Without one the tee's branch ends in a cap.
+  touch them, in a chain. The projector has to touch a ship block beside the
+  ship's connector, so a connector sticking out of the hull with nothing beside
+  it gets a cap. Without one the tee's branch ends in a cap.
 - The pieces are `ShipyardArmLargeBlocks` and `ShipyardArmSmallBlocks`, each
   turned so its mount points face its neighbors in the arm.
 
-The quote checks that an arm can be planned. At build start the arm's blocks are
+The quote checks that an arm can be planned; when none fits, the server log says
+why for each rotor once. At build start the arm's blocks are
 placed as frames from the rotor head, and the head's grid turns static for the
 build. The arm's components go into the shipyard's containers on top of the
 ship's, for free: OCT pays for the arm. When the welders have completed the
@@ -909,6 +912,14 @@ Station with the shipyard's mods and the kiosk mods: the quote and the order, th
 hydrogen from a docked ship's tank into the new ship's, the payment, a press while
 it builds, a faction-paid order queued behind the finished ship and canceled after
 a restart, and a free order canceled with the button itself.
+`tests/arm/ArmTests` checks the support arm's path planning without the game
+(`dotnet run -c Release --project tests/arm/ArmTests`): pipes around the ship and
+obstacles, the turn cost, docking, the cap, giving up an armor block, no plan when
+nothing is reachable and the reason logged for it. `tests/test_support_arm.py`
+checks the arm in game on a world built by `build_world.py`: a large ship docked to
+the arm's connector across a server restart, the same ship ending in a cap with the
+admin fill, and a small ship on a small rotor; each time the arm and its projector
+are gone afterwards and the rotor heads stay.
 `tests/test_free_build.py` checks the free-build limits at their defaults with
 the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
 refused, and a player who reaches 10,000 PCU gets no more starter ships and a

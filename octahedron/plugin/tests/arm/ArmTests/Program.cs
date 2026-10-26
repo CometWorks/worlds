@@ -198,6 +198,18 @@ int Pipes(ArmPlan plan) =>
     Check(plan != null && plan.Connector == null, "no reachable connector: a cap instead");
 }
 
+// 5b. A connector sticking out of the ship, nothing beside it: no projector spot next to the
+// arm's connector touches the ship, so the arm ends in a cap
+{
+    var volume = Box(C(-2, 10, -2), C(2, 14, 2));
+    volume.Add(C(3, 12, 0));
+    var p = Problem(volume);
+    p.Connectors.Add((C(3, 12, 0), C(1, 0, 0)));
+    var plan = ArmPlanner.Plan(p);
+    Valid(plan, p, "sticking out");
+    Check(plan != null && plan.Connector == null, "sticking out: a cap instead");
+}
+
 // 6. No face of the ship can be built from a projector: the lightest armor block gives way,
 //    even when a heavier one is closer
 {

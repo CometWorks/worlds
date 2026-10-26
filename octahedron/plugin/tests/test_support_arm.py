@@ -67,32 +67,24 @@ def large(name: str, entity: int, connector: bool) -> tuple[str, int]:
             "MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (2, 0, 2)
         ),
     }
+    if connector:
+        # Flush with the back face, armor beside it: the arm's projector sits on that
+        # armor next to the arm's connector, as in the "... Arm Exam" blueprint
+        special[(1, 0, 5)] = rig.block(
+            "MyObjectBuilder_ShipConnector", "Connector", (1, 0, 5), forward="Backward"
+        )
     blocks = hull(special, (3, 2, 6), "LargeBlockArmorBlock")
     # The control station mounts only on its bottom: on the front, on top
     blocks.append(rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (1, 2, 0)))
-    if connector:
-        blocks.append(
-            rig.block(
-                "MyObjectBuilder_ShipConnector",
-                "Connector",
-                (1, 0, 6),
-                forward="Backward",
-            )
-        )
     grid = rig.grid(name, entity, blocks, tag="MyObjectBuilder_CubeGrid")
     return grid, len(blocks)
 
 
 def small() -> tuple[str, int]:
-    blocks = hull({}, (4, 3, 8), "SmallBlockArmorBlock")
-    blocks.append(
-        rig.block(
-            "MyObjectBuilder_ShipConnector",
-            "ConnectorSmall",
-            (1, 1, 8),
-            forward="Backward",
-        )
+    connector = rig.block(
+        "MyObjectBuilder_ShipConnector", "ConnectorSmall", (1, 1, 7), forward="Backward"
     )
+    blocks = hull({(1, 1, 7): connector}, (4, 3, 8), "SmallBlockArmorBlock")
     grid = rig.grid("ArmSmall", 777000693000300, blocks, tag="MyObjectBuilder_CubeGrid")
     return grid.replace(
         "<GridSizeEnum>Large</GridSizeEnum>", "<GridSizeEnum>Small</GridSizeEnum>"
@@ -282,8 +274,9 @@ def finish(remote, case: str, mark: int) -> None:
 
 
 def restart(remote):
-    rig.stop_client()
+    # The server first: the welders finish a ship this small in under a minute
     rig.stop_server()
+    rig.stop_client()
     rig.start_server()
     remote = rig.start_client()
     log("rejoined")
