@@ -71,6 +71,7 @@ public class Plugin : IPlugin
             worldEdge.Update();
             TableHologram.Update();
             ShipyardOrders.Update();
+            FreePrints.Update();
         }
         catch (Exception e)
         {
@@ -96,7 +97,7 @@ public class Plugin : IPlugin
         }
     }
 
-    private static readonly PluginClusterClient Cluster = PluginCluster.IsClusterProcess
+    internal static readonly PluginClusterClient Cluster = PluginCluster.IsClusterProcess
         ? PluginCluster.ForPlugin(Id)
         : null;
 
