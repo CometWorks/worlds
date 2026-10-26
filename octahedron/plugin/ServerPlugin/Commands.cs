@@ -115,6 +115,38 @@ public sealed class Commands : CommandModule
     public string Taxday() => Money.Force(tax: true);
 
     [Command(
+        "leaderboard",
+        "Counts the faction leaderboard now and lists it, as the station panels will show it",
+        "!oct leaderboard: on a cluster on a node, which counts its own grids."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public void LeaderboardNow()
+    {
+        var context = Context;
+        Leaderboard.CountNow(
+            (ranked, error) =>
+            {
+                if (ranked == null)
+                {
+                    context.Respond(CommandReply.Error(error));
+                    return;
+                }
+                if (ranked.Count == 0)
+                    context.Respond("No factions on the leaderboard.");
+                for (int i = 0; i < ranked.Count; i++)
+                {
+                    var r = ranked[i];
+                    context.Respond(
+                        $"{i + 1}. [{r.Tag}] {r.Name}: {LeaderboardMath.N(r.Total)} SC "
+                            + $"(cash {LeaderboardMath.N(r.Cash)} SC, grids {LeaderboardMath.N(r.Grids)} SC), "
+                            + $"{LeaderboardMath.N(r.Pcu)} PCU"
+                    );
+                }
+            }
+        );
+    }
+
+    [Command(
         "contracts",
         "Lists OCT's contracts at every station",
         "!oct contracts [post]: post also posts the missing ones and checks bounties and salvage now."
