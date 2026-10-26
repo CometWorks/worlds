@@ -224,8 +224,11 @@ internal static class ShipyardArm
         problem.Start = C(start);
         problem.Up = C(upward);
         // An advanced rotor's head sits inside its stator's two cells, so the pipe end's cell
-        // is in the stator's box; the game builds it there ("... Arm Exam" blueprint)
-        stator.Remove(problem.Start);
+        // is in the stator's box; the game builds it there ("... Arm Exam" blueprint). The
+        // stator takes only the cells up to the head's top, which on a small head leaves room
+        // for the pipes inside the large stator's box
+        var top = Math.Max(Vector3I.Dot(head.Min, upward), Vector3I.Dot(head.Max, upward));
+        stator.RemoveWhere(c => c.Dot(C(upward)) > top);
         blocked.UnionWith(stator);
 
         // Search around the ship and the head, with room to go around
