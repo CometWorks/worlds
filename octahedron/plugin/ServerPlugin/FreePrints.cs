@@ -48,6 +48,17 @@ internal static class FreePrints
         }
     }
 
+    // An admin with the game's "Ignore PCU limits" on (Alt+F10) gets free builds and starter ships
+    // without the cool-downs and FreeBuildPcuLimit, to test the shipyard. The flag is this process's
+    // copy of the player's admin settings: a cluster node has it while the player is on it.
+    public static bool Exempt(long player)
+    {
+        var steamId = MySession.Static.Players.TryGetSteamId(player);
+        return steamId != 0
+            && MySession.Static.IsUserAdmin(steamId)
+            && MySession.Static.IsUserIgnorePCULimit(steamId);
+    }
+
     // How long the player still waits for a free build, zero when they can order one
     public static TimeSpan Wait(long player)
     {
