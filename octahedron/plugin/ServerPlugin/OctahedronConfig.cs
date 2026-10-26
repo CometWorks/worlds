@@ -14,6 +14,7 @@ namespace ServerPlugin;
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
+[Section("hangar", caption: "Hangar")]
 [Section("drops", caption: "Container Drops")]
 [Section("encounters", caption: "Encounters")]
 [Section("mes", caption: "MES Spawn Pattern")]
@@ -449,6 +450,18 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 24;
+
+    [LongOption(
+        0,
+        description: "What a ship costs to retrieve from Hangar at another station than it was stored at, paid to OCT: "
+            + "SC per 10 PCU, rounded up. At the same station it is free. 0: free everywhere. Needs Hangar 1.1.0 or later.",
+        Parent = "hangar"
+    )]
+    public long HangarRetrieveFeePer10Pcu
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1;
 
     [BoolOption(
         "Spawn the game's personal drop pods (Unknown Signal), each only for its player. Off: only the strong ones "

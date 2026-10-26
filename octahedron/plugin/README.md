@@ -441,6 +441,17 @@ Admin commands, for tests and support: `!oct market show <station> [owner] [all]
 restock OCT now), `!oct market stores [tick]` (the game's store items of OCT's
 stations, after an economy tick) and `!oct market age <listing> <days>`.
 
+### Hangar fee
+
+With Hangar 1.1.0 or later on the server, set to `AdminSafeZonesOnly`, players store
+and retrieve their ships only inside a station's safe zone, the world's only admin
+safe zones, and Hangar records the zone on each stored ship. A ship comes back free at
+the station it was stored at. At another station it costs `HangarRetrieveFeePer10Pcu`
+(1) SC per 10 PCU, rounded up, paid to OCT: the labor fee of building it, with no wait,
+and the ship keeps its inventory. A player who can't pay is told the price and the
+ship stays stored. The plugin hooks Hangar by reflection, so it still runs without
+Hangar, or with an older one, where retrieval is free.
+
 ### Container drops
 
 The game's drop pods (world setting `EnableContainerDrops`) come in two kinds.
@@ -734,8 +745,12 @@ on (and the game's with them off), the tax by `!oct taxday`, two payouts by
 `!oct payday`, OCT topped up to its floor, the day's totals and the state read back
 after a restart. `OCT_WORLD_SOURCE` points the rig at a world built by
 `build_world.py` instead of `octahedron/server`. `tests/money/MoneyTests` checks the
-arithmetic of the tax and the payout alone
+arithmetic of the tax, the payout and Hangar's retrieval fee alone
 (`dotnet run -c Release --project tests/money/MoneyTests`).
+`tests/test_hangar_fee.py` checks the Hangar fee with the client and a Hangar working
+copy (`OCT_HANGAR_REPO`) on the server holding ships stored at the stations: a load
+outside the safe zones refused, the same station free, another station 100 SC for
+1,000 PCU paid to OCT, a fee the player can't pay refused, and a fee of 0 free.
 `tests/mes/` holds MesCluster's tests for the MES spawn gate:
 `CellPatternTests` checks the cell pattern against a brute-force definition
 (`dotnet run -c Release --project tests/mes/CellPatternTests`); `ds/run.py PLAN [cfg]`

@@ -63,6 +63,10 @@ internal static class MoneyMath
         }
         return payout;
     }
+
+    // Hangar's fee for a ship brought to another station: per10Pcu SC per 10 PCU, rounded up
+    public static long RetrieveFee(int pcu, long per10Pcu) =>
+        pcu <= 0 || per10Pcu <= 0 ? 0 : checked((pcu * per10Pcu + 9) / 10);
 }
 
 internal sealed class Payout

@@ -82,6 +82,7 @@ public class Plugin : IPlugin
             Ledgers.Update();
             Kiosks.Update();
             Market.Update();
+            HangarFee.Bind();
         }
         catch (Exception e)
         {
