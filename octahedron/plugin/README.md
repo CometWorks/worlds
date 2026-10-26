@@ -505,6 +505,13 @@ and money move in one step: a sale that can't move both moves neither.
   at `MarketPriceDriftTonnes` (100 t), or lower it the same way, at most
   `MarketPriceDriftMax` (2) times either way. Half of the drift wears off in
   `MarketPriceDriftHalfLifeHours` (24 h).
+- OCT sells zone chips at `ZoneChipStations` (Moon Station only) for
+  `ZoneChipPrice` (1,000 SC) each, a fixed price that doesn't drift. A chip keeps a
+  player safe zone up for an hour (the game's safe zone block takes 1 chip every
+  60 minutes). OCT doesn't buy them, and they stay out of its catalog
+  (`MarketCatalogExcluded`). Its ledger there is topped up to `ZoneChipStock` (100)
+  chips every minute and before each purchase, so one purchase takes at most that
+  many. Players may still list chips at any station.
 - OCT's stations have no generated store items: the plugin stops the game's
   generator for OCT and empties what its stations had. Players' own store blocks
   work as before.
@@ -918,12 +925,17 @@ setting; not the touch input itself.
 `tests/market/MarketTests` checks the market's bookkeeping without the game
 (`dotnet run -c Release --project tests/market/MarketTests`): OCT's prices, stock,
 specialty and drift, buying and selling through listings and OCT all or none, the
-fee, limits, cancel and expiry, the formats, and that no money is made or lost.
+fee, limits, cancel and expiry, the zone chips, the formats, and that no money is
+made or lost.
 `tests/test_market.py` checks the market in game with the client and both mods,
 through the kiosk mod's `/kiosk` requests at Alpha Station: OCT's daily stock and
 prices, the game's store items gone, buying from OCT, Alpha's specialty and its
 quota, a faction offer and a player's order with the fee, the trading rank, the
 listing limit and expiry, and the market after a restart.
+`tests/test_zone_chips.py` checks the zone chips in game the same way: OCT sells
+them at Moon Station for 1,000 SC and not at Alpha, the stock is topped up, a
+bought chip goes from the ledger into the player's hands, and the game's safe zone
+block takes 1 chip per 60 minutes.
 `tests/test_ledgers.py` checks them in game with the client's admin commands, the
 game's item masses and the config, then restarts the server and finds them as they
 were saved.

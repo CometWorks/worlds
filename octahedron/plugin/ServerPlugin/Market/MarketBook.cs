@@ -57,6 +57,11 @@ public sealed class MarketSettings
     public double DriftKg = 100_000;
     public double DriftHalfLifeHours = 24;
     public double DriftMaxFactor = 2;
+
+    // Goods OCT sells at a fixed price (milli-SC per unit) by station and item, from a stock
+    // kept topped up to FixedStock (raw): the zone chips
+    public Dictionary<(string Station, string Item), long> FixedAsks = new();
+    public long FixedStock;
 }
 
 /// <summary>What the market needs from the game: time, items, prices, accounts and the ledgers.</summary>
@@ -214,7 +219,9 @@ public sealed class MarketBook
 
     /// <summary>What OCT sells the item for at the station, milli-SC per unit; 0: it doesn't.</summary>
     public long OctAsk(IMarketWorld w, MarketSettings s, string station, string item) =>
-        OctPrice(w, s, station, item, s.OctSellPercent);
+        s.FixedAsks.TryGetValue((station, item), out long ask)
+            ? ask
+            : OctPrice(w, s, station, item, s.OctSellPercent);
 
     /// <summary>What OCT pays for the item at the station, milli-SC per unit; 0: it doesn't buy it.</summary>
     public long OctBid(
@@ -713,6 +720,41 @@ public sealed class MarketBook
     }
 
     /// <summary>
+    /// Tops OCT's fixed-price goods up to their stock at the given stations. Null when none was
+    /// missing, else what was added, or why it failed.
+    /// </summary>
+    public string TopUp(IMarketWorld w, MarketSettings s, IEnumerable<string> stations)
+    {
+        var known = stations.ToHashSet();
+        var ops = new List<LedgerOp>();
+        foreach (var (station, item) in s.FixedAsks.Keys.Where(k => known.Contains(k.Station)))
+        {
+            long add = s.FixedStock - Free(w, station, w.Oct, item);
+            if (add > 0)
+                ops.Add(
+                    new LedgerOp
+                    {
+                        Action = LedgerAction.Deposit,
+                        Station = station,
+                        Owner = w.Oct,
+                    }.Add(item, add)
+                );
+        }
+        if (ops.Count == 0)
+            return null;
+        return w.ApplyLedger(ops) is { } error
+            ? "OCT's top-up failed: " + error
+            : "OCT topped up "
+                + string.Join(
+                    ", ",
+                    ops.Select(o =>
+                        $"{o.Items[0].Key} {LedgerBook.Units(o.Items[0].Value)} at {o.Station}"
+                    )
+                )
+                + ".";
+    }
+
+    /// <summary>
     /// The catalog items OCT holds less of at the station than its daily stock, with the amount
     /// missing (raw), for OCT's acquisition contracts.
     /// </summary>
@@ -785,7 +827,7 @@ public sealed class MarketBook
     ///             amount, specialty (1/0); prices milli-SC per unit, amounts raw
     ///   listing   id, offer/order, item, display name, amount left, price, mine/faction, expires (unix s)
     ///   balance   the operator's SC, the faction's (-1 without a faction)
-    /// Catalog items and items with listings, by name.
+    /// Catalog items, OCT's fixed-price goods and items with listings, by name.
     /// </summary>
     public string View(
         IMarketWorld w,
@@ -799,7 +841,10 @@ public sealed class MarketBook
         var text = new StringBuilder();
         void Line(params object[] fields) =>
             text.Append(string.Join("\t", fields.Select(KioskReply.Field))).Append('\n');
-        var items = w.Catalog(station).Concat(At(station).Select(l => l.Item)).Distinct();
+        var items = w.Catalog(station)
+            .Concat(s.FixedAsks.Keys.Where(k => k.Station == station).Select(k => k.Item))
+            .Concat(At(station).Select(l => l.Item))
+            .Distinct();
         foreach (var item in items.OrderBy(name, StringComparer.OrdinalIgnoreCase))
         {
             if (!w.Item(item, out double massKg, out _))
