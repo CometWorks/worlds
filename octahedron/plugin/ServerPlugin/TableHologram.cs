@@ -76,10 +76,10 @@ internal static class TableHologram
 
     private static bool Fit(MyProjectorBase table, List<MyObjectBuilder_CubeGrid> grids)
     {
+        // Not gated on the starter ship: the shipyard quotes ships on the same tables
         var config = Plugin.Config;
         if (
             !config.Enabled
-            || !config.StarterShipEnabled
             || grids == null
             || grids.Count == 0
             || table.MarkedForClose
