@@ -489,17 +489,25 @@ def voxel_map(ids, storage_name, center, size, forward, up):
 
 def clone_grid(grid, ids):
     """Copies a grid with every entity id replaced, references included."""
-    grid = copy.deepcopy(grid)
+    return clone_grids([grid], ids)[0]
+
+
+def clone_grids(grids, ids):
+    """Copies grids with every entity id replaced, references between them included, like a
+    rotor's TopBlockId to its head on another grid."""
+    grids = [copy.deepcopy(grid) for grid in grids]
     old_ids = {
         node.text
+        for grid in grids
         for node in grid.iter()
         if node.tag == "EntityId" and node.text and node.text != "0"
     }
     mapping = {old: str(ids.new()) for old in sorted(old_ids)}
-    for node in grid.iter():
-        if len(node) == 0 and node.text in mapping:
-            node.text = mapping[node.text]
-    return grid
+    for grid in grids:
+        for node in grid.iter():
+            if len(node) == 0 and node.text in mapping:
+                node.text = mapping[node.text]
+    return grids
 
 
 def grid_bounds(grid):
@@ -527,6 +535,38 @@ def place_grid(grid, center, forward, up):
     # Grid local axes: X = Right, Y = Up, Z = Backward
     offset = add(add(mul(right, local[0]), mul(up, local[1])), mul(forward, -local[2]))
     set_position(grid, sub(center, offset), forward, up)
+
+
+def frame(grid):
+    """(position, forward, up) of a grid's PositionAndOrientation."""
+    po = grid.find("PositionAndOrientation")
+    return tuple(
+        tuple(float(po.find(tag).get(k)) for k in "xyz")
+        for tag in ("Position", "Forward", "Up")
+    )
+
+
+def follow(grid, before, after):
+    """Moves the grid with its main grid, which moved from frame before to frame after: a
+    subgrid, like a rotor's head, keeps its place relative to the main grid."""
+    axes = [
+        (cross(f, u), u, mul(f, -1)) for _, f, u in (before, after)
+    ]  # Right, Up, Backward
+
+    def move(v):
+        local = [dot(v, axis) for axis in axes[0]]
+        return add(
+            add(mul(axes[1][0], local[0]), mul(axes[1][1], local[1])),
+            mul(axes[1][2], local[2]),
+        )
+
+    position, forward, up = frame(grid)
+    set_position(
+        grid,
+        add(after[0], move(sub(position, before[0]))),
+        norm(move(forward)),
+        norm(move(up)),
+    )
 
 
 def as_sector_object(grid):
@@ -775,12 +815,26 @@ def raise_shipyard(yard, station_center, zone, height, up):
 
 
 def shipyard_template():
-    return ET.parse(SHIPYARD_BLUEPRINT).getroot().find(".//CubeGrid")
+    """The shipyard blueprint's main grid."""
+    return shipyard_grids()[0]
+
+
+def shipyard_grids():
+    """The shipyard blueprint's grids: the main grid first, then its arm rotors' heads."""
+    return ET.parse(SHIPYARD_BLUEPRINT).getroot().findall(".//CubeGrid")
 
 
 def shipyard(template, ids, name, center, forward, up, owner, color):
-    grid = clone_grid(template, ids)
+    """The shipyard's main grid and its rotor heads, from template, shipyard_grids()."""
+    grid, *heads = clone_grids(template, ids)
+    before = frame(grid)
     place_grid(grid, center, forward, up)
+    for head in heads:
+        follow(head, before, frame(grid))
+        set_child(head, "CreatePhysics", "true")
+        set_child(head, "DestructibleBlocks", "false")
+        for block in head.find("CubeBlocks"):
+            recolor(block, color, skin=True)
     set_child(grid, "DisplayName", name)
     set_child(grid, "IsStatic", "true")
     set_child(grid, "CreatePhysics", "true")
@@ -798,7 +852,7 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
         if kind == "BatteryBlock":
             set_child(block, "CustomName", SHIPYARD_BATTERY)
         stock(block, kind, SHIPYARD_REACTOR_URANIUM)
-    return as_sector_object(grid)
+    return [as_sector_object(g) for g in (grid, *heads)]
 
 
 EQUATOR_STATIONS = {"Alpha Station", "Beta Station", "Gamma Station", "Delta Station"}
@@ -1431,9 +1485,9 @@ def main():
 
     add_trade_stations(checkpoint, ids, faction, trade_stations)
 
-    yard = shipyard_template()
+    yard = shipyard_grids()
     for name, placement in shipyards.items():
-        objects.append(
+        objects.extend(
             shipyard(
                 yard, ids, f"{name} Shipyard", *placement, owner, STATION_COLORS[name]
             )

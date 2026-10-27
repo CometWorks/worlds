@@ -48,6 +48,10 @@ public sealed class Commands : CommandModule
             table.Length == 0 ? null : string.Join(" ", table)
         );
 
+    [Command("shipyards", "Lists the shipyards, their arm rotors and the builds running in them")]
+    [Permission(MyPromoteLevel.Admin)]
+    public IEnumerable<string> Shipyards() => ShipyardOrders.Describe();
+
     [Command(
         "encounters",
         "Lists the encounters that could spawn where you are",
