@@ -77,6 +77,15 @@ cluster each node brakes the grids and characters in the partitions it owns.
 `!oct edge` (admin) lists the grids and characters in the braking zone with their
 distance, outward speed and the limit there.
 
+Jump drives keep to the braking radius as well. A jump whose target lies beyond it is
+shortened to where the jump line crosses that sphere, and the ship arrives there. A
+ship already beyond the braking radius may jump sideways or inward, but never farther
+out than it is: its jump stops where the line crosses the sphere of its own distance,
+so a jump straight outward goes nowhere and the game refuses it as too short. The
+player gets a chat message either way. The server shortens the target when the jump
+is requested and again when the ship arrives, which also catches jumps that scripts
+and mods start, on a single server and on every cluster node.
+
 ### Starter ship
 
 Players don't get a respawn ship. A player who stands within `StarterShipTableReach`

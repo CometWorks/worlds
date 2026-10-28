@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <LangVersion>14</LangVersion>
+    <!-- Not a plugin: keep the repo's Directory.Build.props game references out of it -->
+    <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../ServerPlugin/JumpLimitMath.cs" />
+  </ItemGroup>
+</Project>
