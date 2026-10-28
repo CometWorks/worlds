@@ -95,6 +95,17 @@ internal static class ShipyardOrders
         public int ArmBuilt;
         public int ArmIdle;
 
+        // The ship's integrity at the last check, and the checks since it grew
+        public float Progress = -1;
+        public int Idle;
+
+        // A build that stalled: what the ship misses, and whether it is scrapped and refunded
+        public string Missing;
+        public bool Refund;
+
+        // The components the payer gets back for the missing pieces of a delivered ship, raw
+        public Dictionary<string, long> Refunded = [];
+
         // The arm's connector, and the ship's block the projector took the place of
         public Vector3I? Connector;
         public MyDefinitionId? GivenUp;
@@ -806,6 +817,8 @@ internal static class ShipyardOrders
             End(shipyard, order, null);
         else if (DateTime.UtcNow >= order.Ends)
             End(shipyard, order, $"{built} of {order.Blocks} blocks complete");
+        else if (Stalled(shipyard, order))
+            Stall(shipyard, order);
         else
             Welders(shipyard, true);
     }
@@ -1248,8 +1261,20 @@ internal static class ShipyardOrders
     )
     {
         var gone = missing != null;
+        var stalled =
+            $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
         var message =
-            missing == "unbuilt"
+            order.Refund
+                ? $"{stalled}, with {order.Missing} missing. The ship was removed"
+                    + (
+                        order.Free
+                            ? ", and the free build doesn't count."
+                            : ", its components are back in the ledger and the labor fee is paid back."
+                    )
+            : order.Missing != null && !gone
+                ? $"{stalled}. The ship is yours without {order.Missing}"
+                    + (order.Free ? "." : "; their components are back in the ledger.")
+            : missing == "unbuilt"
                 ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
             : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
             : why == null
@@ -1258,7 +1283,7 @@ internal static class ShipyardOrders
                 + "The projection is gone, the unfinished ship is yours.";
         if (!order.Free)
         {
-            if (left.Count > 0)
+            if (left.Count > 0 && order.Missing == null)
                 message += " The leftover components are back in the ledger.";
             if (order.Hydrogen > 0 && !gone)
                 message +=
@@ -1277,11 +1302,13 @@ internal static class ShipyardOrders
                     Player = order.Player,
                     Ship = name,
                 },
-                order.Free ? new Dictionary<string, long>() : left,
+                order.Free ? new Dictionary<string, long>()
+                    : order.Missing != null ? order.Refunded
+                    : left,
                 filled > 0
                     ? Math.Min(IceFor(filled, up: true), IceFor(order.Hydrogen, up: true))
                     : 0,
-                refund: false,
+                refund: order.Refund,
                 message
             );
         else
@@ -1289,6 +1316,35 @@ internal static class ShipyardOrders
             Tell(order.Player, message);
             Plugin.Log.Info($"Shipyard order '{name}' of {Name(order.Player)} ended: {message}");
         }
+    }
+
+    /// <summary>Removes every unit of the item from the station shipyard's containers and welders.</summary>
+    public static string Strip(string station, string item)
+    {
+        if (!Ledgers.TryItemId(item, out var id))
+            return $"Unknown item {item}.";
+        var shipyard = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .FirstOrDefault(g =>
+                ShipyardZoneWelding.IsShipyard(g)
+                && g.DisplayName.StartsWith(station + " ", StringComparison.OrdinalIgnoreCase)
+            );
+        if (shipyard == null)
+            return $"No shipyard of {station} on this node.";
+        MyFixedPoint taken = 0;
+        foreach (
+            var inventory in Containers(shipyard)
+                .Concat(Beams(shipyard).Select(b => b.GetInventory()))
+        )
+        {
+            var amount = inventory.GetItemAmount(id);
+            if (amount <= 0)
+                continue;
+            inventory.RemoveItemsOfType(amount, id);
+            taken += amount;
+        }
+        return $"Took {taken} {item} out of {shipyard.DisplayName}.";
     }
 
     /// <summary>The shipyards this node simulates, their arm rotors and running builds.</summary>
@@ -1424,6 +1480,12 @@ internal static class ShipyardOrders
         };
         orders[shipyard.EntityId] = order;
         lost.Remove(shipyard.EntityId);
+        var grid = projector.CubeGrid;
+        var instant = WeldArm(
+            shipyard,
+            order,
+            arm.Where(c => !Reachable(shipyard, grid.GridIntegerToWorld(c)))
+        );
         Welders(shipyard, true);
         var plan = layout.Plan;
         Plugin.Log.Info(
@@ -1431,6 +1493,7 @@ internal static class ShipyardOrders
                 + $"{(next.Free ? "free" : "paid by " + next.Payer)}) for {Name(next.Player)} at {shipyard.DisplayName}, until {ends:u}: "
                 + $"arm on '{layout.Rotor.CustomName}' of {plan.Blocks.Count} blocks, cost {plan.Cost}, "
                 + (plan.Connector != null ? "docking at a connector" : "with a cap")
+                + $", {instant} arm blocks out of the welders' reach built at once"
                 + (
                     plan.GivenUp != null
                         ? $", the projector in place of a {layout.GivenUp.SubtypeName}"
@@ -1502,9 +1565,8 @@ internal static class ShipyardOrders
         return order.Arm.All(c => grid.GetCubeBlock(c)?.IsFullIntegrity == true);
     }
 
-    // The beam welders may never reach a few of the arm's blocks, like the two conveyor tubes
-    // at a small ship's arm's bend: the arm stalls after ArmIdleChecks checks without a newly
-    // completed block
+    // The arm's blocks out of the welders' reach are built at once, the rest stall the arm
+    // after ArmIdleChecks checks without a newly completed block: the plugin welds them then
     private const int ArmIdleChecks = 3;
 
     private static bool ArmStalled(Order order)
@@ -1520,14 +1582,23 @@ internal static class ShipyardOrders
         return ++order.ArmIdle >= ArmIdleChecks;
     }
 
-    // Welds the arm's blocks left with the components in the shipyard's containers, as a welder
-    // of the shipyard would
     private static void FinishArm(MyCubeGrid shipyard, Order order)
+    {
+        var left = WeldArm(shipyard, order, order.Arm);
+        order.ArmIdle = 0;
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id} at {shipyard.DisplayName}: the welders stalled on {left} arm blocks, welded them"
+        );
+    }
+
+    // Welds the arm's blocks at the cells with the components in the shipyard's containers, as
+    // a welder of the shipyard would; returns how many it welded
+    private static int WeldArm(MyCubeGrid shipyard, Order order, IEnumerable<Vector3I> cells)
     {
         var grid = order.Projector.CubeGrid;
         var containers = Containers(shipyard).ToList();
-        var left = 0;
-        foreach (var cell in order.Arm)
+        var welded = 0;
+        foreach (var cell in cells)
         {
             var block = grid.GetCubeBlock(cell);
             if (block == null || block.IsFullIntegrity)
@@ -1540,12 +1611,132 @@ internal static class ShipyardOrders
                 containers.FirstOrDefault(),
                 isHelping: true
             );
-            left++;
+            welded++;
         }
-        order.ArmIdle = 0;
-        Plugin.Log.Info(
-            $"Shipyard order {order.Id} at {shipyard.DisplayName}: the welders stalled on {left} arm blocks, welded them"
+        return welded;
+    }
+
+    // The OmniArc welder's turret turns all the way around its block's up axis and tilts 45°
+    // up or down from the plane across it, out to 100 m. A block is left to the welders
+    // nearest to it: arm blocks 43° to 46° off the plane of their four nearest welders stayed
+    // unwelded in tests, though farther welders could have aimed at them. So a block counts
+    // as reachable only within 40° of one of its four nearest welders.
+    private const double WelderRange = 100;
+    private static readonly double welderTilt = Math.Sin(MathHelper.ToRadians(40));
+
+    private static bool Reachable(MyCubeGrid shipyard, Vector3D point) =>
+        Beams(shipyard)
+            .Select(b => (Up: b.WorldMatrix.Up, To: point - b.PositionComp.GetPosition()))
+            .OrderBy(b => b.To.LengthSquared())
+            .Take(4)
+            .Any(b =>
+            {
+                var distance = b.To.Length();
+                return distance <= WelderRange
+                    && (
+                        distance < 0.01
+                        || Math.Abs(Vector3D.Dot(b.To / distance, b.Up)) <= welderTilt
+                    );
+            });
+
+    // A build stalls after StallChecks checks (60 s) in which its ship's integrity didn't grow
+    private const int StallChecks = 6;
+
+    private static bool Stalled(MyCubeGrid shipyard, Order order)
+    {
+        var progress = ShipSoFar(shipyard, order).Sum(b => b.Integrity);
+        if (progress > order.Progress + 0.01f)
+        {
+            order.Progress = progress;
+            order.Idle = 0;
+            return false;
+        }
+        return ++order.Idle >= StallChecks;
+    }
+
+    // The ship's blocks so far, the scaffold left out
+    private static IEnumerable<MySlimBlock> ShipSoFar(MyCubeGrid shipyard, Order order) =>
+        order.Arm.Count > 0
+            ? ShipBlocks(shipyard, order)
+            : Group(order.Projector.CubeGrid)
+                .SelectMany(g => ((MyCubeGrid)g).GetBlocks())
+                .Where(b => !(b.FatBlock is MyTerminalBlock t && IsScaffold(t)));
+
+    // The welders stopped. A ship missing only armor and other blocks without a control panel
+    // or a conveyor is delivered, and the payer gets the missing pieces' components back; one
+    // missing a functional block is removed and the build refunded, the labor fee with it.
+    private static void Stall(MyCubeGrid shipyard, Order order)
+    {
+        var projected = (
+            (MyObjectBuilder_ProjectorBase)order.Projector.GetObjectBuilderCubeBlock(true)
+        ).ProjectedGrids;
+        var unbuilt = new Dictionary<MyDefinitionId, int>();
+        foreach (var block in projected?.SelectMany(g => g.CubeBlocks) ?? [])
+            unbuilt[block.GetId()] = (unbuilt.TryGetValue(block.GetId(), out var n) ? n : 0) + 1;
+        var blocks = ShipSoFar(shipyard, order).ToList();
+        foreach (var block in blocks)
+            if (unbuilt.TryGetValue(block.BlockDefinition.Id, out var n))
+                unbuilt[block.BlockDefinition.Id] = n - 1;
+        var missing = new Dictionary<MyCubeBlockDefinition, int>();
+        var parts = new Dictionary<string, int>();
+        foreach (var (id, count) in unbuilt.Select(u => (u.Key, u.Value)).Where(u => u.Value > 0))
+            if (MyDefinitionManager.Static.TryGetCubeBlockDefinition(id, out var definition))
+            {
+                missing[definition] = count;
+                foreach (var c in definition.Components)
+                    parts[c.Definition.Id.SubtypeName] =
+                        (parts.TryGetValue(c.Definition.Id.SubtypeName, out var had) ? had : 0)
+                        + c.Count * count;
+            }
+        foreach (var block in blocks.Where(b => !b.IsFullIntegrity))
+        {
+            missing[block.BlockDefinition] =
+                (missing.TryGetValue(block.BlockDefinition, out var had) ? had : 0) + 1;
+            block.GetMissingComponents(parts);
+        }
+        order.Missing = string.Join(
+            ", ",
+            missing
+                .OrderByDescending(m => m.Value)
+                .Select(m => $"{m.Value} {m.Key.DisplayNameText}")
         );
+        order.Refund = missing.Keys.Any(Functional);
+        order.Refunded = parts.ToDictionary(
+            p => Ledgers.ItemName(new MyDefinitionId(typeof(MyObjectBuilder_Component), p.Key)),
+            p => p.Value * LedgerBook.Unit
+        );
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
+                + $"missing {order.Missing}: {(order.Refund ? "removed and refunded" : "delivered")}"
+        );
+        if (order.Refund)
+            Scrap(shipyard, order);
+        End(shipyard, order, "stalled");
+    }
+
+    // Blocks with a control panel, and conveyors
+    private static bool Functional(MyCubeBlockDefinition definition)
+    {
+        Type type = definition.Id.TypeId;
+        return typeof(MyObjectBuilder_TerminalBlock).IsAssignableFrom(type)
+            || typeof(MyObjectBuilder_Conveyor).IsAssignableFrom(type)
+            || typeof(MyObjectBuilder_ConveyorConnector).IsAssignableFrom(type);
+    }
+
+    // Removes what the welders built of the ship
+    private static void Scrap(MyCubeGrid shipyard, Order order)
+    {
+        var grid = order.Projector.CubeGrid;
+        if (order.Arm.Count == 0)
+        {
+            foreach (MyCubeGrid g in Group(grid))
+                g.Close();
+            return;
+        }
+        var own = Own(shipyard);
+        foreach (var g in Grids(grid).Where(g => g != grid && !own.Contains(g)))
+            g.Close();
+        Raze(grid, ShipBlocksOnArm(order).Select(b => b.Position).ToList());
     }
 
     // The ship's blocks on the arm's grid: not the arm, nor the rotor head

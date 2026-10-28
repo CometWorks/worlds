@@ -94,13 +94,27 @@ def small() -> tuple[str, int]:
 DOCK, DOCK_BLOCKS = large("ArmDock", 777000693000100, True)
 CAP, CAP_BLOCKS = large("ArmCap", 777000693000200, False)
 SMALL, SMALL_BLOCKS = small()
+# Builds that stall: the test takes an item out of the shipyard. Heavy armor needs metal
+# grids, nothing else of the ship or the arm does; only the cockpit needs displays.
+PARTIAL, PARTIAL_BLOCKS = large("ArmPartial", 777000693000400, False)
+PARTIAL = PARTIAL.replace(
+    "<SubtypeName>LargeBlockArmorBlock<", "<SubtypeName>LargeHeavyBlockArmorBlock<", 2
+)
+SCRAP, SCRAP_BLOCKS = large("ArmScrap", 777000693000500, False)
 # The tables in the world's order: North, South, Alpha, Beta, Gamma, Delta, Moon
-TABLES = [DOCK, DOCK, DOCK, CAP, SMALL, DOCK, DOCK]
+TABLES = [DOCK, DOCK, DOCK, CAP, SMALL, PARTIAL, SCRAP]
 # name: (station, ship, blocks, paid, connector, rotor size)
 CASES = {
     "dock": ("Alpha", "ArmDock", DOCK_BLOCKS, True, True, "Large"),
     "cap": ("Beta", "ArmCap", CAP_BLOCKS, True, False, "Large"),
     "small": ("Gamma", "ArmSmall", SMALL_BLOCKS, False, True, "Small"),
+    "partial": ("Delta", "ArmPartial", PARTIAL_BLOCKS, True, False, "Large"),
+    "scrap": ("Moon", "ArmScrap", SCRAP_BLOCKS, True, False, "Large"),
+}
+# Stalled builds: the item taken out, and how the build ends
+STALLS = {
+    "partial": ("Component/MetalGrid", "The ship is yours without"),
+    "scrap": ("Component/Display", "The ship was removed"),
 }
 # For the paid builds: the components, and the ice for 500,000 L of hydrogen
 DEPOSIT = {
@@ -113,7 +127,7 @@ DEPOSIT = {
     "Component/Computer": 200,
     "Component/Display": 30,
     "Component/PowerCell": 120,
-    "Component/MetalGrid": 30,
+    "Component/MetalGrid": 200,
     "Component/BulletproofGlass": 30,
     "Ore/Ice": 25000,
 }
@@ -275,6 +289,9 @@ def order(remote, case: str) -> tuple:
     check(started is not None, f"{case}: the build starts: {started}")
     if started is None:
         return None
+    if case in STALLS:
+        # Before the arm is complete and the projection starts
+        log(admin(remote, f"!oct shipyard strip {station} {STALLS[case][0]}"))
     arm = wait_state(remote, station, rf"'{ship}'.*: arm \d+/\d+", 30)
     # The welders may complete a small arm's projector before this looks
     check(arm is not None, f"{case}: the arm is placed: {arm}")
@@ -359,6 +376,31 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
     )
 
 
+def stall(remote, case: str, mark: int) -> None:
+    """The build order() took an item out of: the plugin ends it after 60 s without
+    progress, as the case expects"""
+    station, ship = CASES[case][:2]
+    ending = STALLS[case][1]
+    line = follow(remote, case, lambda _: False)
+    log(f"{case}: the build ended after {line}")
+    ended = wait_chat(remote, f"stopped building '{ship}'", 30, mark)
+    check(
+        ended is not None and ending in ended,
+        f"{case}: the stalled build ends with '{ending}': {ended}",
+    )
+    if case == "scrap":
+        check(
+            ended is not None and "labor fee is paid back" in ended,
+            f"{case}: the build cost is paid back: {ended}",
+        )
+    time.sleep(5)
+    lines = shipyard(remote, station)
+    check(
+        not any(f"'{ship}'" in line for line in lines[1:]),
+        f"{case}: no build left in the shipyard: {lines}",
+    )
+
+
 def shipyard_id(remote, station: str) -> int:
     name = f"{station} Station Shipyard"
     return next(g["entityId"] for g in remote.list_grids() if g["name"] == name)
@@ -396,8 +438,9 @@ def watch_build(remote, case: str) -> str | None:
     return None
 
 
-# The build fails when no arm or ship block completes for this long
-STALL = 60.0
+# The test's own watchdog: the build failed when no arm or ship block completes for this
+# long. The plugin ends a build after 60 s without progress, on its 10 s checks.
+STALL = 90.0
 
 
 def follow(remote, case: str, done) -> str | None:
@@ -491,7 +534,25 @@ def saved(cases: list[str]) -> None:
         for e in root.iter("MyObjectBuilder_EntityBase")
         if e.find("CubeBlocks") is not None
     }
+    log_text = rig.server_game_log()
+    check(
+        "the welders stalled on" not in log_text,
+        "saved: the arm blocks out of the welders' reach were built at once: "
+        + str(re.findall(r"(\d+) arm blocks out of the welders' reach", log_text)),
+    )
+    if "partial" in cases:
+        grid = grids.get("ArmPartial")
+        cubes = list(grid.find("CubeBlocks")) if grid is not None else []
+        check(
+            grid is not None and grid.findtext("IsStatic") != "true",
+            "saved: 'ArmPartial' was delivered without some heavy armor, dynamic: "
+            + f"{len(cubes)} of {PARTIAL_BLOCKS} blocks",
+        )
+    if "scrap" in cases:
+        check("ArmScrap" not in grids, "saved: 'ArmScrap' was removed")
     for case in cases:
+        if case in STALLS:
+            continue
         _, ship, blocks, paid, connector, _ = CASES[case]
         grid = grids.get(ship)
         check(grid is not None, f"saved: '{ship}' is in the world")
@@ -581,7 +642,10 @@ def main() -> int:
                 remote = restart(remote)
                 line = wait_log(r"order 'ArmDock' .*picked up", 60)
                 check(line is not None, f"dock: picked up after the restart: {line}")
-            finish(remote, case, mark, restarted=case == "dock")
+            if case in STALLS:
+                stall(remote, case, mark)
+            else:
+                finish(remote, case, mark, restarted=case == "dock")
     finally:
         rig.stop_client()
         rig.stop_server()

@@ -333,6 +333,29 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(Free(w, p1, Plate) == 10 * U && Free(w, p1, Ice) == 50 * U, "refund: everything is back");
 }
 
+// Finish with a refund after the welders used some: the ship was removed, all comes back
+{
+    var (w, m, market, b) = Setup();
+    var needed = Needs((Plate, 10 * U), (Ice, 50 * U));
+    var order = Ok(
+        w,
+        "order",
+        () => b.Order(w, market, s, Paid(p1), needed, none, long.MaxValue)
+    ).Order;
+    long paid = 25_000 - w.Balances[p1];
+    b.Start(w, s, order.Id);
+    Ok(
+        w,
+        "finish with refund, few leftovers",
+        () => b.Finish(w, s, order.Id, Needs((Plate, 3 * U)), 0, refund: true)
+    );
+    Check(w.Balances[p1] == 25_000 - paid + 100, "scrapped: the fee is back");
+    Check(
+        Free(w, p1, Plate) == 10 * U && Free(w, p1, Ice) == 50 * U,
+        "scrapped: every component is back: " + LedgerBook.Units(Free(w, p1, Plate))
+    );
+}
+
 // Hydrogen from a ship at the station: put into the build ledger, not bought
 {
     var (w, m, market, b) = Setup();
