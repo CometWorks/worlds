@@ -94,7 +94,7 @@ def edge_report(remote) -> dict[str, tuple[float, float, float]]:
 def check_edge(report) -> None:
     for name, (km, out, limit) in report.items():
         log(f"edge {name}: {km:.3f} km, outward {out:.2f} m/s, limit {limit:.2f} m/s")
-        # Beyond the edge only when it started there, and then on its way back
+        # Beyond the edge only until the next scan moves it back onto the sphere
         assert km <= 500.01 or out < 0, name
         if name == "Edge 470 in":
             assert abs(out + 100) < 0.5, "inward motion is left alone"

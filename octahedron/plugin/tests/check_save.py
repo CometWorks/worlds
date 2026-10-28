@@ -20,7 +20,7 @@ RADIUS, BRAKING, SPEED, EXPONENT = 500_000, 450_000, 360, 0.5
 
 def limit(distance: float) -> float:
     if distance >= RADIUS:
-        return max(RADIUS - distance, -10)
+        return 0
     return SPEED * min(1, (RADIUS - distance) / (RADIUS - BRAKING)) ** EXPONENT
 
 

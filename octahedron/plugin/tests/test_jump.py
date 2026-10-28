@@ -1,13 +1,18 @@
 """Checks the jump drive limit on the test server with the headless client. Three
-ships with a charged jump drive and a remote control wait in empty space; the client
-takes control of each in turn and blind jumps it forward through the vanilla flow
-(terminal action, confirmation box, server request):
+ships with a charged jump drive wait in empty space. For each, the jump probe
+(tests/jump/probe) sends the server the request a game client sends when its pilot
+confirms a blind jump forward; the server then charges, jumps and tells the player as
+in a real jump. (A headless client can't reach a ship that far through a remote
+control without an antenna network.)
 
 - Jump out: from 400 km straight outward by 100 km. Shortened, it arrives at the
   450 km sphere, and the player is told.
 - Jump inside: from 300 km outward by 50 km. Arrives at 350 km, no message.
 - Jump beyond: from 470 km outward by 20 km. Refused, the ship stays, and the
   player is told.
+
+Then the world edge moves what is beyond the world radius back onto it: a grid saved
+at 520 km and the character teleported to 530 km end up just inside 500 km.
 
 The arrival positions are read from the world the server saves at the end.
 
@@ -22,13 +27,12 @@ import time
 import xml.etree.ElementTree as ET
 
 os.environ.setdefault("OCT_TASK", "SE-752")
-import rig
-from se_remote import SetOp
-from test_client import log
+import rig  # noqa: E402
+from test_client import log  # noqa: E402
 
 MIN_JUMP, MAX_JUMP = 5_000, 2_000_000
 DRIVE = (0, 0, 2)
-SHORTENED = "Jump shortened from 100.0 km to 50.0 km"
+SHORTENED = "Jump shortened from 100.0 km to 49.6 km"
 REFUSED = "Jump refused"
 # name -> (entity id, position, outward direction, jump distance, expected end km)
 SHIPS = {
@@ -44,6 +48,16 @@ SHIPS = {
 }
 
 
+PROBE = (
+    "jump-probe",
+    rig.PLUGIN / "tests" / "jump" / "probe",
+    "JumpProbe.xml",
+    "9B3E1D52-7C46-4A0B-8F21-5D7E0A752001",
+)
+# Saved beyond the world radius, moved back onto it
+OUTSIDE = ("Outside 520", 777000752000020, (-312_000, 0, 416_000))
+
+
 def ship(name: str, entity_id: int, position, forward, distance: float) -> str:
     ratio = (distance - MIN_JUMP) / (MAX_JUMP - MIN_JUMP)
     up = (0, 1, 0) if forward[1] == 0 else (1, 0, 0)
@@ -51,12 +65,7 @@ def ship(name: str, entity_id: int, position, forward, distance: float) -> str:
         name,
         entity_id,
         [
-            rig.block(
-                "MyObjectBuilder_RemoteControl",
-                "LargeBlockRemoteControl",
-                (0, 0, 0),
-                f"<EntityId>{entity_id + 10}</EntityId>",
-            ),
+            rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 0, 0)),
             rig.block(
                 "MyObjectBuilder_BatteryBlock",
                 "LargeBlockBatteryBlock",
@@ -82,7 +91,7 @@ def saved_positions() -> dict[str, tuple[float, float, float]]:
     found = {}
     for entity in sector.find("SectorObjects"):
         name = entity.findtext("DisplayName")
-        if name in SHIPS:
+        if name in SHIPS or name == OUTSIDE[0]:
             p = entity.find("PositionAndOrientation/Position")
             found[name] = tuple(float(p.get(a)) for a in "xyz")
     return found
@@ -96,43 +105,36 @@ def chat_lines(remote, after: int) -> list[str]:
 
 
 def jump(remote, name: str) -> list[str]:
-    """Blind jumps the ship from its remote control; returns the chat lines that came"""
-    entity_id = SHIPS[name][0]
-    control = remote.take_remote_control(entity_id, entity_id + 10, timeout=60)
-    assert control.get("controlledByMe"), control
-    latest = remote.get_chat_messages().get("latest", 0)
-    remote.batch(sets=[SetOp.action(entity_id, DRIVE, "Jump")]).set(0)
-    # The confirmation box, then the 10 s countdown
-    deadline = time.monotonic() + 20
-    while time.monotonic() < deadline:
-        boxes = [
-            s for s in remote.list_screens() if s.get("type") == "MyGuiScreenMessageBox"
-        ]
-        if boxes:
-            remote.control_click(text="Yes", screen=boxes[0]["index"])
-            break
-        time.sleep(0.5)
-    else:
-        raise AssertionError(f"{name}: no confirmation box")
+    """Blind jumps the ship forward by its distance; returns the chat lines that came"""
+    entity_id, _, _, distance, _ = SHIPS[name]
+    before = set(chat_lines(remote, 0))
+    reply = " ".join(rig.chat(remote, f"!jprobe jump {entity_id} {distance}", 3))
+    assert "REQUESTED" in reply, reply
+    # The 10 s countdown and the jump
     time.sleep(20)
-    lines = chat_lines(remote, latest)
+    lines = [line for line in chat_lines(remote, 0) if line not in before]
     log(f"{name}: {lines}")
     return lines
 
 
 def main() -> None:
     grids = [ship(n, i, p, f, d) for n, (i, p, f, d, _) in SHIPS.items()]
+    grids.append(rig.grid(OUTSIDE[0], OUTSIDE[1], rig.small_ship_blocks(), OUTSIDE[2]))
     rig.stop_client()
     rig.stop_server()
     rig.prepare_world(grids)
     rig.write_plugin_config()
-    rig.prepare_server()
+    rig.prepare_server(extra_dev_folders=[PROBE])
     rig.start_server()
     log("server ready")
     remote = rig.start_client()
     rig.ensure_character(remote)
 
     results = {name: jump(remote, name) for name in SHIPS}
+    remote.character_teleport(0, -530_000, 0)
+    time.sleep(10)
+    character_km = math.dist(remote.get_character()["position"], (0, 0, 0)) / 1000
+    log(f"character teleported to 530 km, now at {character_km:.3f} km")
     rig.stop_client()
     rig.stop_server()
     log("server stopped and saved")
@@ -159,10 +161,16 @@ def main() -> None:
                 abs(km - expected) < 0.5,
                 f"{name} arrives at {expected:.1f} km ({km:.3f})",
             )
-            check("Jump " not in text, f"{name} gets no message")
+            check(
+                SHORTENED[:14] not in text and REFUSED not in text,
+                f"{name} gets no message",
+            )
         else:
             check(moved < 0.5, f"{name} stays put (moved {moved:.3f} km)")
             check(REFUSED in text, f"{name} told it was refused")
+    km = math.dist(saved[OUTSIDE[0]], (0, 0, 0)) / 1000
+    check(499 < km <= 500, f"{OUTSIDE[0]} moved back onto the sphere ({km:.3f} km)")
+    check(499 < character_km <= 500.01, f"character moved back ({character_km:.3f} km)")
     log("PASS" if not failures else f"FAIL {len(failures)}: {failures}")
     raise SystemExit(1 if failures else 0)
 

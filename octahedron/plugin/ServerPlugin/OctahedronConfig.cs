@@ -137,7 +137,7 @@ public class OctahedronConfig : PluginConfig
 
     [DoubleOption(
         1,
-        description: "Radius of the world sphere (m). Nothing moves outward beyond it; what is beyond it drifts back.",
+        description: "Radius of the world sphere (m). Nothing moves outward beyond it; what is beyond it is moved back onto it.",
         Parent = "edge"
     )]
     public double WorldEdgeRadius

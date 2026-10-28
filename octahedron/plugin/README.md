@@ -65,9 +65,9 @@ to zero at the world radius:
 The exponent 0.5 gives a constant deceleration, about 1.3 m/s² with these values: a
 ship at 360 m/s stops just at 500 km, a ship at 100 m/s starts braking 3.9 km before
 it. The inward and sideways components are left alone, so a ship can always turn
-back. Beyond the world radius the cap turns negative and pulls a body back, at 1 m/s
-per meter beyond it and at most 10 m/s; a ship thrusting outward at the edge settles
-within about a meter of it.
+back. A grid or character found beyond the world radius, by whatever means it got
+there, is moved straight back toward the center onto the world sphere (1 m inside it),
+a grid with everything attached to it, and loses its outward speed.
 
 Nothing is deleted. The rule doesn't use the game's `WorldSizeKm` or
 `MySession.IsInsideWorld`: the world keeps `WorldSizeKm` at 0, since above 0 the game
