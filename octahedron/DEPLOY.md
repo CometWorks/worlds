@@ -141,7 +141,13 @@ the Create From Template dialog), then create a config profile from that
 template. The profile takes the session settings and the 45 mods from the
 world's `Sandbox_config.sbc`. In the profile:
 
-- Online mode Public, a server name and description.
+- Online mode Public, server name and world name `Octahedron`, a description,
+  and the message of the day from `config/motd.txt`. A local Magnetar server
+  takes the same three values in `SpaceEngineers-Dedicated.cfg` (`ServerName`,
+  `WorldName`, `MessageOfTheDay`). The world's session name is `Octahedron` too.
+- Programmable block scripts need the Scripter role (`EnableScripterRole`, set
+  by `build_world.py`). Admins promote players to it; how players earn it is not
+  decided yet.
 - `MaxPlayers` and `TotalPCU` as decided above.
 - Administrators: the SteamID64s of the admins.
 - Plugins, from the MagnetarHub: Essentials, Hangar, Multigrid Projector,
