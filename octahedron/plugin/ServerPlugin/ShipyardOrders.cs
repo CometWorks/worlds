@@ -14,6 +14,7 @@ using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.EntityComponents;
 using Sandbox.Game.Multiplayer;
 using Sandbox.Game.Screens.Helpers;
 using Sandbox.Game.World;
@@ -42,8 +43,9 @@ namespace ServerPlugin;
 //
 // A ship is a free build for a player under FreeBuildPcuLimit, once FreeBuildCooldownMinutes
 // passed since their last free build ended (FreePrints), without the blocks in
-// FreeBuildBlockedBlocks; an admin with "Ignore PCU limits" on skips the PCU limit and the cool-down
-// (FreePrints.Exempt). Any other ship is a paid build: its components, and the ice for the
+// FreeBuildBlockedBlocks. An admin with "Ignore PCU limits" on (FreePrints.Exempt) gets every
+// ship as a free build: no PCU limit, cool-down or blocked blocks, and no per-ship cap of
+// GroupPcuLimit. The order keeps that, for the node that builds it. Any other ship is a paid build: its components, and the ice for the
 // hydrogen to fill its H2 tanks to ShipyardHydrogenFillPercent, come from the payer's ledger at
 // the station (the player's, or their faction's with the kiosk's Faction switch on), then the
 // cheapest listings and OCT, plus the labor fee; hydrogen in the tanks of the player's ships
@@ -83,12 +85,33 @@ internal static class ShipyardOrders
         public string Id = "";
         public bool Free = true;
 
+        // Ordered by an admin who ignores PCU limits (BuildOrder.Exempt)
+        public bool Exempt;
+
         // Liters for the ship's H2 tanks at the end
         public double Hydrogen;
 
         // The support arm's blocks on the rotor head's grid, the projector's included; empty for
         // a ship built from a projector on itself
         public List<Vector3I> Arm = [];
+
+        // The arm's complete blocks at the last check, and the checks since one was added
+        public int ArmBuilt;
+        public int ArmIdle;
+
+        // The ship's integrity at the last check, and the checks since it grew
+        public float Progress = -1;
+        public int Idle;
+
+        // A build that stalled: what the ship misses, and whether it is scrapped and refunded
+        public string Missing;
+        public bool Refund;
+
+        // The components the payer gets back for the missing pieces of a delivered ship, raw
+        public Dictionary<string, long> Refunded = [];
+
+        // The arm's grid, which the projector leaves when it stays on an unfinished ship
+        public MyCubeGrid ArmGrid;
 
         // The arm's connector, and the ship's block the projector took the place of
         public Vector3I? Connector;
@@ -153,7 +176,7 @@ internal static class ShipyardOrders
         public int Pcu;
         public bool Free;
 
-        // The player ignores PCU limits: no cool-down or FreeBuildPcuLimit (FreePrints.Exempt)
+        // The player ignores PCU limits: a free build whatever the ship (FreePrints.Exempt)
         public bool Exempt;
 
         // Why it is a paid build, and which rule: pcu, blocked or cooldown
@@ -200,7 +223,9 @@ internal static class ShipyardOrders
         plan.Blueprint = blueprint;
         plan.Ship = blueprint[0].DisplayName ?? "Ship";
         plan.Pcu = blueprint.Sum(g => g.CalculatePCUs());
-        var error = Fits(plan.Shipyard, blueprint);
+        // The player is on this node, so its copy of their admin settings is current
+        plan.Exempt = FreePrints.Exempt(identityId);
+        var error = Fits(plan.Shipyard, blueprint, plan.Exempt);
         if (error != null)
             return Fail(plan, error);
 
@@ -208,7 +233,6 @@ internal static class ShipyardOrders
         var playerPcu = StarterShip.PlayerPcu(identity);
         var blocked = Blocked(blueprint, Config.FreeBuildBlockedBlocks);
         var wait = FreePrints.Wait(identityId);
-        plan.Exempt = FreePrints.Exempt(identityId);
         if (!plan.Exempt && playerPcu >= Config.FreeBuildPcuLimit)
             (plan.PaidRule, plan.Paid) = (
                 "pcu",
@@ -221,7 +245,7 @@ internal static class ShipyardOrders
                 "cooldown",
                 $"your next free ship is in {Math.Ceiling(wait.TotalMinutes)} min"
             );
-        else if (blocked.Count > 0)
+        else if (!plan.Exempt && blocked.Count > 0)
             (plan.PaidRule, plan.Paid) = (
                 "blocked",
                 $"a free ship can't have {string.Join(", ", blocked)}"
@@ -259,11 +283,16 @@ internal static class ShipyardOrders
     }
 
     // Why the shipyard can't build the blueprint at all, or null
-    private static string Fits(MyCubeGrid shipyard, List<MyObjectBuilder_CubeGrid> blueprint)
+    private static string Fits(
+        MyCubeGrid shipyard,
+        List<MyObjectBuilder_CubeGrid> blueprint,
+        bool exempt
+    )
     {
         var pcu = blueprint.Sum(g => g.CalculatePCUs());
-        // The ordered ship is the player's, so GroupPcuLimit would stop welding it there
-        if (Config.GroupPcuLimit > 0 && pcu > Config.GroupPcuLimit)
+        // The ordered ship is the player's, so GroupPcuLimit would stop welding it there, unless
+        // the order is exempt (Exempt below)
+        if (!exempt && Config.GroupPcuLimit > 0 && pcu > Config.GroupPcuLimit)
             return $"The blueprint has {pcu:N0} PCU, a ship at most {Config.GroupPcuLimit:N0}.";
         var main = blueprint[0];
         var arms = ShipyardArm.Rotors(shipyard).Count > 0;
@@ -527,6 +556,7 @@ internal static class ShipyardOrders
             Ship = plan.Ship,
             Pcu = plan.Pcu,
             Blueprint = EncodeBlueprint(plan.Blueprint),
+            Exempt = plan.Exempt,
         };
         var drained = new List<(MyGasTank Tank, double Liters)>();
         if (!plan.Free)
@@ -561,10 +591,10 @@ internal static class ShipyardOrders
                 tell(message);
                 if (ok)
                 {
-                    if (plan.Free && plan.Exempt)
+                    if (plan.Exempt)
                         Plugin.Log.Info(
                             $"Free builds: {Name(plan.Player)} ignores PCU limits, '{plan.Ship}' is free "
-                                + "without the cool-down and FreeBuildPcuLimit"
+                                + $"({plan.Pcu} PCU) without the PCU limits, cool-down or blocked blocks"
                         );
                     quotes.Remove(plan.Table.EntityId);
                     Write(
@@ -705,6 +735,8 @@ internal static class ShipyardOrders
         ticks++;
         if (docks.Count > 0)
             UpdateDocks();
+        if (razing.Count > 0 && ticks % RazeTicks == 0)
+            UpdateRazing();
         if (ticks % QuoteTicks == 0 && loaded.Count > 0)
         {
             foreach (var (tableId, player) in loaded.ToList())
@@ -749,6 +781,10 @@ internal static class ShipyardOrders
         {
             if (order != null)
                 End(shipyard, order, "the ship is gone");
+            else if (
+                !razing.ContainsKey(shipyard.EntityId) && !starting.Contains(shipyard.EntityId)
+            )
+                ClearHeads(shipyard);
             return;
         }
         if (order?.Projector != projector)
@@ -774,11 +810,13 @@ internal static class ShipyardOrders
                 Docked(shipyard, order, ship, false, null);
                 return;
             }
-            // The arm first: the projection starts when its projector is complete
-            if (!projector.SlimBlock.IsFullIntegrity)
+            // The arm first: the projection starts when all of its blocks are complete
+            if (!ArmComplete(order))
             {
                 if (DateTime.UtcNow >= order.Ends)
                     End(shipyard, order, "the support arm unfinished");
+                else if (ArmStalled(order))
+                    FinishArm(shipyard, order);
                 else
                     Welders(shipyard, true);
                 return;
@@ -787,7 +825,7 @@ internal static class ShipyardOrders
             {
                 projector.Enabled = true;
                 Plugin.Log.Info(
-                    $"Shipyard order {order.Id} at {shipyard.DisplayName}: the arm's projector is complete, projecting"
+                    $"Shipyard order {order.Id} at {shipyard.DisplayName}: the arm is complete, projecting"
                 );
             }
         }
@@ -799,6 +837,8 @@ internal static class ShipyardOrders
             End(shipyard, order, null);
         else if (DateTime.UtcNow >= order.Ends)
             End(shipyard, order, $"{built} of {order.Blocks} blocks complete");
+        else if (Stalled(shipyard, order))
+            Stall(shipyard, order);
         else
             Welders(shipyard, true);
     }
@@ -920,9 +960,11 @@ internal static class ShipyardOrders
         if (
             orders.ContainsKey(shipyard.EntityId)
             || docks.ContainsKey(shipyard.EntityId)
+            || razing.ContainsKey(shipyard.EntityId)
             || !starting.Add(shipyard.EntityId)
         )
             return;
+        Sweep(shipyard, true);
         if (Obstacle(shipyard) != null)
         {
             starting.Remove(shipyard.EntityId);
@@ -942,7 +984,7 @@ internal static class ShipyardOrders
                 var error =
                     blueprint == null || blueprint.Count == 0
                         ? "its blueprint could not be read"
-                        : Fits(shipyard, blueprint);
+                        : Fits(shipyard, blueprint, next.Exempt);
                 if (error != null)
                 {
                     // Not started: the build ledger is still whole
@@ -1069,6 +1111,7 @@ internal static class ShipyardOrders
             $"Ends={ends.ToString("o", CultureInfo.InvariantCulture)}",
             $"Build={next.Id}",
             $"Free={(next.Free ? 1 : 0)}",
+            $"Exempt={(next.Exempt ? 1 : 0)}",
             $"Hydrogen={hydrogen.ToString("R", CultureInfo.InvariantCulture)}"
         );
         Load(containers, components);
@@ -1081,6 +1124,7 @@ internal static class ShipyardOrders
             Components = components,
             Id = next.Id,
             Free = next.Free,
+            Exempt = next.Exempt,
             Hydrogen = hydrogen,
         };
         lost.Remove(shipyard.EntityId);
@@ -1203,29 +1247,41 @@ internal static class ShipyardOrders
         var name = ship.DisplayName;
         double filled = 0;
         var gone = ship.MarkedForClose;
+        var keep = Unfinished(order, why);
         if (!gone)
         {
             var scaffold = ship.GetFatBlocks<MyTerminalBlock>()
-                .Where(IsScaffold)
+                .Where(b => IsScaffold(b) && !(keep && b == order.Projector))
                 .Select(b => b.Position)
                 .ToList();
             // RazeBlocks would ask the safe zone, which forbids grinding
             ship.RazeGeneratedBlocks(scaffold);
             MyMultiplayer.RaiseEvent(ship, x => x.RazeBlocksClient, scaffold);
             HandOver(ship, order.Player);
-            if (order.Free && FreePrints.Exempt(order.Player))
-                Plugin.Log.Info(
-                    $"Free builds: {Name(order.Player)} ignores PCU limits, no cool-down after '{name}'"
-                );
-            else if (order.Free)
-                FreePrints.Ended(order.Player);
+            NoteFreeEnd(order, name);
             if (order.Hydrogen > 0)
                 filled = FillHydrogen(ship, order.Hydrogen);
-            if (ship.IsStatic)
-                MyMultiplayer.RaiseEvent(ship, x => x.OnConvertToDynamic);
+            Dynamic(shipyard, ship);
+            if (keep)
+                KeepProjector(order);
         }
         var left = RemoveLeftovers(shipyard, order.Components);
         Report(shipyard, order, name, gone ? "gone" : null, why, filled, left, "");
+    }
+
+    // An unfinished ship that is delivered keeps the build's projector, projecting what is
+    // missing, so the player can build it by hand
+    private static bool Unfinished(Order order, string why) => why != null && !order.Refund;
+
+    private const string Projecting =
+        " The build's projector stays on it and shows the missing blocks: build them by hand.";
+
+    private static void KeepProjector(Order order)
+    {
+        var projector = (Sandbox.ModAPI.IMyProjector)order.Projector;
+        projector.CustomName = $"{order.Name} Projector";
+        projector.CustomData = "";
+        projector.Enabled = true;
     }
 
     // Tells the player how the build ended and gives the build ledger back
@@ -1241,17 +1297,31 @@ internal static class ShipyardOrders
     )
     {
         var gone = missing != null;
+        var stalled =
+            $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
         var message =
-            missing == "unbuilt"
+            order.Refund
+                ? $"{stalled}, with {order.Missing} missing. The ship was removed"
+                    + (
+                        order.Free
+                            ? ", and the free build doesn't count."
+                            : ", its components are back in the ledger and the labor fee is paid back."
+                    )
+            : order.Missing != null && !gone
+                ? $"{stalled}. The ship is yours without {order.Missing}"
+                    + (order.Free ? "." : "; their components are back in the ledger.")
+                    + Projecting
+            : missing == "unbuilt"
                 ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
             : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
             : why == null
                 ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
             : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
-                + "The projection is gone, the unfinished ship is yours.";
+                + "The unfinished ship is yours."
+                + Projecting;
         if (!order.Free)
         {
-            if (left.Count > 0)
+            if (left.Count > 0 && order.Missing == null)
                 message += " The leftover components are back in the ledger.";
             if (order.Hydrogen > 0 && !gone)
                 message +=
@@ -1270,11 +1340,13 @@ internal static class ShipyardOrders
                     Player = order.Player,
                     Ship = name,
                 },
-                order.Free ? new Dictionary<string, long>() : left,
+                order.Free ? new Dictionary<string, long>()
+                    : order.Missing != null ? order.Refunded
+                    : left,
                 filled > 0
                     ? Math.Min(IceFor(filled, up: true), IceFor(order.Hydrogen, up: true))
                     : 0,
-                refund: false,
+                refund: order.Refund,
                 message
             );
         else
@@ -1282,6 +1354,35 @@ internal static class ShipyardOrders
             Tell(order.Player, message);
             Plugin.Log.Info($"Shipyard order '{name}' of {Name(order.Player)} ended: {message}");
         }
+    }
+
+    /// <summary>Removes every unit of the item from the station shipyard's containers and welders.</summary>
+    public static string Strip(string station, string item)
+    {
+        if (!Ledgers.TryItemId(item, out var id))
+            return $"Unknown item {item}.";
+        var shipyard = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .FirstOrDefault(g =>
+                ShipyardZoneWelding.IsShipyard(g)
+                && g.DisplayName.StartsWith(station + " ", StringComparison.OrdinalIgnoreCase)
+            );
+        if (shipyard == null)
+            return $"No shipyard of {station} on this node.";
+        MyFixedPoint taken = 0;
+        foreach (
+            var inventory in Containers(shipyard)
+                .Concat(Beams(shipyard).Select(b => b.GetInventory()))
+        )
+        {
+            var amount = inventory.GetItemAmount(id);
+            if (amount <= 0)
+                continue;
+            inventory.RemoveItemsOfType(amount, id);
+            taken += amount;
+        }
+        return $"Took {taken} {item} out of {shipyard.DisplayName}.";
     }
 
     /// <summary>The shipyards this node simulates, their arm rotors and running builds.</summary>
@@ -1384,6 +1485,7 @@ internal static class ShipyardOrders
             $"Ends={ends.ToString("o", CultureInfo.InvariantCulture)}",
             $"Build={next.Id}",
             $"Free={(next.Free ? 1 : 0)}",
+            $"Exempt={(next.Exempt ? 1 : 0)}",
             $"Hydrogen={hydrogen.ToString("R", CultureInfo.InvariantCulture)}",
             $"Arm={string.Join(";", arm.Select(Format))}",
             // Restore names the order by it, not by the saved projection's grid
@@ -1409,6 +1511,7 @@ internal static class ShipyardOrders
             Components = components,
             Id = next.Id,
             Free = next.Free,
+            Exempt = next.Exempt,
             Hydrogen = hydrogen,
             Arm = arm,
             Connector = connector,
@@ -1417,6 +1520,12 @@ internal static class ShipyardOrders
         };
         orders[shipyard.EntityId] = order;
         lost.Remove(shipyard.EntityId);
+        var grid = projector.CubeGrid;
+        var instant = WeldArm(
+            shipyard,
+            order,
+            arm.Where(c => !Reachable(shipyard, grid.GridIntegerToWorld(c)))
+        );
         Welders(shipyard, true);
         var plan = layout.Plan;
         Plugin.Log.Info(
@@ -1424,6 +1533,7 @@ internal static class ShipyardOrders
                 + $"{(next.Free ? "free" : "paid by " + next.Payer)}) for {Name(next.Player)} at {shipyard.DisplayName}, until {ends:u}: "
                 + $"arm on '{layout.Rotor.CustomName}' of {plan.Blocks.Count} blocks, cost {plan.Cost}, "
                 + (plan.Connector != null ? "docking at a connector" : "with a cap")
+                + $", {instant} arm blocks out of the welders' reach built at once"
                 + (
                     plan.GivenUp != null
                         ? $", the projector in place of a {layout.GivenUp.SubtypeName}"
@@ -1489,6 +1599,190 @@ internal static class ShipyardOrders
         return own;
     }
 
+    private static bool ArmComplete(Order order)
+    {
+        var grid = order.Projector.CubeGrid;
+        return order.Arm.All(c => grid.GetCubeBlock(c)?.IsFullIntegrity == true);
+    }
+
+    // The arm's blocks out of the welders' reach are built at once, the rest stall the arm
+    // after ArmIdleChecks checks without a newly completed block: the plugin welds them then
+    private const int ArmIdleChecks = 3;
+
+    private static bool ArmStalled(Order order)
+    {
+        var grid = order.Projector.CubeGrid;
+        var built = order.Arm.Count(c => grid.GetCubeBlock(c)?.IsFullIntegrity == true);
+        if (built > order.ArmBuilt)
+        {
+            order.ArmBuilt = built;
+            order.ArmIdle = 0;
+            return false;
+        }
+        return ++order.ArmIdle >= ArmIdleChecks;
+    }
+
+    private static void FinishArm(MyCubeGrid shipyard, Order order)
+    {
+        var left = WeldArm(shipyard, order, order.Arm);
+        order.ArmIdle = 0;
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id} at {shipyard.DisplayName}: the welders stalled on {left} arm blocks, welded them"
+        );
+    }
+
+    // Welds the arm's blocks at the cells with the components in the shipyard's containers, as
+    // a welder of the shipyard would; returns how many it welded
+    private static int WeldArm(MyCubeGrid shipyard, Order order, IEnumerable<Vector3I> cells)
+    {
+        var grid = order.Projector.CubeGrid;
+        var containers = Containers(shipyard).ToList();
+        var welded = 0;
+        foreach (var cell in cells)
+        {
+            var block = grid.GetCubeBlock(cell);
+            if (block == null || block.IsFullIntegrity)
+                continue;
+            foreach (var inventory in containers)
+                block.MoveItemsToConstructionStockpile(inventory);
+            block.IncreaseMountLevel(
+                block.MaxIntegrity / block.BlockDefinition.IntegrityPointsPerSec,
+                order.Projector.OwnerId,
+                containers.FirstOrDefault(),
+                isHelping: true
+            );
+            welded++;
+        }
+        return welded;
+    }
+
+    // The OmniArc welder's turret turns all the way around its block's up axis and tilts 45°
+    // up or down from the plane across it, out to 100 m. A block is left to the welders
+    // nearest to it: arm blocks 43° to 46° off the plane of their four nearest welders stayed
+    // unwelded in tests, though farther welders could have aimed at them. So a block counts
+    // as reachable only within 40° of one of its four nearest welders.
+    private const double WelderRange = 100;
+    private static readonly double welderTilt = Math.Sin(MathHelper.ToRadians(40));
+
+    private static bool Reachable(MyCubeGrid shipyard, Vector3D point) =>
+        Beams(shipyard)
+            .Select(b => (Up: b.WorldMatrix.Up, To: point - b.PositionComp.GetPosition()))
+            .OrderBy(b => b.To.LengthSquared())
+            .Take(4)
+            .Any(b =>
+            {
+                var distance = b.To.Length();
+                return distance <= WelderRange
+                    && (
+                        distance < 0.01
+                        || Math.Abs(Vector3D.Dot(b.To / distance, b.Up)) <= welderTilt
+                    );
+            });
+
+    // A build stalls after StallChecks checks (60 s) in which its ship's integrity didn't grow
+    private const int StallChecks = 6;
+
+    private static bool Stalled(MyCubeGrid shipyard, Order order)
+    {
+        var progress = ShipSoFar(shipyard, order).Sum(b => b.Integrity);
+        if (progress > order.Progress + 0.01f)
+        {
+            order.Progress = progress;
+            order.Idle = 0;
+            return false;
+        }
+        return ++order.Idle >= StallChecks;
+    }
+
+    // The ship's blocks so far, the scaffold left out
+    private static IEnumerable<MySlimBlock> ShipSoFar(MyCubeGrid shipyard, Order order) =>
+        order.Arm.Count > 0
+            ? ShipBlocks(shipyard, order)
+            : Group(order.Projector.CubeGrid)
+                .SelectMany(g => ((MyCubeGrid)g).GetBlocks())
+                .Where(b => !(b.FatBlock is MyTerminalBlock t && IsScaffold(t)));
+
+    // The welders stopped. A ship missing only armor and other plain blocks, at most
+    // MaxMissingPlain of them, is delivered, and the payer gets the missing pieces' components
+    // back; one missing a functional block or more of the plain ones is removed and the build
+    // refunded, the labor fee with it.
+    private static void Stall(MyCubeGrid shipyard, Order order)
+    {
+        var projected = (
+            (MyObjectBuilder_ProjectorBase)order.Projector.GetObjectBuilderCubeBlock(true)
+        ).ProjectedGrids;
+        var unbuilt = new Dictionary<MyDefinitionId, int>();
+        foreach (var block in projected?.SelectMany(g => g.CubeBlocks) ?? [])
+            unbuilt[block.GetId()] = (unbuilt.TryGetValue(block.GetId(), out var n) ? n : 0) + 1;
+        var plain = unbuilt.Where(u => !Functional(u.Key)).Sum(u => u.Value);
+        var blocks = ShipSoFar(shipyard, order).ToList();
+        foreach (var block in blocks)
+            if (unbuilt.TryGetValue(block.BlockDefinition.Id, out var n))
+                unbuilt[block.BlockDefinition.Id] = n - 1;
+        var missing = new Dictionary<MyCubeBlockDefinition, int>();
+        var parts = new Dictionary<string, int>();
+        foreach (var (id, count) in unbuilt.Select(u => (u.Key, u.Value)).Where(u => u.Value > 0))
+            if (MyDefinitionManager.Static.TryGetCubeBlockDefinition(id, out var definition))
+            {
+                missing[definition] = count;
+                foreach (var c in definition.Components)
+                    parts[c.Definition.Id.SubtypeName] =
+                        (parts.TryGetValue(c.Definition.Id.SubtypeName, out var had) ? had : 0)
+                        + c.Count * count;
+            }
+        foreach (var block in blocks.Where(b => !b.IsFullIntegrity))
+        {
+            missing[block.BlockDefinition] =
+                (missing.TryGetValue(block.BlockDefinition, out var had) ? had : 0) + 1;
+            block.GetMissingComponents(parts);
+        }
+        order.Missing = string.Join(
+            ", ",
+            missing
+                .OrderByDescending(m => m.Value)
+                .Select(m => $"{m.Value} {m.Key.DisplayNameText}")
+        );
+        order.Refund =
+            missing.Keys.Any(d => Functional(d.Id))
+            || missing.Where(m => !Functional(m.Key.Id)).Sum(m => m.Value)
+                > MaxMissingPlain * plain;
+        order.Refunded = parts.ToDictionary(
+            p => Ledgers.ItemName(new MyDefinitionId(typeof(MyObjectBuilder_Component), p.Key)),
+            p => p.Value * LedgerBook.Unit
+        );
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
+                + $"missing {order.Missing}: {(order.Refund ? "removed and refunded" : "delivered")}"
+        );
+        if (order.Refund)
+            Scrap(shipyard, order);
+        End(shipyard, order, "stalled");
+    }
+
+    // A ship missing more than this share of its plain blocks is not delivered
+    private const double MaxMissingPlain = 0.1;
+
+    // Every block of its own type is functional: only the plain blocks, armor and decorations,
+    // are a slim block alone, at most with a bare MyCubeBlock for their model
+    private static bool Functional(MyDefinitionId id) =>
+        id.TypeId != typeof(MyObjectBuilder_CubeBlock);
+
+    // Removes what the welders built of the ship
+    private static void Scrap(MyCubeGrid shipyard, Order order)
+    {
+        var grid = order.Projector.CubeGrid;
+        if (order.Arm.Count == 0)
+        {
+            foreach (MyCubeGrid g in Group(grid))
+                g.Close();
+            return;
+        }
+        var own = Own(shipyard);
+        foreach (var g in Grids(grid).Where(g => g != grid && !own.Contains(g)))
+            g.Close();
+        Raze(grid, ShipBlocksOnArm(order).Select(b => b.Position).ToList());
+    }
+
     // The ship's blocks on the arm's grid: not the arm, nor the rotor head
     private static List<MySlimBlock> ShipBlocksOnArm(Order order)
     {
@@ -1518,6 +1812,13 @@ internal static class ShipyardOrders
             );
     }
 
+    /// <summary>
+    /// True while the shipyard on this node builds a ship for an admin who ignores PCU limits, so
+    /// GroupPcuLimit lets its blocks be welded on a node that has no copy of their admin settings.
+    /// </summary>
+    internal static bool Exempt(long player) =>
+        orders.Values.Any(o => o.Exempt && o.Player == player);
+
     /// <summary>The PCU of the support arms on the grid, which the cap of a ship leaves out.</summary>
     internal static int ArmPcu(MyCubeGrid grid)
     {
@@ -1534,13 +1835,24 @@ internal static class ShipyardOrders
         MyCubeGrid ship = null;
         if (!grid.MarkedForClose)
         {
+            order.ArmGrid = grid;
             var blocks = ShipBlocksOnArm(order);
+            // An unfinished ship takes the arm's projector along, which faces its first block
+            if (blocks.Count > 0 && Unfinished(order, why))
+                blocks.Add(order.Projector.SlimBlock);
+            // A split of a static grid is static, and the clients may miss an event on the
+            // new grid: the arm's grid turns dynamic first, in the same order on the
+            // clients, so the ship is born dynamic and docks to the arm as one
+            if (blocks.Count > 0 && grid.IsStatic)
+                MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
             if (blocks.Count > 0)
                 ship = MyCubeGrid.CreateSplit(grid, blocks);
-            ship?.ChangeDisplayNameRequest(order.Name);
-            // A split of the static arm grid is static: a dynamic ship docks to the arm
-            if (ship?.IsStatic == true)
-                MyMultiplayer.RaiseEvent(ship, x => x.OnConvertToDynamic);
+            if (ship != null && Config.ShipyardRepasteShips)
+                ship = Repaste(shipyard, order, ship);
+            else
+                ship?.ChangeDisplayNameRequest(order.Name);
+            if (ship != null)
+                Dynamic(shipyard, ship);
         }
         var connector =
             order.Connector is { } cell && !grid.MarkedForClose
@@ -1632,14 +1944,14 @@ internal static class ShipyardOrders
                 + (connected ? $"docked, {charged} batteries charged" : "no dock, admin fill")
                 + $", {filled:N0} of {order.Hydrogen:N0} L hydrogen"
         );
-        var armLeft = RemoveArm(order);
+        var armLeft = RemoveArm(shipyard, order);
         if (alive)
         {
             HandOver(ship, order.Player);
-            if (order.Free)
-                FreePrints.Ended(order.Player);
-            if (ship.IsStatic)
-                MyMultiplayer.RaiseEvent(ship, x => x.OnConvertToDynamic);
+            NoteFreeEnd(order, order.Name);
+            Dynamic(shipyard, ship);
+            if (order.Projector.CubeGrid == ship)
+                KeepProjector(order);
         }
         // What the arm didn't use is OCT's
         RemoveLeftovers(shipyard, armLeft);
@@ -1664,10 +1976,10 @@ internal static class ShipyardOrders
     }
 
     // Destroys the arm's blocks, never the rotor head; returns the components they still miss
-    private static Dictionary<MyDefinitionId, int> RemoveArm(Order order)
+    private static Dictionary<MyDefinitionId, int> RemoveArm(MyCubeGrid shipyard, Order order)
     {
         var missing = new Dictionary<MyDefinitionId, int>();
-        var grid = order.Projector.CubeGrid;
+        var grid = order.ArmGrid ?? order.Projector.CubeGrid;
         if (grid.MarkedForClose)
             return missing;
         foreach (var cell in order.Arm)
@@ -1680,10 +1992,69 @@ internal static class ShipyardOrders
                 missing[id] = (missing.TryGetValue(id, out var had) ? had : 0) + part.Value;
             }
         }
-        Raze(grid, order.Arm);
-        if (grid.IsStatic)
-            MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
+        Dismantle(shipyard, grid, order.Arm);
         return missing;
+    }
+
+    // Arms coming down one block every RazeTicks (6 a second), from the tip to the rotor
+    // head, by shipyard entity id; the head's grid turns dynamic again after the last one
+    private const int RazeTicks = 10;
+    private static readonly Dictionary<long, (MyCubeGrid Grid, List<Vector3I> Cells)> razing =
+        new();
+
+    private static void Dismantle(MyCubeGrid shipyard, MyCubeGrid grid, IEnumerable<Vector3I> cells)
+    {
+        var head =
+            grid.GetFatBlocks<MyAttachableTopBlockBase>().FirstOrDefault()?.Position
+            ?? Vector3I.Zero;
+        // Nearest the head first: they come down from the end of the list
+        var left = cells
+            .Where(grid.CubeExists)
+            .OrderBy(c => Vector3I.DistanceManhattan(c, head))
+            .ToList();
+        razing[shipyard.EntityId] = (grid, left);
+    }
+
+    private static void UpdateRazing()
+    {
+        foreach (var (id, (grid, cells)) in razing.ToList())
+        {
+            if (!grid.MarkedForClose && cells.Count > 0)
+            {
+                Raze(grid, [cells[cells.Count - 1]]);
+                cells.RemoveAt(cells.Count - 1);
+            }
+            if (grid.MarkedForClose || cells.Count > 0)
+                continue;
+            razing.Remove(id);
+            if (grid.IsStatic)
+                MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
+        }
+    }
+
+    // An idle shipyard's rotor heads carry nothing else: an arm left over, by a restart while
+    // it came down, comes down now
+    private static void ClearHeads(MyCubeGrid shipyard)
+    {
+        var players = MySession.Static.Players;
+        foreach (var rotor in ShipyardArm.Rotors(shipyard))
+        {
+            var grid = (MyCubeGrid)rotor.TopGrid;
+            var left = grid.GetBlocks()
+                .Where(b =>
+                    b.FatBlock != rotor.TopBlock
+                    && (b.BuiltBy == 0 || players.IdentityIsNpc(b.BuiltBy))
+                )
+                .Select(b => b.Position)
+                .ToList();
+            if (left.Count == 0)
+                continue;
+            Plugin.Log.Info(
+                $"Shipyard {shipyard.DisplayName}: removing {left.Count} blocks left on '{rotor.CustomName}'"
+            );
+            Dismantle(shipyard, grid, left);
+            return;
+        }
     }
 
     // RazeBlocks would ask the safe zone, which forbids grinding
@@ -1692,6 +2063,63 @@ internal static class ShipyardOrders
         var present = cells.Where(c => grid.CubeExists(c)).ToList();
         grid.RazeGeneratedBlocks(present);
         MyMultiplayer.RaiseEvent(grid, x => x.RazeBlocksClient, present);
+    }
+
+    // A free build starts the player's cool-down, unless an admin who ignores PCU limits ordered it
+    private static void NoteFreeEnd(Order order, string name)
+    {
+        if (order.Exempt)
+            Plugin.Log.Info(
+                $"Free builds: {Name(order.Player)} ignores PCU limits, no cool-down after '{name}'"
+            );
+        else if (order.Free)
+            FreePrints.Ended(order.Player);
+    }
+
+    // Players could not use a ship split off the arm until they cut and pasted it with
+    // Essentials' !fixship; SE-746 tracks why. The ship and its subgrids are pasted anew
+    // right after the split instead. Returns the new ship grid; a projector that went along
+    // stays the order's.
+    private static MyCubeGrid Repaste(MyCubeGrid shipyard, Order order, MyCubeGrid ship)
+    {
+        var own = Own(shipyard);
+        var grids = Grids(ship).Where(g => !own.Contains(g)).ToList();
+        var builders = new List<MyObjectBuilder_EntityBase>();
+        foreach (var grid in grids)
+        {
+            var builder = (MyObjectBuilder_CubeGrid)grid.GetObjectBuilder(true);
+            builder.IsStatic = false;
+            if (grid == ship)
+                builder.DisplayName = order.Name;
+            builders.Add(builder);
+        }
+        var main = grids.IndexOf(ship);
+        foreach (var grid in grids)
+            grid.Close();
+        MyAPIGateway.Entities.RemapObjectBuilderCollection(builders);
+        MyCubeGrid pasted = null;
+        for (var i = 0; i < builders.Count; i++)
+        {
+            var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(builders[i]);
+            grid?.DetectDisconnectsAfterFrame();
+            if (i == main)
+                pasted = grid;
+        }
+        if (pasted?.GetFatBlocks<MyProjectorBase>().FirstOrDefault(IsScaffold) is { } projector)
+            order.Projector = projector;
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id} '{order.Name}': pasted {grids.Count} grids anew as {pasted?.EntityId}"
+        );
+        return pasted;
+    }
+
+    // The ship and its subgrids: rotor and piston tops built on the static arm may be static
+    private static void Dynamic(MyCubeGrid shipyard, MyCubeGrid ship)
+    {
+        var own = Own(shipyard);
+        foreach (MyCubeGrid grid in Group(ship))
+            if (grid.IsStatic && !own.Contains(grid))
+                MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
     }
 
     // Blocks the projector built itself, like the tops of rotors and pistons, are BuiltBy its NPC
@@ -1754,6 +2182,7 @@ internal static class ShipyardOrders
             Blocks = grids.Sum(g => g.CubeBlocks.Count),
             Id = values.TryGetValue("Build", out var id) ? id : "",
             Free = !values.TryGetValue("Free", out var f) || f != "0",
+            Exempt = values.TryGetValue("Exempt", out var x) && x == "1",
             Hydrogen = hydrogen,
             Name = values.TryGetValue("Ship", out var ship) ? ship : grids[0].DisplayName ?? "Ship",
         };
@@ -2222,9 +2651,16 @@ internal static class ShipyardOrders
             .Where(b => ((IMyTerminalBlock)b).GetProperty(ShootProperty) != null);
 
     // Through the tools' terminal switches, which ToolCore also sends to the clients. In a
-    // no-welding zone the clients turn the tools off again, so they show no beams (SE1-0259).
+    // no-welding zone the clients would turn the tools off again and show no beams (SE-441):
+    // ShowBeams keeps them on.
     private static void Welders(MyCubeGrid shipyard, bool on)
     {
+        ShipyardZoneWelding.ShowBeams(shipyard, on);
+        if (on)
+        {
+            Fuel(shipyard);
+            Sweep(shipyard, false);
+        }
         foreach (var beam in Beams(shipyard))
         {
             if (on)
@@ -2235,6 +2671,77 @@ internal static class ShipyardOrders
             if (block.GetValueBool(ShootProperty) != on)
                 block.SetValueBool(ShootProperty, on);
         }
+    }
+
+    // The welders stop without power: the shipyard's reactors are topped up to ReactorUranium
+    // while a build runs, at OCT's cost
+    private const int ReactorUranium = 1000;
+    private static readonly MyDefinitionId uranium = new(typeof(MyObjectBuilder_Ingot), "Uranium");
+
+    private static void Fuel(MyCubeGrid shipyard)
+    {
+        foreach (var reactor in shipyard.GetFatBlocks<MyReactor>())
+        {
+            var inventory = reactor.GetInventory();
+            var missing = ReactorUranium - inventory.GetItemAmount(uranium);
+            if (missing > 0)
+                inventory.AddItems(
+                    MyFixedPoint.Min(missing, inventory.ComputeAmountThatFits(uranium)),
+                    MyObjectBuilderSerializer.CreateNewObject(uranium)
+                );
+        }
+    }
+
+    // Removes the garbage in the shipyard main grid's box that could block a build: floating
+    // objects, and before a build the grids no player owns and the players' wrecks, unpowered
+    // and without a cockpit or remote control. Characters, the shipyard and the grids on its
+    // rotors stay.
+    private static void Sweep(MyCubeGrid shipyard, bool grids)
+    {
+        var box = new MyOrientedBoundingBoxD(
+            shipyard.PositionComp.LocalAABB,
+            shipyard.PositionComp.WorldMatrixRef
+        );
+        var entities = MyEntities.GetEntitiesInOBB(ref box);
+        var floating = entities.OfType<MyFloatingObject>().ToList();
+        var found = grids
+            ? entities.OfType<MyCubeGrid>().Where(g => !g.IsPreview).Select(Grids).ToList()
+            : [];
+        entities.Clear();
+        foreach (var item in floating)
+            MyFloatingObjects.RemoveFloatingObject(item);
+        var own = Grids(shipyard);
+        var removed = new HashSet<MyCubeGrid>();
+        foreach (var group in found)
+        {
+            if (group.Any(g => own.Contains(g) || removed.Contains(g)) || !Garbage(group))
+                continue;
+            foreach (var grid in group)
+            {
+                removed.Add(grid);
+                grid.Close();
+            }
+        }
+        if (floating.Count > 0 || removed.Count > 0)
+            Plugin.Log.Info(
+                $"Shipyard {shipyard.DisplayName}: removed {floating.Count} floating objects and "
+                    + $"{removed.Count} grids: {string.Join(", ", removed.Select(g => g.DisplayName))}"
+            );
+    }
+
+    private static bool Garbage(List<MyCubeGrid> group)
+    {
+        var players = MySession.Static.Players;
+        if (!group.SelectMany(g => g.BigOwners).Any(o => !players.IdentityIsNpc(o)))
+            return true;
+        return !group.Any(g =>
+            g.GetFatBlocks<MyShipController>().Any()
+            || g.GridSystems.ResourceDistributor?.ResourceStateByType(
+                MyResourceDistributorComponent.ElectricityId,
+                grid: g
+            )
+                is not (null or MyResourceStateEnum.NoPower)
+        );
     }
 
     // Complete blocks of the ship and its subgrids, the scaffold left out

@@ -333,6 +333,29 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(Free(w, p1, Plate) == 10 * U && Free(w, p1, Ice) == 50 * U, "refund: everything is back");
 }
 
+// Finish with a refund after the welders used some: the ship was removed, all comes back
+{
+    var (w, m, market, b) = Setup();
+    var needed = Needs((Plate, 10 * U), (Ice, 50 * U));
+    var order = Ok(
+        w,
+        "order",
+        () => b.Order(w, market, s, Paid(p1), needed, none, long.MaxValue)
+    ).Order;
+    long paid = 25_000 - w.Balances[p1];
+    b.Start(w, s, order.Id);
+    Ok(
+        w,
+        "finish with refund, few leftovers",
+        () => b.Finish(w, s, order.Id, Needs((Plate, 3 * U)), 0, refund: true)
+    );
+    Check(w.Balances[p1] == 25_000 - paid + 100, "scrapped: the fee is back");
+    Check(
+        Free(w, p1, Plate) == 10 * U && Free(w, p1, Ice) == 50 * U,
+        "scrapped: every component is back: " + LedgerBook.Units(Free(w, p1, Plate))
+    );
+}
+
 // Hydrogen from a ship at the station: put into the build ledger, not bought
 {
     var (w, m, market, b) = Setup();
@@ -546,6 +569,45 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(BuildBook.DecodeOrder(queue).Blueprint == "", "request: the queue without blueprints");
     string next = new BuildRequest { Verb = BuildVerb.Next, Station = A }.Run(b, w, market, s);
     Check(BuildBook.DecodeOrder(next).Blueprint == "QUJD", "request: next with its blueprint");
+    var exempt = new BuildRequest
+    {
+        Verb = BuildVerb.Order,
+        Station = B,
+        Player = 2,
+        Ship = "Big",
+        Exempt = true,
+    };
+    var exemptBack = BuildRequest.Decode(exempt.Encode());
+    Check(exemptBack.Exempt && !back.Exempt, "request: exempt on the wire");
+    Check(
+        !BuildRequest.Decode(request.Encode().Replace("\t0\n", "\n")).Exempt,
+        "request: from a node from before exempt"
+    );
+    // On a book of its own, the checks below count this one's money
+    var (w2, _, market2, b2) = Setup();
+    exemptBack.Run(b2, w2, market2, s);
+    var exemptOrder = BuildBook.DecodeOrder(
+        new BuildRequest { Verb = BuildVerb.Next, Station = B }.Run(b2, w2, market2, s)
+    );
+    Check(exemptOrder.Exempt && exemptOrder.Free, "request: the exempt order keeps it");
+    var started = BuildBook.DecodeOrder(
+        BuildBook.EncodeOrder(
+            new BuildOrder
+            {
+                Id = "x",
+                Started = true,
+                Exempt = true,
+            },
+            blueprint: false
+        )
+    );
+    Check(started.Started && started.Exempt, "wire format: started and exempt");
+    Check(
+        !BuildBook
+            .DecodeOrder(BuildBook.EncodeOrder(new BuildOrder { Started = true }, false))
+            .Exempt,
+        "wire format: started, not exempt"
+    );
     string quote = new BuildRequest
     {
         Verb = BuildVerb.Quote,

@@ -180,7 +180,8 @@ terminal's Info tab, so a vanilla projector's reservation (one PCU per projected
 block) is part of it; Multigrid Projector doesn't reserve on the grid.
 
 Blocks built by nobody or by an NPC, like the stations' blocks, and admins with
-"Ignore PCU limit" on are not capped. A group already over the cap, pasted by an
+"Ignore PCU limit" on are not capped, nor is the ship a shipyard builds for such
+an admin, on whichever node builds it. A group already over the cap, pasted by an
 admin for example, keeps what it has. The game reattaches the top parts it
 already had, after a load for example, without the check. 0 turns the cap off.
 
@@ -236,15 +237,14 @@ toolbar item (its own On switch) so that clients offer it; the item never runs.
   `Octahedron-FreePrints`, on a cluster in the World Authority's world: the node
   ending an order sends the time to every process, and a starting node asks the
   World Authority for the list. A player gets one free ship at a time.
-- An admin with the game's "Ignore PCU limits" on (Alt+F10) gets a free build
-  without the cool-down and whatever PCU they own, so a shipyard build can be
-  tested again and again. Their free builds start no cool-down, and the server
-  log says so. The other rules stay: the blocked blocks, one free ship at a
-  time, one order per queue, the shipyard's space and `GroupPcuLimit`. The
-  server that takes the order checks the flag, on a cluster the node the player
-  is on, and the node ending the build checks it again before it records a
-  cool-down: a node that doesn't have the player's flag records one, which
-  doesn't hold back that admin while the flag stays on.
+- An admin with the game's "Ignore PCU limits" on (Alt+F10) gets every ship as a
+  free build, whatever PCU they own, during a cool-down, with blocked blocks and
+  over `GroupPcuLimit`, so a shipyard build can be tested again and again. Their
+  builds start no cool-down, and the server log says so. The other rules stay:
+  one free ship at a time, one order per queue, the shipyard's space and
+  containers. The server that takes the order checks the flag, on a cluster the
+  node the player is on, and the order keeps it in the queue and the build's
+  projector: the node building the ship may not have the admin's settings.
 - Any other ship is a paid build. The payer is the player, or their faction when
   their last kiosk request had the Faction switch on, which needs the trading
   rank. The quote lists each component of every block with where it comes from:
@@ -269,7 +269,8 @@ toolbar item (its own On switch) so that clients offer it; the item never runs.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
   shipyard, its components the shipyard's containers, and it may have at most
-  `GroupPcuLimit` PCU, the cap of a ship. The quote checks that; an order that
+  `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
+  ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back.
 - The next order starts when the shipyard's free space is empty: a ship left
   there has to fly out first. The ship is built centered in the free space, from
@@ -279,9 +280,30 @@ toolbar item (its own On switch) so that clients offer it; the item never runs.
   to it, outside the ship's bounds. Either way the projector projects the
   blueprint (Multigrid Projector builds its subgrids), the components go into the
   shipyard's cargo containers, from the build ledger for a paid build, and its
-  OmniArc welders are switched on through their terminal switches. Clients don't
-  see the beams in a no-welding safe zone: ToolCore turns the tools off there on
-  the client, which doesn't have the shipyard exception above (SE1-0259).
+  OmniArc welders are switched on through their terminal switches. The welders
+  take the components from the containers like any welder, so a free build gets
+  its components loaded too, and what is left is removed at the end; no tool has
+  to skip the component cost. While a build runs the plugin also tops up the
+  shipyard's reactors to 1000 uranium each, at OCT's cost: without power the
+  welders stop. Floating objects in the shipyard main grid's bounding box are
+  removed while a build runs. Before a build starts, grids in that box that no
+  player owns are removed too, and so are players' wrecks: grids with no power
+  and no cockpit or remote control in their whole mechanical group. Characters,
+  players' other grids and the shipyard's own grids stay; those still block the
+  next build until they leave. In a no-welding safe zone ToolCore on the clients,
+  which don't have the shipyard exception above, would turn the tools off and
+  show no beams (SE-441): while a build runs, the plugin tells the clients every
+  10 s that the zones don't hold the shipyard grid, and puts it back at the end.
+  The server's own zones are left alone.
+- A build whose ship gains no integrity for 60 s stops. Plain blocks, armor and
+  decorations, are those of the plain `CubeBlock` type; every block of its own
+  type, lights, panels and conveyors included, is functional. When the ship
+  misses only plain blocks, at most 10% of them, it is delivered as usual, and a
+  paid build's payer gets those missing pieces' components back, not the labor
+  fee. When it misses a functional block or more plain ones, the ship is
+  removed and the build refunded: every component it took and the labor fee go
+  back to the payer, and a free build doesn't count. The player
+  gets a chat message either way.
 - Every projected block welded onto the ship or its subgrids is the player's,
   owner and `BuiltBy`, so it counts toward the player's PCU and the projection
   limits check it for them.
@@ -325,17 +347,34 @@ The quote checks that an arm can be planned; when none fits, the server log says
 why for each rotor once. At build start the arm's blocks are
 placed as frames from the rotor head, and the head's grid turns static for the
 build. The arm's components go into the shipyard's containers on top of the
-ship's, for free: OCT pays for the arm. When the welders have completed the
-projector, the plugin switches it on and the projection appears. When the ship
-is complete, or its time is up, the ship's blocks split off the arm's grid as
-the player's ship. With a connector the arm's connector locks onto the ship's;
+ship's, for free: OCT pays for the arm. When the welders have completed every
+block of the arm, the plugin switches the projector on and the projection
+appears. The OmniArc welders turn all the way around their block's up axis but
+tilt only 45° from the plane across it, out to 100 m, and a block is left to
+the welders nearest to it, so a few cells near the shipyard's edge are out of
+their reach. Arm blocks more than 40° off the plane of all four of their nearest
+welders are built at once when the arm is placed. Should the welders still complete no arm block for
+30 s, the plugin welds the rest with the components in the containers. When the
+ship is complete, or its time is up, the head's grid turns dynamic and the ship's
+blocks split off it as the player's ship, its subgrids dynamic too. With
+`ShipyardRepasteShips` (on) the plugin then pastes the ship and its subgrids anew,
+as Essentials' `!fixship` does: a player could sit in a ship that was only split
+off but not fly it until it was re-pasted; SE-746 tracks why. With a connector the arm's connector locks onto the ship's;
 docked within `ShipyardArmDockSeconds` (1), the ship's H2 tanks get the build's
 hydrogen and its batteries are charged. Without a dock the plugin fills the
-tanks itself. Then the plugin destroys the arm and its projector, never the
-rotor head, turns the head's grid dynamic again and hands the ship over. What
+tanks itself. Then the plugin hands the ship over and takes the arm down, a
+block every 10 ticks from its tip to the rotor head, never the head itself; the
+shipyard starts its next build after that. An idle shipyard takes down anything
+an NPC built that is left on its rotor heads, as after a restart mid-way.
+An unfinished ship that is delivered takes the arm's projector along: it stays
+on the ship, the player's, and keeps projecting the missing blocks, so the
+player can build them by hand. A ship built without an arm keeps its scaffold
+projector the same way. What
 the arm didn't use of its components is removed with the ship's leftovers, and
 only the ship's go back to the ledger. The `!oct shipyards` admin command lists
 the shipyards, their arm rotors and the running builds with their arm.
+`!oct shipyard strip <station> <item>` takes an item out of a shipyard's
+containers and welders, so tests can stall a build.
 
 The ship's PCU cap (`GroupPcuLimit`) leaves out the shipyard and the arm, which
 are in one mechanical group with the ship while it is built.
@@ -930,7 +969,18 @@ nothing is reachable and the reason logged for it. `tests/test_support_arm.py`
 checks the arm in game on a world built by `build_world.py`: a large ship docked to
 the arm's connector across a server restart, the same ship ending in a cap with the
 admin fill, and a small ship on a small rotor; each time the arm and its projector
-are gone afterwards and the rotor heads stay.
+are gone afterwards and the rotor heads stay. Without the restart it also checks
+that the whole arm is complete when the projector turns on, that the client sees
+the shipyard's welders shoot, and that the client sees the finished ship dynamic
+and owned by the player who ordered it. A build fails as soon as no arm or ship
+block completes for 90 s. Two more builds stall on purpose: one missing only
+2 of its 33 armor blocks is delivered, one missing 4 of them and one missing its
+cockpit are removed and refunded. The player sits in the docked and the capped
+ship's cockpit and flies the docked one. A ship ordered by an admin who ignores
+PCU limits, over a lowered `GroupPcuLimit` and with a blocked block, is refused
+without the flag and free with it, and is still welded and free with the flag
+turned off once its build started, as on a cluster node without the admin's
+settings.
 `tests/test_free_build.py` checks the free-build limits at their defaults with
 the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
 refused, and a player who reaches 10,000 PCU gets no more starter ships and a

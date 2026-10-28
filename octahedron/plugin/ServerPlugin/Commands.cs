@@ -53,6 +53,15 @@ public sealed class Commands : CommandModule
     public IEnumerable<string> Shipyards() => ShipyardOrders.Describe();
 
     [Command(
+        "shipyard strip",
+        "Takes an item out of a shipyard's containers and welders, for tests",
+        "!oct shipyard strip <station> <item>: item as in the ledger, like Component/Display. "
+            + "A running build then stalls on the blocks that need it."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ShipyardStrip(string station, string item) => ShipyardOrders.Strip(station, item);
+
+    [Command(
         "encounters",
         "Lists the encounters that could spawn where you are",
         "!oct encounters [type count]: with a type and a count, the share of each mod in that "

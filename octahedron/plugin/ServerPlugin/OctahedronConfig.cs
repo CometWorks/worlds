@@ -495,6 +495,17 @@ public class OctahedronConfig : PluginConfig
     } = 1;
 
     [BoolOption(
+        "Pastes a ship that splits off its support arm anew, as Essentials' !fixship does: the clients "
+            + "get it whole instead of a split of their copy of the arm, which they may not be able to use.",
+        Parent = "shipyard"
+    )]
+    public bool ShipyardRepasteShips
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [BoolOption(
         "OCT's account is real, without the economy's top-up toward 1e9: new money comes only from the subsidy and OCT's floor. "
             + "Once a day (00:00 UTC) the wealth tax goes into a pool; once an hour a part of it, the subsidy and OCT's balance above its cap "
             + "are split between the active players. "

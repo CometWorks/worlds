@@ -75,7 +75,11 @@ internal static class GroupPcuLimit
     private static bool Exempt(long identityId)
     {
         var session = MySession.Static;
-        if (identityId == 0 || session.Players.IdentityIsNpc(identityId))
+        if (
+            identityId == 0
+            || session.Players.IdentityIsNpc(identityId)
+            || ShipyardOrders.Exempt(identityId)
+        )
             return true;
         var steamId = session.Players.TryGetSteamId(identityId);
         return session.IsUserAdmin(steamId)

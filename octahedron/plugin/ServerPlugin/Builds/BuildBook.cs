@@ -27,6 +27,11 @@ public sealed class BuildOrder
     public long Created;
     public bool Started;
 
+    // An admin who ignores PCU limits ordered it (FreePrints.Exempt): always a free build, without
+    // the per-ship PCU cap. Kept here because the node that builds it may not know their admin
+    // settings.
+    public bool Exempt;
+
     // The blueprint, opaque here: base64, no tabs or line breaks
     public string Blueprint = "";
 
@@ -480,8 +485,9 @@ public sealed class BuildBook
     /// <summary>
     /// The build ended: the order leaves the queue. A paid build gets the leftover components
     /// back into the payer's ledger, uses up the ice of the hydrogen that went into the ship and
-    /// returns the rest. With <paramref name="refund"/> (the build couldn't start) the fee
-    /// comes back too.
+    /// returns the rest. With <paramref name="refund"/> (the build couldn't start, or its ship
+    /// was removed) every component the build took comes back, whatever the leftovers, and the
+    /// fee too.
     /// </summary>
     public BuildResult Finish(
         IMarketWorld w,
@@ -500,6 +506,10 @@ public sealed class BuildBook
             orders.Remove(id);
             return new BuildResult(true, "", order);
         }
+        if (refund)
+            leftovers = order
+                .Items.Where(i => i.Key != s.HydrogenItem)
+                .ToDictionary(i => i.Key, i => i.Value);
         var ops = new List<LedgerOp>();
         var back = new LedgerOp
         {
@@ -560,7 +570,8 @@ public sealed class BuildBook
                 o.Pcu.ToString(CultureInfo.InvariantCulture),
                 Clean(o.Ship),
                 BuildQuote.N(o.Created),
-                o.Started ? "1" : "0",
+                // Flags: 1 started, 2 exempt; orders from before Exempt have 0 or 1
+                ((o.Started ? 1 : 0) | (o.Exempt ? 2 : 0)).ToString(CultureInfo.InvariantCulture),
                 blueprint ? o.Blueprint ?? "" : ""
             )
         );
@@ -583,9 +594,11 @@ public sealed class BuildBook
             Pcu = int.Parse(f[6], CultureInfo.InvariantCulture),
             Ship = f[7],
             Created = BuildQuote.L(f[8]),
-            Started = f[9] == "1",
             Blueprint = f[10],
         };
+        var flags = int.Parse(f[9], CultureInfo.InvariantCulture);
+        order.Started = (flags & 1) != 0;
+        order.Exempt = (flags & 2) != 0;
         if (f[4].Length > 0 && !LedgerOwner.TryParse(f[4], out order.Payer))
             throw new FormatException("Malformed build payer");
         for (int i = 11; i < f.Length; i += 2)
@@ -694,6 +707,7 @@ public sealed class BuildRequest
     public long MaxTotal;
     public long HydrogenUsed;
     public bool Refund;
+    public bool Exempt;
     public Dictionary<string, long> Needed = new();
     public Dictionary<string, long> Provided = new();
 
@@ -713,7 +727,8 @@ public sealed class BuildRequest
             Blueprint ?? "",
             BuildQuote.N(MaxTotal),
             BuildQuote.N(HydrogenUsed),
-            Refund ? "1" : "0"
+            Refund ? "1" : "0",
+            Exempt ? "1" : "0"
         )
         + "\n"
         + Items(Needed)
@@ -741,7 +756,8 @@ public sealed class BuildRequest
     {
         var lines = text.Split('\n');
         var f = lines[0].Split('\t');
-        if (lines.Length != 3 || f.Length != 12)
+        // 12 fields: from a node from before Exempt
+        if (lines.Length != 3 || f.Length is not (12 or 13))
             throw new FormatException("Malformed build request");
         var r = new BuildRequest
         {
@@ -756,6 +772,7 @@ public sealed class BuildRequest
             MaxTotal = BuildQuote.L(f[9]),
             HydrogenUsed = BuildQuote.L(f[10]),
             Refund = f[11] == "1",
+            Exempt = f.Length > 12 && f[12] == "1",
             Needed = Items(lines[1]),
             Provided = Items(lines[2]),
         };
@@ -798,6 +815,7 @@ public sealed class BuildRequest
                     Pcu = Pcu,
                     Ship = Ship,
                     Blueprint = Blueprint,
+                    Exempt = Exempt,
                 },
                 Needed,
                 Provided,
