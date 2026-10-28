@@ -106,6 +106,9 @@ internal static class ShipyardOrders
         // The components the payer gets back for the missing pieces of a delivered ship, raw
         public Dictionary<string, long> Refunded = [];
 
+        // The arm's grid, which the projector leaves when it stays on an unfinished ship
+        public MyCubeGrid ArmGrid;
+
         // The arm's connector, and the ship's block the projector took the place of
         public Vector3I? Connector;
         public MyDefinitionId? GivenUp;
@@ -721,6 +724,8 @@ internal static class ShipyardOrders
         ticks++;
         if (docks.Count > 0)
             UpdateDocks();
+        if (razing.Count > 0 && ticks % RazeTicks == 0)
+            UpdateRazing();
         if (ticks % QuoteTicks == 0 && loaded.Count > 0)
         {
             foreach (var (tableId, player) in loaded.ToList())
@@ -765,6 +770,10 @@ internal static class ShipyardOrders
         {
             if (order != null)
                 End(shipyard, order, "the ship is gone");
+            else if (
+                !razing.ContainsKey(shipyard.EntityId) && !starting.Contains(shipyard.EntityId)
+            )
+                ClearHeads(shipyard);
             return;
         }
         if (order?.Projector != projector)
@@ -940,6 +949,7 @@ internal static class ShipyardOrders
         if (
             orders.ContainsKey(shipyard.EntityId)
             || docks.ContainsKey(shipyard.EntityId)
+            || razing.ContainsKey(shipyard.EntityId)
             || !starting.Add(shipyard.EntityId)
         )
             return;
@@ -1224,10 +1234,11 @@ internal static class ShipyardOrders
         var name = ship.DisplayName;
         double filled = 0;
         var gone = ship.MarkedForClose;
+        var keep = Unfinished(order, why);
         if (!gone)
         {
             var scaffold = ship.GetFatBlocks<MyTerminalBlock>()
-                .Where(IsScaffold)
+                .Where(b => IsScaffold(b) && !(keep && b == order.Projector))
                 .Select(b => b.Position)
                 .ToList();
             // RazeBlocks would ask the safe zone, which forbids grinding
@@ -1243,9 +1254,26 @@ internal static class ShipyardOrders
             if (order.Hydrogen > 0)
                 filled = FillHydrogen(ship, order.Hydrogen);
             Dynamic(shipyard, ship);
+            if (keep)
+                KeepProjector(order);
         }
         var left = RemoveLeftovers(shipyard, order.Components);
         Report(shipyard, order, name, gone ? "gone" : null, why, filled, left, "");
+    }
+
+    // An unfinished ship that is delivered keeps the build's projector, projecting what is
+    // missing, so the player can build it by hand
+    private static bool Unfinished(Order order, string why) => why != null && !order.Refund;
+
+    private const string Projecting =
+        " The build's projector stays on it and shows the missing blocks: build them by hand.";
+
+    private static void KeepProjector(Order order)
+    {
+        var projector = (Sandbox.ModAPI.IMyProjector)order.Projector;
+        projector.CustomName = $"{order.Name} Projector";
+        projector.CustomData = "";
+        projector.Enabled = true;
     }
 
     // Tells the player how the build ended and gives the build ledger back
@@ -1274,13 +1302,15 @@ internal static class ShipyardOrders
             : order.Missing != null && !gone
                 ? $"{stalled}. The ship is yours without {order.Missing}"
                     + (order.Free ? "." : "; their components are back in the ledger.")
+                    + Projecting
             : missing == "unbuilt"
                 ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
             : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
             : why == null
                 ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
             : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
-                + "The projection is gone, the unfinished ship is yours.";
+                + "The unfinished ship is yours."
+                + Projecting;
         if (!order.Free)
         {
             if (left.Count > 0 && order.Missing == null)
@@ -1662,9 +1692,10 @@ internal static class ShipyardOrders
                 .SelectMany(g => ((MyCubeGrid)g).GetBlocks())
                 .Where(b => !(b.FatBlock is MyTerminalBlock t && IsScaffold(t)));
 
-    // The welders stopped. A ship missing only armor and other blocks without a control panel
-    // or a conveyor is delivered, and the payer gets the missing pieces' components back; one
-    // missing a functional block is removed and the build refunded, the labor fee with it.
+    // The welders stopped. A ship missing only armor and other plain blocks, at most
+    // MaxMissingPlain of them, is delivered, and the payer gets the missing pieces' components
+    // back; one missing a functional block or more of the plain ones is removed and the build
+    // refunded, the labor fee with it.
     private static void Stall(MyCubeGrid shipyard, Order order)
     {
         var projected = (
@@ -1673,6 +1704,7 @@ internal static class ShipyardOrders
         var unbuilt = new Dictionary<MyDefinitionId, int>();
         foreach (var block in projected?.SelectMany(g => g.CubeBlocks) ?? [])
             unbuilt[block.GetId()] = (unbuilt.TryGetValue(block.GetId(), out var n) ? n : 0) + 1;
+        var plain = unbuilt.Where(u => !Functional(u.Key)).Sum(u => u.Value);
         var blocks = ShipSoFar(shipyard, order).ToList();
         foreach (var block in blocks)
             if (unbuilt.TryGetValue(block.BlockDefinition.Id, out var n))
@@ -1700,7 +1732,10 @@ internal static class ShipyardOrders
                 .OrderByDescending(m => m.Value)
                 .Select(m => $"{m.Value} {m.Key.DisplayNameText}")
         );
-        order.Refund = missing.Keys.Any(Functional);
+        order.Refund =
+            missing.Keys.Any(d => Functional(d.Id))
+            || missing.Where(m => !Functional(m.Key.Id)).Sum(m => m.Value)
+                > MaxMissingPlain * plain;
         order.Refunded = parts.ToDictionary(
             p => Ledgers.ItemName(new MyDefinitionId(typeof(MyObjectBuilder_Component), p.Key)),
             p => p.Value * LedgerBook.Unit
@@ -1714,14 +1749,13 @@ internal static class ShipyardOrders
         End(shipyard, order, "stalled");
     }
 
-    // Blocks with a control panel, and conveyors
-    private static bool Functional(MyCubeBlockDefinition definition)
-    {
-        Type type = definition.Id.TypeId;
-        return typeof(MyObjectBuilder_TerminalBlock).IsAssignableFrom(type)
-            || typeof(MyObjectBuilder_Conveyor).IsAssignableFrom(type)
-            || typeof(MyObjectBuilder_ConveyorConnector).IsAssignableFrom(type);
-    }
+    // A ship missing more than this share of its plain blocks is not delivered
+    private const double MaxMissingPlain = 0.1;
+
+    // Every block of its own type is functional: only the plain blocks, armor and decorations,
+    // are a slim block alone, at most with a bare MyCubeBlock for their model
+    private static bool Functional(MyDefinitionId id) =>
+        id.TypeId != typeof(MyObjectBuilder_CubeBlock);
 
     // Removes what the welders built of the ship
     private static void Scrap(MyCubeGrid shipyard, Order order)
@@ -1784,7 +1818,11 @@ internal static class ShipyardOrders
         MyCubeGrid ship = null;
         if (!grid.MarkedForClose)
         {
+            order.ArmGrid = grid;
             var blocks = ShipBlocksOnArm(order);
+            // An unfinished ship takes the arm's projector along, which faces its first block
+            if (blocks.Count > 0 && Unfinished(order, why))
+                blocks.Add(order.Projector.SlimBlock);
             // A split of a static grid is static, and the clients may miss an event on the
             // new grid: the arm's grid turns dynamic first, in the same order on the
             // clients, so the ship is born dynamic and docks to the arm as one
@@ -1886,13 +1924,15 @@ internal static class ShipyardOrders
                 + (connected ? $"docked, {charged} batteries charged" : "no dock, admin fill")
                 + $", {filled:N0} of {order.Hydrogen:N0} L hydrogen"
         );
-        var armLeft = RemoveArm(order);
+        var armLeft = RemoveArm(shipyard, order);
         if (alive)
         {
             HandOver(ship, order.Player);
             if (order.Free)
                 FreePrints.Ended(order.Player);
             Dynamic(shipyard, ship);
+            if (order.Projector.CubeGrid == ship)
+                KeepProjector(order);
         }
         // What the arm didn't use is OCT's
         RemoveLeftovers(shipyard, armLeft);
@@ -1917,10 +1957,10 @@ internal static class ShipyardOrders
     }
 
     // Destroys the arm's blocks, never the rotor head; returns the components they still miss
-    private static Dictionary<MyDefinitionId, int> RemoveArm(Order order)
+    private static Dictionary<MyDefinitionId, int> RemoveArm(MyCubeGrid shipyard, Order order)
     {
         var missing = new Dictionary<MyDefinitionId, int>();
-        var grid = order.Projector.CubeGrid;
+        var grid = order.ArmGrid ?? order.Projector.CubeGrid;
         if (grid.MarkedForClose)
             return missing;
         foreach (var cell in order.Arm)
@@ -1933,10 +1973,69 @@ internal static class ShipyardOrders
                 missing[id] = (missing.TryGetValue(id, out var had) ? had : 0) + part.Value;
             }
         }
-        Raze(grid, order.Arm);
-        if (grid.IsStatic)
-            MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
+        Dismantle(shipyard, grid, order.Arm);
         return missing;
+    }
+
+    // Arms coming down one block every RazeTicks (6 a second), from the tip to the rotor
+    // head, by shipyard entity id; the head's grid turns dynamic again after the last one
+    private const int RazeTicks = 10;
+    private static readonly Dictionary<long, (MyCubeGrid Grid, List<Vector3I> Cells)> razing =
+        new();
+
+    private static void Dismantle(MyCubeGrid shipyard, MyCubeGrid grid, IEnumerable<Vector3I> cells)
+    {
+        var head =
+            grid.GetFatBlocks<MyAttachableTopBlockBase>().FirstOrDefault()?.Position
+            ?? Vector3I.Zero;
+        // Nearest the head first: they come down from the end of the list
+        var left = cells
+            .Where(grid.CubeExists)
+            .OrderBy(c => Vector3I.DistanceManhattan(c, head))
+            .ToList();
+        razing[shipyard.EntityId] = (grid, left);
+    }
+
+    private static void UpdateRazing()
+    {
+        foreach (var (id, (grid, cells)) in razing.ToList())
+        {
+            if (!grid.MarkedForClose && cells.Count > 0)
+            {
+                Raze(grid, [cells[cells.Count - 1]]);
+                cells.RemoveAt(cells.Count - 1);
+            }
+            if (grid.MarkedForClose || cells.Count > 0)
+                continue;
+            razing.Remove(id);
+            if (grid.IsStatic)
+                MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
+        }
+    }
+
+    // An idle shipyard's rotor heads carry nothing else: an arm left over, by a restart while
+    // it came down, comes down now
+    private static void ClearHeads(MyCubeGrid shipyard)
+    {
+        var players = MySession.Static.Players;
+        foreach (var rotor in ShipyardArm.Rotors(shipyard))
+        {
+            var grid = (MyCubeGrid)rotor.TopGrid;
+            var left = grid.GetBlocks()
+                .Where(b =>
+                    b.FatBlock != rotor.TopBlock
+                    && (b.BuiltBy == 0 || players.IdentityIsNpc(b.BuiltBy))
+                )
+                .Select(b => b.Position)
+                .ToList();
+            if (left.Count == 0)
+                continue;
+            Plugin.Log.Info(
+                $"Shipyard {shipyard.DisplayName}: removing {left.Count} blocks left on '{rotor.CustomName}'"
+            );
+            Dismantle(shipyard, grid, left);
+            return;
+        }
     }
 
     // RazeBlocks would ask the safe zone, which forbids grinding

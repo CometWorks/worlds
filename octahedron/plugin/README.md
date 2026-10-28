@@ -294,12 +294,14 @@ toolbar item (its own On switch) so that clients offer it; the item never runs.
   show no beams (SE-441): while a build runs, the plugin tells the clients every
   10 s that the zones don't hold the shipyard grid, and puts it back at the end.
   The server's own zones are left alone.
-- A build whose ship gains no integrity for 60 s stops. When the ship misses only
-  armor and other blocks without a control panel or a conveyor, it is delivered
-  as usual, and a paid build's payer gets those missing pieces' components back,
-  not the labor fee. When it misses a block with a control panel or a conveyor,
-  the ship is removed and the build refunded: every component it took and the
-  labor fee go back to the payer, and a free build doesn't count. The player
+- A build whose ship gains no integrity for 60 s stops. Plain blocks, armor and
+  decorations, are those of the plain `CubeBlock` type; every block of its own
+  type, lights, panels and conveyors included, is functional. When the ship
+  misses only plain blocks, at most 10% of them, it is delivered as usual, and a
+  paid build's payer gets those missing pieces' components back, not the labor
+  fee. When it misses a functional block or more plain ones, the ship is
+  removed and the build refunded: every component it took and the labor fee go
+  back to the payer, and a free build doesn't count. The player
   gets a chat message either way.
 - Every projected block welded onto the ship or its subgrids is the player's,
   owner and `BuiltBy`, so it counts toward the player's PCU and the projection
@@ -356,8 +358,14 @@ ship is complete, or its time is up, the head's grid turns dynamic and the ship'
 blocks split off it as the player's ship, its subgrids dynamic too. With a connector the arm's connector locks onto the ship's;
 docked within `ShipyardArmDockSeconds` (1), the ship's H2 tanks get the build's
 hydrogen and its batteries are charged. Without a dock the plugin fills the
-tanks itself. Then the plugin destroys the arm and its projector, never the
-rotor head, and hands the ship over. What
+tanks itself. Then the plugin hands the ship over and takes the arm down, a
+block every 10 ticks from its tip to the rotor head, never the head itself; the
+shipyard starts its next build after that. An idle shipyard takes down anything
+an NPC built that is left on its rotor heads, as after a restart mid-way.
+An unfinished ship that is delivered takes the arm's projector along: it stays
+on the ship, the player's, and keeps projecting the missing blocks, so the
+player can build them by hand. A ship built without an arm keeps its scaffold
+projector the same way. What
 the arm didn't use of its components is removed with the ship's leftovers, and
 only the ship's go back to the ledger. The `!oct shipyards` admin command lists
 the shipyards, their arm rotors and the running builds with their arm.
@@ -962,7 +970,8 @@ that the whole arm is complete when the projector turns on, that the client sees
 the shipyard's welders shoot, and that the client sees the finished ship dynamic
 and owned by the player who ordered it. A build fails as soon as no arm or ship
 block completes for 90 s. Two more builds stall on purpose: one missing only
-heavy armor is delivered, one missing its cockpit is removed and refunded.
+2 of its 33 armor blocks is delivered, one missing 4 of them and one missing its
+cockpit are removed and refunded.
 `tests/test_free_build.py` checks the free-build limits at their defaults with
 the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
 refused, and a player who reaches 10,000 PCU gets no more starter ships and a

@@ -94,15 +94,29 @@ def small() -> tuple[str, int]:
 DOCK, DOCK_BLOCKS = large("ArmDock", 777000693000100, True)
 CAP, CAP_BLOCKS = large("ArmCap", 777000693000200, False)
 SMALL, SMALL_BLOCKS = small()
+
+
 # Builds that stall: the test takes an item out of the shipyard. Heavy armor needs metal
 # grids, nothing else of the ship or the arm does; only the cockpit needs displays.
-PARTIAL, PARTIAL_BLOCKS = large("ArmPartial", 777000693000400, False)
-PARTIAL = PARTIAL.replace(
-    "<SubtypeName>LargeBlockArmorBlock<", "<SubtypeName>LargeHeavyBlockArmorBlock<", 2
-)
+def heavy(name: str, entity: int, count: int) -> tuple[str, int]:
+    """The cap ship with count of its 33 armor blocks heavy"""
+    grid, blocks = large(name, entity, False)
+    return (
+        grid.replace(
+            "<SubtypeName>LargeBlockArmorBlock<",
+            "<SubtypeName>LargeHeavyBlockArmorBlock<",
+            count,
+        ),
+        blocks,
+    )
+
+
+# 2 of 33 plain blocks missing is delivered, 4 (over 10%) is not
+PARTIAL, PARTIAL_BLOCKS = heavy("ArmPartial", 777000693000400, 2)
+HEAVY, HEAVY_BLOCKS = heavy("ArmArmor", 777000693000600, 4)
 SCRAP, SCRAP_BLOCKS = large("ArmScrap", 777000693000500, False)
 # The tables in the world's order: North, South, Alpha, Beta, Gamma, Delta, Moon
-TABLES = [DOCK, DOCK, DOCK, CAP, SMALL, PARTIAL, SCRAP]
+TABLES = [HEAVY, DOCK, DOCK, CAP, SMALL, PARTIAL, SCRAP]
 # name: (station, ship, blocks, paid, connector, rotor size)
 CASES = {
     "dock": ("Alpha", "ArmDock", DOCK_BLOCKS, True, True, "Large"),
@@ -110,11 +124,13 @@ CASES = {
     "small": ("Gamma", "ArmSmall", SMALL_BLOCKS, False, True, "Small"),
     "partial": ("Delta", "ArmPartial", PARTIAL_BLOCKS, True, False, "Large"),
     "scrap": ("Moon", "ArmScrap", SCRAP_BLOCKS, True, False, "Large"),
+    "armor": ("North", "ArmArmor", HEAVY_BLOCKS, True, False, "Large"),
 }
 # Stalled builds: the item taken out, and how the build ends
 STALLS = {
     "partial": ("Component/MetalGrid", "The ship is yours without"),
     "scrap": ("Component/Display", "The ship was removed"),
+    "armor": ("Component/MetalGrid", "The ship was removed"),
 }
 # For the paid builds: the components, and the ice for 500,000 L of hydrogen
 DEPOSIT = {
@@ -127,7 +143,7 @@ DEPOSIT = {
     "Component/Computer": 200,
     "Component/Display": 30,
     "Component/PowerCell": 120,
-    "Component/MetalGrid": 200,
+    "Component/MetalGrid": 300,
     "Component/BulletproofGlass": 30,
     "Ore/Ice": 25000,
 }
@@ -360,16 +376,7 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
             ready is not None and f"{HYDROGEN:,} L" in ready,
             f"{case}: its H2 tank has {HYDROGEN:,} L: {ready}",
         )
-    time.sleep(5)
-    lines = shipyard(remote, station)
-    heads = re.findall(
-        rf"'Advanced Rotor \w+ Arm {size}' head (\d+) blocks( static)?",
-        lines[0] if lines else "",
-    )
-    check(
-        len(heads) == 2 and all(n == "1" and not static for n, static in heads),
-        f"{case}: the arms are gone, the {size.lower()} rotor heads alone and dynamic: {lines}",
-    )
+    lines = arms_gone(remote, case)
     check(
         not any(f"'{ship}'" in line for line in lines[1:]),
         f"{case}: no build left in the shipyard: {lines}",
@@ -388,17 +395,38 @@ def stall(remote, case: str, mark: int) -> None:
         ended is not None and ending in ended,
         f"{case}: the stalled build ends with '{ending}': {ended}",
     )
-    if case == "scrap":
+    if case in ("scrap", "armor"):
         check(
             ended is not None and "labor fee is paid back" in ended,
             f"{case}: the build cost is paid back: {ended}",
         )
-    time.sleep(5)
-    lines = shipyard(remote, station)
+    lines = arms_gone(remote, case)
     check(
         not any(f"'{ship}'" in line for line in lines[1:]),
         f"{case}: no build left in the shipyard: {lines}",
     )
+
+
+def arms_gone(remote, case: str) -> list[str]:
+    """The arm comes down a block every 10 ticks after the build: waits up to 60 s for the
+    case's rotor heads to be alone and dynamic. Returns the shipyard's lines."""
+    station, size = CASES[case][0], CASES[case][5]
+    deadline = time.monotonic() + 60
+    while True:
+        lines = shipyard(remote, station)
+        heads = re.findall(
+            rf"'Advanced Rotor \w+ Arm {size}' head (\d+) blocks( static)?",
+            lines[0] if lines else "",
+        )
+        alone = len(heads) == 2 and all(n == "1" and not st for n, st in heads)
+        if alone or time.monotonic() > deadline:
+            break
+        time.sleep(3)
+    check(
+        alone,
+        f"{case}: the arms are gone, the {size.lower()} rotor heads alone and dynamic: {lines}",
+    )
+    return lines
 
 
 def shipyard_id(remote, station: str) -> int:
@@ -548,8 +576,35 @@ def saved(cases: list[str]) -> None:
             "saved: 'ArmPartial' was delivered without some heavy armor, dynamic: "
             + f"{len(cubes)} of {PARTIAL_BLOCKS} blocks",
         )
-    if "scrap" in cases:
-        check("ArmScrap" not in grids, "saved: 'ArmScrap' was removed")
+        projectors = [
+            b
+            for b in cubes
+            if b.get("{http://www.w3.org/2001/XMLSchema-instance}type")
+            == "MyObjectBuilder_Projector"
+        ]
+        builders = {b.findtext("BuiltBy") for b in cubes if b not in projectors}
+        check(
+            len(projectors) == 1
+            and projectors[0].findtext("Enabled") == "true"
+            and projectors[0].find("ProjectedGrids/MyObjectBuilder_CubeGrid")
+            is not None
+            and projectors[0].findtext("Owner") in builders,
+            "saved: 'ArmPartial' keeps the build's projector, the player's, on and projecting: "
+            + str(
+                [
+                    (
+                        p.findtext("CustomName"),
+                        p.findtext("Enabled"),
+                        p.findtext("Owner"),
+                    )
+                    for p in projectors
+                ]
+            ),
+        )
+    for case in ("scrap", "armor"):
+        if case in cases:
+            ship = CASES[case][1]
+            check(ship not in grids, f"saved: '{ship}' was removed")
     for case in cases:
         if case in STALLS:
             continue
