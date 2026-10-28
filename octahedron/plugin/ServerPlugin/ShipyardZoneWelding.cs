@@ -1,6 +1,7 @@
 using System;
 using HarmonyLib;
 using Sandbox.Definitions;
+using Sandbox.Engine.Multiplayer;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
@@ -27,6 +28,11 @@ namespace ServerPlugin;
 //   block's box; ModCanBuild lets every mod past that, as the build request decides.
 // The shipyard grid itself is indestructible and not editable, so letting anyone "weld" it
 // changes nothing.
+//
+// Clients run ToolCore's tool loop too, without this plugin: a tool whose grid the zone holds
+// is switched off there, and players see no beams (SE-441). While a build runs, ShowBeams
+// tells the clients that the zones don't hold the shipyard grid, so their ToolCore draws the
+// beams. The server keeps its own list; it welds as before.
 internal static class ShipyardZoneWelding
 {
     private const string Owner = "Octahedron Authority";
@@ -54,6 +60,39 @@ internal static class ShipyardZoneWelding
             if (players.IdentityIsNpc(owner) && players.TryGetIdentity(owner)?.DisplayName == Owner)
                 return true;
         return false;
+    }
+
+    private static readonly System.Reflection.MethodInfo removeEntity = AccessTools.Method(
+        typeof(MySafeZone),
+        "RemoveEntity_Implementation"
+    );
+    private static readonly System.Reflection.MethodInfo insertEntity = AccessTools.Method(
+        typeof(MySafeZone),
+        "InsertEntity_Implementation"
+    );
+
+    // Events by private methods: the replication layer takes the method of the returned delegate
+    private static readonly Func<MySafeZone, Action<long, bool>> removeEvent = z =>
+        (Action<long, bool>)Delegate.CreateDelegate(typeof(Action<long, bool>), z, removeEntity);
+    private static readonly Func<MySafeZone, Action<long>> insertEvent = z =>
+        (Action<long>)Delegate.CreateDelegate(typeof(Action<long>), z, insertEntity);
+
+    /// <summary>
+    /// Takes the shipyard grid out of the zones around it on the clients, or puts it back.
+    /// A client that joins gets the zones' lists again, so a running build sends it again.
+    /// </summary>
+    internal static void ShowBeams(MyCubeGrid shipyard, bool on)
+    {
+        var box = shipyard.PositionComp.WorldAABB;
+        foreach (var zone in MySessionComponentSafeZones.SafeZones)
+        {
+            if (!zone.Enabled || !zone.PositionComp.WorldAABB.Intersects(box))
+                continue;
+            if (on)
+                MyMultiplayer.RaiseEvent(zone, removeEvent, shipyard.EntityId, true);
+            else
+                MyMultiplayer.RaiseEvent(zone, insertEvent, shipyard.EntityId);
+        }
     }
 
     private static bool IsShipyard(long entityId) =>

@@ -279,9 +279,21 @@ toolbar item (its own On switch) so that clients offer it; the item never runs.
   to it, outside the ship's bounds. Either way the projector projects the
   blueprint (Multigrid Projector builds its subgrids), the components go into the
   shipyard's cargo containers, from the build ledger for a paid build, and its
-  OmniArc welders are switched on through their terminal switches. Clients don't
-  see the beams in a no-welding safe zone: ToolCore turns the tools off there on
-  the client, which doesn't have the shipyard exception above (SE1-0259).
+  OmniArc welders are switched on through their terminal switches. The welders
+  take the components from the containers like any welder, so a free build gets
+  its components loaded too, and what is left is removed at the end; no tool has
+  to skip the component cost. While a build runs the plugin also tops up the
+  shipyard's reactors to 1000 uranium each, at OCT's cost: without power the
+  welders stop. Floating objects in the shipyard main grid's bounding box are
+  removed while a build runs. Before a build starts, grids in that box that no
+  player owns are removed too, and so are players' wrecks: grids with no power
+  and no cockpit or remote control in their whole mechanical group. Characters,
+  players' other grids and the shipyard's own grids stay; those still block the
+  next build until they leave. In a no-welding safe zone ToolCore on the clients,
+  which don't have the shipyard exception above, would turn the tools off and
+  show no beams (SE-441): while a build runs, the plugin tells the clients every
+  10 s that the zones don't hold the shipyard grid, and puts it back at the end.
+  The server's own zones are left alone.
 - Every projected block welded onto the ship or its subgrids is the player's,
   owner and `BuiltBy`, so it counts toward the player's PCU and the projection
   limits check it for them.
@@ -325,14 +337,17 @@ The quote checks that an arm can be planned; when none fits, the server log says
 why for each rotor once. At build start the arm's blocks are
 placed as frames from the rotor head, and the head's grid turns static for the
 build. The arm's components go into the shipyard's containers on top of the
-ship's, for free: OCT pays for the arm. When the welders have completed the
-projector, the plugin switches it on and the projection appears. When the ship
-is complete, or its time is up, the ship's blocks split off the arm's grid as
-the player's ship. With a connector the arm's connector locks onto the ship's;
+ship's, for free: OCT pays for the arm. When the welders have completed every
+block of the arm, the plugin switches the projector on and the projection
+appears. The welders may never reach a few arm blocks, like the conveyor tubes
+at the bend of a small ship's arm: after 30 s without a newly completed arm
+block, the plugin welds the rest with the components in the containers. When the
+ship is complete, or its time is up, the head's grid turns dynamic and the ship's
+blocks split off it as the player's ship, its subgrids dynamic too. With a connector the arm's connector locks onto the ship's;
 docked within `ShipyardArmDockSeconds` (1), the ship's H2 tanks get the build's
 hydrogen and its batteries are charged. Without a dock the plugin fills the
 tanks itself. Then the plugin destroys the arm and its projector, never the
-rotor head, turns the head's grid dynamic again and hands the ship over. What
+rotor head, and hands the ship over. What
 the arm didn't use of its components is removed with the ship's leftovers, and
 only the ship's go back to the ledger. The `!oct shipyards` admin command lists
 the shipyards, their arm rotors and the running builds with their arm.
@@ -930,7 +945,11 @@ nothing is reachable and the reason logged for it. `tests/test_support_arm.py`
 checks the arm in game on a world built by `build_world.py`: a large ship docked to
 the arm's connector across a server restart, the same ship ending in a cap with the
 admin fill, and a small ship on a small rotor; each time the arm and its projector
-are gone afterwards and the rotor heads stay.
+are gone afterwards and the rotor heads stay. Without the restart it also checks
+that the whole arm is complete when the projector turns on, that the client sees
+the shipyard's welders shoot, and that the client sees the finished ship dynamic
+and owned by the player who ordered it. A build fails as soon as no arm or ship
+block completes for 60 s.
 `tests/test_free_build.py` checks the free-build limits at their defaults with
 the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
 refused, and a player who reaches 10,000 PCU gets no more starter ships and a

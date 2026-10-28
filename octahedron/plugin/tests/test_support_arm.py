@@ -162,6 +162,66 @@ def station_tables() -> dict[str, tuple[float, float, float]]:
     return tables
 
 
+def litter(station: str) -> None:
+    """Puts garbage in the middle of the station shipyard's welders, into the prepared
+    world: an unowned armor block and a floating stone. The build there sweeps it away.
+    """
+    sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
+    root = ET.parse(sector).getroot()
+    yard = next(
+        e
+        for e in root.iter("MyObjectBuilder_EntityBase")
+        if e.findtext("DisplayName") == f"{station} Station Shipyard"
+    )
+    beams = [
+        [int(b.find("Min").get(a)) for a in "xyz"]
+        for b in yard.iter("MyObjectBuilder_CubeBlock")
+        if b.findtext("SubtypeName") == "OmniArcBeam"
+    ]
+    cell = [sum(c[i] for c in beams) / len(beams) * 2.5 for i in range(3)]
+    po = yard.find("PositionAndOrientation")
+    pos, fwd, up = (
+        [float(po.find(t).get(a)) for a in "xyz"] for t in ("Position", "Forward", "Up")
+    )
+    right = [
+        fwd[1] * up[2] - fwd[2] * up[1],
+        fwd[2] * up[0] - fwd[0] * up[2],
+        fwd[0] * up[1] - fwd[1] * up[0],
+    ]
+    at = [
+        pos[i] + cell[0] * right[i] + cell[1] * up[i] - cell[2] * fwd[i]
+        for i in range(3)
+    ]
+    wreck = rig.grid(
+        WRECK,
+        None,
+        [rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, 0))],
+        at,
+    )
+    stone = (
+        '<MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_FloatingObject">'
+        "<SubtypeName /><PersistentFlags>CastShadows InScene</PersistentFlags>"
+        "<PositionAndOrientation>"
+        + rig._vec(
+            "Position", (at[0] + 5 * up[0], at[1] + 5 * up[1], at[2] + 5 * up[2])
+        )
+        + rig._vec("Forward", fwd)
+        + rig._vec("Up", up)
+        + "</PositionAndOrientation><Item><Amount>100</Amount>"
+        '<PhysicalContent xsi:type="MyObjectBuilder_Ore"><SubtypeName>Stone</SubtypeName>'
+        "</PhysicalContent></Item></MyObjectBuilder_EntityBase>"
+    )
+    text = sector.read_text(encoding="utf-8")
+    sector.write_text(
+        text.replace("</SectorObjects>", wreck + stone + "</SectorObjects>", 1),
+        encoding="utf-8",
+    )
+    log(f"{station}: litter at {[round(x) for x in at]}")
+
+
+WRECK = "Shipyard Wreck"
+
+
 def at_table(remote, station: str) -> None:
     x, y, z = station_tables()[station]
     remote.character_teleport(x, y + 3, z)
@@ -253,8 +313,10 @@ def wait_log(pattern: str, timeout: float) -> str | None:
 def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
     station, ship, blocks, paid, connector, size = CASES[case]
     if restarted:
-        # The welders finish the ship before the client is back: follow the server's log
-        line = wait_log(rf"'{ship}' at .*: (docked|no dock)", 1200)
+        # The welders may finish the ship before the client is back: then the server's log
+        # has it
+        follow(remote, case, lambda _: False)
+        line = wait_log(rf"'{ship}' at .*: (docked|no dock)", 60)
         check(
             line is not None and ("docked" in line) == connector,
             f"{case}: the ship {'docks at the arm' if connector else 'gets the admin fill'}: {line}",
@@ -262,7 +324,7 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
         line = wait_log(rf"'{ship}' of .* ended", 60)
         ready = line if line and f"'{ship}' is ready" in line else None
     else:
-        line = wait_state(remote, station, rf"'{ship}'.*projector on", 1200)
+        line = watch_build(remote, case)
         check(
             line is not None,
             f"{case}: the arm's projector completes and projects: {line}",
@@ -271,8 +333,11 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
             line is not None and (", connector" in line) == connector,
             f"{case}: the arm {'docks at a connector' if connector else 'ends in a cap'}: {line}",
         )
-        ready = wait_chat(remote, f"'{ship}' is ready", 1800, mark)
+        follow(remote, case, lambda _: False)
+        ready = wait_chat(remote, f"'{ship}' is ready", 60, mark)
     check(ready is not None, f"{case}: the ship is ready: {ready}")
+    if not restarted:
+        seen_by_client(remote, case)
     if paid:
         check(
             ready is not None and f"{HYDROGEN:,} L" in ready,
@@ -294,6 +359,103 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
     )
 
 
+def shipyard_id(remote, station: str) -> int:
+    name = f"{station} Station Shipyard"
+    return next(g["entityId"] for g in remote.list_grids() if g["name"] == name)
+
+
+def watch_build(remote, case: str) -> str | None:
+    """Follows the build until the arm's projector is on: the whole arm must be complete
+    by then, and the client must see the shipyard's welders shoot (in the no-welding zone
+    a client turned them off, SE-441). Returns the !oct shipyards line."""
+    station, ship = CASES[case][:2]
+    yard = shipyard_id(remote, station)
+    shooting = []
+
+    def projecting(line: str) -> bool:
+        shooting.append(shoots(remote, yard))
+        return "projector on" in line
+
+    line = follow(remote, case, projecting)
+    if line is not None:
+        arm = re.search(r"arm (\d+)/(\d+)", line)
+        if "projector on" in line:
+            log(f"{station}: {line.strip()}")
+            check(
+                arm is not None and arm[1] == arm[2],
+                f"{case}: the arm is complete when the projector turns on: {line.strip()}",
+            )
+            shooting.append(shoots(remote, yard))
+            seen = [x for x in shooting if x is not None]
+            check(
+                len(seen) > 0 and all(seen),
+                f"{case}: the client sees the shipyard's welders shoot: {shooting}",
+            )
+            return line
+    check(False, f"{case}: the arm's projector turns on: {line}")
+    return None
+
+
+# The build fails when no arm or ship block completes for this long
+STALL = 60.0
+
+
+def follow(remote, case: str, done) -> str | None:
+    """Polls the build's !oct shipyards line until done(line) or the build is gone, and
+    returns the last line. Fails the build when the complete blocks of its arm and ship,
+    or the ticks left to dock, don't change for STALL seconds."""
+    station, ship = CASES[case][:2]
+    seen, since, last = None, time.monotonic(), None
+    while True:
+        line = next((x for x in shipyard(remote, station) if f"'{ship}'" in x), None)
+        if line is None or done(line):
+            return line if line is not None else last
+        last = line
+        counts = re.findall(r"(\d+)/\d+|(\d+) ticks left", line)
+        if counts != seen:
+            seen, since = counts, time.monotonic()
+        elif time.monotonic() - since > STALL:
+            log(f"{station}: {line.strip()}")
+            check(
+                False, f"{case}: a block completes every {STALL:.0f} s: {line.strip()}"
+            )
+            return None
+        time.sleep(3)
+
+
+def shoots(remote, yard: int) -> bool | None:
+    """ToolCore_Shoot of a shipyard welder on the client; None when it can't be read"""
+    try:
+        return so.beam_shoot(remote, yard).get("value") is True
+    except Exception as e:  # noqa: BLE001 -- the client may not have the grid yet
+        log(f"ToolCore_Shoot unreadable: {e}")
+        return None
+
+
+def seen_by_client(remote, case: str) -> None:
+    """The finished ship as the ordering player's client sees it, checked in saved()
+    against the ship's entity id: the client may still hold the projection's preview grid
+    by the same name"""
+    ship = CASES[case][1]
+    time.sleep(10)
+    seen[case] = {}
+    for g in remote.list_grids():
+        if g["name"] != ship:
+            continue
+        found = set()
+        for block in remote.list_blocks(g["entityId"], 0, 500)["blocks"]:
+            if "isFunctional" in block:
+                got = remote.get_block(g["entityId"], tuple(block["min"]))
+                found.add(got.get("ownerId"))
+        static = remote.get_grid(g["entityId"])["isStatic"]
+        seen[case][g["entityId"]] = (static, sorted(found))
+    log(f"{case}: the client's '{ship}' grids, (static, block owners): {seen[case]}")
+
+
+# The client's grids by the finished ships' names, (static, block owners) by entity id
+seen: dict[str, dict[int, tuple[bool, list[int]]]] = {}
+
+
 def restart(remote):
     # The server first: the welders finish a ship this small in under a minute
     rig.stop_server()
@@ -309,6 +471,21 @@ def saved(cases: list[str]) -> None:
     root = ET.parse(rig.WORLD / "SANDBOX_0_0_0_.sbs").getroot()
     text = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
     check("Shipyard Order" not in text, "saved: no arm projector is left")
+    if "small" in cases:
+        station = CASES["small"][0]
+        swept = [
+            x
+            for x in rig.server_game_log().splitlines()
+            if f"Shipyard {station} Station Shipyard: removed" in x
+        ]
+        check(
+            any(
+                re.search(r"removed [1-9]\d* floating objects", x) and WRECK in x
+                for x in swept
+            )
+            and WRECK not in text,
+            f"saved: the garbage in {station}'s shipyard was swept: {swept}",
+        )
     grids = {
         e.findtext("DisplayName"): e
         for e in root.iter("MyObjectBuilder_EntityBase")
@@ -330,6 +507,20 @@ def saved(cases: list[str]) -> None:
             len(builders) == 1 and None not in builders,
             f"saved: '{ship}' built by one player: {builders}",
         )
+        owned = {b.findtext("Owner") for b in cubes if b.find("Owner") is not None}
+        check(
+            owned == builders,
+            f"saved: '{ship}' owned by the player who built it: {owned} vs {builders}",
+        )
+        if case in seen:
+            client = seen[case].get(int(grid.findtext("EntityId")))
+            check(client is not None, f"saved: the client had '{ship}': {seen[case]}")
+            if client is not None:
+                check(not client[0], f"saved: the client saw '{ship}' dynamic")
+                check(
+                    client[1] == [int(x) for x in builders],
+                    f"saved: the client saw '{ship}''s blocks owned by its builder: {client[1]}",
+                )
         names = {b.findtext("CustomName") for b in cubes}
         check("Shipyard Order" not in names, f"saved: '{ship}' has no arm block")
         for b in cubes:
@@ -376,6 +567,8 @@ def main() -> int:
     rig.stop_client()
     rig.stop_server()
     so.prepare(TABLES, 60)
+    if "small" in cases:
+        litter(CASES["small"][0])
     rig.start_server()
     remote = rig.start_client()
     log("joined")
