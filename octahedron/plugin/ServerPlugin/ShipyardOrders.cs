@@ -43,8 +43,9 @@ namespace ServerPlugin;
 //
 // A ship is a free build for a player under FreeBuildPcuLimit, once FreeBuildCooldownMinutes
 // passed since their last free build ended (FreePrints), without the blocks in
-// FreeBuildBlockedBlocks; an admin with "Ignore PCU limits" on skips the PCU limit and the cool-down
-// (FreePrints.Exempt). Any other ship is a paid build: its components, and the ice for the
+// FreeBuildBlockedBlocks. An admin with "Ignore PCU limits" on (FreePrints.Exempt) gets every
+// ship as a free build: no PCU limit, cool-down or blocked blocks, and no per-ship cap of
+// GroupPcuLimit. The order keeps that, for the node that builds it. Any other ship is a paid build: its components, and the ice for the
 // hydrogen to fill its H2 tanks to ShipyardHydrogenFillPercent, come from the payer's ledger at
 // the station (the player's, or their faction's with the kiosk's Faction switch on), then the
 // cheapest listings and OCT, plus the labor fee; hydrogen in the tanks of the player's ships
@@ -83,6 +84,9 @@ internal static class ShipyardOrders
         // The queue entry; empty for an order from before the queues
         public string Id = "";
         public bool Free = true;
+
+        // Ordered by an admin who ignores PCU limits (BuildOrder.Exempt)
+        public bool Exempt;
 
         // Liters for the ship's H2 tanks at the end
         public double Hydrogen;
@@ -172,7 +176,7 @@ internal static class ShipyardOrders
         public int Pcu;
         public bool Free;
 
-        // The player ignores PCU limits: no cool-down or FreeBuildPcuLimit (FreePrints.Exempt)
+        // The player ignores PCU limits: a free build whatever the ship (FreePrints.Exempt)
         public bool Exempt;
 
         // Why it is a paid build, and which rule: pcu, blocked or cooldown
@@ -219,7 +223,9 @@ internal static class ShipyardOrders
         plan.Blueprint = blueprint;
         plan.Ship = blueprint[0].DisplayName ?? "Ship";
         plan.Pcu = blueprint.Sum(g => g.CalculatePCUs());
-        var error = Fits(plan.Shipyard, blueprint);
+        // The player is on this node, so its copy of their admin settings is current
+        plan.Exempt = FreePrints.Exempt(identityId);
+        var error = Fits(plan.Shipyard, blueprint, plan.Exempt);
         if (error != null)
             return Fail(plan, error);
 
@@ -227,7 +233,6 @@ internal static class ShipyardOrders
         var playerPcu = StarterShip.PlayerPcu(identity);
         var blocked = Blocked(blueprint, Config.FreeBuildBlockedBlocks);
         var wait = FreePrints.Wait(identityId);
-        plan.Exempt = FreePrints.Exempt(identityId);
         if (!plan.Exempt && playerPcu >= Config.FreeBuildPcuLimit)
             (plan.PaidRule, plan.Paid) = (
                 "pcu",
@@ -240,7 +245,7 @@ internal static class ShipyardOrders
                 "cooldown",
                 $"your next free ship is in {Math.Ceiling(wait.TotalMinutes)} min"
             );
-        else if (blocked.Count > 0)
+        else if (!plan.Exempt && blocked.Count > 0)
             (plan.PaidRule, plan.Paid) = (
                 "blocked",
                 $"a free ship can't have {string.Join(", ", blocked)}"
@@ -278,11 +283,16 @@ internal static class ShipyardOrders
     }
 
     // Why the shipyard can't build the blueprint at all, or null
-    private static string Fits(MyCubeGrid shipyard, List<MyObjectBuilder_CubeGrid> blueprint)
+    private static string Fits(
+        MyCubeGrid shipyard,
+        List<MyObjectBuilder_CubeGrid> blueprint,
+        bool exempt
+    )
     {
         var pcu = blueprint.Sum(g => g.CalculatePCUs());
-        // The ordered ship is the player's, so GroupPcuLimit would stop welding it there
-        if (Config.GroupPcuLimit > 0 && pcu > Config.GroupPcuLimit)
+        // The ordered ship is the player's, so GroupPcuLimit would stop welding it there, unless
+        // the order is exempt (Exempt below)
+        if (!exempt && Config.GroupPcuLimit > 0 && pcu > Config.GroupPcuLimit)
             return $"The blueprint has {pcu:N0} PCU, a ship at most {Config.GroupPcuLimit:N0}.";
         var main = blueprint[0];
         var arms = ShipyardArm.Rotors(shipyard).Count > 0;
@@ -546,6 +556,7 @@ internal static class ShipyardOrders
             Ship = plan.Ship,
             Pcu = plan.Pcu,
             Blueprint = EncodeBlueprint(plan.Blueprint),
+            Exempt = plan.Exempt,
         };
         var drained = new List<(MyGasTank Tank, double Liters)>();
         if (!plan.Free)
@@ -580,10 +591,10 @@ internal static class ShipyardOrders
                 tell(message);
                 if (ok)
                 {
-                    if (plan.Free && plan.Exempt)
+                    if (plan.Exempt)
                         Plugin.Log.Info(
                             $"Free builds: {Name(plan.Player)} ignores PCU limits, '{plan.Ship}' is free "
-                                + "without the cool-down and FreeBuildPcuLimit"
+                                + $"({plan.Pcu} PCU) without the PCU limits, cool-down or blocked blocks"
                         );
                     quotes.Remove(plan.Table.EntityId);
                     Write(
@@ -973,7 +984,7 @@ internal static class ShipyardOrders
                 var error =
                     blueprint == null || blueprint.Count == 0
                         ? "its blueprint could not be read"
-                        : Fits(shipyard, blueprint);
+                        : Fits(shipyard, blueprint, next.Exempt);
                 if (error != null)
                 {
                     // Not started: the build ledger is still whole
@@ -1100,6 +1111,7 @@ internal static class ShipyardOrders
             $"Ends={ends.ToString("o", CultureInfo.InvariantCulture)}",
             $"Build={next.Id}",
             $"Free={(next.Free ? 1 : 0)}",
+            $"Exempt={(next.Exempt ? 1 : 0)}",
             $"Hydrogen={hydrogen.ToString("R", CultureInfo.InvariantCulture)}"
         );
         Load(containers, components);
@@ -1112,6 +1124,7 @@ internal static class ShipyardOrders
             Components = components,
             Id = next.Id,
             Free = next.Free,
+            Exempt = next.Exempt,
             Hydrogen = hydrogen,
         };
         lost.Remove(shipyard.EntityId);
@@ -1245,12 +1258,7 @@ internal static class ShipyardOrders
             ship.RazeGeneratedBlocks(scaffold);
             MyMultiplayer.RaiseEvent(ship, x => x.RazeBlocksClient, scaffold);
             HandOver(ship, order.Player);
-            if (order.Free && FreePrints.Exempt(order.Player))
-                Plugin.Log.Info(
-                    $"Free builds: {Name(order.Player)} ignores PCU limits, no cool-down after '{name}'"
-                );
-            else if (order.Free)
-                FreePrints.Ended(order.Player);
+            NoteFreeEnd(order, name);
             if (order.Hydrogen > 0)
                 filled = FillHydrogen(ship, order.Hydrogen);
             Dynamic(shipyard, ship);
@@ -1477,6 +1485,7 @@ internal static class ShipyardOrders
             $"Ends={ends.ToString("o", CultureInfo.InvariantCulture)}",
             $"Build={next.Id}",
             $"Free={(next.Free ? 1 : 0)}",
+            $"Exempt={(next.Exempt ? 1 : 0)}",
             $"Hydrogen={hydrogen.ToString("R", CultureInfo.InvariantCulture)}",
             $"Arm={string.Join(";", arm.Select(Format))}",
             // Restore names the order by it, not by the saved projection's grid
@@ -1502,6 +1511,7 @@ internal static class ShipyardOrders
             Components = components,
             Id = next.Id,
             Free = next.Free,
+            Exempt = next.Exempt,
             Hydrogen = hydrogen,
             Arm = arm,
             Connector = connector,
@@ -1802,6 +1812,13 @@ internal static class ShipyardOrders
             );
     }
 
+    /// <summary>
+    /// True while the shipyard on this node builds a ship for an admin who ignores PCU limits, so
+    /// GroupPcuLimit lets its blocks be welded on a node that has no copy of their admin settings.
+    /// </summary>
+    internal static bool Exempt(long player) =>
+        orders.Values.Any(o => o.Exempt && o.Player == player);
+
     /// <summary>The PCU of the support arms on the grid, which the cap of a ship leaves out.</summary>
     internal static int ArmPcu(MyCubeGrid grid)
     {
@@ -1830,7 +1847,10 @@ internal static class ShipyardOrders
                 MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
             if (blocks.Count > 0)
                 ship = MyCubeGrid.CreateSplit(grid, blocks);
-            ship?.ChangeDisplayNameRequest(order.Name);
+            if (ship != null && Config.ShipyardRepasteShips)
+                ship = Repaste(shipyard, order, ship);
+            else
+                ship?.ChangeDisplayNameRequest(order.Name);
             if (ship != null)
                 Dynamic(shipyard, ship);
         }
@@ -1928,8 +1948,7 @@ internal static class ShipyardOrders
         if (alive)
         {
             HandOver(ship, order.Player);
-            if (order.Free)
-                FreePrints.Ended(order.Player);
+            NoteFreeEnd(order, order.Name);
             Dynamic(shipyard, ship);
             if (order.Projector.CubeGrid == ship)
                 KeepProjector(order);
@@ -2046,6 +2065,54 @@ internal static class ShipyardOrders
         MyMultiplayer.RaiseEvent(grid, x => x.RazeBlocksClient, present);
     }
 
+    // A free build starts the player's cool-down, unless an admin who ignores PCU limits ordered it
+    private static void NoteFreeEnd(Order order, string name)
+    {
+        if (order.Exempt)
+            Plugin.Log.Info(
+                $"Free builds: {Name(order.Player)} ignores PCU limits, no cool-down after '{name}'"
+            );
+        else if (order.Free)
+            FreePrints.Ended(order.Player);
+    }
+
+    // Players could not use a ship split off the arm until they cut and pasted it with
+    // Essentials' !fixship; SE-746 tracks why. The ship and its subgrids are pasted anew
+    // right after the split instead. Returns the new ship grid; a projector that went along
+    // stays the order's.
+    private static MyCubeGrid Repaste(MyCubeGrid shipyard, Order order, MyCubeGrid ship)
+    {
+        var own = Own(shipyard);
+        var grids = Grids(ship).Where(g => !own.Contains(g)).ToList();
+        var builders = new List<MyObjectBuilder_EntityBase>();
+        foreach (var grid in grids)
+        {
+            var builder = (MyObjectBuilder_CubeGrid)grid.GetObjectBuilder(true);
+            builder.IsStatic = false;
+            if (grid == ship)
+                builder.DisplayName = order.Name;
+            builders.Add(builder);
+        }
+        var main = grids.IndexOf(ship);
+        foreach (var grid in grids)
+            grid.Close();
+        MyAPIGateway.Entities.RemapObjectBuilderCollection(builders);
+        MyCubeGrid pasted = null;
+        for (var i = 0; i < builders.Count; i++)
+        {
+            var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(builders[i]);
+            grid?.DetectDisconnectsAfterFrame();
+            if (i == main)
+                pasted = grid;
+        }
+        if (pasted?.GetFatBlocks<MyProjectorBase>().FirstOrDefault(IsScaffold) is { } projector)
+            order.Projector = projector;
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id} '{order.Name}': pasted {grids.Count} grids anew as {pasted?.EntityId}"
+        );
+        return pasted;
+    }
+
     // The ship and its subgrids: rotor and piston tops built on the static arm may be static
     private static void Dynamic(MyCubeGrid shipyard, MyCubeGrid ship)
     {
@@ -2115,6 +2182,7 @@ internal static class ShipyardOrders
             Blocks = grids.Sum(g => g.CubeBlocks.Count),
             Id = values.TryGetValue("Build", out var id) ? id : "",
             Free = !values.TryGetValue("Free", out var f) || f != "0",
+            Exempt = values.TryGetValue("Exempt", out var x) && x == "1",
             Hydrogen = hydrogen,
             Name = values.TryGetValue("Ship", out var ship) ? ship : grids[0].DisplayName ?? "Ship",
         };

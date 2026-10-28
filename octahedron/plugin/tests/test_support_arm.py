@@ -15,6 +15,10 @@ table's button for an admin) and follows the build with !oct shipyards:
   ends in a cap and the plugin fills the tank itself.
 - "small" at Gamma Station: "ArmSmall", a small grid ship with a small connector, a free
   build on a small arm rotor's head.
+- "exempt" at South Station: "ArmExempt", the cap ship ordered by the player as an admin
+  with "Ignore PCU limits" on, over a lowered GroupPcuLimit and with its control station
+  blocked for free builds: a free build anyway. The flag is turned off once the build
+  starts, as on a cluster node without the admin's settings; the ship is still welded.
 
 After each build the arm and its projector are gone, the rotor head is still on its
 rotor and dynamic again, and the ship is the player's dynamic ship. The saved world is
@@ -39,6 +43,7 @@ import xml.etree.ElementTree as ET
 
 os.environ.setdefault("OCT_TASK", "SE-693")
 import rig  # noqa: E402
+import se_autopilot as ap  # noqa: E402
 import test_client as tc  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 from test_client import log, with_config  # noqa: E402
@@ -57,7 +62,9 @@ def hull(blocks: dict, size: tuple[int, int, int], subtype: str) -> list[str]:
     return out + [b for b in blocks.values() if b]
 
 
-def large(name: str, entity: int, connector: bool) -> tuple[str, int]:
+def large(
+    name: str, entity: int, connector: bool, thrust: bool = False
+) -> tuple[str, int]:
     special = {
         (0, 0, 2): rig.block(
             "MyObjectBuilder_OxygenTank", "LargeHydrogenTankSmall", (0, 0, 2)
@@ -67,6 +74,12 @@ def large(name: str, entity: int, connector: bool) -> tuple[str, int]:
             "MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (2, 0, 2)
         ),
     }
+    if thrust:
+        # An ion thruster on top, so the player can fly the ship off the dock, whose
+        # battery is charged
+        special[(1, 2, 3)] = rig.block(
+            "MyObjectBuilder_Thrust", "LargeBlockSmallThrust", (1, 2, 3)
+        )
     if connector:
         # Flush with the back face, armor beside it: the arm's projector sits on that
         # armor next to the arm's connector, as in the "... Arm Exam" blueprint
@@ -91,7 +104,7 @@ def small() -> tuple[str, int]:
     ), len(blocks)
 
 
-DOCK, DOCK_BLOCKS = large("ArmDock", 777000693000100, True)
+DOCK, DOCK_BLOCKS = large("ArmDock", 777000693000100, True, thrust=True)
 CAP, CAP_BLOCKS = large("ArmCap", 777000693000200, False)
 SMALL, SMALL_BLOCKS = small()
 
@@ -115,8 +128,13 @@ def heavy(name: str, entity: int, count: int) -> tuple[str, int]:
 PARTIAL, PARTIAL_BLOCKS = heavy("ArmPartial", 777000693000400, 2)
 HEAVY, HEAVY_BLOCKS = heavy("ArmArmor", 777000693000600, 4)
 SCRAP, SCRAP_BLOCKS = large("ArmScrap", 777000693000500, False)
+# Ordered by an admin who ignores PCU limits: free although it is over the PCU cap and
+# has a blocked block, and still free and welded with the flag off once it started, as
+# on a cluster node that has no copy of the admin's settings
+EXEMPT, EXEMPT_BLOCKS = large("ArmExempt", 777000693000700, False)
+EXEMPT_CONFIG = {"GroupPcuLimit": 40, "FreeBuildBlockedBlocks": "Cockpit/*"}
 # The tables in the world's order: North, South, Alpha, Beta, Gamma, Delta, Moon
-TABLES = [HEAVY, DOCK, DOCK, CAP, SMALL, PARTIAL, SCRAP]
+TABLES = [HEAVY, EXEMPT, DOCK, CAP, SMALL, PARTIAL, SCRAP]
 # name: (station, ship, blocks, paid, connector, rotor size)
 CASES = {
     "dock": ("Alpha", "ArmDock", DOCK_BLOCKS, True, True, "Large"),
@@ -125,6 +143,7 @@ CASES = {
     "partial": ("Delta", "ArmPartial", PARTIAL_BLOCKS, True, False, "Large"),
     "scrap": ("Moon", "ArmScrap", SCRAP_BLOCKS, True, False, "Large"),
     "armor": ("North", "ArmArmor", HEAVY_BLOCKS, True, False, "Large"),
+    "exempt": ("South", "ArmExempt", EXEMPT_BLOCKS, False, False, "Large"),
 }
 # Stalled builds: the item taken out, and how the build ends
 STALLS = {
@@ -145,6 +164,7 @@ DEPOSIT = {
     "Component/PowerCell": 120,
     "Component/MetalGrid": 300,
     "Component/BulletproofGlass": 30,
+    "Component/Thrust": 200,
     "Ore/Ice": 25000,
 }
 HYDROGEN = 500_000
@@ -254,7 +274,16 @@ WRECK = "Shipyard Wreck"
 
 def at_table(remote, station: str) -> None:
     x, y, z = station_tables()[station]
-    remote.character_teleport(x, y + 3, z)
+    # Right after the player left a cockpit the client may answer 503 for a while
+    for attempt in range(6):
+        try:
+            remote.character_teleport(x, y + 3, z)
+            break
+        except Exception as e:  # noqa: BLE001 -- retried, then raised
+            if attempt == 5:
+                raise
+            log(f"teleport: {e}, retrying")
+            time.sleep(10)
     time.sleep(4)
     table = min(tc.tables(remote), key=lambda b: b["distance"])
     tc.stand_by(remote, table)
@@ -290,18 +319,37 @@ def wait_state(remote, station: str, pattern: str, timeout: float) -> str | None
 
 def order(remote, case: str) -> tuple:
     station, ship, blocks, paid, _, _ = CASES[case]
-    with_config(remote, FreeBuildPcuLimit=0 if paid else 10000)
+    exempt = case == "exempt"
+    with_config(
+        remote,
+        FreeBuildPcuLimit=0 if paid or exempt else 10000,
+        ShipyardRepasteShips=(
+            "false" if os.environ.get("OCT_REPASTE") == "0" else "true"
+        ),
+        **(EXEMPT_CONFIG if exempt else {}),
+    )
     if paid:
         for item, count in DEPOSIT.items():
             admin(remote, f"!oct ledger deposit {station} me {item} {count}", 3)
     at_table(remote, station)
     mark = so_latest(remote)
+    if exempt:
+        reply = admin(remote, "!oct order", 8)
+        check(
+            "a ship at most" in reply,
+            f"{case}: over the PCU cap without the flag: {reply}",
+        )
+        ignore_pcu(remote, True)
     reply = admin(remote, "!oct order", 8)
     if "Your quote for" in reply:
         check(f"'{ship}'" in reply, f"{case}: the quote is for {ship}: {reply}")
+        if exempt:
+            check("a free build" in reply, f"{case}: free with the flag: {reply}")
         reply = admin(remote, "!oct order", 8)
     check("is in the queue" in reply, f"{case}: ordered: {reply}")
     started = wait_chat(remote, f"builds '{ship}' for you now", 90, mark)
+    if exempt:
+        ignore_pcu(remote, False)
     check(started is not None, f"{case}: the build starts: {started}")
     if started is None:
         return None
@@ -312,6 +360,13 @@ def order(remote, case: str) -> tuple:
     # The welders may complete a small arm's projector before this looks
     check(arm is not None, f"{case}: the arm is placed: {arm}")
     return mark
+
+
+def ignore_pcu(remote, on: bool) -> None:
+    remote.set_admin_flag("ignorePcu", on)
+    # The server gets the flag with the admin menu's event
+    time.sleep(3)
+    log(f"Ignore PCU limits {'on' if on else 'off'}")
 
 
 def so_latest(remote) -> int:
@@ -371,6 +426,8 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
     check(ready is not None, f"{case}: the ship is ready: {ready}")
     if not restarted:
         seen_by_client(remote, case)
+    if case in USED:
+        usable(remote, case, fly=case == "dock")
     if paid:
         check(
             ready is not None and f"{HYDROGEN:,} L" in ready,
@@ -381,6 +438,9 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
         not any(f"'{ship}'" in line for line in lines[1:]),
         f"{case}: no build left in the shipyard: {lines}",
     )
+    if case == "exempt":
+        line = wait_log(rf"ignores PCU limits, no cool-down after '{ship}'", 10)
+        check(line is not None, f"{case}: no cool-down with the flag off: {line}")
 
 
 def stall(remote, case: str, mark: int) -> None:
@@ -405,6 +465,59 @@ def stall(remote, case: str, mark: int) -> None:
         not any(f"'{ship}'" in line for line in lines[1:]),
         f"{case}: no build left in the shipyard: {lines}",
     )
+
+
+# The cases whose ship the player gets into: the docked one has a thruster and a charged battery
+USED = ("dock", "cap")
+
+
+def usable(remote, case: str, fly: bool) -> None:
+    """The player sits in the delivered ship's cockpit and, with fly, flies it, with no
+    !fixship. Without the re-paste (OCT_REPASTE=0) the player sits but can't fly."""
+    ship = CASES[case][1]
+    time.sleep(5)
+    grids = [g["entityId"] for g in remote.list_grids() if g["name"] == ship]
+    # The ship is the grid whose cockpit is the player's; another of its name is a leftover
+    owned = {}
+    for g in grids:
+        try:
+            cockpit = ap.find_cockpit(remote, g)
+            owned[g] = remote.get_block(g, tuple(cockpit["min"])).get("ownerId")
+        except Exception as e:  # noqa: BLE001 -- logged below
+            owned[g] = str(e)
+    log(f"{case}: client grids '{ship}', cockpit owners: {owned}")
+    for g in grids:
+        log(f"{case}: client grid {g}: {remote.get_grid(g)}")
+    # The client also keeps a grid of the ship's name owned by nobody, with or without the
+    # re-paste: the arm projector's projection, apparently. Logged above, not checked.
+    players = [g for g, o in owned.items() if isinstance(o, int) and o != 0]
+    check(len(players) == 1, f"{case}: the client has the player's '{ship}': {owned}")
+    if not players:
+        return
+    grid = players[0]
+    try:
+        state = ap.enter_cockpit(remote, grid, timeout=60)
+    except Exception as e:  # noqa: BLE001 -- the check reports it
+        state = {"error": str(e)}
+    check(
+        state.get("state") == "sitting",
+        f"{case}: the player sits in '{ship}''s cockpit: {state}",
+    )
+    if state.get("state") != "sitting":
+        return
+    log(f"{case}: in the cockpit, view {remote.get_view()}")
+    if fly:
+        speed = 0.0
+        for key in ("W", "S"):
+            remote.set_input_state(keys=[key])
+            time.sleep(3)
+            remote.clear_input_state()
+            speed = remote.get_grid(grid).get("speed", 0)
+            if speed > 0.5:
+                break
+        check(speed > 0.5, f"{case}: the player flies '{ship}': {speed:.1f} m/s")
+    remote.character_use()
+    time.sleep(2)
 
 
 def arms_gone(remote, case: str) -> list[str]:
@@ -642,8 +755,10 @@ def saved(cases: list[str]) -> None:
         for b in cubes:
             if b.findtext("SubtypeName") == "LargeHydrogenTankSmall":
                 ratio = float(b.findtext("FilledRatio") or 0)
+                # A free build comes without hydrogen
                 check(
-                    abs(ratio - 0.5) < 0.01, f"saved: '{ship}' tank filled to {ratio}"
+                    abs(ratio - (0.5 if paid else 0)) < 0.01,
+                    f"saved: '{ship}' tank filled to {ratio}",
                 )
             if b.findtext("SubtypeName") == "LargeBlockBatteryBlock":
                 stored = float(b.findtext("CurrentStoredPower") or 0)

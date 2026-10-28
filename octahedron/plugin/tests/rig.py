@@ -47,8 +47,11 @@ DS64 = Path(
         "/SpaceEngineersDedicatedServer/DedicatedServer64",
     )
 )
-DS_CONFIG_TEMPLATE = (
-    HOME / ".config/SpaceEngineersDedicated/SpaceEngineers-Dedicated.cfg"
+DS_CONFIG_TEMPLATE = Path(
+    os.environ.get(
+        "OCT_DS_CONFIG",
+        HOME / ".config/SpaceEngineersDedicated/SpaceEngineers-Dedicated.cfg",
+    )
 )
 PULSAR_TEMPLATE = Path(os.environ.get("OCT_PULSAR_TEMPLATE", HOME / ".config/Pulsar"))
 # Given to the client, so it doesn't depend on Pulsar finding the game through Steam
