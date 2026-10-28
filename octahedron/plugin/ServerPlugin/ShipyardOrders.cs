@@ -735,8 +735,6 @@ internal static class ShipyardOrders
         ticks++;
         if (docks.Count > 0)
             UpdateDocks();
-        if (razing.Count > 0 && ticks % RazeTicks == 0)
-            UpdateRazing();
         if (ticks % QuoteTicks == 0 && loaded.Count > 0)
         {
             foreach (var (tableId, player) in loaded.ToList())
@@ -781,9 +779,7 @@ internal static class ShipyardOrders
         {
             if (order != null)
                 End(shipyard, order, "the ship is gone");
-            else if (
-                !razing.ContainsKey(shipyard.EntityId) && !starting.Contains(shipyard.EntityId)
-            )
+            else if (!starting.Contains(shipyard.EntityId))
                 ClearHeads(shipyard);
             return;
         }
@@ -960,7 +956,6 @@ internal static class ShipyardOrders
         if (
             orders.ContainsKey(shipyard.EntityId)
             || docks.ContainsKey(shipyard.EntityId)
-            || razing.ContainsKey(shipyard.EntityId)
             || !starting.Add(shipyard.EntityId)
         )
             return;
@@ -1247,11 +1242,10 @@ internal static class ShipyardOrders
         var name = ship.DisplayName;
         double filled = 0;
         var gone = ship.MarkedForClose;
-        var keep = Unfinished(order, why);
         if (!gone)
         {
             var scaffold = ship.GetFatBlocks<MyTerminalBlock>()
-                .Where(b => IsScaffold(b) && !(keep && b == order.Projector))
+                .Where(IsScaffold)
                 .Select(b => b.Position)
                 .ToList();
             // RazeBlocks would ask the safe zone, which forbids grinding
@@ -1262,26 +1256,9 @@ internal static class ShipyardOrders
             if (order.Hydrogen > 0)
                 filled = FillHydrogen(ship, order.Hydrogen);
             Dynamic(shipyard, ship);
-            if (keep)
-                KeepProjector(order);
         }
         var left = RemoveLeftovers(shipyard, order.Components);
         Report(shipyard, order, name, gone ? "gone" : null, why, filled, left, "");
-    }
-
-    // An unfinished ship that is delivered keeps the build's projector, projecting what is
-    // missing, so the player can build it by hand
-    private static bool Unfinished(Order order, string why) => why != null && !order.Refund;
-
-    private const string Projecting =
-        " The build's projector stays on it and shows the missing blocks: build them by hand.";
-
-    private static void KeepProjector(Order order)
-    {
-        var projector = (Sandbox.ModAPI.IMyProjector)order.Projector;
-        projector.CustomName = $"{order.Name} Projector";
-        projector.CustomData = "";
-        projector.Enabled = true;
     }
 
     // Tells the player how the build ended and gives the build ledger back
@@ -1310,15 +1287,13 @@ internal static class ShipyardOrders
             : order.Missing != null && !gone
                 ? $"{stalled}. The ship is yours without {order.Missing}"
                     + (order.Free ? "." : "; their components are back in the ledger.")
-                    + Projecting
             : missing == "unbuilt"
                 ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
             : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
             : why == null
                 ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
             : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
-                + "The unfinished ship is yours."
-                + Projecting;
+                + "The unfinished ship is yours.";
         if (!order.Free)
         {
             if (left.Count > 0 && order.Missing == null)
@@ -1836,21 +1811,24 @@ internal static class ShipyardOrders
         if (!grid.MarkedForClose)
         {
             order.ArmGrid = grid;
+            // The projector stays on the arm, under an unfinished ship too, and comes down
+            // with it; its projection must not show the ship again once the blocks leave
+            var projector = (Sandbox.ModAPI.IMyProjector)order.Projector;
+            projector.SetProjectedGrid(null);
+            projector.Enabled = false;
             var blocks = ShipBlocksOnArm(order);
-            // An unfinished ship takes the arm's projector along, which faces its first block
-            if (blocks.Count > 0 && Unfinished(order, why))
-                blocks.Add(order.Projector.SlimBlock);
-            // A split of a static grid is static, and the clients may miss an event on the
-            // new grid: the arm's grid turns dynamic first, in the same order on the
-            // clients, so the ship is born dynamic and docks to the arm as one
-            if (blocks.Count > 0 && grid.IsStatic)
-                MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
-            if (blocks.Count > 0)
+            if (blocks.Count > 0 && Config.ShipyardRepasteShips)
+                ship = Repaste(shipyard, order, grid, blocks);
+            else if (blocks.Count > 0)
+            {
+                // A split of a static grid is static, and the clients may miss an event on
+                // the new grid: the arm's grid turns dynamic first, in the same order on the
+                // clients, so the ship is born dynamic and docks to the arm as one
+                if (grid.IsStatic)
+                    MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
                 ship = MyCubeGrid.CreateSplit(grid, blocks);
-            if (ship != null && Config.ShipyardRepasteShips)
-                ship = Repaste(shipyard, order, ship);
-            else
                 ship?.ChangeDisplayNameRequest(order.Name);
+            }
             if (ship != null)
                 Dynamic(shipyard, ship);
         }
@@ -1950,8 +1928,6 @@ internal static class ShipyardOrders
             HandOver(ship, order.Player);
             NoteFreeEnd(order, order.Name);
             Dynamic(shipyard, ship);
-            if (order.Projector.CubeGrid == ship)
-                KeepProjector(order);
         }
         // What the arm didn't use is OCT's
         RemoveLeftovers(shipyard, armLeft);
@@ -1992,48 +1968,19 @@ internal static class ShipyardOrders
                 missing[id] = (missing.TryGetValue(id, out var had) ? had : 0) + part.Value;
             }
         }
-        Dismantle(shipyard, grid, order.Arm);
+        Dismantle(grid, order.Arm);
         return missing;
     }
 
-    // Arms coming down one block every RazeTicks (6 a second), from the tip to the rotor
-    // head, by shipyard entity id; the head's grid turns dynamic again after the last one
-    private const int RazeTicks = 10;
-    private static readonly Dictionary<long, (MyCubeGrid Grid, List<Vector3I> Cells)> razing =
-        new();
-
-    private static void Dismantle(MyCubeGrid shipyard, MyCubeGrid grid, IEnumerable<Vector3I> cells)
+    // The arm comes down at once, and the rotor head's grid turns dynamic again
+    private static void Dismantle(MyCubeGrid grid, List<Vector3I> cells)
     {
-        var head =
-            grid.GetFatBlocks<MyAttachableTopBlockBase>().FirstOrDefault()?.Position
-            ?? Vector3I.Zero;
-        // Nearest the head first: they come down from the end of the list
-        var left = cells
-            .Where(grid.CubeExists)
-            .OrderBy(c => Vector3I.DistanceManhattan(c, head))
-            .ToList();
-        razing[shipyard.EntityId] = (grid, left);
+        Raze(grid, cells);
+        if (grid.IsStatic)
+            MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
     }
 
-    private static void UpdateRazing()
-    {
-        foreach (var (id, (grid, cells)) in razing.ToList())
-        {
-            if (!grid.MarkedForClose && cells.Count > 0)
-            {
-                Raze(grid, [cells[cells.Count - 1]]);
-                cells.RemoveAt(cells.Count - 1);
-            }
-            if (grid.MarkedForClose || cells.Count > 0)
-                continue;
-            razing.Remove(id);
-            if (grid.IsStatic)
-                MyMultiplayer.RaiseEvent(grid, x => x.OnConvertToDynamic);
-        }
-    }
-
-    // An idle shipyard's rotor heads carry nothing else: an arm left over, by a restart while
-    // it came down, comes down now
+    // An idle shipyard's rotor heads carry nothing else: an arm left over comes down now
     private static void ClearHeads(MyCubeGrid shipyard)
     {
         var players = MySession.Static.Players;
@@ -2052,7 +1999,7 @@ internal static class ShipyardOrders
             Plugin.Log.Info(
                 $"Shipyard {shipyard.DisplayName}: removing {left.Count} blocks left on '{rotor.CustomName}'"
             );
-            Dismantle(shipyard, grid, left);
+            Dismantle(grid, left);
             return;
         }
     }
@@ -2076,41 +2023,66 @@ internal static class ShipyardOrders
             FreePrints.Ended(order.Player);
     }
 
-    // Players could not use a ship split off the arm until they cut and pasted it with
-    // Essentials' !fixship; SE-746 tracks why. The ship and its subgrids are pasted anew
-    // right after the split instead. Returns the new ship grid; a projector that went along
-    // stays the order's.
-    private static MyCubeGrid Repaste(MyCubeGrid shipyard, Order order, MyCubeGrid ship)
+    // A ship split off the arm was unusable: CreateSplit splits the clients' copy of the
+    // arm too (SE-746), and a re-paste in the same tick left them that copy as a ghost over
+    // the new ship. The ship leaves the arm as Essentials' !fixship re-pastes one instead,
+    // with no split: its blocks and subgrids are saved, removed and pasted anew as a
+    // dynamic ship. Returns the new ship grid.
+    private static MyCubeGrid Repaste(
+        MyCubeGrid shipyard,
+        Order order,
+        MyCubeGrid arm,
+        List<MySlimBlock> blocks
+    )
     {
         var own = Own(shipyard);
-        var grids = Grids(ship).Where(g => !own.Contains(g)).ToList();
-        var builders = new List<MyObjectBuilder_EntityBase>();
-        foreach (var grid in grids)
+        var subgrids = Grids(arm).Where(g => g != arm && !own.Contains(g)).ToList();
+        var cells = new HashSet<Vector3I>(blocks.Select(b => b.Min));
+        var saved = (MyObjectBuilder_CubeGrid)arm.GetObjectBuilder(true);
+        var builders = new List<MyObjectBuilder_EntityBase>
+        {
+            new MyObjectBuilder_CubeGrid
+            {
+                GridSizeEnum = saved.GridSizeEnum,
+                PositionAndOrientation = saved.PositionAndOrientation,
+                PersistentFlags = saved.PersistentFlags,
+                DisplayName = order.Name,
+                DampenersEnabled = true,
+                CubeBlocks = saved.CubeBlocks.Where(b => cells.Contains(b.Min)).ToList(),
+            },
+        };
+        foreach (var grid in subgrids)
         {
             var builder = (MyObjectBuilder_CubeGrid)grid.GetObjectBuilder(true);
             builder.IsStatic = false;
-            if (grid == ship)
-                builder.DisplayName = order.Name;
             builders.Add(builder);
         }
-        var main = grids.IndexOf(ship);
-        foreach (var grid in grids)
-            grid.Close();
-        MyAPIGateway.Entities.RemapObjectBuilderCollection(builders);
-        MyCubeGrid pasted = null;
-        for (var i = 0; i < builders.Count; i++)
+        // As !fixship does
+        foreach (
+            var block in builders.Cast<MyObjectBuilder_CubeGrid>().SelectMany(g => g.CubeBlocks)
+        )
         {
-            var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(builders[i]);
-            grid?.DetectDisconnectsAfterFrame();
-            if (i == main)
-                pasted = grid;
+            if (block is MyObjectBuilder_ProjectorBase projector)
+                projector.Enabled = false;
+            if (block is MyObjectBuilder_OxygenTank tank)
+                tank.AutoRefill = false;
         }
-        if (pasted?.GetFatBlocks<MyProjectorBase>().FirstOrDefault(IsScaffold) is { } projector)
-            order.Projector = projector;
+        foreach (var grid in subgrids)
+            grid.Close();
+        Raze(arm, blocks.Select(b => b.Position).ToList());
+        MyAPIGateway.Entities.RemapObjectBuilderCollection(builders);
+        MyCubeGrid ship = null;
+        foreach (var builder in builders)
+        {
+            var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(builder);
+            grid?.DetectDisconnectsAfterFrame();
+            ship ??= grid;
+        }
         Plugin.Log.Info(
-            $"Shipyard order {order.Id} '{order.Name}': pasted {grids.Count} grids anew as {pasted?.EntityId}"
+            $"Shipyard order {order.Id} '{order.Name}': {blocks.Count} blocks and {subgrids.Count} subgrids "
+                + $"off the arm, pasted anew as {ship?.EntityId}"
         );
-        return pasted;
+        return ship;
     }
 
     // The ship and its subgrids: rotor and piston tops built on the static arm may be static

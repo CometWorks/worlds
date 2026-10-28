@@ -495,8 +495,8 @@ public class OctahedronConfig : PluginConfig
     } = 1;
 
     [BoolOption(
-        "Pastes a ship that splits off its support arm anew, as Essentials' !fixship does: the clients "
-            + "get it whole instead of a split of their copy of the arm, which they may not be able to use.",
+        "A finished ship leaves its support arm as Essentials' !fixship re-pastes a ship: saved, removed from "
+            + "the arm and pasted anew, with no grid split. Off: it splits off the arm, and the clients may not be able to use it.",
         Parent = "shipyard"
     )]
     public bool ShipyardRepasteShips

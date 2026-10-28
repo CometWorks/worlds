@@ -455,6 +455,8 @@ def stall(remote, case: str, mark: int) -> None:
         ended is not None and ending in ended,
         f"{case}: the stalled build ends with '{ending}': {ended}",
     )
+    if case == "partial":
+        seen_by_client(remote, case)
     if case in ("scrap", "armor"):
         check(
             ended is not None and "labor fee is paid back" in ended,
@@ -488,8 +490,8 @@ def usable(remote, case: str, fly: bool) -> None:
     log(f"{case}: client grids '{ship}', cockpit owners: {owned}")
     for g in grids:
         log(f"{case}: client grid {g}: {remote.get_grid(g)}")
-    # The client also keeps a grid of the ship's name owned by nobody, with or without the
-    # re-paste: the arm projector's projection, apparently. Logged above, not checked.
+    # A split left the clients a ghost copy of the ship, or the arm's projection showed it
+    check(len(grids) == 1, f"{case}: the client has one '{ship}', no ghost: {owned}")
     players = [g for g, o in owned.items() if isinstance(o, int) and o != 0]
     check(len(players) == 1, f"{case}: the client has the player's '{ship}': {owned}")
     if not players:
@@ -521,10 +523,10 @@ def usable(remote, case: str, fly: bool) -> None:
 
 
 def arms_gone(remote, case: str) -> list[str]:
-    """The arm comes down a block every 10 ticks after the build: waits up to 60 s for the
-    case's rotor heads to be alone and dynamic. Returns the shipyard's lines."""
+    """The arm comes down at once after the build: waits up to 10 s for the case's rotor
+    heads to be alone and dynamic. Returns the shipyard's lines."""
     station, size = CASES[case][0], CASES[case][5]
-    deadline = time.monotonic() + 60
+    deadline = time.monotonic() + 10
     while True:
         lines = shipyard(remote, station)
         heads = re.findall(
@@ -618,8 +620,7 @@ def shoots(remote, yard: int) -> bool | None:
 
 def seen_by_client(remote, case: str) -> None:
     """The finished ship as the ordering player's client sees it, checked in saved()
-    against the ship's entity id: the client may still hold the projection's preview grid
-    by the same name"""
+    against the ship's entity id"""
     ship = CASES[case][1]
     time.sleep(10)
     seen[case] = {}
@@ -634,6 +635,7 @@ def seen_by_client(remote, case: str) -> None:
         static = remote.get_grid(g["entityId"])["isStatic"]
         seen[case][g["entityId"]] = (static, sorted(found))
     log(f"{case}: the client's '{ship}' grids, (static, block owners): {seen[case]}")
+    check(len(seen[case]) == 1, f"{case}: the client sees one '{ship}': {seen[case]}")
 
 
 # The client's grids by the finished ships' names, (static, block owners) by entity id
@@ -695,24 +697,10 @@ def saved(cases: list[str]) -> None:
             if b.get("{http://www.w3.org/2001/XMLSchema-instance}type")
             == "MyObjectBuilder_Projector"
         ]
-        builders = {b.findtext("BuiltBy") for b in cubes if b not in projectors}
         check(
-            len(projectors) == 1
-            and projectors[0].findtext("Enabled") == "true"
-            and projectors[0].find("ProjectedGrids/MyObjectBuilder_CubeGrid")
-            is not None
-            and projectors[0].findtext("Owner") in builders,
-            "saved: 'ArmPartial' keeps the build's projector, the player's, on and projecting: "
-            + str(
-                [
-                    (
-                        p.findtext("CustomName"),
-                        p.findtext("Enabled"),
-                        p.findtext("Owner"),
-                    )
-                    for p in projectors
-                ]
-            ),
+            not projectors,
+            "saved: 'ArmPartial' comes without the build's projector: "
+            + str([p.findtext("CustomName") for p in projectors]),
         )
     for case in ("scrap", "armor"):
         if case in cases:
