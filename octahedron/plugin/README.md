@@ -364,21 +364,21 @@ the welders nearest to it, so a few cells near the shipyard's edge are out of
 their reach. Arm blocks more than 40° off the plane of all four of their nearest
 welders are built at once when the arm is placed. Should the welders still complete no arm block for
 30 s, the plugin welds the rest with the components in the containers. When the
-ship is complete, or its time is up, the head's grid turns dynamic and the ship's
-blocks split off it as the player's ship, its subgrids dynamic too. With
-`ShipyardRepasteShips` (on) the plugin then pastes the ship and its subgrids anew,
-as Essentials' `!fixship` does: a player could sit in a ship that was only split
-off but not fly it until it was re-pasted; SE-746 tracks why. With a connector the arm's connector locks onto the ship's;
+ship is complete, or its time is up, the arm's projector is switched off and its
+projection cleared, and the ship leaves the arm as the player's dynamic ship. With
+`ShipyardRepasteShips` (on) it leaves as Essentials' `!fixship` re-pastes a ship:
+the plugin saves the ship's blocks and subgrids, removes them from the arm and
+pastes them anew as one dynamic ship, with no grid split. A split (the option
+off) leaves the clients a copy of the ship they can sit in but not fly; SE-746
+tracks why. With a connector the arm's connector locks onto the ship's;
 docked within `ShipyardArmDockSeconds` (1), the ship's H2 tanks get the build's
 hydrogen and its batteries are charged. Without a dock the plugin fills the
-tanks itself. Then the plugin hands the ship over and takes the arm down, a
-block every 10 ticks from its tip to the rotor head, never the head itself; the
-shipyard starts its next build after that. An idle shipyard takes down anything
-an NPC built that is left on its rotor heads, as after a restart mid-way.
-An unfinished ship that is delivered takes the arm's projector along: it stays
-on the ship, the player's, and keeps projecting the missing blocks, so the
-player can build them by hand. A ship built without an arm keeps its scaffold
-projector the same way. What
+tanks itself. Then the plugin hands the ship over and takes the arm down at
+once, never the rotor head itself; the shipyard starts its next build after
+that. An idle shipyard takes down anything an NPC built that is left on its
+rotor heads. An unfinished ship that is delivered leaves the arm's projector
+behind, and it comes down with the arm. A ship built without an arm loses its
+scaffold projector the same way. What
 the arm didn't use of its components is removed with the ship's leftovers, and
 only the ship's go back to the ledger. The `!oct shipyards` admin command lists
 the shipyards, their arm rotors and the running builds with their arm.
