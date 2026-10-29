@@ -65,9 +65,9 @@ to zero at the world radius:
 The exponent 0.5 gives a constant deceleration, about 1.3 m/s² with these values: a
 ship at 360 m/s stops just at 500 km, a ship at 100 m/s starts braking 3.9 km before
 it. The inward and sideways components are left alone, so a ship can always turn
-back. Beyond the world radius the cap turns negative and pulls a body back, at 1 m/s
-per meter beyond it and at most 10 m/s; a ship thrusting outward at the edge settles
-within about a meter of it.
+back. A grid or character found beyond the world radius, by whatever means it got
+there, is moved straight back toward the center onto the world sphere (1 m inside it),
+a grid with everything attached to it, and loses its outward speed.
 
 Nothing is deleted. The rule doesn't use the game's `WorldSizeKm` or
 `MySession.IsInsideWorld`: the world keeps `WorldSizeKm` at 0, since above 0 the game
@@ -76,6 +76,15 @@ cluster each node brakes the grids and characters in the partitions it owns.
 
 `!oct edge` (admin) lists the grids and characters in the braking zone with their
 distance, outward speed and the limit there.
+
+Jump drives keep to the braking radius as well. A jump whose target lies beyond it is
+shortened to where the jump line crosses that sphere, and the ship arrives there. A
+ship already beyond the braking radius may jump sideways or inward, but never farther
+out than it is: its jump stops where the line crosses the sphere of its own distance,
+so a jump straight outward goes nowhere and the game refuses it as too short. The
+player gets a chat message either way. The server shortens the target when the jump
+is requested and again when the ship arrives, which also catches jumps that scripts
+and mods start, on a single server and on every cluster node.
 
 ### Starter ship
 

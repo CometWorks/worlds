@@ -10,8 +10,9 @@ namespace ServerPlugin;
 // The world is a sphere. Between the braking radius and the world radius the outward
 // component of a grid's or character's velocity is capped, the cap falling to zero at the
 // world radius; the inward and sideways components are left alone, so a ship can always
-// turn back. Independent of the game's WorldSizeKm, which deletes what crosses its cube.
-// Each cluster node brakes what it simulates.
+// turn back. Whatever still ends up beyond the world radius, by any means, is moved straight
+// back onto it. Independent of the game's WorldSizeKm, which deletes what crosses its cube.
+// Each cluster node brakes and moves what it simulates.
 internal sealed class WorldEdge
 {
     private const int ScanIntervalTicks = 60;
@@ -20,8 +21,9 @@ internal sealed class WorldEdge
     // past it between two scans
     private const double ScanMargin = 1000;
 
-    // Beyond the world radius a body is pulled back at 1 m/s per meter, at most this fast
-    private const double ReturnSpeed = 10;
+    // A body beyond the world radius is put back this far inside it, so it isn't moved again
+    // for a rounding error
+    private const double ReturnInset = 1;
 
     private readonly List<MyEntity> watched = new();
     private long tick;
@@ -62,8 +64,7 @@ internal sealed class WorldEdge
 
     private void Brake(MyEntity entity, OctahedronConfig config)
     {
-        var physics = entity.Physics;
-        if (entity.MarkedForClose || entity.Parent != null || physics == null || physics.IsStatic)
+        if (entity.MarkedForClose || entity.Parent != null)
             return;
 
         var offset = entity.PositionComp.GetPosition() - config.WorldEdgeCenter;
@@ -72,6 +73,15 @@ internal sealed class WorldEdge
             return;
 
         var outward = offset / distance;
+        if (distance > config.WorldEdgeRadius)
+        {
+            MoveBack(entity, outward, config);
+            return;
+        }
+
+        var physics = entity.Physics;
+        if (physics == null || physics.IsStatic)
+            return;
         Vector3D velocity = physics.LinearVelocity;
         var speed = Vector3D.Dot(velocity, outward);
         var limit = OutwardSpeedLimit(distance, config);
@@ -79,6 +89,32 @@ internal sealed class WorldEdge
             return;
 
         physics.LinearVelocity = (Vector3)(velocity - outward * (speed - limit));
+    }
+
+    // Onto the world sphere along the line from the center, the way the game's admin teleport
+    // moves a player: a grid with everything attached to it, a character as it is. Its outward
+    // speed is dropped.
+    private static void MoveBack(MyEntity entity, Vector3D outward, OctahedronConfig config)
+    {
+        if (!Plugin.Simulated(entity))
+            return;
+        var from = entity.PositionComp.GetPosition();
+        var matrix = entity.WorldMatrix;
+        matrix.Translation =
+            config.WorldEdgeCenter + outward * Math.Max(0, config.WorldEdgeRadius - ReturnInset);
+        entity.Teleport(matrix);
+
+        var physics = entity.Physics;
+        if (physics != null && !physics.IsStatic)
+        {
+            Vector3D velocity = physics.LinearVelocity;
+            var speed = Vector3D.Dot(velocity, outward);
+            if (speed > 0)
+                physics.LinearVelocity = (Vector3)(velocity - outward * speed);
+        }
+        Plugin.Log.Info(
+            $"World edge: {entity.DisplayName ?? entity.EntityId.ToString()} ({entity.EntityId}) moved from {Vector3D.Distance(from, config.WorldEdgeCenter) / 1000:F3} km back onto the world sphere"
+        );
     }
 
     // One line per grid and character in the braking zone, the farthest first
@@ -111,13 +147,13 @@ internal sealed class WorldEdge
         return found.ConvertAll(f => f.Line);
     }
 
-    // The fastest a body may move outward at this distance from the center. Negative beyond
-    // the world radius, which pulls it back.
+    // The fastest a body may move outward at this distance from the center, zero from the
+    // world radius on
     internal static double OutwardSpeedLimit(double distance, OctahedronConfig config)
     {
         var radius = config.WorldEdgeRadius;
         if (distance >= radius)
-            return Math.Max(radius - distance, -ReturnSpeed);
+            return 0;
 
         var width = Math.Max(1, radius - config.WorldEdgeBrakingRadius);
         var left = Math.Min(1, (radius - distance) / width);

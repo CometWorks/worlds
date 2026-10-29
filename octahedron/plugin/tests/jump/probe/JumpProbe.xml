@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<PluginData
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="GitHubPlugin"
+>
+  <!-- Test-only server plugin of the jump test (tests/test_jump.py). Never published to a hub. -->
+  <Id>9B3E1D52-7C46-4A0B-8F21-5D7E0A752001</Id>
+  <RepoId>CometWorks/worlds</RepoId>
+  <FriendlyName>Jump Probe</FriendlyName>
+  <Author>CometWorks</Author>
+  <Tooltip>Admin command that requests a blind jump the way a game client does, for the jump test</Tooltip>
+  <Commit>TODO Git commit hash</Commit>
+</PluginData>
