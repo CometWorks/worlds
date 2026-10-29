@@ -490,9 +490,9 @@ def usable(remote, case: str, fly: bool) -> None:
     log(f"{case}: client grids '{ship}', cockpit owners: {owned}")
     for g in grids:
         log(f"{case}: client grid {g}: {remote.get_grid(g)}")
-    # A split left the clients a ghost copy of the ship, or the arm's projection showed it
-    check(len(grids) == 1, f"{case}: the client has one '{ship}', no ghost: {owned}")
     players = [g for g, o in owned.items() if isinstance(o, int) and o != 0]
+    ghosts = ghosts_of(remote, grids, players)
+    check(not ghosts, f"{case}: no ghost of '{ship}' on the client: {ghosts}")
     check(len(players) == 1, f"{case}: the client has the player's '{ship}': {owned}")
     if not players:
         return
@@ -635,7 +635,24 @@ def seen_by_client(remote, case: str) -> None:
         static = remote.get_grid(g["entityId"])["isStatic"]
         seen[case][g["entityId"]] = (static, sorted(found))
     log(f"{case}: the client's '{ship}' grids, (static, block owners): {seen[case]}")
-    check(len(seen[case]) == 1, f"{case}: the client sees one '{ship}': {seen[case]}")
+    players = [g for g, (_, owners) in seen[case].items() if any(owners)]
+    ghosts = ghosts_of(remote, list(seen[case]), players)
+    check(
+        len(players) == 1 and not ghosts,
+        f"{case}: the client sees one '{ship}' of the player's, no ghost over it: {ghosts}",
+    )
+
+
+def ghosts_of(remote, grids: list[int], players: list[int]) -> list[int]:
+    """Grids of the ship's name within 50 m of the player's: a split left the clients a
+    copy of the ship over it. The hologram table's quote, by the same name, is farther.
+    """
+    where = {g: remote.get_grid(g)["position"] for g in grids}
+    return [
+        g
+        for g in grids
+        if g not in players and any(math.dist(where[g], where[p]) < 50 for p in players)
+    ]
 
 
 # The client's grids by the finished ships' names, (static, block owners) by entity id
@@ -793,6 +810,8 @@ def main() -> int:
     log("joined")
     try:
         for case in cases:
+            # The long run may outlast the suit's oxygen in an unpressurized station
+            rig.ensure_character(remote)
             mark = order(remote, case)
             if mark is None:
                 continue  # no build to follow
