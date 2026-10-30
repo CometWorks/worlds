@@ -1870,12 +1870,16 @@ internal static class ShipyardOrders
             order.ArmGrid = grid;
             // The projector stays on the arm, under an unfinished ship too, and comes down
             // with it; its projection must not show the ship again once the blocks leave
+            // Not a copy: that gets new entity ids, and AddGroups goes by the blocks' ids
+            var blueprint = (
+                (MyObjectBuilder_ProjectorBase)order.Projector.GetObjectBuilderCubeBlock(false)
+            ).ProjectedGrids;
             var projector = (Sandbox.ModAPI.IMyProjector)order.Projector;
             projector.SetProjectedGrid(null);
             projector.Enabled = false;
             var blocks = ShipBlocksOnArm(order);
             if (blocks.Count > 0 && Config.ShipyardRepasteShips)
-                ship = Repaste(shipyard, order, grid, blocks);
+                ship = Repaste(shipyard, order, grid, blocks, blueprint);
             else if (blocks.Count > 0)
             {
                 // A split of a static grid is static, and the clients may miss an event on
@@ -2089,29 +2093,47 @@ internal static class ShipyardOrders
         MyCubeGrid shipyard,
         Order order,
         MyCubeGrid arm,
-        List<MySlimBlock> blocks
+        List<MySlimBlock> blocks,
+        List<MyObjectBuilder_CubeGrid> blueprint
     )
     {
         var own = Own(shipyard);
         var subgrids = Grids(arm).Where(g => g != arm && !own.Contains(g)).ToList();
         var cells = new HashSet<Vector3I>(blocks.Select(b => b.Min));
+        var positions = new HashSet<Vector3I>(blocks.Select(b => b.Position));
+        // !fixship pastes a grid's own builder; the ship's is the arm's, cut down to the
+        // ship's blocks and its block groups, which the projector put on the arm as it
+        // welded their blocks (SE-772). What belongs to the arm's cells or to the arm
+        // itself goes.
         var saved = (MyObjectBuilder_CubeGrid)arm.GetObjectBuilder(true);
-        var builders = new List<MyObjectBuilder_EntityBase>
-        {
-            new MyObjectBuilder_CubeGrid
+        saved.Name = null;
+        saved.DisplayName = order.Name;
+        saved.IsStatic = false;
+        saved.DampenersEnabled = true;
+        saved.Editable = true;
+        saved.DestructibleBlocks = true;
+        saved.Immune = false;
+        saved.IsRespawnGrid = false;
+        saved.CubeBlocks = saved.CubeBlocks.Where(b => cells.Contains(b.Min)).ToList();
+        saved.BlockGroups = saved
+            .BlockGroups.Select(g => new MyObjectBuilder_BlockGroup
             {
-                GridSizeEnum = saved.GridSizeEnum,
-                PositionAndOrientation = saved.PositionAndOrientation,
-                PersistentFlags = saved.PersistentFlags,
-                DisplayName = order.Name,
-                DampenersEnabled = true,
-                CubeBlocks = saved.CubeBlocks.Where(b => cells.Contains(b.Min)).ToList(),
-            },
-        };
+                Name = g.Name,
+                Blocks = g.Blocks.Where(positions.Contains).ToList(),
+            })
+            .Where(g => g.Blocks.Count > 0)
+            .ToList();
+        saved.ConveyorLines = [];
+        saved.Skeleton = null;
+        saved.OxygenAmount = null;
+        saved.OxygenRooms = null;
+        AddGroups(saved, blueprint, blocks);
+        var builders = new List<MyObjectBuilder_EntityBase> { saved };
         foreach (var grid in subgrids)
         {
             var builder = (MyObjectBuilder_CubeGrid)grid.GetObjectBuilder(true);
             builder.IsStatic = false;
+            AddGroups(builder, blueprint, grid.GetBlocks());
             builders.Add(builder);
         }
         // As !fixship does
@@ -2137,9 +2159,64 @@ internal static class ShipyardOrders
         }
         Plugin.Log.Info(
             $"Shipyard order {order.Id} '{order.Name}': {blocks.Count} blocks and {subgrids.Count} subgrids "
-                + $"off the arm, pasted anew as {ship?.EntityId}"
+                + $"off the arm, pasted anew as {ship?.EntityId} with {saved.BlockGroups.Count} block groups"
         );
         return ship;
+    }
+
+    // The blueprint's block groups, on the blocks welded from it: the projector reserves the
+    // blueprint's entity ids for them. Vanilla adds a group to the projector's grid as a block
+    // of it is welded, which the shipyard's welding doesn't go through (SE-772).
+    private static void AddGroups(
+        MyObjectBuilder_CubeGrid builder,
+        List<MyObjectBuilder_CubeGrid> blueprint,
+        IEnumerable<MySlimBlock> blocks
+    )
+    {
+        if (blueprint == null)
+            return;
+        var welded = blocks
+            .Where(b => b.FatBlock != null)
+            .ToDictionary(b => b.FatBlock.EntityId, b => b.Position);
+        var names = new HashSet<string>(builder.BlockGroups.Select(g => g.Name));
+        foreach (var grid in blueprint)
+        {
+            var ids = new Dictionary<Vector3I, long>();
+            foreach (var block in grid.CubeBlocks)
+            {
+                if (
+                    block.EntityId == 0
+                    || !MyDefinitionManager.Static.TryGetCubeBlockDefinition(
+                        block.GetId(),
+                        out var definition
+                    )
+                )
+                    continue;
+                var position = MySlimBlock.ComputePositionInGrid(
+                    new MatrixI(block.BlockOrientation),
+                    definition,
+                    block.Min
+                );
+                ids[position] = block.EntityId;
+            }
+            foreach (var group in grid.BlockGroups)
+            {
+                if (names.Contains(group.Name))
+                    continue;
+                var members = group
+                    .Blocks.Select(p => ids.TryGetValue(p, out var id) ? id : 0)
+                    .Where(welded.ContainsKey)
+                    .Select(id => welded[id])
+                    .Distinct()
+                    .ToList();
+                if (members.Count == 0)
+                    continue;
+                builder.BlockGroups.Add(
+                    new MyObjectBuilder_BlockGroup { Name = group.Name, Blocks = members }
+                );
+                names.Add(group.Name);
+            }
+        }
     }
 
     // The ship and its subgrids: rotor and piston tops built on the static arm may be static

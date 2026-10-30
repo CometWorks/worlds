@@ -22,9 +22,10 @@ table's button for an admin) and follows the build with !oct shipyards:
 
 After each build the arm and its projector are gone, the rotor head is still on its
 rotor and dynamic again, and the ship is the player's dynamic ship. The large ships'
-cockpit toolbars turn the battery and the tank on and off by EntityId: the client must
-show both slots in the delivered cockpit, and the saved ship must point them at its own
-blocks (SE-772). The saved world is checked at the end.
+cockpit toolbars turn the battery and the tank on and off by EntityId, and the battery's
+block group by name: the client must show the three slots in the delivered cockpit and
+have the group, and the saved ship must point the slots at its own blocks and keep the
+group (SE-772). The saved world is checked at the end.
 
     OCT_TASK=SE-693 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_support_arm.py [case ...]
@@ -64,8 +65,12 @@ def hull(blocks: dict, size: tuple[int, int, int], subtype: str) -> list[str]:
     return out + [b for b in blocks.values() if b]
 
 
-def toolbar(slots: dict[int, int]) -> str:
-    """A cockpit toolbar whose slots turn blocks on and off, by their EntityId"""
+GROUP = "Arm Batteries"
+
+
+def toolbar(slots: dict[int, int], cockpit: int) -> str:
+    """A cockpit toolbar whose slots turn blocks on and off, by their EntityId, and
+    the next slot the GROUP"""
     return (
         "<Toolbar><ToolbarType>Character</ToolbarType>"
         '<SelectedSlot xsi:nil="true" /><Slots>'
@@ -75,22 +80,47 @@ def toolbar(slots: dict[int, int]) -> str:
             f"<Action>OnOff</Action><BlockEntityId>{block}</BlockEntityId></Data></Slot>"
             for i, block in slots.items()
         )
-        + "</Slots></Toolbar>"
+        + f"<Slot><Index>{len(slots)}</Index><Item />"
+        '<Data xsi:type="MyObjectBuilder_ToolbarItemTerminalGroup">'
+        f"<Action>OnOff</Action><BlockEntityId>{cockpit}</BlockEntityId>"
+        f"<GroupName>{GROUP}</GroupName></Data></Slot>" + "</Slots></Toolbar>"
     )
 
 
 def toolbar_ok(grid) -> tuple[bool, str]:
-    """Whether the grid's cockpit has its two toolbar slots, on blocks of the grid"""
+    """Whether the grid's cockpit has its two block slots, on blocks of the grid, and
+    its group slot, on a group of the grid that holds the battery"""
     ids = {b.findtext("EntityId") for b in grid.find("CubeBlocks")}
     cockpit = next(
         b
         for b in grid.find("CubeBlocks")
         if b.findtext("SubtypeName") == "LargeBlockCockpit"
     )
-    slots = [
-        d.findtext("BlockEntityId") for d in cockpit.iterfind("Toolbar/Slots/Slot/Data")
-    ]
-    return len(slots) == 2 and set(slots) <= ids, f"slots {slots}"
+    data = list(cockpit.iterfind("Toolbar/Slots/Slot/Data"))
+    blocks = [d.findtext("BlockEntityId") for d in data if not d.findtext("GroupName")]
+    named = [d.findtext("GroupName") for d in data if d.findtext("GroupName")]
+    groups = {
+        g.findtext("Name"): [
+            (v.findtext("X"), v.findtext("Y"), v.findtext("Z"))
+            for v in g.iterfind("Blocks/Vector3I")
+        ]
+        for g in grid.iterfind("BlockGroups/MyObjectBuilder_BlockGroup")
+    }
+    battery = next(
+        b.find("Min")
+        for b in grid.find("CubeBlocks")
+        if b.findtext("SubtypeName") == "LargeBlockBatteryBlock"
+    )
+    cell = (battery.get("x"), battery.get("y"), battery.get("z"))
+    return (
+        (
+            len(blocks) == 2
+            and set(blocks) <= ids
+            and named == [GROUP]
+            and groups.get(GROUP) == [cell]
+        ),
+        f"block slots {blocks}, group slots {named}, groups {groups}, battery at {cell}",
+    )
 
 
 def large(
@@ -125,16 +155,23 @@ def large(
         )
     blocks = hull(special, (3, 2, 6), "LargeBlockArmorBlock")
     # The control station mounts only on its bottom: on the front, on top
-    # Its toolbar turns the battery and the tank on and off (SE-772)
+    # Its toolbar turns the battery and the tank on and off, and the battery's group
+    # (SE-772)
     blocks.append(
         rig.block(
             "MyObjectBuilder_Cockpit",
             "LargeBlockCockpit",
             (1, 2, 0),
-            toolbar({0: entity + 2, 1: entity + 1}),
+            f"<EntityId>{entity + 3}</EntityId>"
+            + toolbar({0: entity + 2, 1: entity + 1}, entity + 3),
         )
     )
-    grid = rig.grid(name, entity, blocks, tag="MyObjectBuilder_CubeGrid")
+    grid = rig.grid(name, entity, blocks, tag="MyObjectBuilder_CubeGrid").replace(
+        "</CubeBlocks>",
+        f"</CubeBlocks><BlockGroups><MyObjectBuilder_BlockGroup><Name>{GROUP}</Name>"
+        "<Blocks><Vector3I><X>2</X><Y>0</Y><Z>2</Z></Vector3I></Blocks>"
+        "</MyObjectBuilder_BlockGroup></BlockGroups>",
+    )
     return grid, len(blocks)
 
 
@@ -557,8 +594,13 @@ def usable(remote, case: str, fly: bool) -> None:
         time.sleep(3)
         items = remote.get_toolbar().get("items", [])
         check(
-            len(items) == 2,
-            f"{case}: the cockpit's toolbar keeps its two blocks on the client: {items}",
+            len(items) == 3,
+            f"{case}: the cockpit's toolbar keeps its two blocks and its group on the client: {items}",
+        )
+        groups = remote.list_block_groups(grid)
+        check(
+            len(groups.get(GROUP, [])) == 1,
+            f"{case}: the client's '{ship}' has the group of its group slot: {groups}",
         )
     if fly:
         speed = 0.0
