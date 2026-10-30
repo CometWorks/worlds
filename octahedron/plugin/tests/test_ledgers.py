@@ -120,14 +120,14 @@ def main() -> int:
     # A steel plate is 20 kg
     ok(remote, "deposit Alpha me Component/SteelPlate 50", "50 plates")
     shows(remote, "Alpha me", [": 2 t"], "1 t of iron and 1 t of plates")
-    with_config(remote, LedgerPlayerLimitTonnes=2)
+    with_config(remote, LedgerPlayerLimitTonnes=2, MarketEnabled="false")
     refused(
         remote,
         "deposit Alpha me Component/SteelPlate 1",
         "over the limit of 2 t",
         "limit from the config",
     )
-    with_config(remote)
+    with_config(remote, MarketEnabled="false")
 
     ok(
         remote,
