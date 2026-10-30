@@ -398,6 +398,8 @@ def run(bench) -> None:
         r"Free builds: (?:no cool-down list|sending cool-downs failed).*", log(node_b)
     )
     bench.record("list-warnings", warnings)
+    # At most one for each of the node's two starts, however long it was fenced
+    check("a failed list request is logged once", len(warnings) <= 2, warnings)
 
     # A handover keeps a table's blueprint, in both directions
     for node in (node_a, node_b):
