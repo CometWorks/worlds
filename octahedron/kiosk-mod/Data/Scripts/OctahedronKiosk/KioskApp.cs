@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using Lima.API;
 using Sandbox.ModAPI;
 using VRage.Game.GUI.TextPanel;
@@ -59,6 +61,12 @@ namespace OctahedronKiosk
         private readonly View actions;
         private readonly View marketActions;
         private readonly Label status;
+
+        // Everything clickable on the screens, for /kiosk screen
+        private readonly List<KeyValuePair<string, ElementBase>> fixedClicks =
+            new List<KeyValuePair<string, ElementBase>>();
+        private readonly List<KeyValuePair<string, ElementBase>> clicks =
+            new List<KeyValuePair<string, ElementBase>>();
 
         public KioskApp(IMyCubeBlock block, IMyTextSurface surface)
             : base(block, surface)
@@ -136,6 +144,10 @@ namespace OctahedronKiosk
             status = new Label("Connecting to the station...", 0.45f, TextAlignment.LEFT);
             status.Margin = new Vector4(8, 2, 8, 4);
             AddChild(status);
+
+            TrackSwitch(fixedClicks, "page", pages, "Storage", "Transfer", "Market");
+            TrackSwitch(fixedClicks, "source", sourceSwitch, "Ship", "From hand");
+            TrackSwitch(fixedClicks, "ledger", ledgerSwitch, "Mine", "Faction");
 
             KioskSession.Instance.StateReceived += OnState;
             Refresh();
@@ -219,6 +231,7 @@ namespace OctahedronKiosk
             sourceSwitch.Enabled = page == Storage;
             sourceSwitch.Index = hand ? 1 : 0;
 
+            clicks.Clear();
             Clear(shipRow);
             Clear(list);
             Clear(actions);
@@ -272,6 +285,7 @@ namespace OctahedronKiosk
             selector.Selected = index < 0 ? 0 : index;
             selector.Flex = new Vector2(1, 1);
             shipRow.AddChild(selector);
+            TrackSelector("ship", selector);
         }
 
         private void BuildList()
@@ -304,13 +318,19 @@ namespace OctahedronKiosk
                         {
                             selected = item;
                             Rebuild();
-                        }
+                        },
+                        "row:" + item
                     )
                 );
             }
         }
 
-        private View Row(string[] cells, bool highlighted, System.Action onClick)
+        private View Row(
+            string[] cells,
+            bool highlighted,
+            System.Action onClick,
+            string name = null
+        )
         {
             View row;
             if (onClick != null)
@@ -318,6 +338,7 @@ namespace OctahedronKiosk
                 var button = new EmptyButton(onClick);
                 button.Direction = ViewDirection.Row;
                 row = button;
+                clicks.Add(new KeyValuePair<string, ElementBase>(name, button));
             }
             else
                 row = new View(ViewDirection.Row);
@@ -349,6 +370,7 @@ namespace OctahedronKiosk
             choice.Selected = amount;
             choice.Flex = new Vector2(1, 1);
             actions.AddChild(choice);
+            TrackSelector("amount", choice);
             string units = Amounts[amount] == "All" ? "all" : Amounts[amount];
             if (page == Storage)
             {
@@ -366,6 +388,7 @@ namespace OctahedronKiosk
                     state.MembersTrade
                 );
                 actions.AddChild(members);
+                clicks.Add(new KeyValuePair<string, ElementBase>("members", members));
                 actions.AddChild(new Label("Members trade", 0.4f));
             }
         }
@@ -383,6 +406,7 @@ namespace OctahedronKiosk
                 }
             );
             button.Flex = new Vector2(0.6f, 1);
+            clicks.Add(new KeyValuePair<string, ElementBase>("action:" + text, button));
             return button;
         }
 
@@ -405,6 +429,7 @@ namespace OctahedronKiosk
                 }
             );
             shipRow.AddChild(views);
+            TrackSwitch(clicks, "view", views, "Prices", "My listings");
             long balance = faction ? state.FactionBalance : state.Balance;
             var money = new Label(
                 balance < 0
@@ -456,7 +481,8 @@ namespace OctahedronKiosk
                         {
                             selected = item;
                             Rebuild();
-                        }
+                        },
+                        "row:" + item
                     )
                 );
             }
@@ -465,6 +491,7 @@ namespace OctahedronKiosk
             choice.Selected = amount;
             choice.Flex = new Vector2(1, 1);
             actions.AddChild(choice);
+            TrackSelector("amount", choice);
             string units = Amounts[amount] == "All" ? "all" : Amounts[amount];
             actions.AddChild(Action("Buy", () => Request("buy", selected, units)));
             actions.AddChild(Action("Sell", () => Request("sell", selected, units)));
@@ -473,6 +500,7 @@ namespace OctahedronKiosk
             prices.Selected = price;
             prices.Flex = new Vector2(1, 1);
             marketActions.AddChild(prices);
+            TrackSelector("price", prices);
             marketActions.AddChild(
                 Action("Offer", () => Request("offer", selected, units, Prices[price]))
             );
@@ -504,7 +532,8 @@ namespace OctahedronKiosk
                         {
                             listing = id;
                             Rebuild();
-                        }
+                        },
+                        "listing:" + id
                     )
                 );
             }
@@ -521,7 +550,96 @@ namespace OctahedronKiosk
             );
             cancel.Flex = new Vector2(1, 1);
             actions.AddChild(cancel);
+            clicks.Add(new KeyValuePair<string, ElementBase>("action:Cancel listing", cancel));
         }
+
+        // --- /kiosk screen: what the screen shows, for tests and support ---
+
+        private static void TrackSwitch(
+            List<KeyValuePair<string, ElementBase>> into,
+            string name,
+            Switch control,
+            params string[] labels
+        )
+        {
+            for (int i = 0; i < labels.Length; i++)
+                into.Add(
+                    new KeyValuePair<string, ElementBase>(
+                        name + ":" + labels[i],
+                        control.Buttons[i]
+                    )
+                );
+        }
+
+        private void TrackSelector(string name, Selector selector)
+        {
+            // Selector's wrapper has no property for its arrows: its children are arrow, label, arrow
+            var children = selector.Children;
+            clicks.Add(
+                new KeyValuePair<string, ElementBase>(
+                    name + ":prev",
+                    new EmptyButton(children[0])
+                )
+            );
+            clicks.Add(
+                new KeyValuePair<string, ElementBase>(
+                    name + ":next",
+                    new EmptyButton(children[2])
+                )
+            );
+        }
+
+        /// <summary>The frame as text, one record per line: see tests/test_kiosk_screen.py.</summary>
+        public void Describe(StringBuilder text, List<MySprite> sprites)
+        {
+            var cursor = Screen.CursorPosition;
+            text.Append(
+                $"screen\tpage={page}\thand={hand}\tfaction={faction}\tselected={selected}\tamount={Amounts[amount]}\tprice={Prices[price]}\tlistings={listings}\tlisting={listing}\tstatus={status.Text}\n"
+            );
+            text.Append($"cursor\t{F(cursor.X)}\t{F(cursor.Y)}\t{Screen.IsOnScreen}\n");
+            var viewport = Viewport;
+            text.Append(
+                $"viewport\t{F(viewport.X)}\t{F(viewport.Y)}\t{F(viewport.Width)}\t{F(viewport.Height)}\t{F(Theme.Scale)}\n"
+            );
+            foreach (var click in fixedClicks.Concat(clicks))
+            {
+                var position = click.Value.Position;
+                var button = click.Value as EmptyButton;
+                // A checkbox has no handler in the API's wrapper: its own area is its hit area
+                var hit =
+                    button != null
+                        ? button.Handler.HitArea
+                        : new Vector4(
+                            position.X,
+                            position.Y,
+                            position.X + click.Value.GetBoundaries().X,
+                            position.Y + click.Value.GetBoundaries().Y
+                        );
+                bool over = button != null && button.Handler.Mouse1.IsOver;
+                text.Append(
+                    $"hit\t{click.Key}\t{F(hit.X)}\t{F(hit.Y)}\t{F(hit.Z)}\t{F(hit.W)}\t{over}\t{F(position.X)}\t{F(position.Y)}\t{IsShown(click.Value)}\n"
+                );
+            }
+            foreach (var sprite in sprites)
+            {
+                var position = sprite.Position ?? Vector2.Zero;
+                var size = sprite.Size ?? Vector2.Zero;
+                var color = sprite.Color ?? Color.White;
+                text.Append(
+                    $"sprite\t{sprite.Type}\t{(sprite.Data ?? "").Replace('\n', ' ')}\t{F(position.X)}\t{F(position.Y)}\t{F(size.X)}\t{F(size.Y)}\t{F(sprite.RotationOrScale)}\t{color.PackedValue}\t{sprite.Alignment}\n"
+                );
+            }
+        }
+
+        private static bool IsShown(ElementBase element)
+        {
+            for (var e = element; e != null; e = e.Parent)
+                if (!e.Enabled)
+                    return false;
+            return true;
+        }
+
+        private static string F(float value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
         private static string Money(long milli) => KioskState.Price(milli);
 

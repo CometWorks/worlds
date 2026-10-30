@@ -23,6 +23,7 @@ namespace OctahedronKiosk
         private readonly IMyTextSurface surface;
         private KioskApp app;
         private bool failed;
+        private int failures;
 
         public KioskTSS(IMyTextSurface surface, IMyCubeBlock block, Vector2 size)
             : base(surface, block, size)
@@ -42,8 +43,13 @@ namespace OctahedronKiosk
         public override void Run()
         {
             base.Run();
-            if (failed || MyAPIGateway.Utilities.IsDedicated)
+            if (MyAPIGateway.Utilities.IsDedicated)
                 return;
+            if (failed)
+            {
+                KioskSession.Instance?.ReportScreen(block.EntityId, failures, null, null);
+                return;
+            }
             try
             {
                 var session = KioskSession.Instance;
@@ -69,12 +75,15 @@ namespace OctahedronKiosk
                 using (var frame = m_surface.DrawFrame())
                 {
                     app.ForceUpdate();
-                    frame.AddRange(app.GetSprites());
+                    var sprites = app.GetSprites();
+                    frame.AddRange(sprites);
+                    session.ReportScreen(block.EntityId, failures, app, sprites);
                 }
             }
             catch (Exception e)
             {
                 failed = true;
+                failures++;
                 app?.Dispose();
                 app = null;
                 MyLog.Default.WriteLineAndConsole($"Octahedron kiosk screen failed: {e}");

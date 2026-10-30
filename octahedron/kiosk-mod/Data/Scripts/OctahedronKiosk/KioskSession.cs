@@ -7,6 +7,7 @@ using Lima.API;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
+using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -34,6 +35,8 @@ namespace OctahedronKiosk
 
         private long sequence;
         private readonly HashSet<long> chatRequests = new HashSet<long>();
+        private string screenRequest;
+        private long screenKiosk;
 
         public override void LoadData()
         {
@@ -103,6 +106,7 @@ namespace OctahedronKiosk
             }
         }
 
+        // /kiosk screen [request id]: writes what the screen shows to the mod's local storage
         // /kiosk <state|deposit|withdraw|give|take|members|market|buy|sell|offer|order|cancel> [faction] [hand|ship=ID]
         //   [item=Type/Subtype] [amount=N|all] [price=SC|N%] [id=listing] [kiosk=ID]
         // The kiosk is the nearest one within 20 m unless given.
@@ -153,7 +157,32 @@ namespace OctahedronKiosk
                 MyAPIGateway.Utilities.ShowMessage("Kiosk", "No kiosk near.");
                 return;
             }
+            if (verb == "screen")
+            {
+                // The kiosk's screen script writes its next frame into the mod's local storage
+                screenRequest = words.Count > 1 ? words[1] : "0";
+                screenKiosk = kiosk;
+                return;
+            }
             chatRequests.Add(Send(verb, kiosk, faction, source, item, amount, price, listing));
+        }
+
+        /// <summary>Called by the screen script after each frame; writes it if /kiosk screen asked for it.</summary>
+        public void ReportScreen(long kiosk, int failures, KioskApp app, List<MySprite> sprites)
+        {
+            if (kiosk != screenKiosk || screenRequest == null)
+                return;
+            var text = new StringBuilder();
+            text.Append($"request\t{screenRequest}\t{failures}\n");
+            app?.Describe(text, sprites);
+            screenRequest = null;
+            using (
+                var file = MyAPIGateway.Utilities.WriteFileInLocalStorage(
+                    "kiosk-screen.txt",
+                    typeof(KioskSession)
+                )
+            )
+                file.Write(text.ToString());
         }
 
         // A kiosk is a text panel showing this mod's screen; the server plugin selects it
