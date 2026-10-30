@@ -24,7 +24,7 @@ save), and on the other restarted once more after a WA kill. It runs at 60 minut
 the restarts. Last, FreeBuildCooldownMinutes is lowered so
 that about 2 minutes are left: refused, then free right after they pass. So only 2 minutes are waited.
 
-Run on polaris on 2026-10-30: 25/25 checks in 16 minutes.
+Run on polaris on 2026-10-30: 26/26 checks in 16 minutes.
 """
 
 from __future__ import annotations

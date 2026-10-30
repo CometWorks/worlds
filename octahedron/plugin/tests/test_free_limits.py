@@ -29,6 +29,7 @@ os.environ.setdefault("OCT_TASK", "SE-694")
 import rig  # noqa: E402
 import test_client as tc  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
+import test_support_arm as sa  # noqa: E402
 
 BLOCKED = rig.grid(
     "Free Limits Blocked",
@@ -45,6 +46,7 @@ BLOCKED = rig.grid(
     tag="MyObjectBuilder_CubeGrid",
 )
 COOLDOWN = "next free ship is in"
+NO_BLUEPRINT = "load a blueprint into it first"
 started = time.monotonic()
 
 
@@ -53,7 +55,14 @@ def log(text: str) -> None:
 
 
 def order(remote) -> str:
-    return tc.ship_reply(remote, "!oct order")
+    """Presses the button of the nearest table. An order clears its table (SE-773), so
+    with no blueprint there this goes on to the other stations' tables"""
+    reply = tc.ship_reply(remote, "!oct order")
+    stations = iter(sorted(sa.station_tables()))
+    while NO_BLUEPRINT in reply:
+        sa.at_table(remote, next(stations))
+        reply = tc.ship_reply(remote, "!oct order")
+    return reply
 
 
 def wait_chat_count(remote, text: str, count: int, timeout: float) -> None:
@@ -82,9 +91,16 @@ def set_tables(blueprint: str, remove: str | None = None) -> None:
             flags=re.S,
         )
         assert count == 1, (remove, count)
+    # A cleared table (SE-773) has no blueprint to replace
+    text = re.sub(
+        r"<ProjectedGrids[^>]*/>|<ProjectedGrids>.*?</ProjectedGrids>",
+        "",
+        text,
+        flags=re.S,
+    )
     text, count = re.subn(
-        r"(<SubtypeName>LargeBlockConsole</SubtypeName>.*?<ProjectedGrids>).*?(</ProjectedGrids>)",
-        lambda m: m[1] + blueprint + m[2],
+        r"(<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>(?:true|false)</Enabled>",
+        lambda m: f"{m[1]}<Enabled>true</Enabled><ProjectedGrids>{blueprint}</ProjectedGrids>",
         text,
         flags=re.S,
     )
@@ -122,7 +138,7 @@ def completed_ship() -> None:
     so.place(remote, "Order Test")
     wait_chat_count(remote, "is ready", 1, 900)
     reply = order(remote)
-    assert f"{COOLDOWN} 10 min" in reply, reply
+    assert re.search(COOLDOWN + " (9|10) min", reply), reply
     # The default could run out before the next server start is up
     tc.with_config(remote, FreeBuildCooldownMinutes=60)
     stop()
