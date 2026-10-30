@@ -20,6 +20,7 @@ from bench import run_scenario
 from cluster import wait_until
 from scenarios_core import CLIENT_ID
 from se_autopilot import enter_cockpit
+from se_remote import CallOp, OpError
 
 LABEL = sys.argv[1] if len(sys.argv) > 1 else "run"
 OUT = (
@@ -88,6 +89,14 @@ def pick_gps(api) -> None:
     time.sleep(1)
 
 
+def _missing(api, grid: int) -> bool:
+    try:
+        api.list_blocks(grid, limit=1)
+        return False
+    except OpError:
+        return True
+
+
 def fly(bench, api, path: str, name: str, start, gps: bool) -> None:
     spawn = bench.cluster.node(
         "node-1",
@@ -100,13 +109,9 @@ def fly(bench, api, path: str, name: str, start, gps: bool) -> None:
     if api.get_character().get("state") == "sitting":
         api.character_use()
         time.sleep(3)
-    wait_until(
-        lambda: any(
-            g.get("id") == grid or g.get("entityId") == grid for g in api.list_grids()
-        ),
-        60,
-        f"{name} on the client",
-    )
+    # A far grid reaches the client only once the character is near it
+    api.character_teleport(start[0], start[1] + 30, start[2])
+    wait_until(lambda: not _missing(api, grid), 90, f"{name} on the client")
     enter_cockpit(api, grid)
     if gps:
         pick_gps(api)
@@ -153,9 +158,7 @@ def check(bench) -> None:
     time.sleep(10)
     api.character_teleport(-310_000, 0, 412_000)
     time.sleep(10)
-    world = api.batch(
-        calls=[__import__("se_remote").CallOp.grid_to_world(grid, (0, 0, 0))]
-    ).call(0)["world"]
+    world = api.batch(calls=[CallOp.grid_to_world(grid, (0, 0, 0))]).call(0)["world"]
     bench.check(
         "a grid at 520 km is moved back inside 500 km",
         499 < km(world) <= 500,

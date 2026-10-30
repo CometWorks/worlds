@@ -174,10 +174,13 @@ def pick_gps(remote, target) -> None:
 
 def pilot_jump(remote, name: str) -> list[str]:
     """The pilot jumps the ship as a player does; returns the chat lines that came"""
-    entity_id, _, _, _, gps = PILOTED[name]
+    entity_id, position, _, _, gps = PILOTED[name]
     if remote.get_character().get("state") == "sitting":
         remote.character_use()
         time.sleep(3)
+    # A far grid reaches the client only once the character is near it
+    remote.character_teleport(position[0], position[1] + 30, position[2])
+    time.sleep(10)
     enter_cockpit(remote, entity_id)
     if gps:
         pick_gps(remote, gps)
