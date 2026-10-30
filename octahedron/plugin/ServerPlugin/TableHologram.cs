@@ -23,7 +23,7 @@ internal static class TableHologram
     private static readonly Dictionary<MyProjectorBase, List<MyObjectBuilder_CubeGrid>> pending =
         new();
 
-    private static readonly AccessTools.FieldRef<
+    internal static readonly AccessTools.FieldRef<
         MyProjectorBase,
         List<MyObjectBuilder_CubeGrid>
     > Blueprint = AccessTools.FieldRefAccess<MyProjectorBase, List<MyObjectBuilder_CubeGrid>>(

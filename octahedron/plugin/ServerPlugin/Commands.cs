@@ -48,6 +48,18 @@ public sealed class Commands : CommandModule
             table.Length == 0 ? null : string.Join(" ", table)
         );
 
+    [Command(
+        "table hold",
+        "Makes you the player who loaded the nearest hologram table's blueprint, for tests",
+        "!oct table hold [table name]: the blueprint is then cleared when you leave the station, as if you had loaded it."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string TableHold(params string[] table) =>
+        ShipyardOrders.Hold(
+            Context.Caller.IdentityId,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+
     [Command("shipyards", "Lists the shipyards, their arm rotors and the builds running in them")]
     [Permission(MyPromoteLevel.Admin)]
     public IEnumerable<string> Shipyards() => ShipyardOrders.Describe();

@@ -321,6 +321,18 @@ public class OctahedronConfig : PluginConfig
     } = 60;
 
     [IntOption(
+        1,
+        description: "Minutes a blueprint stays loaded in a station's hologram table at most. It is cleared sooner once its ship "
+            + "is in the queue, or when the player who loaded it leaves the station.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardTableMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 15;
+
+    [IntOption(
         0,
         description: "Minutes a player waits between two free shipyard builds. It starts when a free build ends with the ship "
             + "handed over, finished or not; a ship removed before that starts none. Kept in the world, on a cluster on the World Authority.",

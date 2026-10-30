@@ -155,6 +155,10 @@ internal static class ShipyardOrders
     // Tables whose blueprint a player just loaded: the quote is for them
     private static readonly Dictionary<long, long> loaded = new();
 
+    // Who loaded each table's blueprint, and when; player 0 for one found loaded after a
+    // restart or a move of the station to this node
+    private static readonly Dictionary<long, (long Player, DateTime At)> holders = new();
+
     private static int ticks;
 
     private static string blockedPatterns;
@@ -455,6 +459,19 @@ internal static class ShipyardOrders
         return answers.Count > 0 ? string.Join("\n", answers) : "The shipyard answers in chat.";
     }
 
+    // !oct table hold: the admin counts as the player who loaded the nearest table's blueprint
+    public static string Hold(long identityId, string tableName)
+    {
+        var character = MySession.Static.Players.TryGetIdentity(identityId)?.Character;
+        if (character == null || character.IsDead || character.MarkedForClose)
+            return "Spawn first.";
+        var table = StarterShip.FindTable(character, tableName, Config);
+        if (table == null || TableHologram.Blueprint(table) == null)
+            return "Stand by a station's hologram table with a blueprint loaded.";
+        holders[table.EntityId] = (identityId, DateTime.UtcNow);
+        return $"You hold the blueprint of hologram table {table.EntityId}.";
+    }
+
     /// <summary>A press of the table's button: cancels the player's queue entry, shows their quote or orders.</summary>
     public static void Press(long identityId, MyProjectorBase table, Action<string> tell)
     {
@@ -596,10 +613,11 @@ internal static class ShipyardOrders
                             $"Free builds: {Name(plan.Player)} ignores PCU limits, '{plan.Ship}' is free "
                                 + $"({plan.Pcu} PCU) without the PCU limits, cool-down or blocked blocks"
                         );
-                    quotes.Remove(plan.Table.EntityId);
-                    Write(
+                    Plugin.Log.Info(
+                        $"Hologram table {plan.Table.EntityId}: blueprint cleared, '{plan.Ship}' is in the queue"
+                    );
+                    ClearTable(
                         plan.Table,
-                        Config.ShipyardQuoteSurface,
                         $"'{plan.Ship}' is in the queue for {Name(plan.Player)}.\n\nLoad a blueprint for a new quote."
                     );
                     Refresh(plan.Station);
@@ -621,8 +639,10 @@ internal static class ShipyardOrders
             var identity = MySession.Static.Players.TryGetIdentityId(
                 MyEventContext.Current.Sender.Value
             );
-            if (identity != 0)
-                loaded[__instance.EntityId] = identity;
+            if (identity == 0)
+                return;
+            loaded[__instance.EntityId] = identity;
+            holders[__instance.EntityId] = (identity, DateTime.UtcNow);
         }
     }
 
@@ -756,7 +776,70 @@ internal static class ShipyardOrders
         foreach (var shipyard in shipyards)
             Check(shipyard);
         foreach (var station in StationTables())
+        {
+            Expire(station.Value);
             Refresh(station.Key, station.Value);
+        }
+    }
+
+    // A table's blueprint is cleared when the player who loaded it leaves the station, or
+    // ShipyardTableMinutes after it was loaded
+    private static void Expire(List<MyProjectorBase> tables)
+    {
+        BoundingSphereD? sphere = null;
+        foreach (var table in tables)
+        {
+            if (!Plugin.Simulated(table.CubeGrid))
+                continue;
+            if (TableHologram.Blueprint(table) == null)
+            {
+                holders.Remove(table.EntityId);
+                continue;
+            }
+            if (!holders.TryGetValue(table.EntityId, out var holder))
+                holders[table.EntityId] = holder = (0, DateTime.UtcNow);
+            string why = null;
+            if (DateTime.UtcNow - holder.At >= TimeSpan.FromMinutes(Config.ShipyardTableMinutes))
+                why = $"loaded {Config.ShipyardTableMinutes} min ago";
+            else if (holder.Player != 0)
+            {
+                sphere ??= StationSphere(table.CubeGrid);
+                if (Left(holder.Player, sphere.Value))
+                    why = $"{Name(holder.Player)} left the station";
+            }
+            if (why == null)
+                continue;
+            Plugin.Log.Info($"Hologram table {table.EntityId}: blueprint cleared, {why}");
+            ClearTable(table, "Load a blueprint for a quote.");
+        }
+    }
+
+    // Away from this node (logged off, or handed over to another node) or out of the sphere;
+    // a dead player may still respawn at the station
+    private static bool Left(long player, BoundingSphereD sphere)
+    {
+        if (!MySession.Static.Players.IsPlayerOnline(player))
+            return true;
+        var character = MySession.Static.Players.TryGetIdentity(player)?.Character;
+        return character != null
+            && !character.IsDead
+            && sphere.Contains(character.PositionComp.GetPosition()) == ContainmentType.Disjoint;
+    }
+
+    private static BoundingSphereD StationSphere(MyCubeGrid grid)
+    {
+        var box = BoundingBoxD.CreateInvalid();
+        foreach (var g in Grids(grid))
+            box.Include(g.PositionComp.WorldAABB);
+        return BoundingSphereD.CreateFromBoundingBox(box);
+    }
+
+    private static void ClearTable(MyProjectorBase table, string text)
+    {
+        holders.Remove(table.EntityId);
+        quotes.Remove(table.EntityId);
+        ((Sandbox.ModAPI.IMyProjector)table).SetProjectedGrid(null);
+        Write(table, Config.ShipyardQuoteSurface, text);
     }
 
     private static void Check(MyCubeGrid shipyard)

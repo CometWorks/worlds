@@ -234,6 +234,10 @@ the presser, or a quote of another blueprint or more than 5 minutes old, shows
 their quote first and asks them to press again. The plugin gives the button a
 toolbar item (its own On switch) so that clients offer it; the item never runs.
 `!oct order [table name]` (admin) presses the button of the nearest table.
+The table's blueprint is cleared once the ship is in the queue, when the player
+who loaded it leaves the sphere around the station's grids or this server (a
+log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
+(15) after it was loaded.
 `ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
 
 - A ship is a free build for a player with less than `FreeBuildPcuLimit`
