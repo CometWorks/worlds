@@ -118,15 +118,16 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = new();
 
+    // On by default: a Quasar cluster starts from these defaults, not from octahedron.cfg
     [BoolOption(
-        "Brake grids and characters flying out of the world sphere below. Needs no WorldSizeKm, which should stay 0.",
+        "Keep the world a sphere: brake grids and characters flying out of it, shorten jumps at the braking radius, move back what is beyond the radius. Needs no WorldSizeKm, which should stay 0.",
         Parent = "edge"
     )]
     public bool WorldEdgeEnabled
     {
         get;
         set => SetField(ref field, value);
-    }
+    } = true;
 
     [Vector3DOption("Center of the world sphere, in world coordinates (m).", Parent = "edge")]
     public Vector3D WorldEdgeCenter

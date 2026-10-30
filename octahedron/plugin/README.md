@@ -911,9 +911,12 @@ pending update from Maintenance. Quasar's content update monitoring doesn't
 see new commits of a dev folder.
 
 On a Quasar cluster the plugin gets its config from Quasar, not from a file:
-set it in the cluster's plugin configuration editor to the values in
-`../config/octahedron.cfg`. `OCTAHEDRON_CONFIG` and `Octahedron.cfg` in the
-instance folder are ignored there.
+cluster setup starts from the plugin's compiled defaults, and nothing copies
+`../config/octahedron.cfg` over them. Set the values in the cluster's plugin
+configuration editor. `OCTAHEDRON_CONFIG` and `Octahedron.cfg` in the instance
+folder are ignored there. An update keeps the saved values while the config's
+schema (option names, types, descriptions) stays the same; when it changes, the
+values go back to the defaults.
 
 The cluster CLI (`se1/cluster`, also the test bench) loads compiled local
 plugins only. For it, `package.sh <folder>` builds

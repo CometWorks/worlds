@@ -87,6 +87,21 @@ internal static class JumpLimit
                     Plugin.Config
                 );
         }
+
+        // The game moves the location off what is there, which can push it back over the limit.
+        // No location, as when the game finds none: the jump doesn't happen.
+        private static void Postfix(
+            MyGridJumpDriveSystem __instance,
+            Vector3D desiredLocation,
+            ref Vector3D? __result
+        )
+        {
+            if (!Active || __result is not { } location || location == desiredLocation)
+                return;
+            var start = GridOf(__instance).WorldMatrix.Translation;
+            if (Clamp(start, location, Plugin.Config) != location)
+                __result = null;
+        }
     }
 
     private static string Km(double meters) =>
