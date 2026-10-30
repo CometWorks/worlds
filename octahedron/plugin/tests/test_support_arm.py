@@ -21,8 +21,10 @@ table's button for an admin) and follows the build with !oct shipyards:
   starts, as on a cluster node without the admin's settings; the ship is still welded.
 
 After each build the arm and its projector are gone, the rotor head is still on its
-rotor and dynamic again, and the ship is the player's dynamic ship. The saved world is
-checked at the end.
+rotor and dynamic again, and the ship is the player's dynamic ship. The large ships'
+cockpit toolbars turn the battery and the tank on and off by EntityId: the client must
+show both slots in the delivered cockpit, and the saved ship must point them at its own
+blocks (SE-772). The saved world is checked at the end.
 
     OCT_TASK=SE-693 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_support_arm.py [case ...]
@@ -62,16 +64,51 @@ def hull(blocks: dict, size: tuple[int, int, int], subtype: str) -> list[str]:
     return out + [b for b in blocks.values() if b]
 
 
+def toolbar(slots: dict[int, int]) -> str:
+    """A cockpit toolbar whose slots turn blocks on and off, by their EntityId"""
+    return (
+        "<Toolbar><ToolbarType>Character</ToolbarType>"
+        '<SelectedSlot xsi:nil="true" /><Slots>'
+        + "".join(
+            f"<Slot><Index>{i}</Index><Item />"
+            '<Data xsi:type="MyObjectBuilder_ToolbarItemTerminalBlock">'
+            f"<Action>OnOff</Action><BlockEntityId>{block}</BlockEntityId></Data></Slot>"
+            for i, block in slots.items()
+        )
+        + "</Slots></Toolbar>"
+    )
+
+
+def toolbar_ok(grid) -> tuple[bool, str]:
+    """Whether the grid's cockpit has its two toolbar slots, on blocks of the grid"""
+    ids = {b.findtext("EntityId") for b in grid.find("CubeBlocks")}
+    cockpit = next(
+        b
+        for b in grid.find("CubeBlocks")
+        if b.findtext("SubtypeName") == "LargeBlockCockpit"
+    )
+    slots = [
+        d.findtext("BlockEntityId") for d in cockpit.iterfind("Toolbar/Slots/Slot/Data")
+    ]
+    return len(slots) == 2 and set(slots) <= ids, f"slots {slots}"
+
+
 def large(
     name: str, entity: int, connector: bool, thrust: bool = False
 ) -> tuple[str, int]:
     special = {
         (0, 0, 2): rig.block(
-            "MyObjectBuilder_OxygenTank", "LargeHydrogenTankSmall", (0, 0, 2)
+            "MyObjectBuilder_OxygenTank",
+            "LargeHydrogenTankSmall",
+            (0, 0, 2),
+            f"<EntityId>{entity + 1}</EntityId>",
         ),
         (0, 1, 2): None,  # the tank is two blocks high
         (2, 0, 2): rig.block(
-            "MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (2, 0, 2)
+            "MyObjectBuilder_BatteryBlock",
+            "LargeBlockBatteryBlock",
+            (2, 0, 2),
+            f"<EntityId>{entity + 2}</EntityId>",
         ),
     }
     if thrust:
@@ -88,7 +125,15 @@ def large(
         )
     blocks = hull(special, (3, 2, 6), "LargeBlockArmorBlock")
     # The control station mounts only on its bottom: on the front, on top
-    blocks.append(rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (1, 2, 0)))
+    # Its toolbar turns the battery and the tank on and off (SE-772)
+    blocks.append(
+        rig.block(
+            "MyObjectBuilder_Cockpit",
+            "LargeBlockCockpit",
+            (1, 2, 0),
+            toolbar({0: entity + 2, 1: entity + 1}),
+        )
+    )
     grid = rig.grid(name, entity, blocks, tag="MyObjectBuilder_CubeGrid")
     return grid, len(blocks)
 
@@ -508,6 +553,13 @@ def usable(remote, case: str, fly: bool) -> None:
     if state.get("state") != "sitting":
         return
     log(f"{case}: in the cockpit, view {remote.get_view()}")
+    if case != "small":
+        time.sleep(3)
+        items = remote.get_toolbar().get("items", [])
+        check(
+            len(items) == 2,
+            f"{case}: the cockpit's toolbar keeps its two blocks on the client: {items}",
+        )
     if fly:
         speed = 0.0
         for key in ("W", "S"):
@@ -757,6 +809,9 @@ def saved(cases: list[str]) -> None:
                 )
         names = {b.findtext("CustomName") for b in cubes}
         check("Shipyard Order" not in names, f"saved: '{ship}' has no arm block")
+        if ship != "ArmSmall":
+            ok, what = toolbar_ok(grid)
+            check(ok, f"saved: '{ship}''s cockpit toolbar keeps its blocks: {what}")
         for b in cubes:
             if b.findtext("SubtypeName") == "LargeHydrogenTankSmall":
                 ratio = float(b.findtext("FilledRatio") or 0)
