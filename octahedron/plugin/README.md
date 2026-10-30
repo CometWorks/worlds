@@ -1006,6 +1006,8 @@ after a restart. `OCT_WORLD_SOURCE` points the rig at a world built by
 `build_world.py` instead of `octahedron/server`. `tests/money/MoneyTests` checks the
 arithmetic of the tax, the payout and Hangar's retrieval fee alone
 (`dotnet run -c Release --project tests/money/MoneyTests`).
+`tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
+local test cluster, with the World Authority keeping both: see its docstring.
 `tests/test_hangar_fee.py` checks the Hangar fee with the client and a Hangar working
 copy (`OCT_HANGAR_REPO`) on the server holding ships stored at the stations: a load
 outside the safe zones refused, the same station free, another station 100 SC for
