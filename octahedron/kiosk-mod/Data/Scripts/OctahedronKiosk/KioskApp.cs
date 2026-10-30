@@ -41,6 +41,7 @@ namespace OctahedronKiosk
         private long pending;
         private int ticksToRefresh;
         private bool rebuild;
+        private bool wasPressed;
 
         private int page = Storage;
         private bool hand;
@@ -172,11 +173,14 @@ namespace OctahedronKiosk
         {
             if (state != null)
                 Screen.InteractiveDistance = (float)state.Reach;
-            if (rebuild)
+            // A new button never saw the press: wait until the release has reached the old one
+            bool pressed = Screen.Mouse1.IsPressed;
+            if (rebuild && !pressed && !wasPressed)
             {
                 rebuild = false;
                 Rebuild();
             }
+            wasPressed = pressed;
             if (--ticksToRefresh <= 0 && Screen.IsOnScreen)
                 Refresh();
         }

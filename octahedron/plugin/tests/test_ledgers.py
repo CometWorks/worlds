@@ -77,7 +77,12 @@ def main() -> int:
     rig.stop_client()
     rig.stop_server()
     rig.prepare_world()
-    rig.write_plugin_config()
+    # The market keeps OCT's daily stock in OCT's ledgers, which this test reads as its own
+    rig.write_plugin_config(
+        rig.CONFIG_SOURCE.read_text(encoding="utf-8").replace(
+            "<MarketEnabled>true<", "<MarketEnabled>false<"
+        )
+    )
     rig.prepare_server()
     rig.start_server()
     remote = rig.start_client()

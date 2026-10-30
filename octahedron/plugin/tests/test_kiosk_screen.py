@@ -516,10 +516,30 @@ def run(remote) -> None:
             f"the long list has a scroll bar: {len(visible)} of {len(rows)} rows",
         )
 
-    frame = lcd.until(
-        lambda f: f"row:{IRON}" in f.shown() or f"row:{PLATE}" in f.shown()
+    # Holding the scroll bar brings the rest of the list in, and those rows work the same
+    item = PLATE
+    frame = lcd.frame()
+    first = next(iter(frame.shown("row:")))
+    right = max(h["rect"][2] for h in frame.shown("row:").values())
+    bar = next(
+        s
+        for s in frame.sprites
+        if s["type"] == "TEXTURE"
+        and s["data"] == "SquareSimple"
+        and s["x"] >= right - 1
+        and s["h"] > 20 * frame.scale
     )
-    item = IRON if f"row:{IRON}" in frame.shown() else PLATE
+    for step in range(1, 11):
+        if f"row:{item}" in lcd.frame().shown():
+            break
+        lcd.aim(
+            bar["x"] + bar["w"] / 2, bar["y"] - bar["h"] / 2 + bar["h"] * step / 10.5
+        )
+        lcd.press()
+    frame = lcd.frame()
+    check(f"row:{item}" in frame.shown(), f"the scroll bar brings up {item}")
+    check(first not in frame.shown(), f"{first} scrolled out of the list")
+    layout(lcd, "Market/Prices scrolled")
     lcd.click(f"row:{item}")
     choose(lcd, "amount", "1")
     before = state(lcd, "market").amount(item, "mine")
