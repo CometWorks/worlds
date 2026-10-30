@@ -47,6 +47,10 @@ dotnet build octahedron/kiosk-mod/KioskMod.csproj -p:Bin64=<game Bin64>
 
 `octahedron/plugin/tests/test_kiosks.py` loads it as a world mod on a test
 server and client and checks the requests end to end.
+`test_kiosk_screen.py` next to it aims the client's cursor at the LCD and clicks
+every screen. It reads what the screen shows from `/kiosk screen [id]`, which writes
+the next frame's sprites, hit areas and cursor to `kiosk-screen.txt` in the mod's
+local storage.
 
 ## Publishing
 

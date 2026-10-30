@@ -70,6 +70,29 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "kioskaxes",
+        "The kiosk's position and axes: AXES x y z right up forward",
+        "!kprobe kioskaxes <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string KioskAxes(string station)
+    {
+        var kiosk = StationGrids(station)
+            .SelectMany(g => g.GetFatBlocks<MyTextPanel>())
+            .First(p =>
+                string.Equals(
+                    p.CustomName?.ToString(),
+                    KioskName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+        var m = kiosk.WorldMatrix;
+        string Fixed(Vector3D v) =>
+            string.Create(CultureInfo.InvariantCulture, $"{v.X:0.0000} {v.Y:0.0000} {v.Z:0.0000}");
+        return $"AXES {Fixed(m.Translation)} {Fixed(m.Right)} {Fixed(m.Up)} {Fixed(m.Forward)}";
+    }
+
+    [Command(
         "safezone",
         "The safe zone blocks' upkeep: SAFEZONE subtype chips minutes, one per block",
         "!kprobe safezone"

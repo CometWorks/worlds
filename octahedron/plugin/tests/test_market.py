@@ -14,7 +14,7 @@ exit code 0 = all passed.
     OCT_TASK=SE-684 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_market.py
 
-Not covered: the touch screens themselves, and a cluster.
+Not covered: the touch screens themselves (tests/test_kiosk_screen.py), and a cluster.
 """
 
 from __future__ import annotations
@@ -142,26 +142,27 @@ def run(remote) -> None:
     )
     balance = m.balance
 
-    # Alpha's specialty: platinum at 80 % up to the day's quota, then 60 %
+    # Alpha's specialty: platinum at 80 % up to the day's quota, then 60 %. Small amounts: the
+    # game's achievement for a rich account would disconnect this client, which has no Steam
     admin(remote, f"!oct ledger deposit Alpha me {PLATINUM} 1000")
     m = market(remote)
     special = m.price(PLATINUM, "buys")
     check(
         m.rows.get(PLATINUM, {}).get("special") == "1", "platinum is Alpha's specialty"
     )
-    m = expect(remote, f"sell item={PLATINUM} amount=100", "sell 100 platinum")
+    m = expect(remote, f"sell item={PLATINUM} amount=10", "sell 10 platinum")
     paid = m.balance - balance
-    check(abs(paid - 100 * special / 1000) <= 1, f"at the specialty price: {paid}")
+    check(abs(paid - 10 * special / 1000) <= 1, f"at the specialty price: {paid}")
     balance = m.balance
     special = m.price(PLATINUM, "buys")
-    with_config(remote, MarketSpecialtyDailyTonnes="0.15")
+    with_config(remote, MarketSpecialtyDailyTonnes="0.015")
     m = expect(
-        remote, f"sell item={PLATINUM} amount=100", "sell 100 more, past the quota"
+        remote, f"sell item={PLATINUM} amount=10", "sell 10 more, past the quota"
     )
     paid = m.balance - balance
-    expected = 50 * special / 1000 + 50 * special * 0.75 / 1000
+    expected = 5 * special / 1000 + 5 * special * 0.75 / 1000
     check(
-        abs(paid - expected) <= 2, f"50 at 80 % and 50 at 60 %: {paid} ~ {expected:.0f}"
+        abs(paid - expected) <= 2, f"5 at 80 % and 5 at 60 %: {paid} ~ {expected:.0f}"
     )
     check(
         m.price(PLATINUM, "buys") * 4 <= special * 3 + 4,

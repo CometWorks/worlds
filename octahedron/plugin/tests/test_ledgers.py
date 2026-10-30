@@ -77,7 +77,12 @@ def main() -> int:
     rig.stop_client()
     rig.stop_server()
     rig.prepare_world()
-    rig.write_plugin_config()
+    # The market keeps OCT's daily stock in OCT's ledgers, which this test reads as its own
+    rig.write_plugin_config(
+        rig.CONFIG_SOURCE.read_text(encoding="utf-8").replace(
+            "<MarketEnabled>true<", "<MarketEnabled>false<"
+        )
+    )
     rig.prepare_server()
     rig.start_server()
     remote = rig.start_client()
@@ -115,14 +120,14 @@ def main() -> int:
     # A steel plate is 20 kg
     ok(remote, "deposit Alpha me Component/SteelPlate 50", "50 plates")
     shows(remote, "Alpha me", [": 2 t"], "1 t of iron and 1 t of plates")
-    with_config(remote, LedgerPlayerLimitTonnes=2)
+    with_config(remote, LedgerPlayerLimitTonnes=2, MarketEnabled="false")
     refused(
         remote,
         "deposit Alpha me Component/SteelPlate 1",
         "over the limit of 2 t",
         "limit from the config",
     )
-    with_config(remote)
+    with_config(remote, MarketEnabled="false")
 
     ok(
         remote,
