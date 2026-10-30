@@ -113,7 +113,9 @@ def prepare(blueprint: str, minutes: int) -> None:
     rig.write_plugin_config(
         config.replace(
             "</OctahedronConfig>",
-            f"<ShipyardOrderMinutes>{minutes}</ShipyardOrderMinutes></OctahedronConfig>",
+            f"<ShipyardOrderMinutes>{minutes}</ShipyardOrderMinutes>"
+            # The tables keep the world's blueprint for the whole test
+            "<ShipyardTableMinutes>600</ShipyardTableMinutes></OctahedronConfig>",
         )
     )
     rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP])
