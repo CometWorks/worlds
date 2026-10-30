@@ -697,8 +697,8 @@ def saved(cases: list[str]) -> None:
     log_text = rig.server_game_log()
     check(
         "the welders stalled on" not in log_text,
-        "saved: the arm blocks out of the welders' reach were built at once: "
-        + str(re.findall(r"(\d+) arm blocks out of the welders' reach", log_text)),
+        "saved: the arm was built at once: "
+        + str(re.findall(r"(\d+) arm blocks built at once", log_text)),
     )
     if "partial" in cases:
         grid = grids.get("ArmPartial")

@@ -1495,12 +1495,9 @@ internal static class ShipyardOrders
         };
         orders[shipyard.EntityId] = order;
         lost.Remove(shipyard.EntityId);
-        var grid = projector.CubeGrid;
-        var instant = WeldArm(
-            shipyard,
-            order,
-            arm.Where(c => !Reachable(shipyard, grid.GridIntegerToWorld(c)))
-        );
+        // The arm is built at once, with the components in the containers: the welders took
+        // too long on it, a small block arm most of all
+        var built = WeldArm(shipyard, order, arm);
         Welders(shipyard, true);
         var plan = layout.Plan;
         Plugin.Log.Info(
@@ -1508,7 +1505,7 @@ internal static class ShipyardOrders
                 + $"{(next.Free ? "free" : "paid by " + next.Payer)}) for {Name(next.Player)} at {shipyard.DisplayName}, until {ends:u}: "
                 + $"arm on '{layout.Rotor.CustomName}' of {plan.Blocks.Count} blocks, cost {plan.Cost}, "
                 + (plan.Connector != null ? "docking at a connector" : "with a cap")
-                + $", {instant} arm blocks out of the welders' reach built at once"
+                + $", {built} arm blocks built at once"
                 + (
                     plan.GivenUp != null
                         ? $", the projector in place of a {layout.GivenUp.SubtypeName}"
@@ -1580,8 +1577,8 @@ internal static class ShipyardOrders
         return order.Arm.All(c => grid.GetCubeBlock(c)?.IsFullIntegrity == true);
     }
 
-    // The arm's blocks out of the welders' reach are built at once, the rest stall the arm
-    // after ArmIdleChecks checks without a newly completed block: the plugin welds them then
+    // The arm is built at once when it is placed. Should a block be left incomplete, the arm
+    // stalls after ArmIdleChecks checks without a newly completed block: the plugin welds it then
     private const int ArmIdleChecks = 3;
 
     private static bool ArmStalled(Order order)
@@ -1630,29 +1627,6 @@ internal static class ShipyardOrders
         }
         return welded;
     }
-
-    // The OmniArc welder's turret turns all the way around its block's up axis and tilts 45°
-    // up or down from the plane across it, out to 100 m. A block is left to the welders
-    // nearest to it: arm blocks 43° to 46° off the plane of their four nearest welders stayed
-    // unwelded in tests, though farther welders could have aimed at them. So a block counts
-    // as reachable only within 40° of one of its four nearest welders.
-    private const double WelderRange = 100;
-    private static readonly double welderTilt = Math.Sin(MathHelper.ToRadians(40));
-
-    private static bool Reachable(MyCubeGrid shipyard, Vector3D point) =>
-        Beams(shipyard)
-            .Select(b => (Up: b.WorldMatrix.Up, To: point - b.PositionComp.GetPosition()))
-            .OrderBy(b => b.To.LengthSquared())
-            .Take(4)
-            .Any(b =>
-            {
-                var distance = b.To.Length();
-                return distance <= WelderRange
-                    && (
-                        distance < 0.01
-                        || Math.Abs(Vector3D.Dot(b.To / distance, b.Up)) <= welderTilt
-                    );
-            });
 
     // A build stalls after StallChecks checks (60 s) in which its ship's integrity didn't grow
     private const int StallChecks = 6;
