@@ -148,7 +148,9 @@ namespace OctahedronKiosk
             ForceDispose();
         }
 
-        // Called by the screen script every 10 ticks: the state again every 5 s while someone looks at it
+        // Called by the screen script every 10 ticks: the state again 5 s after each answer while
+        // someone looks at it. On a cluster an answer can take longer than that; asking again
+        // sooner would only get "Still working" and drop the answer on its way.
         public void Tick()
         {
             if (state != null)
@@ -170,7 +172,7 @@ namespace OctahedronKiosk
             bool? asFaction = null
         )
         {
-            ticksToRefresh = 30;
+            ticksToRefresh = 360;
             pending = KioskSession.Instance.Send(
                 verb,
                 kiosk,
@@ -187,16 +189,21 @@ namespace OctahedronKiosk
         {
             if (answer.Kiosk != kiosk || answer.Sequence != pending)
                 return;
-            state = answer;
-            if (!hand)
-                ship = answer.Source;
-            if (!answer.InFaction)
-                faction = false;
+            ticksToRefresh = 30;
             status.Text =
                 answer.Message.Length > 0 ? answer.Message
                 : answer.Ok ? ""
                 : "The station refused.";
             status.TextColor = answer.Ok ? Theme.WhiteColor : Color.OrangeRed;
+            // A refusal before the station looked (still busy, too fast) has no screens and no
+            // reach: keep the last ones, or the touch cursor goes away
+            if (answer.Station.Length == 0 && state != null)
+                return;
+            state = answer;
+            if (!hand)
+                ship = answer.Source;
+            if (!answer.InFaction)
+                faction = false;
             Rebuild();
         }
 

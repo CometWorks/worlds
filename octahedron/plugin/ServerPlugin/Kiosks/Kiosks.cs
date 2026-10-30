@@ -145,6 +145,7 @@ internal static class Kiosks
     private sealed class Visit
     {
         public ulong Sender;
+        public DateTime Started = DateTime.UtcNow;
         public KioskRequest Request;
         public KioskReply Reply;
         public long Identity;
@@ -176,7 +177,12 @@ internal static class Kiosks
         {
             Sender = sender,
             Request = request,
-            Reply = new KioskReply { Sequence = request.Sequence, Kiosk = request.Kiosk },
+            Reply = new KioskReply
+            {
+                Sequence = request.Sequence,
+                Kiosk = request.Kiosk,
+                Reach = Plugin.Config.KioskReachMeters,
+            },
         };
         try
         {
@@ -231,7 +237,6 @@ internal static class Kiosks
         visit.Kiosk = (MyTextPanel)block;
         visit.Faction = session.Factions.GetPlayerFaction(visit.Identity);
         visit.Reply.Station = visit.Station;
-        visit.Reply.Reach = Plugin.Config.KioskReachMeters;
 
         busy.Add(visit.Sender);
         ReadLedgers(visit, () => Act(visit));
@@ -753,6 +758,12 @@ internal static class Kiosks
     private static void Finish(Visit visit)
     {
         busy.Remove(visit.Sender);
+        // The kiosk screen asks again 5 s after an answer; on a cluster the reads go to the World Authority
+        var took = DateTime.UtcNow - visit.Started;
+        if (took.TotalSeconds > 5)
+            Plugin.Log.Warning(
+                $"Kiosk {visit.Request.Verb} for {visit.Sender} took {took.TotalSeconds:F1} s: {visit.Reply.Message}"
+            );
         try
         {
             Describe(visit);
