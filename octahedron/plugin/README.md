@@ -354,16 +354,12 @@ take part. The plugin plans an arm on each and takes the best:
 
 The quote checks that an arm can be planned; when none fits, the server log says
 why for each rotor once. At build start the arm's blocks are
-placed as frames from the rotor head, and the head's grid turns static for the
-build. The arm's components go into the shipyard's containers on top of the
-ship's, for free: OCT pays for the arm. When the welders have completed every
-block of the arm, the plugin switches the projector on and the projection
-appears. The OmniArc welders turn all the way around their block's up axis but
-tilt only 45° from the plane across it, out to 100 m, and a block is left to
-the welders nearest to it, so a few cells near the shipyard's edge are out of
-their reach. Arm blocks more than 40° off the plane of all four of their nearest
-welders are built at once when the arm is placed. Should the welders still complete no arm block for
-30 s, the plugin welds the rest with the components in the containers. When the
+placed from the rotor head and built at once with the arm's components, and the
+head's grid turns static for the build. The arm's components go into the
+shipyard's containers on top of the ship's, for free: OCT pays for the arm. When
+every block of the arm is complete, the plugin switches the projector on and the
+projection appears. Should an arm block still be incomplete with no progress for
+30 s, the plugin welds it with the components in the containers. When the
 ship is complete, or its time is up, the arm's projector is switched off and its
 projection cleared, and the ship leaves the arm as the player's dynamic ship. With
 `ShipyardRepasteShips` (on) it leaves as Essentials' `!fixship` re-pastes a ship:
