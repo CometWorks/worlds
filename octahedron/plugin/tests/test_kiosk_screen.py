@@ -303,6 +303,16 @@ def rows_hover_and_click(lcd: Lcd, screen: str, prefix: str = "row:") -> None:
         )
         if not frame.alive():
             raise RuntimeError(f"{screen}: the screen died on {name}")
+        chosen = frame.background(frame.hits[name]["rect"])
+        rest = {
+            frame.background(h["rect"])["color"]
+            for n, h in frame.shown(prefix).items()
+            if n != name and frame.background(h["rect"])
+        }
+        check(
+            chosen is not None and chosen["color"] not in rest,
+            f"{screen}: the chosen {name} stands out from the other rows",
+        )
 
 
 def state(lcd: Lcd, args: str = "state") -> kiosks.State:
@@ -360,6 +370,12 @@ def run(remote) -> None:
         return
     remote.character_teleport(*(float(v) for v in match.groups()))
     time.sleep(3)
+    # TouchScreenAPI's ray starts at the camera, which a new client has in third person
+    for _ in range(4):
+        if remote.get_view().get("firstPerson"):
+            break
+        remote.key("V")
+        time.sleep(1)
     pose = kiosks.probe(remote, "kioskaxes Alpha")
     numbers = [float(v) for v in re.findall(r"-?\d+\.\d+", pose)]
     check(len(numbers) == 12, f"the kiosk's axes: {pose}")

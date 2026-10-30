@@ -40,6 +40,7 @@ namespace OctahedronKiosk
         private KioskState state;
         private long pending;
         private int ticksToRefresh;
+        private bool rebuild;
 
         private int page = Storage;
         private bool hand;
@@ -97,6 +98,7 @@ namespace OctahedronKiosk
             controls.Flex = new Vector2(1, 0);
             controls.Pixels = new Vector2(0, 26);
             controls.Gap = 6;
+            controls.Alignment = ViewAlignment.Center;
             AddChild(controls);
             sourceSwitch = new Switch(
                 new[] { "Ship", "From hand" },
@@ -122,6 +124,7 @@ namespace OctahedronKiosk
             shipRow = new View(ViewDirection.Row);
             shipRow.Flex = new Vector2(1, 0);
             shipRow.Pixels = new Vector2(0, 26);
+            shipRow.Alignment = ViewAlignment.Center;
             AddChild(shipRow);
 
             list = new ScrollView();
@@ -133,12 +136,14 @@ namespace OctahedronKiosk
             actions.Flex = new Vector2(1, 0);
             actions.Pixels = new Vector2(0, 28);
             actions.Gap = 6;
+            actions.Alignment = ViewAlignment.Center;
             AddChild(actions);
 
             marketActions = new View(ViewDirection.Row);
             marketActions.Flex = new Vector2(1, 0);
             marketActions.Pixels = new Vector2(0, 28);
             marketActions.Gap = 6;
+            marketActions.Alignment = ViewAlignment.Center;
             AddChild(marketActions);
 
             status = new Label("Connecting to the station...", 0.45f, TextAlignment.LEFT);
@@ -167,11 +172,18 @@ namespace OctahedronKiosk
         {
             if (state != null)
                 Screen.InteractiveDistance = (float)state.Reach;
+            if (rebuild)
+            {
+                rebuild = false;
+                Rebuild();
+            }
             if (--ticksToRefresh <= 0 && Screen.IsOnScreen)
                 Refresh();
         }
 
         private string Source => hand ? "hand" : ship;
+
+        private string Units => Amounts[amount] == "All" ? "all" : Amounts[amount];
 
         private void Refresh() => Request(page == Market ? "market" : "state");
 
@@ -216,10 +228,13 @@ namespace OctahedronKiosk
                 ship = answer.Source;
             if (!answer.InFaction)
                 faction = false;
-            Rebuild();
+            rebuild = true;
         }
 
         // --- the screens, built anew from every answer ---
+
+        // Only from Tick: the callbacks of a click run inside TouchScreenAPI's update of the very
+        // lists Rebuild changes, which would end that update with an exception
 
         private void Rebuild()
         {
@@ -233,7 +248,7 @@ namespace OctahedronKiosk
 
             clicks.Clear();
             Clear(shipRow);
-            Clear(list);
+            Clear(list, 1); // the first child of a ScrollView is its scroll bar
             Clear(actions);
             Clear(marketActions);
             if (page == Market)
@@ -282,8 +297,8 @@ namespace OctahedronKiosk
                 }
             );
             int index = state.Ships.FindIndex(s => s.Key.ToString() == ship);
-            selector.Selected = index < 0 ? 0 : index;
-            selector.Flex = new Vector2(1, 1);
+            Show(selector, names, index < 0 ? 0 : index);
+            selector.Flex = new Vector2(1, 0);
             shipRow.AddChild(selector);
             TrackSelector("ship", selector);
         }
@@ -317,7 +332,7 @@ namespace OctahedronKiosk
                         () =>
                         {
                             selected = item;
-                            Rebuild();
+                            rebuild = true;
                         },
                         "row:" + item
                     )
@@ -344,10 +359,11 @@ namespace OctahedronKiosk
                 row = new View(ViewDirection.Row);
             row.Flex = new Vector2(1, 0);
             row.Pixels = new Vector2(0, 20);
+            row.Alignment = ViewAlignment.Center;
             if (highlighted)
             {
                 row.UseThemeColors = false;
-                row.BgColor = Theme.GetMainColorDarker(4);
+                row.BgColor = Theme.GetMainColorDarker(7);
             }
             for (int i = 0; i < cells.Length; i++)
             {
@@ -356,7 +372,7 @@ namespace OctahedronKiosk
                     0.45f,
                     i == 0 ? TextAlignment.LEFT : TextAlignment.RIGHT
                 );
-                label.Flex = new Vector2(i == 0 ? 2 : 1, 1);
+                label.Flex = new Vector2(i == 0 ? 2 : 1, 0);
                 label.AutoEllipsis = LabelEllipsis.Right;
                 label.Margin = new Vector4(4, 0, 4, 0);
                 row.AddChild(label);
@@ -367,20 +383,19 @@ namespace OctahedronKiosk
         private void BuildActions()
         {
             var choice = new Selector(Amounts.ToList(), (i, text) => amount = i);
-            choice.Selected = amount;
-            choice.Flex = new Vector2(1, 1);
+            Show(choice, Amounts.ToList(), amount);
+            choice.Flex = new Vector2(1, 0);
             actions.AddChild(choice);
             TrackSelector("amount", choice);
-            string units = Amounts[amount] == "All" ? "all" : Amounts[amount];
             if (page == Storage)
             {
-                actions.AddChild(Action("Deposit", () => Request("deposit", selected, units)));
-                actions.AddChild(Action("Withdraw", () => Request("withdraw", selected, units)));
+                actions.AddChild(Action("Deposit", () => Request("deposit", selected, Units)));
+                actions.AddChild(Action("Withdraw", () => Request("withdraw", selected, Units)));
                 return;
             }
-            actions.AddChild(Action("Give", () => Request("give", selected, units)));
+            actions.AddChild(Action("Give", () => Request("give", selected, Units)));
             if (state.MayTrade)
-                actions.AddChild(Action("Take", () => Request("take", selected, units)));
+                actions.AddChild(Action("Take", () => Request("take", selected, Units)));
             if (state.MaySetMembers)
             {
                 var members = new Checkbox(
@@ -405,7 +420,7 @@ namespace OctahedronKiosk
                         onClick();
                 }
             );
-            button.Flex = new Vector2(0.6f, 1);
+            button.Flex = new Vector2(0.6f, 0);
             clicks.Add(new KeyValuePair<string, ElementBase>("action:" + text, button));
             return button;
         }
@@ -425,7 +440,7 @@ namespace OctahedronKiosk
                 i =>
                 {
                     listings = i == 1;
-                    Rebuild();
+                    rebuild = true;
                 }
             );
             shipRow.AddChild(views);
@@ -440,7 +455,7 @@ namespace OctahedronKiosk
                 0.45f,
                 TextAlignment.RIGHT
             );
-            money.Flex = new Vector2(1, 1);
+            money.Flex = new Vector2(1, 0);
             shipRow.AddChild(money);
             if (listings)
                 BuildListings();
@@ -480,7 +495,7 @@ namespace OctahedronKiosk
                         () =>
                         {
                             selected = item;
-                            Rebuild();
+                            rebuild = true;
                         },
                         "row:" + item
                     )
@@ -488,24 +503,23 @@ namespace OctahedronKiosk
             }
 
             var choice = new Selector(Amounts.ToList(), (i, text) => amount = i);
-            choice.Selected = amount;
-            choice.Flex = new Vector2(1, 1);
+            Show(choice, Amounts.ToList(), amount);
+            choice.Flex = new Vector2(1, 0);
             actions.AddChild(choice);
             TrackSelector("amount", choice);
-            string units = Amounts[amount] == "All" ? "all" : Amounts[amount];
-            actions.AddChild(Action("Buy", () => Request("buy", selected, units)));
-            actions.AddChild(Action("Sell", () => Request("sell", selected, units)));
+            actions.AddChild(Action("Buy", () => Request("buy", selected, Units)));
+            actions.AddChild(Action("Sell", () => Request("sell", selected, Units)));
 
             var prices = new Selector(Prices.ToList(), (i, text) => price = i);
-            prices.Selected = price;
-            prices.Flex = new Vector2(1, 1);
+            Show(prices, Prices.ToList(), price);
+            prices.Flex = new Vector2(1, 0);
             marketActions.AddChild(prices);
             TrackSelector("price", prices);
             marketActions.AddChild(
-                Action("Offer", () => Request("offer", selected, units, Prices[price]))
+                Action("Offer", () => Request("offer", selected, Units, Prices[price]))
             );
             marketActions.AddChild(
-                Action("Order", () => Request("order", selected, units, Prices[price]))
+                Action("Order", () => Request("order", selected, Units, Prices[price]))
             );
         }
 
@@ -531,7 +545,7 @@ namespace OctahedronKiosk
                         () =>
                         {
                             listing = id;
-                            Rebuild();
+                            rebuild = true;
                         },
                         "listing:" + id
                     )
@@ -548,7 +562,7 @@ namespace OctahedronKiosk
                         Request("cancel", "", "", "", listing, !chosen.Mine);
                 }
             );
-            cancel.Flex = new Vector2(1, 1);
+            cancel.Flex = new Vector2(1, 0);
             actions.AddChild(cancel);
             clicks.Add(new KeyValuePair<string, ElementBase>("action:Cancel listing", cancel));
         }
@@ -576,16 +590,10 @@ namespace OctahedronKiosk
             // Selector's wrapper has no property for its arrows: its children are arrow, label, arrow
             var children = selector.Children;
             clicks.Add(
-                new KeyValuePair<string, ElementBase>(
-                    name + ":prev",
-                    new EmptyButton(children[0])
-                )
+                new KeyValuePair<string, ElementBase>(name + ":prev", new EmptyButton(children[0]))
             );
             clicks.Add(
-                new KeyValuePair<string, ElementBase>(
-                    name + ":next",
-                    new EmptyButton(children[2])
-                )
+                new KeyValuePair<string, ElementBase>(name + ":next", new EmptyButton(children[2]))
             );
         }
 
@@ -639,14 +647,23 @@ namespace OctahedronKiosk
             return true;
         }
 
-        private static string F(float value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+        private static string F(float value) =>
+            value.ToString("0.##", CultureInfo.InvariantCulture);
 
         private static string Money(long milli) => KioskState.Price(milli);
 
-        private static void Clear(ContainerBase view)
+        // A new Selector draws its first label until it is clicked, whatever Selected says.
+        // Its children are arrow, label, arrow.
+        private static void Show(Selector selector, List<string> labels, int index)
+        {
+            selector.Selected = index;
+            new Label(selector.Children[1]).Text = labels[index];
+        }
+
+        private static void Clear(ContainerBase view, int keep = 0)
         {
             var children = view.Children;
-            for (int i = children.Count - 1; i >= 0; i--)
+            for (int i = children.Count - 1; i >= keep; i--)
                 view.RemoveChild(children[i]);
         }
     }

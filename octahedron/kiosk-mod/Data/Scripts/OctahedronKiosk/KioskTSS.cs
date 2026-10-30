@@ -19,10 +19,13 @@ namespace OctahedronKiosk
     {
         public override ScriptUpdate NeedsUpdate => ScriptUpdate.Update10;
 
+        // How long a failed screen waits to start again, 3 s for each failure so far
+        private const int RestartRuns = 18;
+
         private readonly IMyCubeBlock block;
         private readonly IMyTextSurface surface;
         private KioskApp app;
-        private bool failed;
+        private int restartIn;
         private int failures;
 
         public KioskTSS(IMyTextSurface surface, IMyCubeBlock block, Vector2 size)
@@ -45,8 +48,12 @@ namespace OctahedronKiosk
             base.Run();
             if (MyAPIGateway.Utilities.IsDedicated)
                 return;
-            if (failed)
+            if (restartIn > 0)
             {
+                // Not a blank screen: says so and starts the screens anew
+                restartIn--;
+                using (var frame = m_surface.DrawFrame())
+                    frame.Add(Message("Octahedron Kiosk\nRestarting the screen"));
                 KioskSession.Instance?.ReportScreen(block.EntityId, failures, null, null);
                 return;
             }
@@ -82,11 +89,18 @@ namespace OctahedronKiosk
             }
             catch (Exception e)
             {
-                failed = true;
                 failures++;
-                app?.Dispose();
-                app = null;
+                restartIn = Math.Min(failures * RestartRuns, 20 * RestartRuns);
                 MyLog.Default.WriteLineAndConsole($"Octahedron kiosk screen failed: {e}");
+                try
+                {
+                    app?.Dispose();
+                }
+                catch (Exception disposing)
+                {
+                    MyLog.Default.WriteLineAndConsole($"Octahedron kiosk screen: {disposing}");
+                }
+                app = null;
             }
         }
 

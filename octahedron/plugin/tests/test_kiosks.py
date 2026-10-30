@@ -16,8 +16,8 @@ request rate limit. Prints one line per check and a pass/fail summary; exit code
     OCT_TASK=SE-683 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_kiosks.py
 
-Not covered: the touch screens themselves (drawing and clicks need a rendering
-client and TouchScreenAPI's cursor, which a script can't aim), and a cluster.
+Not covered: the touch screens themselves (tests/test_kiosk_screen.py clicks them
+with a rendering client), and a cluster.
 """
 
 from __future__ import annotations

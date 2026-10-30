@@ -14,7 +14,7 @@ exit code 0 = all passed.
     OCT_TASK=SE-684 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_market.py
 
-Not covered: the touch screens themselves, and a cluster.
+Not covered: the touch screens themselves (tests/test_kiosk_screen.py), and a cluster.
 """
 
 from __future__ import annotations
