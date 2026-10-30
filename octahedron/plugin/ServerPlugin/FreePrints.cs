@@ -21,6 +21,7 @@ internal static class FreePrints
     private const string RecordTopic = "free-print";
     private const string ListTopic = "free-prints";
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
 
     // Identity id -> unix seconds the player's last free build ended
     private static Dictionary<long, long> ended = new();
@@ -30,6 +31,9 @@ internal static class FreePrints
     private static IDisposable[] handlers;
     private static Task<PluginResult> listing;
     private static bool listed;
+    private static bool listFailed;
+    private static DateTime nextListing;
+    private static DateTime nextSending;
     private static readonly Dictionary<long, long> unsent = new();
     private static Task<PluginBroadcastResult> sending;
     private static string sent;
@@ -90,13 +94,16 @@ internal static class FreePrints
         if (!Authority && !listed)
         {
             if (listing == null)
-                listing = Cluster.RequestAsync(
-                    new PluginTarget { Kind = PluginTargetKind.WorldAuthority },
-                    ListTopic,
-                    [],
-                    Guid.NewGuid(),
-                    Timeout
-                );
+            {
+                if (DateTime.UtcNow >= nextListing)
+                    listing = Cluster.RequestAsync(
+                        new PluginTarget { Kind = PluginTargetKind.WorldAuthority },
+                        ListTopic,
+                        [],
+                        Guid.NewGuid(),
+                        Timeout
+                    );
+            }
             else if (listing.IsCompleted)
             {
                 if (listing.Result is { Code: PluginResultCode.Success, Payload: { } payload })
@@ -106,9 +113,14 @@ internal static class FreePrints
                     listed = true;
                 }
                 else
-                    Plugin.Log.Warning(
-                        $"Free builds: no cool-down list from the World Authority ({listing.Result.Code}), asking again"
-                    );
+                {
+                    if (!listFailed)
+                        Plugin.Log.Warning(
+                            $"Free builds: no cool-down list from the World Authority ({listing.Result.Code}), asking again every {RetryDelay.TotalSeconds:0} s"
+                        );
+                    listFailed = true;
+                    nextListing = DateTime.UtcNow + RetryDelay;
+                }
                 listing = null;
             }
         }
@@ -124,10 +136,11 @@ internal static class FreePrints
                 foreach (var (player, seconds) in Parse(sent))
                     if (!unsent.ContainsKey(player))
                         unsent[player] = seconds;
+                nextSending = DateTime.UtcNow + RetryDelay;
             }
             sending = null;
         }
-        if (sending == null && unsent.Count > 0)
+        if (sending == null && unsent.Count > 0 && DateTime.UtcNow >= nextSending)
         {
             sent = Format(unsent);
             unsent.Clear();

@@ -7,12 +7,12 @@ Two server starts on one world copy:
 - FreeBuildPcuLimit 0. Flag off: the shipyard quotes a paid build for the PCU limit
   and !oct ship is refused. Flag on: two starter ships in a row (no PCU limit, no
   cool-down), then a free build that completes and records no cool-down, and another
-  free order (canceled). Flag off again: the starter ship waits for its cool-down,
-  the quote is paid again, and with the default config a free order goes in (canceled).
+  free quote. Flag off again: the starter ship waits for its cool-down,
+  the quote is paid again, and with the default config the quote is free.
   The saved world has no cool-down for the player.
 - The finished ship taken out of the save. Flag off: a free build that completes,
-  then the quote is paid for the 60 minute cool-down. Flag on: a free order
-  (canceled). The saved world has the cool-down.
+  then the quote is paid for the 10 minute cool-down. Flag on: a free quote. The
+  saved world has the cool-down.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> \\
     uv run --no-project --with httpx python tests/test_ignore_pcu.py
@@ -32,11 +32,13 @@ import rig  # noqa: E402
 import test_client as tc  # noqa: E402
 import test_free_limits as fl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
+import test_support_arm as sa  # noqa: E402
 
 NAME = "Order Test"
 FREE = "a free build."
 PCU_LIMIT = "a paid build (you have"
-COOLDOWN = "a paid build (your next free ship is in 60 min)"
+COOLDOWN = "a paid build (your next free ship is in"
+visits = 0
 # The server's log lines of the exemption
 EXEMPT = re.compile(r"ignor(es|ing) PCU limits")
 started = time.monotonic()
@@ -62,10 +64,19 @@ def chat_count(remote, text: str) -> int:
     return sum(text in line for line in lines)
 
 
-def paid_quote(remote, text: str) -> None:
-    """With no quote shown, a press quotes"""
+def quote(remote, *texts: str) -> None:
+    """At the next station's table, where no quote is shown yet, a press quotes. A free
+    order can't be undone here: the free shipyard starts it at once"""
+    global visits
+    stations = sorted(sa.station_tables())
+    sa.at_table(remote, stations[visits % len(stations)])
+    visits += 1
     reply = fl.order(remote)
-    assert "Your quote for" in reply and text in reply, reply
+    assert "Your quote for" in reply and all(t in reply for t in texts), reply
+
+
+def paid_quote(remote, text: str) -> None:
+    quote(remote, text)
 
 
 def order_free(remote) -> None:
@@ -78,9 +89,7 @@ def order_free(remote) -> None:
 
 
 def free_quote(remote) -> None:
-    order_free(remote)
-    reply = fl.order(remote)
-    assert "left the queue" in reply, reply
+    quote(remote, FREE)
 
 
 def build(remote) -> None:

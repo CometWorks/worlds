@@ -1,12 +1,12 @@
 """Checks the limits on free shipyard builds with the headless client, on the
 shipyard test server of tests/test_shipyard_order.py: the cool-down between free
-builds (FreeBuildCooldownMinutes, 60) and the blocks a free build can't have
+builds (FreeBuildCooldownMinutes, 10) and the blocks a free build can't have
 (FreeBuildBlockedBlocks).
 
 Three server starts on one world copy, the tables loaded with another blueprint
 before each:
 - "Order Test" (10 blocks): the order completes, and the next one is a paid build
-  for the 60 minute cool-down.
+  for the 10 minute cool-down.
 - "Free Limits Blocked" (a jump drive, a large ion thruster and a prototech
   battery): the quote is still paid for the cool-down, the world kept it over the
   restart. With the cool-down at 0 it is paid for the three blocks.
@@ -29,6 +29,7 @@ os.environ.setdefault("OCT_TASK", "SE-694")
 import rig  # noqa: E402
 import test_client as tc  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
+import test_support_arm as sa  # noqa: E402
 
 BLOCKED = rig.grid(
     "Free Limits Blocked",
@@ -45,6 +46,7 @@ BLOCKED = rig.grid(
     tag="MyObjectBuilder_CubeGrid",
 )
 COOLDOWN = "next free ship is in"
+NO_BLUEPRINT = "load a blueprint into it first"
 started = time.monotonic()
 
 
@@ -53,7 +55,14 @@ def log(text: str) -> None:
 
 
 def order(remote) -> str:
-    return tc.ship_reply(remote, "!oct order")
+    """Presses the button of the nearest table. An order clears its table (SE-773), so
+    with no blueprint there this goes on to the other stations' tables"""
+    reply = tc.ship_reply(remote, "!oct order")
+    stations = iter(sorted(sa.station_tables()))
+    while NO_BLUEPRINT in reply:
+        sa.at_table(remote, next(stations))
+        reply = tc.ship_reply(remote, "!oct order")
+    return reply
 
 
 def wait_chat_count(remote, text: str, count: int, timeout: float) -> None:
@@ -82,9 +91,16 @@ def set_tables(blueprint: str, remove: str | None = None) -> None:
             flags=re.S,
         )
         assert count == 1, (remove, count)
+    # A cleared table (SE-773) has no blueprint to replace
+    text = re.sub(
+        r"<ProjectedGrids[^>]*/>|<ProjectedGrids>.*?</ProjectedGrids>",
+        "",
+        text,
+        flags=re.S,
+    )
     text, count = re.subn(
-        r"(<SubtypeName>LargeBlockConsole</SubtypeName>.*?<ProjectedGrids>).*?(</ProjectedGrids>)",
-        lambda m: m[1] + blueprint + m[2],
+        r"(<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>(?:true|false)</Enabled>",
+        lambda m: f"{m[1]}<Enabled>true</Enabled><ProjectedGrids>{blueprint}</ProjectedGrids>",
         text,
         flags=re.S,
     )
@@ -122,7 +138,9 @@ def completed_ship() -> None:
     so.place(remote, "Order Test")
     wait_chat_count(remote, "is ready", 1, 900)
     reply = order(remote)
-    assert f"{COOLDOWN} 60 min" in reply, reply
+    assert re.search(COOLDOWN + " (9|10) min", reply), reply
+    # The default could run out before the next server start is up
+    tc.with_config(remote, FreeBuildCooldownMinutes=60)
     stop()
 
 
