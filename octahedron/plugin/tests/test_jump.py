@@ -104,7 +104,16 @@ def ship(name: str, entity_id: int, position, forward, distance: float) -> str:
         name,
         entity_id,
         [
-            rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 0, 0)),
+            rig.block(
+                "MyObjectBuilder_Cockpit",
+                "LargeBlockCockpit",
+                (0, 0, 0),
+                # The pilot's jump button; Remote doesn't reach the drive's action directly
+                "<Toolbar><Slots><Slot><Index>0</Index><Item />"
+                '<Data xsi:type="MyObjectBuilder_ToolbarItemTerminalBlock">'
+                f"<BlockEntityId>{entity_id + 100}</BlockEntityId><Action>Jump</Action>"
+                "</Data></Slot></Slots></Toolbar>",
+            ),
             rig.block(
                 "MyObjectBuilder_BatteryBlock",
                 "LargeBlockBatteryBlock",
@@ -115,6 +124,7 @@ def ship(name: str, entity_id: int, position, forward, distance: float) -> str:
                 "MyObjectBuilder_JumpDrive",
                 "LargeJumpDrive",
                 DRIVE,
+                f"<EntityId>{entity_id + 100}</EntityId>"
                 f"<StoredPower>3</StoredPower><JumpRatio>{ratio:.9f}</JumpRatio>"
                 "<Recharging>false</Recharging>",
             ),
@@ -185,7 +195,7 @@ def pilot_jump(remote, name: str) -> list[str]:
     if gps:
         pick_gps(remote, gps)
     before = set(chat_lines(remote, 0))
-    remote.apply_action(entity_id, DRIVE, "Jump")
+    remote.key("D1")
     box = remote.wait_for_screen("MyGuiScreenMessageBox", max_wait=20)
     log(f"{name}: {box[0]}")
     remote.control_click(text="Yes")

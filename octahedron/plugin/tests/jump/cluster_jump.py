@@ -28,7 +28,6 @@ OUT = (
     / f"jump-{LABEL}"
 )
 OUT.mkdir(parents=True, exist_ok=True)
-DRIVE = (0, 0, 2)
 GPS = (100_000, -300_000, 2_600_000)
 
 
@@ -46,7 +45,13 @@ BLUEPRINT = (
     "<PersistentFlags>InScene</PersistentFlags>"
     '<PositionAndOrientation><Position x="0" y="0" z="0" /><Forward x="0" y="0" z="1" /><Up x="0" y="1" z="0" /></PositionAndOrientation>'
     "<GridSizeEnum>Large</GridSizeEnum><CubeBlocks>"
-    + block("LargeBlockCockpit", "Cockpit", 0)
+    + block(
+        "LargeBlockCockpit",
+        "Cockpit",
+        0,
+        '<Toolbar><Slots><Slot><Index>0</Index><Item /><Data xsi:type="MyObjectBuilder_ToolbarItemTerminalBlock">'
+        "<BlockEntityId>780003</BlockEntityId><Action>Jump</Action></Data></Slot></Slots></Toolbar>",
+    )
     + block(
         "LargeBlockBatteryBlock",
         "BatteryBlock",
@@ -57,7 +62,7 @@ BLUEPRINT = (
         "LargeJumpDrive",
         "JumpDrive",
         2,
-        "<StoredPower>3</StoredPower><JumpRatio>1</JumpRatio><Recharging>false</Recharging>",
+        "<EntityId>780003</EntityId><StoredPower>3</StoredPower><JumpRatio>1</JumpRatio><Recharging>false</Recharging>",
     )
     + "</CubeBlocks><IsStatic>false</IsStatic></CubeGrid></CubeGrids></ShipBlueprint></ShipBlueprints></Definitions>"
 )
@@ -116,7 +121,8 @@ def fly(bench, api, path: str, name: str, start, gps: bool) -> None:
     if gps:
         pick_gps(api)
     before = set(chat(api))
-    api.apply_action(grid, DRIVE, "Jump")
+    bench.ensure_gameplay_focus(CLIENT_ID)
+    api.key("D1")
     api.wait_for_screen("MyGuiScreenMessageBox", max_wait=20)
     api.control_click(text="Yes")
     time.sleep(25)
