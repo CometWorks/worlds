@@ -35,9 +35,11 @@ These are not done yet. Each one changes what gets deployed.
    on the Quasar host, and pins it to the checkout's HEAD commit. That needs
    Magnetar 2.4.3.4 or later (see "Loading it on a cluster" in
    `plugin/README.md`). It does the station refill and the refill containers
-   (`config/octahedron.cfg`). Without it the stations get the game's own
-   economy refill: loot in every empty cargo container, ice in the gas
-   generators, and no Free Tools top-up.
+   (`config/octahedron.cfg`). Without it a cluster's stations get no refill at
+   all: the economy tick runs only on the World Authority, which has no grids.
+   A standalone server without the plugin runs the game's own economy refill:
+   loot in every empty cargo container, ice in the gas generators, and no Free
+   Tools top-up.
 5. **World edge (SE1-0119).** The Octahedron plugin brakes ships from 450 km
    and stops them at 500 km; the world keeps `WorldSizeKm` 0. Without the
    plugin (item 4) the world has no edge.
