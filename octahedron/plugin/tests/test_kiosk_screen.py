@@ -351,10 +351,10 @@ def act(lcd: Lcd, name: str, done, what: str) -> None:
     for _ in range(4):
         lcd.click(name)
         time.sleep(1)
+        log(f"{name}: status: {lcd.frame().screen.get('status')}")
         if done():
             check(True, what)
             return
-        log(f"{name}: not yet, status: {lcd.frame().screen.get('status')}")
     check(False, f"{what}: {lcd.frame()}")
 
 
@@ -561,7 +561,8 @@ def run(remote) -> None:
     check(frame.screen.get("price") != price_before, f"the price selector: {frame}")
     state(lcd, f"deposit item={item} amount=5")
     act(lcd, "action:Offer", lambda: listings(lcd) >= 1, "Market: Offer lists it")
-    act(lcd, "action:Order", lambda: listings(lcd) >= 2, "Market: Order lists it")
+    count = listings(lcd)
+    act(lcd, "action:Order", lambda: listings(lcd) > count, "Market: Order lists it")
 
     # My listings
     lcd.click("view:My listings")
