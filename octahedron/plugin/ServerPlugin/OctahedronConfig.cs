@@ -335,7 +335,7 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "Minutes a player waits between two free shipyard builds. It starts when a free build ends with the ship "
+        description: "Minutes a player waits between two free shipyard builds, to slow abuse down a little. It starts when a free build ends with the ship "
             + "handed over, finished or not; a ship removed before that starts none. Kept in the world, on a cluster on the World Authority.",
         Parent = "shipyard"
     )]
@@ -343,7 +343,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = 60;
+    } = 10;
 
     [StringOption(
         description: "Blocks a free shipyard build can't have, comma separated, as type/subtype, where * matches any text: "

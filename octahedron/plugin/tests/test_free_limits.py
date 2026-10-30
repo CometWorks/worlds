@@ -1,12 +1,12 @@
 """Checks the limits on free shipyard builds with the headless client, on the
 shipyard test server of tests/test_shipyard_order.py: the cool-down between free
-builds (FreeBuildCooldownMinutes, 60) and the blocks a free build can't have
+builds (FreeBuildCooldownMinutes, 10) and the blocks a free build can't have
 (FreeBuildBlockedBlocks).
 
 Three server starts on one world copy, the tables loaded with another blueprint
 before each:
 - "Order Test" (10 blocks): the order completes, and the next one is a paid build
-  for the 60 minute cool-down.
+  for the 10 minute cool-down.
 - "Free Limits Blocked" (a jump drive, a large ion thruster and a prototech
   battery): the quote is still paid for the cool-down, the world kept it over the
   restart. With the cool-down at 0 it is paid for the three blocks.
@@ -122,7 +122,9 @@ def completed_ship() -> None:
     so.place(remote, "Order Test")
     wait_chat_count(remote, "is ready", 1, 900)
     reply = order(remote)
-    assert f"{COOLDOWN} 60 min" in reply, reply
+    assert f"{COOLDOWN} 10 min" in reply, reply
+    # The default could run out before the next server start is up
+    tc.with_config(remote, FreeBuildCooldownMinutes=60)
     stop()
 
 

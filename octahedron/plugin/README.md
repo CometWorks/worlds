@@ -242,7 +242,7 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
 
 - A ship is a free build for a player with less than `FreeBuildPcuLimit`
   (10,000) PCU, counted as for the starter ship, once `FreeBuildCooldownMinutes`
-  (60) have passed since their last free build ended, and when it has none of
+  (10) have passed since their last free build ended, and when it has none of
   the blocks `FreeBuildBlockedBlocks` names (prototech blocks, large ion
   thrusters and jump drives). The cool-down starts when a free build ends with
   the ship handed over, finished or not; a canceled order or one whose ship was

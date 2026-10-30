@@ -20,7 +20,8 @@ from Money, the state is in the WA's save and comes back.
 
 Cool-down: a free ship ordered and completed on one node starts it. It then refuses on the other (the live
 broadcast), on the other restarted (the WA's list), after a graceful cluster stop and warm start (the global
-save), and on the other restarted once more after a WA kill. Last, FreeBuildCooldownMinutes is lowered so
+save), and on the other restarted once more after a WA kill. It runs at 60 minutes so that it lasts through
+the restarts. Last, FreeBuildCooldownMinutes is lowered so
 that about 2 minutes are left: refused, then free right after they pass. So only 2 minutes are waited.
 
 Run on polaris on 2026-10-30: 25/25 checks in 16 minutes.
@@ -123,7 +124,12 @@ def prepare() -> Path:
     prepare_server, rig.prepare_server = rig.prepare_server, lambda **_: None
     so.prepare(so.SMALL, 60)
     rig.prepare_server = prepare_server
-    set_config(EncountersEnabled="false", MoneyPlayerTaxThreshold=10_000)
+    # An hour's cool-down: the default of 10 minutes could run out during the node restarts
+    set_config(
+        EncountersEnabled="false",
+        MoneyPlayerTaxThreshold=10_000,
+        FreeBuildCooldownMinutes=60,
+    )
     lc.PLAN.write_text("")
     lc.OUT.write_text("")
     os.environ["CLUSTER_EXTRA_PLUGINS"] = ",".join(

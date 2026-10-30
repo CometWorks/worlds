@@ -11,7 +11,7 @@ Two server starts on one world copy:
   the quote is paid again, and with the default config a free order goes in (canceled).
   The saved world has no cool-down for the player.
 - The finished ship taken out of the save. Flag off: a free build that completes,
-  then the quote is paid for the 60 minute cool-down. Flag on: a free order
+  then the quote is paid for the 10 minute cool-down. Flag on: a free order
   (canceled). The saved world has the cool-down.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> \\
@@ -36,7 +36,7 @@ import test_shipyard_order as so  # noqa: E402
 NAME = "Order Test"
 FREE = "a free build."
 PCU_LIMIT = "a paid build (you have"
-COOLDOWN = "a paid build (your next free ship is in 60 min)"
+COOLDOWN = "a paid build (your next free ship is in 10 min)"
 # The server's log lines of the exemption
 EXEMPT = re.compile(r"ignor(es|ing) PCU limits")
 started = time.monotonic()
