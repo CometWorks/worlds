@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using ServerPlugin;
 
@@ -86,6 +87,59 @@ catch (OverflowException)
 {
     Check(true, "tax total overflow throws");
 }
+
+// A whole day of hourly payouts: the held tax goes out evenly, each active player gets a 24th of the
+// daily subsidy an hour, up to rounding.
+long Day(long held, IReadOnlyList<long> players, IEnumerable<int> hoursLeft, Action<Payout> each)
+{
+    foreach (var left in hoursLeft)
+    {
+        var payout = MoneyMath.Pay(held, left, 0, 20_000_000, 5_000, players);
+        each(payout);
+        held = held - payout.Tax + payout.Rest;
+    }
+    return held;
+}
+
+long[] five = [1, 2, 3, 4, 5];
+long received = 0,
+    releases = 0,
+    subsidy = 0;
+var hours = 0;
+var shares = new List<long>();
+var dayHeld = Day(
+    2_400_000,
+    five,
+    Enumerable.Range(1, 24).Reverse(),
+    p =>
+    {
+        hours++;
+        received += p.Share * five.Length;
+        releases += p.Tax;
+        subsidy += p.Subsidy;
+        shares.Add(p.Share);
+    }
+);
+Check(hours == 24 && shares.Max() - shares.Min() <= 1, "24 even payouts");
+Check(subsidy == 24 * (5_000 * 5 / 24), "the day's subsidy, a 24th an hour");
+Check(subsidy / 5 >= 5_000 - 24 && subsidy / 5 <= 5_000, "a player's daily subsidy stays 5,000");
+Check(
+    shares[0] == (100_000 + 1_041) / 5,
+    "a player's hour: a 24th of the tax and the subsidy, split"
+);
+Check(dayHeld < five.Length, "only the last split's rest stays held");
+Check(received + dayHeld == 2_400_000 + subsidy, "nothing lost or made over the day");
+
+// A server down from 10:00 to 13:59: the tax isn't lost, the hours left release it; the subsidy of the
+// hours it was down isn't paid
+long afterGap = 0;
+var gapHeld = Day(
+    2_400_000,
+    five,
+    Enumerable.Range(1, 24).Reverse().Where(left => left > 14 || left <= 10),
+    p => afterGap += p.Tax
+);
+Check(afterGap >= 2_400_000 && gapHeld < five.Length, "a gap in the hours releases all the tax");
 
 // Hangar's fee for another station: 1 SC per 10 PCU, rounded up
 Check(MoneyMath.RetrieveFee(60_000, 1) == 6_000, "60k PCU costs 6,000 SC");

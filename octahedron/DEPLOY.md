@@ -127,6 +127,7 @@ downloaded (see `README.md`), with the OctahedronOres Workshop id:
 ```bash
 uv run make_ore_mod.py --seed 42
 python3 build_world.py server --seed 42 --ore-mod <OctahedronOres Workshop id>
+uv run check_sun_clearance.py server
 ```
 
 Commit `server/`, then copy it to the host. **The folder must be named
@@ -140,7 +141,7 @@ rsync -a server/ cluster@ai:Octahedron/
 
 In Quasar, import `~/Octahedron` as a world template (World Templates page, or
 the Create From Template dialog), then create a config profile from that
-template. The profile takes the session settings and the 45 mods from the
+template. The profile takes the session settings and the 43 mods from the
 world's `Sandbox_config.sbc`. In the profile:
 
 - Online mode Public, server name and world name `Octahedron`, a description,
