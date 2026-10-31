@@ -840,7 +840,12 @@ internal static class ShipyardOrders
             WriteTable(plan.Table, text.ToString());
         else
             // A station from before the billboard, until the world is wiped
-            WriteTable(plan.Table, text + "\n" + parts);
+            Write(
+                plan.Table,
+                Config.ShipyardQuoteSurface,
+                $"{Wrap(text.ToString(), TableColumns)}\n\n{Wrap(parts ?? "", PaidColumns)}",
+                2f
+            );
     }
 
     // The ship's bill of materials, with where each item comes from once a paid build's quote is in
