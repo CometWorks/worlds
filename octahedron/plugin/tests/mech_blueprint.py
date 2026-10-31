@@ -1,9 +1,12 @@
 """Writes bp.sbc of a ship with a rotor: the cockpit's toolbar turns a battery on the rotor's head on and off
-and its block group, so it needs one id map for both grids (SE-772).
+and its block group, so it needs one id map for both grids (SE-772). With "big" a dozen containers have names
+that don't compress, so the order is over the 64 KiB of a cluster's plugin message but builds as fast (SE-805).
 
-    python mech_blueprint.py bp.sbc
+    python mech_blueprint.py bp.sbc [big]
 """
 
+import base64
+import random
 import sys
 
 import rig
@@ -41,6 +44,18 @@ blocks.append(
         "</Slots></Toolbar>",
     )
 )
+if sys.argv[2:] == ["big"]:
+    noise = random.Random(805)
+    blocks += [
+        rig.block(
+            "MyObjectBuilder_CargoContainer",
+            "LargeBlockSmallContainer",
+            (x, 1, z),
+            f"<CustomName>{base64.b64encode(noise.randbytes(9000)).decode()}</CustomName>",
+        )
+        for x in (0, 2)
+        for z in range(6)
+    ]
 base = rig.grid("Mech Ship", BASE, blocks, tag="CubeGrid")
 head = rig.grid(
     "Mech Head",

@@ -6,6 +6,9 @@ delivered ship's cockpit toolbar must point at the ship's own blocks (SE-772).
         <Test>/.venv/bin/python tests/shipyard_cluster.py <Test> bp.sbc     (from plugin/)
 
 The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one headless client.
+
+`python tests/mech_blueprint.py bp.sbc big` writes a ship whose order doesn't fit one plugin message: before SE-805
+it got the answer "Invalid" here, as the ship "Polaris Mk2 RC8 Recolored" did on the live cluster.
 """
 
 from __future__ import annotations
@@ -167,7 +170,8 @@ run.administrators = [CLIENT_ID]
 
 def main() -> int:
     run.world_template = wa.prepare()
-    wa.set_config(FreeBuildPcuLimit=100000)
+    # A free build whatever the blueprint has: a paid one depends on what the station has for sale
+    wa.set_config(FreeBuildPcuLimit=100000, FreeBuildBlockedBlocks="")
     label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-shipyard")
     results = bench_module.HOST.results / label
     results.mkdir(parents=True, exist_ok=True)
