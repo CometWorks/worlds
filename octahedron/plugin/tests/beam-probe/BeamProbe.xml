@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>beam-probe</Id>
+    <GroupId>beam-probe</GroupId>
+    <RepoId>local/beam-probe</RepoId>
+
+    <FriendlyName>Beam Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: logs the state of the ToolCore tools on shipyards</Tooltip>
+    <Description>Test only. Writes beam-probe.log to the game's user data folder: once a
+        second what ToolCore thinks of the tools on grids named like a shipyard, and each
+        safe zone event about those grids.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>

@@ -312,7 +312,13 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   which don't have the shipyard exception above, would turn the tools off and
   show no beams (SE-441): while a build runs, the plugin tells the clients every
   10 s that the zones don't hold the shipyard grid, and puts it back at the end.
-  The server's own zones are left alone.
+  The server's own zones are left alone. A client that gets the shipyard streamed
+  in during a build (it comes back in range, joins or crosses to this node) still
+  turns the tools off before that message comes, and ToolCore tells it only when
+  the server's switch changes. So the plugin sends each such client the switch itself
+  at the next 10 s check and once more at the one after (SE-782), and nothing to the
+  clients it already told. ToolCore is the mod's own code: this reaches its session
+  and packet by reflection and does nothing if they are gone.
 - A build whose ship gains no integrity for 60 s stops. Plain blocks, armor and
   decorations, are those of the plain `CubeBlock` type; every block of its own
   type, lights, panels and conveyors included, is functional. When the ship
@@ -973,6 +979,15 @@ with the zones holding every test grid from the start, and off.
 (the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
+`tests/test_shipyard_beams.py` checks the welders' beams as a client sees them
+during a long build: the client and the server run the `tests/beam-probe` test
+plugin, which logs once a second what ToolCore says about the shipyard's tools. The
+client goes beyond sync distance and comes back, then leaves the game and joins
+again; all welders must shoot on it afterwards and some must hit, also once only
+integrity is left. `OCT_BEAM_MIX=1` builds functional blocks too, `OCT_BEAM_ZONE=allow`
+is the control with zones that allow welding, and `OCT_BEAM_OFFLINE=1` stops the server
+mid-build and loads its save offline. `tests/shipyard_beams_cluster.py` does the same
+check on a test cluster, with a trip to a station on the other node.
 `tests/builds/BuildTests` checks the queues and build ledgers without the game
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
 from the ledger, listings and OCT, paid orders all or none, cancel, start and finish
