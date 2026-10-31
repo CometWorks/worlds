@@ -62,6 +62,8 @@ internal static class StarterShip
             );
         if (!Plugin.Simulated(table.CubeGrid))
             return CommandReply.Error("The station is busy, try again in a few seconds.");
+        if (ShipyardOrders.Holder(table) is var holder && holder != 0 && holder != identityId)
+            return CommandReply.Error("Another player holds this hologram table for now.");
 
         var builder = (MyObjectBuilder_ProjectorBase)table.GetObjectBuilderCubeBlock(true);
         var grids = builder.ProjectedGrids;
@@ -121,7 +123,7 @@ internal static class StarterShip
         );
     }
 
-    // The nearest NPC-owned hologram table within reach, of the given name if there is one
+    // The nearest station hologram table within reach, of the given name if there is one
     internal static MyProjectorBase FindTable(
         MyCharacter character,
         string name,
@@ -142,8 +144,7 @@ internal static class StarterShip
             foreach (var table in grid.GetFatBlocks<MyProjectorBase>())
             {
                 if (
-                    table.BlockDefinition.Id.SubtypeName != config.StarterShipTableSubtype
-                    || !MySession.Static.Players.IdentityIsNpc(table.OwnerId)
+                    !ShipyardOrders.IsTable(table)
                     || (
                         name != null
                         && !string.Equals(
@@ -270,6 +271,7 @@ internal static class StarterShip
         {
             block.Owner = identityId;
             block.BuiltBy = identityId;
+            TargetNeutrals.Clear(block);
         }
         MyEntities.RemapObjectBuilder(grid);
     }
@@ -277,14 +279,18 @@ internal static class StarterShip
     // The player's PCU: built blocks on this node and, on a cluster, on the other nodes (the
     // cluster plugin's ledger), plus the ships the player keeps in Hangar. The ledger knows only
     // the grids some node has loaded, not those in offline partitions.
-    internal static int PlayerPcu(MyIdentity identity)
+    internal static int PlayerPcu(MyIdentity identity) =>
+        BuiltPcu(identity) + HangarPcu(MySession.Static.Players.TryGetSteamId(identity.IdentityId));
+
+    // Without Hangar: what the game's limit counts
+    internal static int BuiltPcu(MyIdentity identity)
     {
         var pcu = identity.BlockLimits.PCUBuilt;
         if (RemoteUsage.Value != null)
             pcu += (
                 (ValueTuple<int, int>)RemoteUsage.Value.Invoke(null, [identity.IdentityId])
             ).Item1;
-        return pcu + HangarPcu(MySession.Static.Players.TryGetSteamId(identity.IdentityId));
+        return pcu;
     }
 
     private static readonly Lazy<MethodInfo> RemoteUsage = new(() =>

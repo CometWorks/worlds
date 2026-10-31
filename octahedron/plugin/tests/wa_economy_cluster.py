@@ -11,12 +11,13 @@ each other's plugins in a shared cache, and a node can then fail at start. The z
 global save. WA + 2 regular
 nodes + one headless admin client, the Octahedron world as tests/test_shipyard_order.py prepares it (no
 asteroids, ToolCore and OmniArc staged, a 10 block blueprint on every table). Octahedron runs on all
-three, Multigrid Projector (the hub's cached build) on the nodes, and the ledger probe
-(tests/ledgers/probe) on the WA, because !oct payday and !oct taxday only run there.
+three, Multigrid Projector (the hub's cached build) on the nodes, and the console probe
+(tests/console-probe) on the WA, because !oct payday and !oct taxday only run there.
 
 Money: the WA cuts OCT's 1e9, a new account has 25,000 SC, a node refuses !oct payday, the tax and the
 payout on the WA count the client through the merged online list and reach its balance, nodes log nothing
-from Money, the state is in the WA's save and comes back.
+from Money, the state is in the WA's save and comes back, and a payout just before a WA kill leaves the
+balance and the state in step.
 
 Cool-down: a free ship ordered and completed on one node starts it. It then refuses on the other (the live
 broadcast), on the other restarted (the WA's list), after a graceful cluster stop and warm start (the global
@@ -24,7 +25,7 @@ save), and on the other restarted once more after a WA kill. It runs at 60 minut
 the restarts. Last, FreeBuildCooldownMinutes is lowered so
 that about 2 minutes are left: refused, then free right after they pass. So only 2 minutes are waited.
 
-Run on polaris on 2026-10-30: 26/26 checks in 16 minutes.
+Run on polaris on 2026-10-31: 27/27 checks in about 20 minutes.
 """
 
 from __future__ import annotations
@@ -47,7 +48,6 @@ sys.path[:0] = [
     str(TEST_DIR),
     str(TEST_DIR.parent / "Cli"),
     str(PLUGIN / "tests"),
-    str(PLUGIN / "tests/ledgers"),
 ]
 os.environ.setdefault("OCT_TASK", "SE-695")
 
@@ -62,12 +62,12 @@ from scenarios_core import (  # noqa: E402
 )
 
 import rig  # noqa: E402
-import ledger_cluster as lc  # noqa: E402  (the probe's build and its plan file protocol)
+import console_probe as lc  # noqa: E402  (the probe's build and its plan file protocol)
 import test_client as tc  # noqa: E402
 import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 
-ROOT = Path.home() / "cluster-runs/wa-economy"
+ROOT = Path.home() / "cluster-runs" / f"wa-economy-{os.environ['OCT_TASK']}"
 lc.PLUGINS = ROOT / "plugins"
 lc.PLAN = ROOT / "probe-plan.txt"
 lc.OUT = ROOT / "probe-out.txt"
@@ -136,13 +136,13 @@ def prepare() -> Path:
         [
             str(lc.PLUGINS / "Octahedron"),
             f"node:{mgp}",
-            f"wa:{lc.PLUGINS / 'LedgerProbe'}",
+            f"wa:{lc.PLUGINS / 'ConsoleProbe'}",
         ]
     )
     os.environ.update(
-        LEDGERPROBE_PLAN=str(lc.PLAN),
-        LEDGERPROBE_OUT=str(lc.OUT),
-        LEDGERPROBE_NODE="wa-1",
+        CONSOLEPROBE_PLAN=str(lc.PLAN),
+        CONSOLEPROBE_OUT=str(lc.OUT),
+        CONSOLEPROBE_NODE="wa-1",
         OCTAHEDRON_CONFIG=str(CONFIG),
         OCTAHEDRON_ENCOUNTERS=str(PLUGIN / "Encounters"),
     )
@@ -254,11 +254,15 @@ def run(bench) -> None:
     def press(api) -> str:
         """The table's button. The reply may need a trip to the World Authority"""
         reply = ""
-        # A shipyard joins its station's partition by proximity, a little after a start
+        # A shipyard joins its station's partition by proximity, a little after a start, and a
+        # node just restarted can be fenced from the World Authority for a moment
         for _ in range(12):
             reply = " ".join(rig.chat(api, "!oct order", 15))
             print(f"!oct order on {where()} -> {reply}", flush=True)
-            if "shipyard is busy" not in reply and "has no shipyard" not in reply:
+            if not any(
+                busy in reply
+                for busy in ("shipyard is busy", "has no shipyard", "did not answer")
+            ):
                 break
             time.sleep(10)
         return reply
@@ -479,9 +483,35 @@ def run(bench) -> None:
 
     # --- the WA alone ---
     to_station_on(api, node_a)
+
+    def paid_today() -> int:
+        text = " ".join(wa_command("!oct money"))
+        return number(re.search(r"paid out today: ([\d,]+) SC", text)[1])
+
+    # A payout just before the kill: the save brings the balance and the state back together, so
+    # the replacement neither pays that hour twice nor forgets it
+    balance, paid = money(api)["You"], paid_today()
+    wa_command("!oct payday")
+    wait_until(
+        lambda: money(api).get("You", 0) > balance, 60, "the payout before the kill"
+    )
     reset_probe()
     cluster.restart_node("wa-1")
     cluster.wait_ready(nodes=["wa-1"])
+
+    def in_step() -> bool:
+        return money(api).get("You", 0) - balance == paid_today() - paid
+
+    try:
+        wait_until(in_step, 120, "the balance and the state")
+    except ClusterError:
+        pass
+    check(
+        "a payout just before a WA kill: balance and state agree",
+        in_step(),
+        f"{money(api)}, before {balance}; paid today {paid_today()}, before {paid}",
+    )
+    reset_probe()
     cluster.restart_node(node_b)
     cluster.wait_ready(nodes=[node_b])
     refused(api, f"the WA killed, {node_b} restarted", node_b)
@@ -497,6 +527,10 @@ def run(bench) -> None:
         reply,
     )
     time.sleep(max(0, ended + minutes * 60 + 5 - time.time()))
+    # The character waits in the open and can die by now; the cool-down doesn't care.
+    # Back on the node that reloaded the lowered cool-down.
+    rig.ensure_character(api)
+    to_station_on(api, node_b)
     reply = press(api)
     check(
         "free once the time has passed",

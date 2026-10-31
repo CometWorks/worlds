@@ -52,8 +52,6 @@ public class Plugin : IPlugin
         ServerCommands.Register(
             Assembly.GetExecutingAssembly(),
             typeof(Commands),
-            typeof(LedgerCommands),
-            typeof(KioskCommands),
             typeof(MarketCommands)
         );
     }
@@ -80,8 +78,6 @@ public class Plugin : IPlugin
             TableHologram.Update();
             ShipyardOrders.Update();
             FreePrints.Update();
-            Ledgers.Update();
-            Kiosks.Update();
             Market.Update();
             Builds.Update();
             HangarFee.Bind();
@@ -156,7 +152,7 @@ public class Plugin : IPlugin
     public void Dispose()
     {
         MesCluster.Dispose();
-        Kiosks.Dispose();
+        ShipyardArm.Dispose();
         // Harmony patches stay: unpatching all may break other plugins
     }
 }

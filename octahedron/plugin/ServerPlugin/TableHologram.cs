@@ -84,8 +84,7 @@ internal static class TableHologram
             || grids.Count == 0
             || table.MarkedForClose
             || !table.AllowScaling
-            || table.BlockDefinition.Id.SubtypeName != config.StarterShipTableSubtype
-            || !MySession.Static.Players.IdentityIsNpc(table.OwnerId)
+            || !ShipyardOrders.IsTable(table)
         )
             return false;
 

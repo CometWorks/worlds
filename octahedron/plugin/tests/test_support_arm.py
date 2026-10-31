@@ -6,8 +6,8 @@ Each case orders a blueprint at another station's hologram table with !oct order
 table's button for an admin) and follows the build with !oct shipyards:
 
 - "dock" at Alpha Station: "ArmDock", a large grid ship with a connector at its back, an
-  H2 tank and a battery, a paid build with the ice for its hydrogen in the player's
-  ledger. The arm is placed as frames on a large arm rotor's head, with a connector; the
+  H2 tank and a battery, a paid build, its components and the ice for its hydrogen bought from
+  the Store's stock. The arm is placed as frames on a large arm rotor's head, with a connector; the
   projector is switched off until the welders complete it. The server restarts while the
   arm is built and picks the order up. When the ship is complete it docks to the arm's
   connector: the tank gets its 500,000 L, the battery is charged.
@@ -25,7 +25,8 @@ rotor and dynamic again, and the ship is the player's dynamic ship. The large sh
 cockpit toolbars turn the battery and the tank on and off by EntityId, and the battery's
 block group by name: the client must show the three slots in the delivered cockpit and
 have the group, and the saved ship must point the slots at its own blocks and keep the
-group (SE-772). The saved world is checked at the end.
+group (SE-772). The saved world is checked at the end. Paid builds have a labor fee of
+OCT_LABOR_FEE (default 10) SC per 100 PCU; 0 checks that the refund doesn't mention it.
 
     OCT_TASK=SE-693 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_support_arm.py [case ...]
@@ -50,6 +51,7 @@ import se_autopilot as ap  # noqa: E402
 import test_client as tc  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 from test_client import log, with_config  # noqa: E402
+from test_money import money  # noqa: E402
 
 ARMOR = "MyObjectBuilder_CubeBlock"
 
@@ -233,8 +235,9 @@ STALLS = {
     "scrap": ("Component/Display", "The ship was removed"),
     "armor": ("Component/MetalGrid", "The ship was removed"),
 }
-# For the paid builds: the components, and the ice for 500,000 L of hydrogen
-DEPOSIT = {
+# For the paid builds: OCT's stock of the components, and of the ice for 500,000 L of hydrogen
+BUILD_MONEY = 800_000
+STOCK = {
     "Component/SteelPlate": 1500,
     "Component/Construction": 300,
     "Component/InteriorPlate": 200,
@@ -250,6 +253,9 @@ DEPOSIT = {
     "Ore/Ice": 25000,
 }
 HYDROGEN = 500_000
+LABOR_FEE = int(os.environ.get("OCT_LABOR_FEE", "10"))
+# A case to refund: the balances before its order and what its components cost
+BEFORE: dict[str, tuple[dict, int]] = {}
 
 checks: list[tuple[bool, str]] = []
 
@@ -257,6 +263,14 @@ checks: list[tuple[bool, str]] = []
 def check(ok: bool, what: str) -> None:
     checks.append((ok, what))
     log(("PASS " if ok else "FAIL ") + what)
+
+
+def fund(remote) -> None:
+    """Enough for a paid build, with a low balance otherwise: a very rich account earns a
+    no-Steam client an achievement that disconnects it"""
+    short = BUILD_MONEY - money(remote)["You"]
+    if short > 0:
+        admin(remote, f"!sprobe pay me {short}")
 
 
 def admin(remote, text: str, wait: float = 4.0) -> str:
@@ -405,16 +419,20 @@ def order(remote, case: str) -> tuple:
     with_config(
         remote,
         FreeBuildPcuLimit=0 if paid or exempt else 10000,
+        ShipyardLaborFeePer100Pcu=LABOR_FEE,
+        ShipyardTableMinutes=600,
         ShipyardRepasteShips=(
             "false" if os.environ.get("OCT_REPASTE") == "0" else "true"
         ),
         **(EXEMPT_CONFIG if exempt else {}),
     )
     if paid:
-        for item, count in DEPOSIT.items():
-            admin(remote, f"!oct ledger deposit {station} me {item} {count}", 3)
+        for item, count in STOCK.items():
+            admin(remote, f"!oct market set {station} {item} {count}", 3)
+        fund(remote)
     at_table(remote, station)
     mark = so_latest(remote)
+    before = money(remote)
     if exempt:
         reply = admin(remote, "!oct order", 8)
         check(
@@ -429,6 +447,20 @@ def order(remote, case: str) -> tuple:
             check("a free build" in reply, f"{case}: free with the flag: {reply}")
         reply = admin(remote, "!oct order", 8)
     check("is in the queue" in reply, f"{case}: ordered: {reply}")
+    if case in ("scrap", "armor"):
+        cost = re.search(
+            r"([\d,]+) SC for the components(?: and ([\d,]+) SC labor)? paid", reply
+        )
+        components = int(cost[1].replace(",", ""))
+        fee = int((cost[2] or "0").replace(",", ""))
+        check((fee > 0) == (LABOR_FEE > 0), f"{case}: the labor fee: {reply}")
+        now = money(remote)
+        check(
+            now["You"] == before["You"] - components - fee
+            and now["OCT"] == before["OCT"] + components + fee,
+            f"{case}: the player paid, OCT got it: {before} -> {now}",
+        )
+        BEFORE[case] = before, components
     started = wait_chat(remote, f"builds '{ship}' for you now", 90, mark)
     if exempt:
         ignore_pcu(remote, False)
@@ -515,6 +547,10 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
             ready is not None and f"{HYDROGEN:,} L" in ready,
             f"{case}: its H2 tank has {HYDROGEN:,} L: {ready}",
         )
+        check(
+            ready is not None and "left over" not in ready,
+            f"{case}: a finished ship leaves nothing to sell: {ready}",
+        )
     lines = arms_gone(remote, case)
     check(
         not any(f"'{ship}'" in line for line in lines[1:]),
@@ -541,8 +577,14 @@ def stall(remote, case: str, mark: int) -> None:
         seen_by_client(remote, case)
     if case in ("scrap", "armor"):
         check(
-            ended is not None and "labor fee is paid back" in ended,
+            ended is not None and "is paid back" in ended,
             f"{case}: the build cost is paid back: {ended}",
+        )
+        before, _ = BEFORE[case]
+        now = money(remote)
+        check(
+            now["You"] == before["You"] and now["OCT"] == before["OCT"],
+            f"{case}: all of it is back from OCT: {before} -> {now}",
         )
     lines = arms_gone(remote, case)
     check(

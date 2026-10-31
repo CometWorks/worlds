@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../../ServerPlugin/ContractMath.cs" />
+    <Compile Include="../../../ServerPlugin/ContractBook.cs" />
   </ItemGroup>
 </Project>

@@ -179,7 +179,7 @@
     <DepositsCountCoefficient>2</DepositsCountCoefficient>
     <DepositSizeDenominator>30</DepositSizeDenominator>
     <HarvestRatioMultiplier>1</HarvestRatioMultiplier>
-    <TradeFactionsCount>10</TradeFactionsCount>
+    <TradeFactionsCount>0</TradeFactionsCount>
     <ScrapEnabled>false</ScrapEnabled>
     <EnableRadiation>true</EnableRadiation>
     <SolarRadiationIntensity>0</SolarRadiationIntensity>

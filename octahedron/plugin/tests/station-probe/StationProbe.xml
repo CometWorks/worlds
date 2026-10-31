@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<PluginData
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="GitHubPlugin"
+>
+  <!-- Test-only server plugin of the station tests (tests/station_tests.py). Never published to a hub. -->
+  <Id>5C1A9E07-3D84-4B6F-A2E9-0E6C1D1554AA</Id>
+  <RepoId>CometWorks/worlds</RepoId>
+  <FriendlyName>Station Probe</FriendlyName>
+  <Author>CometWorks</Author>
+  <Tooltip>Admin commands that dock ships and set faction ranks, for the station tests</Tooltip>
+  <Commit>TODO Git commit hash</Commit>
+</PluginData>

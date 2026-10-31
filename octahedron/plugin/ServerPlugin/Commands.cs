@@ -39,7 +39,7 @@ public sealed class Commands : CommandModule
         "order",
         "Presses the shipyard button of the nearest station hologram table for you",
         "!oct order [table name]: stand by a station's hologram table with a blueprint loaded. "
-            + "Shows your quote, orders the blueprint or cancels your queue entry, as the button next to the table does."
+            + "Orders the blueprint you loaded, cancels your build or repair slot, or books a repair slot, as the button next to the table does."
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Order(params string[] table) =>
@@ -60,6 +60,30 @@ public sealed class Commands : CommandModule
             table.Length == 0 ? null : string.Join(" ", table)
         );
 
+    [Command(
+        "table show",
+        "Shows what the nearest hologram table's screen and billboard show",
+        "!oct table show [table name]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string TableShow(params string[] table) =>
+        ShipyardOrders.Show(
+            Context.Caller.IdentityId,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+
+    [Command(
+        "table remove",
+        "Removes the blueprint of the nearest hologram table, as the Remove button of its terminal does",
+        "!oct table remove [table name]: only the player who holds the table can do this in its terminal."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string TableRemove(params string[] table) =>
+        ShipyardOrders.Remove(
+            Context.Caller.IdentityId,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+
     [Command("shipyards", "Lists the shipyards, their arm rotors and the builds running in them")]
     [Permission(MyPromoteLevel.Admin)]
     public IEnumerable<string> Shipyards() => ShipyardOrders.Describe();
@@ -67,7 +91,7 @@ public sealed class Commands : CommandModule
     [Command(
         "shipyard strip",
         "Takes an item out of a shipyard's containers and welders, for tests",
-        "!oct shipyard strip <station> <item>: item as in the ledger, like Component/Display. "
+        "!oct shipyard strip <station> <item>: item like Component/Display. "
             + "A running build then stalls on the blocks that need it."
     )]
     [Permission(MyPromoteLevel.Admin)]
@@ -183,14 +207,18 @@ public sealed class Commands : CommandModule
     [Command(
         "contract",
         "Takes, delivers or completes one of OCT's contracts as the caller, for tests and support",
-        "!oct contract accept <id> | deliver <id> [fill] | complete <id>: deliver hands in a hauling or acquisition "
-            + "contract from the caller's inventory, fill adds the items first; complete finishes a bounty or salvage."
+        "!oct contract accept <id> [identity] | deliver <id> [fill] | complete <id>: accept takes it as the caller or "
+            + "the identity, deliver hands in a hauling or acquisition contract from the caller's inventory, fill adds "
+            + "the items first; complete finishes a bounty or salvage."
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string ContractAction(string action, long id, string fill = null) =>
         action switch
         {
-            "accept" => Contracts.Accept(Context.Caller.IdentityId, id),
+            "accept" => Contracts.Accept(
+                long.TryParse(fill, out var identity) ? identity : Context.Caller.IdentityId,
+                id
+            ),
             "deliver" => Contracts.Deliver(Context.Caller.IdentityId, id, fill == "fill"),
             "complete" => Contracts.Complete(id),
             _ => "accept, deliver or complete",

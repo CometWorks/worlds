@@ -42,6 +42,9 @@ ROOT = HOME / ".se-test" / f"{TASK}-ds0"
 TIMEOUT = float(os.environ.get("MES_TIMEOUT", "2400"))
 # MES_WORLD: load this world folder as it is instead of the Empty World with MODS (seed_world.py)
 SOURCE_WORLD = Path(os.environ["MES_WORLD"]) if os.environ.get("MES_WORLD") else None
+# MES_WORLD_NAME: the save's folder. Mods read world storage from Saves/<SessionName>, so a world whose MES
+# config counts needs its session name here
+WORLD_NAME = os.environ.get("MES_WORLD_NAME", "MesTest")
 # MES_GATE=0: the probe only, without the Octahedron plugin
 GATE = os.environ.get("MES_GATE", "1") != "0"
 SERVER_GIB = 5.0
@@ -120,7 +123,7 @@ def prepare(ports: dict[str, int], plan: Path, plugin_cfg: Path | None) -> Path:
         "<Local /><Mods /></Profile>\n"
     )
 
-    world = data / "Saves/MesTest"
+    world = data / "Saves" / WORLD_NAME
     if SOURCE_WORLD:
         shutil.copytree(SOURCE_WORLD, world, ignore=shutil.ignore_patterns("Backup"))
     else:
@@ -149,7 +152,7 @@ def prepare(ports: dict[str, int], plan: Path, plugin_cfg: Path | None) -> Path:
         '<?xml version="1.0" encoding="utf-8"?>\n<MyConfigDedicated xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
         'xmlns:xsd="http://www.w3.org/2001/XMLSchema">'
         f"<IP>127.0.0.1</IP><SteamPort>{ports['DS_STEAM_PORT_BASE']}</SteamPort><ServerPort>{ports['DS_SERVER_PORT_BASE']}</ServerPort>"
-        f"<Administrators /><Banned /><ServerName>Octahedron MES Gate Test {TASK}</ServerName><WorldName>MesTest</WorldName>"
+        f"<Administrators /><Banned /><ServerName>Octahedron MES Gate Test {TASK}</ServerName><WorldName>{WORLD_NAME}</WorldName>"
         "<PauseGameWhenEmpty>false</PauseGameWhenEmpty><AutoRestartEnabled>false</AutoRestartEnabled>"
         "<IgnoreLastSession>true</IgnoreLastSession><RemoteApiEnabled>false</RemoteApiEnabled>"
         f"<LoadWorld>{world}</LoadWorld></MyConfigDedicated>\n"

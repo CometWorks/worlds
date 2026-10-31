@@ -44,7 +44,7 @@ internal static class Leaderboard
     public static bool On =>
         Config.Enabled && !string.IsNullOrWhiteSpace(Config.LeaderboardBlockName);
 
-    private static bool IsWorldAuthority => PluginCluster.IsClusterProcess && Ledgers.IsAuthority;
+    private static bool IsWorldAuthority => PluginCluster.IsClusterProcess && Stations.IsAuthority;
 
     private static DateTime nextCount;
     private static bool busy;
@@ -118,7 +118,7 @@ internal static class Leaderboard
             count = new Count(Prices());
             return;
         }
-        Ledgers.Ask(
+        Stations.Ask(
             PricesTopic,
             "",
             (text, error) =>
@@ -144,7 +144,7 @@ internal static class Leaderboard
             Show(Board(LocalSource, grids), panels);
             return;
         }
-        Ledgers.Ask(
+        Stations.Ask(
             ReportTopic,
             LeaderboardMath.EncodeGrids(grids),
             (text, error) =>
@@ -219,7 +219,7 @@ internal static class Leaderboard
         var book = Market.Book;
         var world = Market.World;
         var settings = Market.Settings;
-        var stations = Ledgers.StationNames().ToList();
+        var stations = Stations.StationNames().ToList();
         var prices = new Dictionary<string, long>();
         foreach (var item in Market.Catalog())
         {
@@ -254,7 +254,6 @@ internal static class Leaderboard
         var sum = LeaderboardMath.Sum(reports.Values.Select(r => r.Grids));
 
         long octId = Market.OctId;
-        var book = Market.Book;
         var rows = new List<LeaderboardRow>();
         foreach (var faction in MySession.Static.Factions.Select(f => f.Value))
         {
@@ -271,7 +270,7 @@ internal static class Leaderboard
                 {
                     Tag = faction.Tag ?? "",
                     Name = faction.Name ?? "",
-                    Cash = balance + book.Escrow(LedgerOwner.OfFaction(faction.FactionId)),
+                    Cash = balance,
                     Grids = g.Value,
                     Pcu = g.Pcu,
                 }
@@ -326,7 +325,7 @@ internal static class Leaderboard
         public Count(Dictionary<string, long> byName)
         {
             foreach (var (item, price) in byName)
-                if (Ledgers.TryItemId(item, out var id))
+                if (Stations.TryItemId(item, out var id))
                     prices[id] = price;
             todo = MyEntities
                 .GetEntities()

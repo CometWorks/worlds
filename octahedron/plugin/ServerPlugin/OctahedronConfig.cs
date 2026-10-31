@@ -11,6 +11,7 @@ namespace ServerPlugin;
 [Section("edge", caption: "World Edge")]
 [Section("starter", caption: "Starter Ship")]
 [Section("projections", caption: "Projections")]
+[Section("weapons", caption: "Weapons")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
@@ -18,8 +19,6 @@ namespace ServerPlugin;
 [Section("drops", caption: "Container Drops")]
 [Section("encounters", caption: "Encounters")]
 [Section("mes", caption: "MES Spawn Pattern")]
-[Section("ledgers", caption: "Station Ledgers")]
-[Section("kiosks", caption: "Station Kiosks")]
 [Section("market", caption: "Station Market")]
 [Section("contracts", caption: "Contracts")]
 [Section("leaderboard", caption: "Leaderboard")]
@@ -285,6 +284,16 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     }
 
+    [BoolOption(
+        "Turn Target Neutrals off on a new turret or custom turret controller, however it is built, and on a ship made for a player, like one bought from a store. A player can turn it back on.",
+        Parent = "weapons"
+    )]
+    public bool ClearTargetNeutralsEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
     [IntOption(
         0,
         description: "Most PCU of a ship or station: the grids joined by rotors, pistons and hinges, not by connectors. "
@@ -323,15 +332,27 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         1,
-        description: "Minutes a blueprint stays loaded in a station's hologram table at most. It is cleared sooner once its ship "
-            + "is in the queue, or when the player who loaded it leaves the station.",
+        description: "Minutes a player holds a station's hologram table with the blueprint they loaded, at most; loading another "
+            + "restarts them. It is cleared and open to everyone again sooner once its ship is in the queue, or when the player leaves the station.",
         Parent = "shipyard"
     )]
     public int ShipyardTableMinutes
     {
         get;
         set => SetField(ref field, value);
-    } = 15;
+    } = 3;
+
+    [IntOption(
+        0,
+        description: "A press of a station's shipyard button without a blueprint books a repair slot: the shipyard's welders, containers and "
+            + "connectors are the player's until they press it again or no building or welding happened for this many minutes. 0: no repair slots.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardRepairIdleMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
 
     [IntOption(
         0,
@@ -359,25 +380,26 @@ public class OctahedronConfig : PluginConfig
 
     [LongOption(
         0,
-        description: "Labor fee of a paid shipyard build, paid to OCT: SC per 10 PCU of the blueprint, rounded up. 0: no fee.",
+        description: "Labor fee of a paid shipyard build, paid to OCT: SC per 100 PCU of the blueprint, rounded up. 0: no fee.",
         Parent = "shipyard"
     )]
-    public long ShipyardLaborFeePer10Pcu
+    public long ShipyardLaborFeePer100Pcu
     {
         get;
         set => SetField(ref field, value);
-    } = 1;
+    }
 
     [IntOption(
         1,
-        description: "Most ships in a shipyard's queue, the one being built included.",
+        description: "Most ships in a shipyard's queue, the one being built included. "
+            + "The queue panel above the hologram table fits 6.",
         Parent = "shipyard"
     )]
     public int ShipyardQueueMax
     {
         get;
         set => SetField(ref field, value);
-    } = 10;
+    } = 6;
 
     [StringOption(
         description: "Name of the station button panel next to the hologram table. Its first button orders the blueprint "
@@ -400,9 +422,21 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "Text Panel - Station ShipyardQueue";
 
+    [StringOption(
+        description: "Name of the station billboard whose first screen shows the blueprint's bill of materials, "
+            + "under the screen's first line. Without one, the hologram table's screen shows it too.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardDetailsPanelName
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Billboard LCD Ship Build Details";
+
     [IntOption(
         0,
-        description: "The hologram table's screen that shows the quote, by index: 1 is the console block's large screen.",
+        description: "The hologram table's screen that shows free or paid, what's wrong and to press the button, "
+            + "by index: 1 is the console block's large screen.",
         Parent = "shipyard"
     )]
     public int ShipyardQuoteSurface
@@ -472,6 +506,18 @@ public class OctahedronConfig : PluginConfig
     } =
         "End=ConveyorTubeSmall, Straight=ConveyorTubeSmall, Corner=ConveyorTubeSmallCurved, Tee=ConveyorTubeSmallT, "
         + "Cap=SmallBlockConveyorCap, Connector=ConnectorSmall, Support=SmallBlockArmorBlock, Projector=SmallProjector";
+
+    [DoubleOption(
+        0,
+        60,
+        "The seconds a support arm's plan may take on its worker thread. A ship with no arm by then is refused.",
+        Parent = "shipyard"
+    )]
+    public double ShipyardArmPlanSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
 
     [IntOption(
         0,
@@ -808,78 +854,9 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "b6de8061483bbd9a";
 
-    [DoubleOption(
-        0,
-        description: "The most a player may keep in one station's warehouse ledger, free and listed items together, in tonnes. "
-            + "0: no limit.",
-        Parent = "ledgers"
-    )]
-    public double LedgerPlayerLimitTonnes
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 100;
-
-    [DoubleOption(
-        0,
-        description: "The most a faction may keep in one station's warehouse ledger, free and listed items together, in tonnes. "
-            + "0: no limit.",
-        Parent = "ledgers"
-    )]
-    public double LedgerFactionLimitTonnes
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 100;
-
-    [StringOption(
-        description: "Name of the station text panels that are kiosks (case-insensitive). The blueprints must keep them clear of the landing pads. "
-            + "Empty: no kiosks.",
-        Parent = "kiosks"
-    )]
-    public string KioskBlockName
-    {
-        get;
-        set => SetField(ref field, value);
-    } = "LCD Panel - Station Lounge StationStorefront";
-
-    [StringOption(
-        description: "Screen script of the kiosk client mod the plugin selects on every kiosk. Empty: the kiosks keep what they show.",
-        Parent = "kiosks"
-    )]
-    public string KioskScript
-    {
-        get;
-        set => SetField(ref field, value);
-    } = "Octahedron_Kiosk";
-
-    [DoubleOption(
-        1,
-        20,
-        "A player must stand this close to a kiosk to use it (m).",
-        Parent = "kiosks"
-    )]
-    public double KioskReachMeters
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 5;
-
-    [DoubleOption(
-        0,
-        10,
-        "The least time between two requests of a player at the kiosks (s).",
-        Parent = "kiosks"
-    )]
-    public double KioskCooldownSeconds
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 0.5;
-
     [BoolOption(
-        "The kiosks' market: players list offers and orders, OCT (MoneyAuthorityFactionTag) buys and sells the catalog at every station, "
-            + "and the game's generated station store items are gone. Runs on the World Authority of a cluster.",
+        "The station markets: the Store blocks of OCT's (MoneyAuthorityFactionTag) stations show its real stock and prices, "
+            + "and the game generates no store items for them. Kept on the World Authority of a cluster.",
         Parent = "market"
     )]
     public bool MarketEnabled
@@ -890,33 +867,14 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        100,
-        "Share of every sale between players that goes to OCT (%).",
+        description: "OCT's tax: what it sells for is this much above its price, what it pays this much below (%).",
         Parent = "market"
     )]
-    public int MarketFeePercent
+    public int MarketTaxPercent
     {
         get;
         set => SetField(ref field, value);
-    } = 5;
-
-    [IntOption(1, description: "Days a listing stays on the market.", Parent = "market")]
-    public int MarketListingDays
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 7;
-
-    [IntOption(
-        1,
-        description: "The most listings a player or faction may have at one station.",
-        Parent = "market"
-    )]
-    public int MarketMaxListings
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 20;
+    } = 2;
 
     [StringOption(
         description: "Items OCT buys and sells at every station, comma separated, as type/subtype, where * matches any text.",
@@ -940,25 +898,25 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "OCT buys catalog items at this share of the reference price, the game's minimal price / 10 (%).",
+        description: "OCT buys catalog items at this share of the reference price, the game's minimal price / 10, less the tax (%).",
         Parent = "market"
     )]
     public int MarketOctBuyPercent
     {
         get;
         set => SetField(ref field, value);
-    } = 60;
+    } = 100;
 
     [IntOption(
         0,
-        description: "OCT sells catalog items at this share of the reference price (%).",
+        description: "OCT sells catalog items at this share of the reference price, plus the tax (%).",
         Parent = "market"
     )]
     public int MarketOctSellPercent
     {
         get;
         set => SetField(ref field, value);
-    } = 140;
+    } = 100;
 
     [DoubleOption(
         0,
@@ -972,11 +930,11 @@ public class OctahedronConfig : PluginConfig
     } = 200;
 
     [StringOption(
-        description: "What OCT adds to its stock at every station each UTC day, as Type/Subtype=units, comma separated; "
-            + "at most up to MarketOctMaxStockTonnes. OCT's acquisition contracts ask for what it lacks of these.",
+        description: "OCT's minimum stock at every station, as Type/Subtype=units, comma separated. Once an hour what is completely out "
+            + "comes back to this, at most up to MarketOctMaxStockTonnes. OCT's acquisition contracts ask for what it lacks of these.",
         Parent = "market"
     )]
-    public string MarketDailyStock
+    public string MarketMinStock
     {
         get;
         set => SetField(ref field, value);
@@ -985,6 +943,17 @@ public class OctahedronConfig : PluginConfig
         + "Component/SmallTube=200,Component/LargeTube=40,Component/Motor=60,Component/Computer=200,Component/Display=30,"
         + "Component/BulletproofGlass=30,Component/Girder=50,Ingot/Iron=2000,Ingot/Nickel=500,Ingot/Silicon=500,"
         + "Ingot/Cobalt=300,Ore/Ice=330";
+
+    [StringOption(
+        description: "The stations' profiles: what a station stocks besides or instead of MarketMinStock, "
+            + "as Station name=Type/Subtype=units,..., stations separated by ;.",
+        Parent = "market"
+    )]
+    public string MarketStationStock
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
 
     [StringOption(
         description: "Each station's specialties, which OCT buys at MarketSpecialtyPercent: Station name=Type/Subtype,..., stations separated by ;.",
@@ -1003,14 +972,14 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "OCT buys a station's specialties at this share of the reference price (%).",
+        description: "OCT buys a station's specialties at this share of the reference price, less the tax, and sells them at no less (%).",
         Parent = "market"
     )]
     public int MarketSpecialtyPercent
     {
         get;
         set => SetField(ref field, value);
-    } = 80;
+    } = 120;
 
     [DoubleOption(
         0,
@@ -1096,9 +1065,9 @@ public class OctahedronConfig : PluginConfig
     } = 100;
 
     [BoolOption(
-        "OCT posts the stations' contracts instead of the game: hauling between stations, acquisitions of what its ledger at a "
+        "OCT posts the stations' contracts instead of the game: hauling between stations, acquisitions of what its stock at a "
             + "station lacks, bounties on NPC grids near a station and salvage of derelicts towed to a station's shipyard. "
-            + "OCT's account pays every reward. Runs on the World Authority of a cluster, without bounties and salvage there.",
+            + "OCT's account pays every reward. Runs on the World Authority of a cluster, where the nodes report the grids.",
         Parent = "contracts"
     )]
     public bool ContractsEnabled
@@ -1305,6 +1274,39 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 180;
 
+    [IntOption(
+        0,
+        description: "On a cluster: open salvage contracts kept on wrecks in offline partitions, at any distance from a station.",
+        Parent = "contracts"
+    )]
+    public int ContractWreckContracts
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
+
+    [IntOption(
+        1,
+        description: "Wreck contracts pick at random from this many of the biggest wrecks, by blocks.",
+        Parent = "contracts"
+    )]
+    public int ContractWreckPool
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
+    [DoubleOption(
+        0,
+        description: "A movable grid without power counts as a wreck once its partition has been offline for this many days.",
+        Parent = "contracts"
+    )]
+    public double ContractWreckOfflineDays
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 7;
+
     [StringOption(
         description: "Name of the text panels that show the faction leaderboard (case-insensitive). Empty: no leaderboard.",
         Parent = "leaderboard"
@@ -1366,7 +1368,9 @@ public struct RefillContainer
 public struct RefillItem
 {
     [
-        StructMember("Item id as Type/Subtype, for example PhysicalGunObject/Welder4Item."),
+        StructMember(
+            "Item id as Type/Subtype, for example PhysicalGunObject/Welder4Item. Several, separated by commas, count together and each one missing is one of them at random."
+        ),
         StructCaption
     ]
     public string Item { get; set; }
