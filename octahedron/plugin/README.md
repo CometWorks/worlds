@@ -169,6 +169,21 @@ checked the same way. Its own limit, `ProjectionPcuLimitPercent`, applies when a
 blueprint is loaded and is counted apart from the player's PCU, so nothing is
 counted twice.
 
+### Target Neutrals
+
+With `ClearTargetNeutralsEnabled` on, a new turret, custom turret controller or
+searchlight, modded ones too, starts with Target Neutrals off however it is built:
+placed by hand, as the first block of a new grid, welded from a projection by any
+tool, pasted, as a starter ship or by a shipyard. Ships and stations then shoot only
+at those whose reputation makes them enemies, and players can turn their weapons off
+around stations.
+
+It happens once, when the block is created. A player who turns the setting back on
+keeps it: a grid loaded from a save or moved to another cluster node isn't built, so
+it isn't cleared again. Grids already in a world keep what they have. So do prefabs,
+like encounter ships, wrecks and respawn ships, which nobody builds and which have
+their own design.
+
 ### PCU per ship or station
 
 A ship or station may have at most `GroupPcuLimit` (60,000) PCU: all grids
@@ -969,6 +984,12 @@ Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
 blocks to their functional level, two grids merging and a rotor attaching a
 head, each stopped by the cap, next to a copy built by nobody that isn't.
+`tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
+with the client, with the rule off too, and a test mod's turret whose definition has
+it on, and reads the setting on the client and in the saved world, across a restart.
+`tests/target_neutrals_cluster.py` does it on a cluster with a shipyard order, a paste
+and blocks placed by hand, and keeps a player's later choice through handovers and
+a cluster restart.
 `tests/test_shipyard_zone.py` restricts the zones as the world does, then checks
 with the client that Alpha Station's shipyard welds a projection, while in the
 same zone a player's hand welder and grinder, ship welder and grinder, and an

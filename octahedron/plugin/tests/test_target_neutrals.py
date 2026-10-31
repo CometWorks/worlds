@@ -59,14 +59,30 @@ def weapons(x: int, modded: bool) -> list[str]:
     """One of each block type with the setting, on it, standing on an armor spine along x"""
     blocks = [
         ("MyObjectBuilder_InteriorTurret", "LargeInteriorTurret", (x, 1, 0)),
-        ("MyObjectBuilder_TurretControlBlock", "LargeTurretControlBlock", (x + 2, 1, 0)),
+        (
+            "MyObjectBuilder_TurretControlBlock",
+            "LargeTurretControlBlock",
+            (x + 2, 1, 0),
+        ),
         ("MyObjectBuilder_Searchlight", "LargeSearchlight", (x + 4, 1, 0)),
         ("MyObjectBuilder_LargeGatlingTurret", "", (x + 6, 1, -1)),
         ("MyObjectBuilder_LargeMissileTurret", "", (x + 10, 1, -1)),
     ]
     if modded:
-        blocks.append(("MyObjectBuilder_LargeGatlingTurret", MOD_TURRET, (x + 14, 1, -1)))
-    return [rig.block(kind, subtype, at, FLAG_ON) for kind, subtype, at in blocks]
+        blocks.append(
+            ("MyObjectBuilder_LargeGatlingTurret", MOD_TURRET, (x + 14, 1, -1))
+        )
+    return [
+        rig.block(
+            kind,
+            subtype,
+            at,
+            # A controller's builder must have these, the game's own blueprints do
+            FLAG_ON
+            + ("<ToolIds /><Toolbar><Slots /></Toolbar>" if "Control" in kind else ""),
+        )
+        for kind, subtype, at in blocks
+    ]
 
 
 def armor(xs, y: int = 0) -> list[str]:
@@ -102,11 +118,15 @@ def write_mod() -> None:
         source,
         re.S,
     )[0]
-    definition = definition.replace("<SubtypeId/>", f"<SubtypeId>{MOD_TURRET}</SubtypeId>")
+    definition = definition.replace(
+        "<SubtypeId/>", f"<SubtypeId>{MOD_TURRET}</SubtypeId>"
+    )
     definition = re.sub(
         r"<BlockPairName>[^<]*", f"<BlockPairName>{MOD_TURRET}", definition
     )
-    definition = re.sub(r"\s*<EnabledTargetingOptions>[^<]*</EnabledTargetingOptions>", "", definition)
+    definition = re.sub(
+        r"\s*<EnabledTargetingOptions>[^<]*</EnabledTargetingOptions>", "", definition
+    )
     definition = definition.replace(
         "</Definition>",
         "<EnabledTargetingOptions>Players SmallShips LargeShips Stations Asteroids Enemies Neutrals"
@@ -263,9 +283,7 @@ def saved_on() -> dict[str, int]:
     text = re.sub(r"<ProjectedGrids>.*?</ProjectedGrids>", "", text, flags=re.S)
     found: dict[str, int] = {}
     for entity in ET.fromstring(text).find("SectorObjects"):
-        count = sum(
-            flag.text == "true" for flag in entity.iter("TargetNeutrals")
-        )
+        count = sum(flag.text == "true" for flag in entity.iter("TargetNeutrals"))
         if count:
             name = entity.findtext("DisplayName") or ""
             found[name] = found.get(name, 0) + count
@@ -275,7 +293,11 @@ def saved_on() -> dict[str, int]:
 def built(remote, label: str, grid_id: int, blocks: int) -> None:
     time.sleep(5)
     count, on = on_cells(remote, grid_id)
-    check(f"{label}: all {blocks} blocks have it off", count == blocks and not on, (count, on))
+    check(
+        f"{label}: all {blocks} blocks have it off",
+        count == blocks and not on,
+        (count, on),
+    )
 
 
 def rule_off_controls(remote, build_rig: int) -> None:
@@ -308,12 +330,16 @@ def hand_and_paste(remote, build_rig: int) -> tuple[tuple, int, tuple]:
         ((14, 1, 0), "LargeSearchlight"),
         ((16, 1, 0), "LargeInteriorTurret"),
     ):
-        log(f"placing {subtype}: {remote.character_build_block(build_rig, cell, subtype)}")
+        log(
+            f"placing {subtype}: {remote.character_build_block(build_rig, cell, subtype)}"
+        )
     time.sleep(5)
     cubes = targeting_cubes(remote, build_rig)
     new = [c for c in cubes if c["min"][0] >= 8]
     values = {
-        c["subtypeId"]: remote.get_property(build_rig, tuple(c["min"]), "TargetNeutrals")["value"]
+        c["subtypeId"]: remote.get_property(
+            build_rig, tuple(c["min"]), "TargetNeutrals"
+        )["value"]
         for c in new
     }
     check(
@@ -365,7 +391,11 @@ def hand_and_paste(remote, build_rig: int) -> tuple[tuple, int, tuple]:
         for c in pasted_on
     ]
     check("pasted onto a grid: off", values == [False], values)
-    turret = next(tuple(c["min"]) for c in targeting_cubes(remote, paste_id) if "Interior" in c["subtypeId"])
+    turret = next(
+        tuple(c["min"])
+        for c in targeting_cubes(remote, paste_id)
+        if "Interior" in c["subtypeId"]
+    )
     return controller, paste_id, turret
 
 
@@ -419,7 +449,11 @@ def run() -> None:
     remote.character_teleport(RIG_AT[0], 30, 0)
     build_rig = wait_grid(remote, "Neutrals Build Rig")
     count, on = on_cells(remote, build_rig)
-    check("in the world: the block that was on stays on", count == 1 == len(on), (count, on))
+    check(
+        "in the world: the block that was on stays on",
+        count == 1 == len(on),
+        (count, on),
+    )
 
     rule_off_controls(remote, build_rig)
     controller, paste_id, turret = hand_and_paste(remote, build_rig)
@@ -442,8 +476,15 @@ def run() -> None:
     first = saved_on()
     check("the saved world holds exactly these", first == expected, first)
     text = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
-    ships = re.findall(rf"<DisplayName>{SHIP}</DisplayName>", re.sub(r"<ProjectedGrids>.*?</ProjectedGrids>", "", text, flags=re.S))
-    check("the starter ship and the ordered ship are saved, with it off", len(ships) == 2, len(ships))
+    ships = re.findall(
+        rf"<DisplayName>{SHIP}</DisplayName>",
+        re.sub(r"<ProjectedGrids>.*?</ProjectedGrids>", "", text, flags=re.S),
+    )
+    check(
+        "the starter ship and the ordered ship are saved, with it off",
+        len(ships) == 2,
+        len(ships),
+    )
 
     rig.start_server()
     remote = rig.start_client()
