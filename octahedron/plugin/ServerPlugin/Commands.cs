@@ -224,6 +224,14 @@ public sealed class Commands : CommandModule
             _ => "accept, deliver or complete",
         };
 
+    [Command(
+        "offline",
+        "Shows the offline characters' times and kept inventories",
+        "!oct offline: on the server or the World Authority, who was last online when and whose inventory is kept."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public IEnumerable<string> Offline() => OfflineCharacters.Describe();
+
     [Command("holograms", "Fits the blueprints in the station hologram tables to the tables again")]
     [Permission(MyPromoteLevel.Admin)]
     public string Holograms() => $"Fitted {TableHologram.FitAll()} hologram tables.";
