@@ -14,7 +14,7 @@ to the 1/3 point nearer the station:
 
 "limit" at South Station forces the support arm's time limit, ShipyardArmPlanSeconds 0:
 
-- A press gets the refusal and orders nothing. With the limit back, the press gets a quote.
+- A press gets the refusal and orders nothing. With the limit back, it can order.
 - A paid order waits behind a grid in the shipyard. The server restarts with the limit at 0 and
   that grid gone: the order ends with its reason, its components and fee are back in the ledger,
   and the rotor head has no arm.
@@ -182,7 +182,8 @@ def check_place(root: ET.Element, case: str) -> None:
 
 
 def blocker(root: ET.Element) -> str:
-    """A grid in South Station's shipyard: an order there waits for it to leave"""
+    """A grid in South Station's shipyard: an order there waits for it to leave. Owned, with a
+    cockpit, else the shipyard sweeps it away as garbage"""
     yard = next(
         e
         for e in root.iter("MyObjectBuilder_EntityBase")
@@ -190,7 +191,7 @@ def blocker(root: ET.Element) -> str:
     )
     pos, _, up, _ = frame(yard)
     at = tuple(pos[i] - 2.5 * 16.5 * up[i] for i in range(3))
-    blocks = [rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, 0))]
+    blocks = rig.small_ship_blocks(owner=BLOCKER)
     grid = rig.grid("PlaceBlocker", BLOCKER, blocks, position=at)
     return grid.replace("<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>")
 
@@ -216,10 +217,12 @@ def forced_limit(remote):
         sa.admin(remote, f"!oct ledger deposit South me {item} {count}", 3)
     before = ledger(remote)
     sa.at_table(remote, "South")
+    # The table quotes by itself once the plan is through, then the first press orders
     reply = sa.admin(remote, "!oct order", 8)
-    sa.check("Your quote for" in reply, f"limit: back at 5 s it quotes: {reply}")
-    reply = sa.admin(remote, "!oct order", 8)
-    sa.check("is in the queue" in reply, f"limit: ordered: {reply}")
+    if "Your quote for" in reply:
+        reply = sa.admin(remote, "!oct order", 8)
+    sa.check("is in the queue" in reply, f"limit: back at 5 s it orders: {reply}")
+    sa.check("builds 'PlaceLimit'" not in reply, f"limit: the order waits: {reply}")
     sa.check(
         "reserved build" in ledger(remote),
         "limit: the components are in a build ledger",
