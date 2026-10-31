@@ -270,6 +270,7 @@ internal static class StarterShip
         {
             block.Owner = identityId;
             block.BuiltBy = identityId;
+            TargetNeutrals.Clear(block);
         }
         MyEntities.RemapObjectBuilder(grid);
     }

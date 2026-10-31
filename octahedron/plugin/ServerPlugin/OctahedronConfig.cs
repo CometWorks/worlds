@@ -11,6 +11,7 @@ namespace ServerPlugin;
 [Section("edge", caption: "World Edge")]
 [Section("starter", caption: "Starter Ship")]
 [Section("projections", caption: "Projections")]
+[Section("weapons", caption: "Weapons")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
@@ -280,6 +281,16 @@ public class OctahedronConfig : PluginConfig
         Parent = "projections"
     )]
     public bool ProjectionLimitsEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [BoolOption(
+        "Turn Target Neutrals off on a new turret or custom turret controller, however it is built, and on a ship made for a player, like one bought from a store. A player can turn it back on.",
+        Parent = "weapons"
+    )]
+    public bool ClearTargetNeutralsEnabled
     {
         get;
         set => SetField(ref field, value);
