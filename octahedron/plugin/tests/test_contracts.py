@@ -330,7 +330,8 @@ def main() -> int:
         f"the save: the derelict is the player's {owners('Test Derelict')}",
     )
     check(
-        target_neutrals("Test Derelict") == ["false"]
+        # The save leaves out a flag that is off
+        target_neutrals("Test Derelict") == []
         and target_neutrals("Yard Derelict") == ["true"],
         "the save: Target Neutrals off on the given derelict's turret, not on the other's: "
         f"{target_neutrals('Test Derelict')} {target_neutrals('Yard Derelict')}",
