@@ -138,6 +138,16 @@ def zone_around(center: tuple[float, float, float]) -> str:
     </MyObjectBuilder_EntityBase>"""
 
 
+def zone_point(
+    where: dict[str, tuple[float, float, float]],
+) -> tuple[float, float, float]:
+    """Inside 500 km of the center: on load the game pulls a grid further out back to that, the zone
+    stays where it is and wouldn't hold the grid any more"""
+    spot = far_point(where, FAR.index("Zone Wreck"))
+    scale = 450_000 / sum(v * v for v in spot) ** 0.5
+    return tuple(v * scale for v in spot)
+
+
 def far_point(
     where: dict[str, tuple[float, float, float]], index: int
 ) -> tuple[float, float, float]:
@@ -228,15 +238,20 @@ def add_grids() -> None:
     ]
     for index, name in enumerate(FAR):
         xml = rig.grid(
-            name, GRIDS[name], blocks[name], position=far_point(where, index)
+            name,
+            GRIDS[name],
+            blocks[name],
+            position=(
+                zone_point(where) if name == "Zone Wreck" else far_point(where, index)
+            ),
         )
         grids.append(
             xml.replace("<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>")
-            # A movable grid in a zone stays awake and its partition never sleeps
+            # A movable wreck in the zone kept its partition awake in a test run
             if name in ("Static Hull", "Zone Wreck")
             else xml
         )
-    grids.append(zone_around(far_point(where, FAR.index("Zone Wreck"))))
+    grids.append(zone_around(zone_point(where)))
     text = text.replace("</SectorObjects>", "".join(grids) + "</SectorObjects>", 1)
     sector.write_text(text, encoding="utf-8")
 
