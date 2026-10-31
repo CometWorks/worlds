@@ -169,6 +169,23 @@ checked the same way. Its own limit, `ProjectionPcuLimitPercent`, applies when a
 blueprint is loaded and is counted apart from the player's PCU, so nothing is
 counted twice.
 
+### Target Neutrals
+
+With `ClearTargetNeutralsEnabled` on, a new turret or custom turret controller, modded
+ones too, starts with Target Neutrals off however it is built: placed by hand, as the
+first block of a new grid, welded from a projection by any tool, pasted, as a starter
+ship or by a shipyard. Ships and stations then shoot only at those whose reputation
+makes them enemies, and players can turn their weapons off around stations.
+Searchlights keep their setting, they don't shoot.
+
+A prefab ship gets the same when it is made for a player: one bought from a store
+block and a respawn ship. Ships NPCs own keep their design, like encounter ships and
+wrecks.
+
+It happens once. A player who turns the setting back on keeps it: a grid loaded from a
+save or moved to another cluster node isn't built, so it isn't cleared again. Grids
+already in a world keep what they have.
+
 ### PCU per ship or station
 
 A ship or station may have at most `GroupPcuLimit` (60,000) PCU: all grids
@@ -268,8 +285,9 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   rank. The quote lists each component of every block with where it comes from:
   the payer's ledger at the station first (free), then bought from the cheapest
   player listings and OCT, as the market's Buy does. On top comes the labor fee,
-  `ShipyardLaborFeePer10Pcu` (1) SC per 10 PCU of the blueprint, rounded up,
-  paid to OCT on every build. The materials also include the hydrogen to fill
+  `ShipyardLaborFeePer100Pcu` (0) SC per 100 PCU of the blueprint, rounded up,
+  paid to OCT on every build. At 0 there is no fee, and the quote and the
+  messages don't mention one. The materials also include the hydrogen to fill
   the ship's H2 tanks to `ShipyardHydrogenFillPercent` (50 %): from the H2 tanks
   of the payer's ships docked at the station's connectors first, the rest as
   ice (`ShipyardHydrogenLitersPerIce`, 20 L per kg) from the ledger and the
@@ -402,10 +420,11 @@ once, never the rotor head itself; the shipyard starts its next build after
 that. An idle shipyard takes down anything an NPC built that is left on its
 rotor heads. An unfinished ship that is delivered leaves the arm's projector
 behind, and it comes down with the arm. A ship built without an arm loses its
-scaffold projector the same way. What
-the arm didn't use of its components is removed with the ship's leftovers, and
-only the ship's go back to the ledger. The `!oct shipyards` admin command lists
-the shipyards, their arm rotors and the running builds with their arm.
+scaffold projector the same way. The shipyard loads what the arm's blocks still
+need, without the first component each frame already has. What the arm didn't
+use of them is removed with the ship's leftovers, and only the ship's go back to
+the ledger. The `!oct shipyards` admin command lists the shipyards, their arm
+rotors and the running builds with their arm.
 `!oct shipyard strip <station> <item>` takes an item out of a shipyard's
 containers and welders, so tests can stall a build.
 
@@ -620,8 +639,8 @@ With Hangar 1.1.0 or later on the server, set to `AdminSafeZonesOnly`, players s
 and retrieve their ships only inside a station's safe zone, the world's only admin
 safe zones, and Hangar records the zone on each stored ship. A ship comes back free at
 the station it was stored at. At another station it costs `HangarRetrieveFeePer10Pcu`
-(1) SC per 10 PCU, rounded up, paid to OCT: the labor fee of building it, with no wait,
-and the ship keeps its inventory. A player who can't pay is told the price and the
+(1) SC per 10 PCU, rounded up, paid to OCT, with no wait, and the ship keeps its
+inventory. A player who can't pay is told the price and the
 ship stays stored. The plugin hooks Hangar by reflection, so it still runs without
 Hangar, or with an older one, where retrieval is free.
 
@@ -1040,6 +1059,15 @@ Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
 blocks to their functional level, two grids merging and a rotor attaching a
 head, each stopped by the cap, next to a copy built by nobody that isn't.
+`tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
+with the client, welding them through shipyard orders, with the rule off too, and a
+test mod's turret whose definition has it on. It buys ships at a store block and
+respawns in one, through the tests/neutrals-probe plugin, and spawns one for an NPC,
+which keeps it. It reads the setting on the client and in the saved world, across a
+restart.
+`tests/target_neutrals_cluster.py` does it on a cluster with a shipyard order, a paste
+and blocks placed by hand, and keeps a player's later choice through handovers and
+a cluster restart.
 `tests/test_shipyard_zone.py` restricts the zones as the world does, then checks
 with the client that Alpha Station's shipyard welds a projection, while in the
 same zone a player's hand welder and grinder, ship welder and grinder, and an
