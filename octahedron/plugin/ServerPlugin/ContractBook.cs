@@ -47,6 +47,9 @@ internal enum ContractGridFlags
 
     // An NPC's movable grid, not OCT's, joined by a connector or landing gear to a player's ship
     Towed = 128,
+
+    // In an enabled safe zone
+    SafeZone = 256,
 }
 
 // A grid as the node simulating it last reported it. Sent as a line to the World Authority.
@@ -333,10 +336,16 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             .OrderBy(r => r.Position.Distance(station))
             .FirstOrDefault();
 
+    // A grid in an offline partition keeps its last report, so a zone active when the partition went
+    // offline counts as active for as long as it sleeps. Emulating the zone's chip use belongs here.
+    public bool InActiveSafeZone(ContractGrid row) => row.Flags.HasFlag(ContractGridFlags.SafeZone);
+
     private IEnumerable<ContractGrid> Free()
     {
         var targeted = Targets.Values.Select(t => t.Grid).ToHashSet();
-        return Grids.Values.Where(r => !targeted.Contains(r.Id) && !Given.ContainsKey(r.Id));
+        return Grids.Values.Where(r =>
+            !targeted.Contains(r.Id) && !Given.ContainsKey(r.Id) && !InActiveSafeZone(r)
+        );
     }
 
     /// <summary>The bounty targets in range of the station, the highest threat first.</summary>
@@ -474,6 +483,7 @@ internal sealed class ContractBook(TimeSpan goneAfter)
                 !gone
                 && stationAt != null
                 && !Given.ContainsKey(target.Grid)
+                && !InActiveSafeZone(row)
                 && Wanted(target.Kind, row.Flags)
                 ? ContractVerdict.Keep
                 : ContractVerdict.Withdraw;

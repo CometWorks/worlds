@@ -85,6 +85,7 @@ GRIDS = {
     "Derelict Arm": LARGE_ID + 11,
     "Player Tug": LARGE_ID + 14,
     "Towed Pirate": LARGE_ID + 15,
+    "Zone Wreck": LARGE_ID + 16,
 }
 NEAR = (
     "Bounty Target",
@@ -126,6 +127,17 @@ def hull(stored_mwh: float) -> list[str]:
     ]
 
 
+def zone_around(center: tuple[float, float, float]) -> str:
+    """An enabled admin safe zone"""
+    x, y, z = center
+    return f"""<MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_SafeZone">
+      <SubtypeName /><EntityId>{LARGE_ID + 17}</EntityId><PersistentFlags>CastShadows InScene</PersistentFlags>
+      <PositionAndOrientation><Position x="{x}" y="{y}" z="{z}" /><Forward x="0" y="0" z="-1" /><Up x="0" y="1" z="0" /></PositionAndOrientation>
+      <DisplayName>Test Zone</DisplayName><Radius>200</Radius><Enabled>true</Enabled><SafeZoneBlockId>0</SafeZoneBlockId>
+      <Shape>Sphere</Shape>
+    </MyObjectBuilder_EntityBase>"""
+
+
 def far_point(
     where: dict[str, tuple[float, float, float]], index: int
 ) -> tuple[float, float, float]:
@@ -152,6 +164,7 @@ def add_grids() -> None:
         "Dead Hull": hull(0),
         "Live Hull": hull(1),
         "Static Hull": hull(0),
+        "Zone Wreck": armor(10),
     }
     grids = [
         rig.grid(
@@ -222,6 +235,7 @@ def add_grids() -> None:
             if name == "Static Hull"
             else xml
         )
+    grids.append(zone_around(far_point(where, FAR.index("Zone Wreck"))))
     text = text.replace("</SectorObjects>", "".join(grids) + "</SectorObjects>", 1)
     sector.write_text(text, encoding="utf-8")
 
@@ -488,6 +502,12 @@ def run(bench) -> None:
         "all the armor wrecks, at once",
         wreck_names(found) == armor_only,
         wreck_names(found),
+    )
+
+    check(
+        "a wreck in an active safe zone, asleep with it: no contract",
+        offline_partition("Zone Wreck") is not None and not named(found, "Zone Wreck"),
+        named(found, "Zone Wreck"),
     )
 
     shift_clock(6.9)

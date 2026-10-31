@@ -698,6 +698,10 @@ Every minute the plugin fills each station up again:
   are back under it. More than 10% over, or over `GroupPcuLimit`, chat tells them it
   stays as it is: the grid keeps its owner and a contract stays open. It is told
   again every 5 minutes while they try.
+- A grid in an enabled safe zone gets no bounty, salvage or wreck contract, and an open
+  contract nobody took on it is withdrawn. A contract someone took goes on, because a
+  shipyard is inside its station's zone. In an offline partition the zone counts as it
+  was when the partition went offline.
 - Against abuse, for salvage and wrecks: a contract on a grid its taker or their faction
   owned or mostly built when it was posted fails at once, unpaid, so nobody sells their
   own ship to OCT by disowning it. It also fails when a third player comes to own the

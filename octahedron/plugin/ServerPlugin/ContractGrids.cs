@@ -211,6 +211,8 @@ internal static class ContractGrids
             )
         )
             row.Flags |= ContractGridFlags.Seated;
+        if (group.Any(InSafeZone))
+            row.Flags |= ContractGridFlags.SafeZone;
         row.MassKg = group.Sum(Mass);
         row.Pcu = GroupPcuLimit.GroupPcu(grid);
         row.Owner =
@@ -230,6 +232,11 @@ internal static class ContractGrids
             row.Flags |= ContractGridFlags.Unownable;
         return row;
     }
+
+    private static bool InSafeZone(MyCubeGrid grid) =>
+        MySessionComponentSafeZones.SafeZones.Any(z =>
+            z.Enabled && !z.MarkedForClose && z.Contains(grid.PositionComp.WorldAABB.Center)
+        );
 
     // A static grid's physics has no mass
     private static double Mass(MyCubeGrid grid) =>

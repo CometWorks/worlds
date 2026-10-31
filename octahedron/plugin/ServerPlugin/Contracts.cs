@@ -831,6 +831,7 @@ internal static class Contracts
                     .Grids.Values.Count(r =>
                         state.Offline.TryGetValue(r.Id, out var since)
                         && ContractBook.IsWreck(r.Flags, now - since, days)
+                        && !state.InActiveSafeZone(r)
                     )
                     .ToString(CultureInfo.InvariantCulture);
         yield return $"Known grids: {state.Grids.Count}, in offline partitions {state.Offline?.Count.ToString(CultureInfo.InvariantCulture) ?? "unknown"}, wrecks {wrecks}, reports {state.Reports}";

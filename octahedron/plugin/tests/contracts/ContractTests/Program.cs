@@ -566,6 +566,50 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     Check(Judge(book, target, true, true, t0) == ContractVerdict.Scrap, "or ground down in place");
 }
 
+// A grid in an active safe zone gets no contract, asleep or not
+{
+    var zone = ContractGridFlags.SafeZone;
+    var wreck = ContractGridFlags.Wreck | ContractGridFlags.Unpowered;
+    var random = new Random(1);
+    var book = Book(Row(1, wreck | zone, 100, 100_000), Row(2, wreck, 50, 100_000));
+    book.Offline = new() { [1] = t0, [2] = t0 };
+    var wrecks = book.Wrecks(t0 + TimeSpan.FromDays(100), week, 5, 5, random);
+    Check(wrecks.Select(r => r.Id).SequenceEqual([2L]), "still active however long it sleeps");
+
+    book = Book(
+        Row(1, ContractGridFlags.Derelict | zone, 100, 2000),
+        Row(2, ContractGridFlags.Derelict, 50, 2000),
+        Row(5, ContractGridFlags.Shipyard, 500, 1000)
+    );
+    Check(
+        book.Derelicts(alpha, 3000, 5).Select(r => r.Id).SequenceEqual([2L]),
+        "no salvage contract in a zone"
+    );
+    book = Book(
+        Row(1, ContractGridFlags.Bounty | zone, 100, 100),
+        Row(2, ContractGridFlags.Bounty, 100, 100)
+    );
+    book.Grids[1].Threat = book.Grids[2].Threat = 10;
+    Check(
+        book.Bounties(alpha, 3000, 1, 5).Select(r => r.Id).SequenceEqual([2L]),
+        "no bounty in a zone"
+    );
+
+    var bounty = new ContractTarget('b', 1, 1, 10, new ContractPoint(100, 0, 0));
+    book.Targets[7] = bounty;
+    Check(Judge(book, bounty, false, false, t0) == ContractVerdict.Withdraw, "nobody took it");
+    Check(
+        Judge(book, bounty, true, false, t0) == ContractVerdict.Keep,
+        "someone took it: on it goes"
+    );
+
+    // The shipyard is in its station's zone
+    var towed = Row(1, ContractGridFlags.Towed | zone, 100, 1100);
+    towed.Tower = Hunter;
+    book = Book(towed, Row(5, ContractGridFlags.Shipyard, 500, 1000));
+    Check(book.TowedIn([alpha], 3000, 150, t => 0).Count == 1, "towed into a zone: taken over");
+}
+
 // Towing a grid in against the limits: the player's limit, 10 % over it, and a ship's
 {
     Check(ContractMath.Tow(100, 0, 1000, 500) == ContractMath.TowResult.Take, "well within");
