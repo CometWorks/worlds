@@ -499,6 +499,25 @@ internal static class ShipyardOrders
         return $"The blueprint of hologram table {table.EntityId} is removed.";
     }
 
+    // !oct table show: what the nearest table's screen and billboard show, and the queue's size
+    public static string Show(long identityId, string tableName)
+    {
+        var character = MySession.Static.Players.TryGetIdentity(identityId)?.Character;
+        var table = character == null ? null : StarterShip.FindTable(character, tableName, Config);
+        if (table == null)
+            return "Stand by a station's hologram table.";
+        string Screen(IMyTextSurfaceProvider provider, int index) =>
+            ((MyTextPanelComponent)provider.GetSurface(index)).Text;
+        var panel = DetailsPanel(table);
+        var how = panel == null ? null : (IMyTextSurfaceProvider)panel;
+        var holder = holders.TryGetValue(table.EntityId, out var h) ? Name(h.Player) : "none";
+        return $"BLUEPRINT {TableHologram.Blueprint(table) != null} HOLDER {holder}\n"
+            + $"TABLE\n{Screen(table, Config.ShipyardQuoteSurface)}\nDETAILS\n"
+            + (how == null ? "none" : Screen(how, 0))
+            + "\nHOW\n"
+            + (how == null ? "none" : Screen(how, 1));
+    }
+
     /// <summary>A press of the table's button: cancels the player's queue entry, shows their quote or orders. With a blueprint on the table, only for the player who loaded it.</summary>
     public static void Press(long identityId, MyProjectorBase table, Action<string> tell)
     {
@@ -829,13 +848,12 @@ internal static class ShipyardOrders
         return Wrap(text.ToString(), DetailsColumns);
     }
 
-    // The billboard's first line stays what the blueprint has; false when the station has no billboard
-    private static bool ShowDetails(MyProjectorBase table, string text)
+    private static MyLCDPanelsBlock DetailsPanel(MyProjectorBase table)
     {
         if (string.IsNullOrWhiteSpace(Config.ShipyardDetailsPanelName))
-            return false;
+            return null;
         var position = table.PositionComp.GetPosition();
-        var panel = Grids(table.CubeGrid)
+        return Grids(table.CubeGrid)
             .SelectMany(g => g.GetFatBlocks<MyLCDPanelsBlock>())
             .Where(p =>
                 string.Equals(
@@ -846,10 +864,18 @@ internal static class ShipyardOrders
             )
             .OrderBy(p => Vector3D.Distance(p.PositionComp.GetPosition(), position))
             .FirstOrDefault();
+    }
+
+    // The billboard's first line stays what the blueprint has; false when the station has no billboard
+    private static bool ShowDetails(MyProjectorBase table, string text)
+    {
+        var panel = DetailsPanel(table);
         if (panel == null)
             return false;
         var provider = (IMyTextSurfaceProvider)panel;
-        var first = provider.GetSurface(0).GetText().Split('\n')[0].TrimEnd();
+        // GetText only has what a script wrote since the world's load
+        var shown = ((MyTextPanelComponent)provider.GetSurface(0)).Text;
+        var first = (shown ?? "").Split('\n')[0].TrimEnd();
         Write(provider, 0, $"{first}\n\n{text}", 0.7f);
         return true;
     }

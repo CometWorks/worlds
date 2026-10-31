@@ -61,6 +61,18 @@ public sealed class Commands : CommandModule
         );
 
     [Command(
+        "table show",
+        "Shows what the nearest hologram table's screen and billboard show",
+        "!oct table show [table name]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string TableShow(params string[] table) =>
+        ShipyardOrders.Show(
+            Context.Caller.IdentityId,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+
+    [Command(
         "table remove",
         "Removes the blueprint of the nearest hologram table, as the Remove button of its terminal does",
         "!oct table remove [table name]: anyone can do this in the table's terminal to get the table."
