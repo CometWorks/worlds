@@ -16,6 +16,9 @@ OCT_BEAM_OFFLINE=1 compares a game without a server: the server stops mid-build 
 then the client loads that save offline, the zones allowing welding as the plugin isn't
 there. ToolCore runs the same loop with the real inventories then.
 
+With OCT_SHOTS=<folder> and OCT_BEAM_RENDER=1 the client renders and saves screenshots from
+among the welders after the steps.
+
 OCT_BEAM_SHIP (8,8,24), OCT_BEAM_WELD (0.5, the world has 3) and OCT_BEAM_WAIT set the ship,
 the welder speed and the seconds per step. OCT_BEAM_ZONE=allow is the control: the zones
 allow welding. Needs what tests/test_support_arm.py needs.
@@ -52,7 +55,7 @@ SIZE = tuple(int(x) for x in os.environ.get("OCT_BEAM_SHIP", "8,8,24").split(","
 MIXED = [
     ("MyObjectBuilder_Reactor", "LargeBlockSmallGenerator"),
     ("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock"),
-    ("MyObjectBuilder_Thrust", "LargeBlockSmallThrust"),
+    ("MyObjectBuilder_CargoContainer", "LargeBlockSmallContainer"),
 ]
 
 
@@ -164,6 +167,15 @@ def offline(remote) -> None:
     rig.stop_client()
     rig.stop_server()
     allow_welding()
+    # Anything else starts a lobby, which fails without Steam
+    for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
+        path = rig.WORLD / name
+        text = re.sub(
+            r"<OnlineMode>[^<]*<",
+            "<OnlineMode>OFFLINE<",
+            path.read_text(encoding="utf-8"),
+        )
+        path.write_text(text, encoding="utf-8")
     (rig.APPDATA / "beam-probe.log").unlink(missing_ok=True)
     remote = rig.start_client(extra_dev_folders=[PROBE], connect=False)
     remote.load(str(rig.WORLD))
@@ -177,7 +189,7 @@ def offline(remote) -> None:
     time.sleep(40)
     mark("offline: the client comes back")
     remote.character_teleport(x, y, z)
-    deadline = time.monotonic() + 1800
+    deadline = time.monotonic() + 900
     while time.monotonic() < deadline:
         time.sleep(20)
         last = samples(rig.APPDATA / "beam-probe.log")[-1]
@@ -189,11 +201,16 @@ def offline(remote) -> None:
 
 def allow_welding() -> None:
     sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
-    text = sector.read_text(encoding="utf-8").replace(
-        f"<AllowedActions>{so.sz.ZONE_ACTIONS}</AllowedActions>",
-        f"<AllowedActions>{so.sz.ZONE_ACTIONS} Welding BuildingProjections</AllowedActions>",
+    # A saved world lists them in its own order
+    text, count = re.subn(
+        r"<AllowedActions>([^<]*)</AllowedActions>",
+        r"<AllowedActions>\1 Welding BuildingProjections</AllowedActions>",
+        sector.read_text(encoding="utf-8"),
     )
+    assert count, "no zones"
     sector.write_text(text, encoding="utf-8")
+    # The binary copy a save has would win
+    (rig.WORLD / "SANDBOX_0_0_0_.sbsB5").unlink(missing_ok=True)
 
 
 def check_beams() -> None:
@@ -282,6 +299,8 @@ def main() -> int:
             check_beams()
             return summary()
         remote = scenario(remote)
+        if so.SHOTS:
+            so.screenshots(remote, sa.shipyard_id(remote, STATION), "beams")
         sa.follow(remote, "beams", lambda _: False)
         log(f"build ended: {sa.wait_chat(remote, f'{SHIP!r} is ready', 60, mark)}")
         time.sleep(10)

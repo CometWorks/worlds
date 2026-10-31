@@ -978,6 +978,15 @@ with the zones holding every test grid from the start, and off.
 (the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
+`tests/test_shipyard_beams.py` checks the welders' beams as a client sees them
+during a long build: the client and the server run the `tests/beam-probe` test
+plugin, which logs once a second what ToolCore says about the shipyard's tools. The
+client goes beyond sync distance and comes back, then leaves the game and joins
+again; all welders must shoot on it afterwards and some must hit, also once only
+integrity is left. `OCT_BEAM_MIX=1` builds functional blocks too, `OCT_BEAM_ZONE=allow`
+is the control with zones that allow welding, and `OCT_BEAM_OFFLINE=1` stops the server
+mid-build and loads its save offline. `tests/shipyard_beams_cluster.py` does the same
+check on a test cluster, with a trip to a station on the other node.
 `tests/builds/BuildTests` checks the queues and build ledgers without the game
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
 from the ledger, listings and OCT, paid orders all or none, cancel, start and finish
