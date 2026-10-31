@@ -724,5 +724,261 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     Check(loaded.Targets[7].Owner == 5 && loaded.Targets[7].Builder == 6, "a target's");
 }
 
+// The gateway's rows of offline partitions: wrecks no node reported
+{
+    ContractOfflineGrid Offline(
+        long id,
+        int blocks,
+        long group,
+        bool functional = false,
+        bool powered = false,
+        long[] owners = null,
+        bool station = false,
+        bool isStatic = false,
+        double mass = 5000,
+        string name = null
+    ) =>
+        new(
+            id,
+            name ?? "grid " + id,
+            isStatic,
+            blocks,
+            new ContractPoint(id, 0, 0),
+            owners ?? [],
+            mass,
+            group,
+            functional,
+            powered,
+            station
+        );
+    List<ContractOfflineRow> Groups(params ContractOfflineGrid[] rows) =>
+        ContractBook.OfflineGroups(rows, 3, o => o == 9, t0);
+    var days = TimeSpan.FromDays(7);
+
+    var wreck = Groups(Offline(1, 10, 1)).Single();
+    Check(
+        wreck.Grid.Flags == (ContractGridFlags.Wreck | ContractGridFlags.Unpowered),
+        "ownerless, nothing works: a wreck"
+    );
+    Check(
+        Groups(Offline(1, 10, 1, functional: true)).Single().Grid.Flags
+            == ContractGridFlags.Unpowered,
+        "a working terminal block: only without power"
+    );
+    Check(
+        Groups(Offline(1, 10, 1, owners: [5])).Single()
+            is { Grid: { Owner: 5, Flags: ContractGridFlags.Unpowered } },
+        "an owner: only without power, and it is kept"
+    );
+    Check(Groups(Offline(1, 10, 1, functional: true, powered: true)).Count == 0, "powered: none");
+    Check(Groups(Offline(1, 2, 1)).Count == 0, "too few blocks");
+    Check(Groups(Offline(1, 10, 1, station: true)).Count == 0, "a station");
+    Check(Groups(Offline(1, 10, 1, owners: [9])).Count == 0, "OCT's");
+    Check(Groups(Offline(1, 10, 1, mass: 0)).Count == 0, "a mass of 0 is unknown");
+    Check(
+        ContractBook
+            .OfflineGroups(
+                [
+                    new ContractOfflineGrid(
+                        1,
+                        "old",
+                        false,
+                        10,
+                        alpha,
+                        [],
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ),
+                ],
+                3,
+                o => false,
+                t0
+            )
+            .Count == 0,
+        "a row read back from a Final: unknown is no wreck"
+    );
+    foreach (
+        var unknown in new[]
+        {
+            Offline(1, 10, 1) with
+            {
+                MassKg = null,
+            },
+            Offline(1, 10, 1) with
+            {
+                Group = null,
+            },
+            Offline(1, 10, 1) with
+            {
+                Functional = null,
+            },
+            Offline(1, 10, 1) with
+            {
+                Powered = null,
+            },
+            Offline(1, 10, 1) with
+            {
+                Station = null,
+            },
+        }
+    )
+        Check(Groups(unknown).Count == 0, "one unknown fact is enough");
+    Check(
+        ContractBook
+            .OfflineGroups(
+                [Offline(1, 1, 1, isStatic: true, name: "TL 01 Alpha > Beta")],
+                1,
+                o => false,
+                t0
+            )
+            .Count == 0,
+        "a lane computer"
+    );
+    Check(
+        ContractBook
+            .OfflineGroups([Offline(1, 1, 1, isStatic: true, name: "Tower")], 1, o => false, t0)
+            .Count == 1,
+        "another single block"
+    );
+
+    // A group adds up, under its biggest grid
+    var docked = Groups(
+        Offline(3, 2, 3, mass: 1000),
+        Offline(7, 8, 3, mass: 2000),
+        Offline(8, 5, 8)
+    );
+    var hull = docked.Single(r => r.Members.Contains(7));
+    Check(docked.Count == 2, "one row per physical group");
+    Check(
+        hull.Grid.Id == 7
+            && hull.Grid.Blocks == 10
+            && hull.Grid.MassKg == 3000
+            && hull.Grid.Position.X == 7
+            && hull.Members.Order().SequenceEqual([3L, 7L]),
+        "the group's blocks and mass, at its biggest grid"
+    );
+    Check(
+        Groups(Offline(3, 8, 3), Offline(7, 8, 3)).Single().Grid.Id == 3,
+        "the same grid every time when two are as big"
+    );
+    Check(
+        Groups(Offline(3, 8, 3), Offline(7, 8, 3, powered: true, functional: true)).Count == 0,
+        "powered by a docked ship"
+    );
+    Check(Groups(Offline(3, 8, 3), Offline(7, 8, 3, owners: [9])).Count == 0, "docked to OCT's");
+    Check(
+        Groups(Offline(3, 8, 3), Offline(7, 8, 3, station: true)).Count == 0,
+        "docked to a station"
+    );
+    Check(
+        Groups(Offline(3, 8, 3), Offline(7, 8, 3, mass: 0)).Count == 0,
+        "docked to something of unknown mass"
+    );
+    Check(
+        Groups(Offline(3, 8, 3), Offline(7, 8, 3, owners: [5])).Single().Grid
+            is { Owner: 5, Flags: ContractGridFlags.Unpowered },
+        "any big owner makes it someone's"
+    );
+
+    // In the book
+    var book = new ContractBook(goneAfter)
+    {
+        Offline = new()
+        {
+            [1] = t0,
+            [2] = t0,
+            [3] = t0,
+        },
+        OfflineRows = Groups(Offline(1, 10, 1), Offline(2, 10, 2, functional: true)),
+    };
+    Check(
+        book.Wrecks(t0, days, 9, 9, new Random(1)).Select(r => r.Id).SequenceEqual([1L]),
+        "a row is a wreck at once, without power only in time"
+    );
+    Check(
+        book.Wrecks(t0 + days, days, 9, 9, new Random(1))
+            .Select(r => r.Id)
+            .Order()
+            .SequenceEqual([1L, 2L]),
+        "the one without power after the days"
+    );
+    book.Offline = new() { [2] = t0 };
+    Check(
+        book.Wrecks(t0, days, 9, 9, new Random(1)).Count == 0,
+        "a row whose partition left the table is nothing"
+    );
+    book.Offline = null;
+    Check(book.Wrecks(t0, days, 9, 9, new Random(1)).Count == 0, "a table not read yet");
+
+    // A report wins for the id, and for the group
+    book.Offline = new()
+    {
+        [1] = t0,
+        [3] = t0,
+        [7] = t0,
+    };
+    book.OfflineRows = Groups(Offline(3, 2, 3), Offline(7, 8, 3));
+    Check(book.Unreported().Single().Id == 7, "unreported");
+    book.Report("n1", [Row(3, Dead, 100, 1100)], t0);
+    Check(!book.Unreported().Any(), "a report on the group's other grid");
+    Check(
+        book.Wrecks(t0 + days, days, 9, 9, new Random(1)).Select(r => r.Id).SequenceEqual([3L]),
+        "one contract for the group, from the report"
+    );
+
+    // Posted, with the row in the book as Contracts.Wrecks does it: taken once, kept through a restart
+    book = new ContractBook(goneAfter)
+    {
+        Offline = new() { [1] = t0 },
+        OfflineRows = Groups(Offline(1, 10, 1, owners: [5])),
+    };
+    var posted = book.Wrecks(t0 + days, days, 9, 9, new Random(1)).Single();
+    book.Grids.TryAdd(posted.Id, posted);
+    book.Targets[70] = new ContractTarget('w', posted.Id, 1, posted.Blocks, posted.Position)
+    {
+        Owner = posted.Owner,
+    };
+    Check(!book.Wrecks(t0 + days, days, 9, 9, new Random(1)).Any(), "not posted twice");
+    Check(!book.IsGone(1, t0 + days), "not gone while it sleeps");
+    var restarted = new ContractBook(goneAfter)
+    {
+        Offline = new() { [1] = t0 },
+        OfflineRows = Groups(Offline(1, 10, 1, owners: [5])),
+    };
+    restarted.LoadTargets(book.SerializeTargets());
+    restarted.LoadGrids(book.SerializeGrids(), t0 + days);
+    Check(!restarted.Wrecks(t0 + days, days, 9, 9, new Random(1)).Any(), "nor after a restart");
+    Check(
+        restarted.Grids[1].Node == ""
+            && restarted.Grids[1].Flags.HasFlag(ContractGridFlags.Unpowered),
+        "its row comes back"
+    );
+    Check(
+        restarted.Judge(restarted.Targets[70], false, alpha, false, 500, 500, t0 + days)
+            == ContractVerdict.Keep,
+        "and the contract stays"
+    );
+    restarted.Given[1] = 0;
+    restarted.Grids.Remove(1);
+    restarted.Targets.Clear();
+    Check(!restarted.Unreported().Any(), "a given grid gets no other contract");
+
+    // The partition wakes: the report tells what the row couldn't
+    var woken = book.Targets[70];
+    book.Offline = [];
+    var report = Row(1, ContractGridFlags.Unpowered | ContractGridFlags.Seated, 100, 1100);
+    report.Owner = 5;
+    report.Builder = Hunter;
+    book.Report("n1", [report], t0 + days);
+    Check(
+        book.Judge(woken, false, alpha, false, 500, 500, t0 + days) == ContractVerdict.Withdraw,
+        "someone sits in it after all: withdrawn"
+    );
+    Check(woken.Builder == Hunter, "the builder a row can't tell, for who can't be paid");
+}
+
 Console.WriteLine($"{checks - failures}/{checks} contract math checks passed");
 return failures == 0 ? 0 : 1;
