@@ -142,10 +142,7 @@ terminal, then check
 the parts list. Press
 the button to order,
 again to cancel.
-Only you can press it
-until the blueprint is
-removed. Anyone can
-remove it in terminal.
+
 The queue holds at
 most 6 ships."""
 # Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's

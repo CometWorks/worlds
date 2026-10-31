@@ -272,8 +272,8 @@ of the station to this node has no known loader: the first player to press gets 
 
 The plugin gives the button a toolbar item (its own On switch) so that clients
 offer it; the item never runs. `!oct order [table name]` (admin) presses the button
-of the nearest table and `!oct table remove [table name]` (admin) removes its
-blueprint. The table's blueprint is cleared once the ship is in the queue, when the
+of the nearest table, `!oct table remove [table name]` (admin) removes its
+blueprint and `!oct table show [table name]` (admin) prints its screens. The table's blueprint is cleared once the ship is in the queue, when the
 player who loaded it leaves the sphere around the station's grids or this server (a
 log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
 (15) after it was loaded. A queued order stays when its owner leaves: it is built
