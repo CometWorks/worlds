@@ -290,6 +290,20 @@ def main() -> int:
     source = ET.parse(rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").getroot()
     rig.prepare_world = lambda **kw: prepare_world(extra_grids=[blocker(source)], **kw)
     so.prepare(tables, 60)
+    # The blocker's owner: the game takes no ownership from an identity it doesn't know
+    sandbox = rig.WORLD / "Sandbox.sbc"
+    text = sandbox.read_text(encoding="utf-8")
+    assert "</Identities>" in text
+    sandbox.write_text(
+        text.replace(
+            "</Identities>",
+            f"<MyObjectBuilder_Identity><IdentityId>{BLOCKER}</IdentityId>"
+            "<DisplayName>PlaceBlocker</DisplayName><CharacterEntityId>0</CharacterEntityId>"
+            "</MyObjectBuilder_Identity></Identities>",
+            1,
+        ),
+        encoding="utf-8",
+    )
     rig.start_server()
     try:
         remote = rig.start_client()
