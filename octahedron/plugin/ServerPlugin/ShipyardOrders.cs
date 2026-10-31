@@ -1804,19 +1804,69 @@ internal static class ShipyardOrders
             $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
                 + $"missing {order.Missing}: {(order.Refund ? "removed and refunded" : "delivered")}"
         );
-        Plugin.Log.Info(
-            $"Shipyard order {order.Id}: built so far "
-                + string.Join(
-                    ", ",
-                    Grids(order.Projector.CubeGrid)
-                        .Select(g =>
-                            $"{g.DisplayName} {g.GetBlocks().Count(b => b.IsFullIntegrity)}/{g.BlocksCount}"
-                        )
-                )
-        );
+        LogStall(shipyard, order, blocks, parts);
         if (order.Refund)
             Scrap(shipyard, order);
         End(shipyard, order, "stalled");
+    }
+
+    // What the welders had when they stopped, for finding out why
+    private static void LogStall(
+        MyCubeGrid shipyard,
+        Order order,
+        List<MySlimBlock> blocks,
+        Dictionary<string, int> parts
+    )
+    {
+        try
+        {
+            var prefix = $"Shipyard order {order.Id} stalled:";
+            Plugin.Log.Info(
+                $"{prefix} built so far "
+                    + string.Join(
+                        ", ",
+                        Grids(order.Projector.CubeGrid)
+                            .Select(g =>
+                                $"{g.DisplayName} {g.GetBlocks().Count(b => b.IsFullIntegrity)}/{g.BlocksCount}"
+                            )
+                    )
+            );
+            var stock = new Dictionary<string, double>();
+            foreach (var item in Containers(shipyard).SelectMany(i => i.GetItems()))
+                stock[item.Content.SubtypeName] =
+                    (stock.TryGetValue(item.Content.SubtypeName, out var had) ? had : 0)
+                    + (double)item.Amount;
+            Plugin.Log.Info(
+                $"{prefix} needs {string.Join(", ", parts.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}"))}"
+            );
+            Plugin.Log.Info(
+                $"{prefix} containers hold {string.Join(", ", stock.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value:0}"))}"
+            );
+            var beams = Beams(shipyard).ToList();
+            Plugin.Log.Info(
+                $"{prefix} {beams.Count} welders, {beams.Count(b => b.Enabled)} on, {beams.Count(b => b.IsWorking)} working"
+            );
+            foreach (var block in blocks.Where(b => !b.IsFullIntegrity).Take(20))
+            {
+                var needs = new Dictionary<string, int>();
+                block.GetMissingComponents(needs);
+                var at = block.CubeGrid.GridIntegerToWorld(block.Position);
+                var nearest =
+                    beams.Count == 0
+                        ? -1
+                        : beams.Min(b => Vector3D.Distance(b.PositionComp.GetPosition(), at));
+                Plugin.Log.Info(
+                    $"{prefix} {block.BlockDefinition.Id.SubtypeName} on {block.CubeGrid.DisplayName}, "
+                        + $"integrity {block.Integrity:0}/{block.MaxIntegrity:0}, "
+                        + $"missing {string.Join(" ", needs.Select(n => $"{n.Key} {n.Value}"))}, "
+                        + $"{nearest:0} m from the nearest welder"
+                );
+            }
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Error("Logging a stalled order failed", e);
+        }
     }
 
     // A ship missing more than this share of its plain blocks is not delivered
