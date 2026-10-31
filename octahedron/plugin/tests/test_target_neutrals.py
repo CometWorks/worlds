@@ -35,6 +35,7 @@ MOD_TURRET = "OctNeutralsTurret"
 RIG_AT = (250_000, 0, 0)
 BUILD_RIG = 777000830000100
 PROJECTION_RIG = 777000830000200
+PROJECTION_OFF = 777000830000300
 SHIP = "Neutrals Test"
 # The tables keep the world's blueprint, and a blueprint of this size may be a starter ship
 CONFIG = {
@@ -80,8 +81,11 @@ def weapons(x: int, modded: bool, welded: bool) -> list[str]:
             kind,
             subtype,
             at,
-            # A controller's builder must have these, the game's own blueprints do
-            FLAG_ON
+            # As in a real blueprint: without an id, client and server each make up their own for
+            # a welded block, and the client's changes go nowhere. A controller's builder must
+            # have the rest
+            f"<EntityId>{777000830001000 + at[0]}</EntityId>"
+            + FLAG_ON
             + ("<ToolIds /><Toolbar><Slots /></Toolbar>" if "Control" in kind else ""),
         )
         for kind, subtype, at in blocks
@@ -149,6 +153,33 @@ def write_mod() -> None:
         )
 
 
+def projection_rig(entity_id: int, y: int) -> str:
+    """A powered projector with an armor block, for the blueprint to weld onto"""
+    return rig.grid(
+        f"Neutrals Projection {entity_id}",
+        entity_id,
+        [
+            rig.block(
+                "MyObjectBuilder_Projector",
+                "LargeProjector",
+                (0, 0, 0),
+                "<Enabled>true</Enabled><KeepProjection>true</KeepProjection>",
+            )
+        ]
+        + armor([1])
+        + [
+            rig.block(
+                "MyObjectBuilder_BatteryBlock",
+                "LargeBlockBatteryBlock",
+                (-x, 0, 0),
+                "<Enabled>true</Enabled><CurrentStoredPower>3</CurrentStoredPower>",
+            )
+            for x in range(1, 4)
+        ],
+        position=(RIG_AT[0], y, 0),
+    )
+
+
 def prepare() -> None:
     so.prepare(blueprint(modded=True, welded=True), 60)
     write_mod()
@@ -177,44 +208,15 @@ def prepare() -> None:
         ],
         position=RIG_AT,
     )
-    # The blueprint's coordinates are the grid's, its first block lands on the projector
-    projected = rig.grid(
-        SHIP,
-        None,
-        [rig.block("MyObjectBuilder_Projector", "LargeProjector", (0, 0, 0))]
-        + armor(range(1, 19))
-        + weapons(2, modded=True, welded=True),
-        tag="MyObjectBuilder_CubeGrid",
-    )
-    projection_rig = rig.grid(
-        "Neutrals Projection Rig",
-        PROJECTION_RIG,
-        [
-            rig.block(
-                "MyObjectBuilder_Projector",
-                "LargeProjector",
-                (0, 0, 0),
-                "<Enabled>true</Enabled>"
-                f"<ProjectedGrids>{projected}</ProjectedGrids>"
-                "<KeepProjection>true</KeepProjection>",
-            )
-        ]
-        + armor([1])
-        + [
-            rig.block(
-                "MyObjectBuilder_BatteryBlock",
-                "LargeBlockBatteryBlock",
-                (-x, 0, 0),
-                "<Enabled>true</Enabled><CurrentStoredPower>3</CurrentStoredPower>",
-            )
-            for x in range(1, 4)
-        ],
-        position=(RIG_AT[0], 100, 0),
-    )
     sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
     sector.write_text(
         sector.read_text(encoding="utf-8").replace(
-            "</SectorObjects>", build_rig + projection_rig + "</SectorObjects>", 1
+            "</SectorObjects>",
+            build_rig
+            + projection_rig(PROJECTION_RIG, 100)
+            + projection_rig(PROJECTION_OFF, 200)
+            + "</SectorObjects>",
+            1,
         ),
         encoding="utf-8",
     )
@@ -329,6 +331,10 @@ def rule_off_controls(remote, build_rig: int) -> None:
     set_rule(remote, False)
     report = remote.character_build_block(build_rig, (4, 1, 0), MOD_TURRET)
     log(f"hand placed with the rule off: {report}")
+    welded = weld(remote, PROJECTION_OFF)
+    time.sleep(5)
+    count, on = on_cells(remote, welded)
+    check("rule off: welding keeps it on", count == 5 == len(on), (count, on))
     pasted = remote.paste_blueprint(
         xml=bp_document(blueprint(True, "CubeGrid")),
         position=(RIG_AT[0], 0, 300),
@@ -423,23 +429,41 @@ def hand_and_paste(remote, build_rig: int) -> tuple[tuple, int, tuple]:
     return controller, paste_id, turret
 
 
-def weld(remote) -> int:
-    grid_id = wait_grid(remote, "Neutrals Projection Rig")
+def weld(remote, entity_id: int) -> int:
+    """Loads the blueprint as the blueprint screen does, and welds it finished: a block under
+    construction has no terminal to change it in. The shipyard orders weld the way a tool does
+    """
+    grid_id = wait_grid(remote, f"Neutrals Projection {entity_id}")
     projector = next(
         c["fatEntityId"]
         for c in remote.list_cubes(grid_id)["cubes"]
         if c["typeId"].endswith("Projector")
     )
+    # The coordinates are the grid's: the blueprint's first block lands on the projector
+    projected = rig.grid(
+        SHIP,
+        None,
+        [
+            rig.block(
+                "MyObjectBuilder_Projector",
+                "LargeProjector",
+                (0, 0, 0),
+                "<EntityId>777000830000999</EntityId>",
+            )
+        ]
+        + armor(range(1, 19))
+        + weapons(2, modded=True, welded=True),
+        tag="CubeGrid",
+    )
+    log(f"loading: {remote.load_projection(projector, xml=bp_document(projected))}")
+    time.sleep(10)
     # Each pass builds what touches the grid by then, the next armor block
     for attempt in range(40):
-        # Finished at once: a block under construction has no terminal to change it in. The shipyard
-        # orders weld the way a tool does
         report = remote.weld_projection(projector, instant=True)
         log(f"welding pass {attempt}: {report}")
         time.sleep(3)
         if not report.get("requested"):
             break
-    built(remote, "welded from a projection", grid_id, 5)
     return grid_id
 
 
@@ -494,7 +518,8 @@ def run() -> None:
 
     rule_off_controls(remote, build_rig)
     controller, paste_id, turret = hand_and_paste(remote, build_rig)
-    welded = weld(remote)
+    welded = weld(remote, PROJECTION_RIG)
+    built(remote, "welded from a projection", welded, 5)
     welded_cell = tuple(targeting_cubes(remote, welded)[0]["min"])
     turn_on(remote, build_rig, controller)
     turn_on(remote, paste_id, turret)
@@ -506,7 +531,8 @@ def run() -> None:
         "Neutrals Build Rig": 3,
         "Neutrals Rule Off": 6,
         "Neutrals Paste": 1,
-        "Neutrals Projection Rig": 1,
+        f"Neutrals Projection {PROJECTION_RIG}": 1,
+        f"Neutrals Projection {PROJECTION_OFF}": 5,
     }
     rig.stop_client()
     rig.stop_server()
