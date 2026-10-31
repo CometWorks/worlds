@@ -511,11 +511,22 @@ internal static class ShipyardOrders
         var panel = DetailsPanel(table);
         var how = panel == null ? null : (IMyTextSurfaceProvider)panel;
         var holder = holders.TryGetValue(table.EntityId, out var h) ? Name(h.Player) : "none";
+        var queue = Grids(table.CubeGrid)
+            .SelectMany(g => g.GetFatBlocks<MyTextPanel>())
+            .FirstOrDefault(p =>
+                string.Equals(
+                    p.CustomName?.ToString(),
+                    Config.ShipyardQueuePanelName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
         return $"BLUEPRINT {TableHologram.Blueprint(table) != null} HOLDER {holder}\n"
             + $"TABLE\n{Screen(table, Config.ShipyardQuoteSurface)}\nDETAILS\n"
             + (how == null ? "none" : Screen(how, 0))
             + "\nHOW\n"
-            + (how == null ? "none" : Screen(how, 1));
+            + (how == null ? "none" : Screen(how, 1))
+            + "\nQUEUE\n"
+            + (queue == null ? "none" : Screen(queue, 0));
     }
 
     /// <summary>A press of the table's button: cancels the player's queue entry, shows their quote or orders. With a blueprint on the table, only for the player who loaded it.</summary>
@@ -1042,6 +1053,7 @@ internal static class ShipyardOrders
     {
         if (TableHologram.Blueprint(table) != null)
             return;
+        ShowDetails(table, DetailsIdle);
         placed.TryGetValue(table.EntityId, out var player);
         var order = queue.FirstOrDefault(o => o.Player == player && !o.Started);
         if (order == null)
