@@ -16,7 +16,7 @@ to the 1/3 point nearer the station:
 
 - A press gets the refusal and orders nothing. With the limit back, it can order.
 - A paid order waits behind a grid in the shipyard. The server restarts with the limit at 0 and
-  that grid gone: the order ends with its reason, its components and fee are back in the ledger,
+  that grid gone: the order ends with its reason, all it paid is back and OCT's stock with it,
   and the rotor head has no arm.
 
     OCT_TASK=SE-824 OCT_WORLD_SOURCE=<world from build_world.py> \\
@@ -34,11 +34,13 @@ import xml.etree.ElementTree as ET
 
 os.environ.setdefault("OCT_TASK", "SE-824")
 import rig  # noqa: E402
+import station_tests as st  # noqa: E402
 import test_client as tc  # noqa: E402
 import test_support_arm as sa  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 from test_client import log  # noqa: E402
 
+PLATE = "Component/SteelPlate"
 # The free space along the shipyard: its grid's cells -57 to 57 along Z, across x 0, y -16.5
 LENGTH = 287.5
 CUBE = {"Large": 2.5, "Small": 0.5}
@@ -196,8 +198,9 @@ def blocker(root: ET.Element) -> str:
     return grid.replace("<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>")
 
 
-def ledger(remote) -> str:
-    return sa.admin(remote, "!oct ledger show South me", 4)
+def state(remote) -> tuple[int, float]:
+    """The player's money and OCT's plates at the station"""
+    return sa.money(remote)["You"], st.stock(remote, "South", PLATE)[0]
 
 
 def forced_limit(remote):
@@ -213,9 +216,10 @@ def forced_limit(remote):
         "limit: nothing is ordered",
     )
     tc.with_config(remote, FreeBuildPcuLimit=0)
-    for item, count in sa.DEPOSIT.items():
-        sa.admin(remote, f"!oct ledger deposit South me {item} {count}", 3)
-    before = ledger(remote)
+    for item, count in sa.STOCK.items():
+        sa.admin(remote, f"!oct market set South {item} {count}", 3)
+    sa.fund(remote)
+    before = state(remote)
     sa.at_table(remote, "South")
     # The table quotes by itself once the plan is through, then the first press orders
     reply = sa.admin(remote, "!oct order", 8)
@@ -223,9 +227,10 @@ def forced_limit(remote):
         reply = sa.admin(remote, "!oct order", 8)
     sa.check("is in the queue" in reply, f"limit: back at 5 s it orders: {reply}")
     sa.check("builds 'PlaceLimit'" not in reply, f"limit: the order waits: {reply}")
+    held = state(remote)
     sa.check(
-        "reserved build" in ledger(remote),
-        "limit: the components are in a build ledger",
+        held[0] < before[0] and held[1] < before[1],
+        f"limit: the components are bought: {before} -> {held}",
     )
     # The server ends the order when it starts; no player needed
     rig.stop_client()
@@ -257,8 +262,7 @@ def forced_limit(remote):
     )
     sa.check(line is not None, f"limit: the order ends with the reason: {line}")
     rig.ensure_character(remote)
-    after = ledger(remote)
-    sa.check("reserved build" not in after, f"limit: the build ledger is gone: {after}")
+    after = state(remote)
     sa.check(after == before, f"limit: everything is back: {before} -> {after}")
     lines = sa.shipyard(remote, "South")
     sa.check(

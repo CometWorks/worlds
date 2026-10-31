@@ -192,12 +192,9 @@ def run(bench) -> None:
     lbc, lbd = rows.get("LBC", {}), rows.get("LBD", {})
     check("new factions have 0 SC", lbc.get("cash") == lbd.get("cash") == 0, rows)
     check("no grids yet", lbc.get("grids") == 0 and lbc.get("pcu") == 0, lbc)
-    # LBD sells iron to OCT for some cash, through the WA
-    probe.run(f"!oct ledger deposit Alpha faction:LBD {lb.IRON} 500")
-    probe.run(f"!oct market do sell Alpha faction:LBD {lb.IRON} 500")
-    reply = probe.ask("!oct market show Alpha faction:LBD")
-    m = re.search(r"balance ([\d,]+) SC", reply)
-    cash = lb.number(m[1]) if m else -1
+    # LBD has some cash, in the account the WA keeps
+    cash = 12_345
+    probe.run(f"!lbprobe pay LBD {cash}")
     rows = board()
     check(
         "LBD's cash is the account the WA keeps",
@@ -207,10 +204,10 @@ def run(bench) -> None:
 
     reply = probe.run(f"!lbprobe ship LBC Alpha {lb.IRON}=1000")
     check("the probe built LBC's ship near Alpha", "SHIP " in reply, reply)
-    names = [s.strip() for s in probe.run("!oct ledger stations").split(",")]
+    names = [s.strip() for s in probe.run("!oct market stations").split(",")]
     check("7 stations", len(names) == 7, names)
     price = lb.prices(
-        lambda station: probe.ask(f'!oct market show "{station}" faction:LBC all'),
+        lambda station: probe.ask(f'!oct market show "{station}" all'),
         names,
     )
     value, pcu = lb.expected(price, iron=1000)
@@ -220,19 +217,6 @@ def run(bench) -> None:
     check("the ship's PCU", lbc.get("pcu") == pcu, f"{lbc} vs {pcu}")
     first = "LBC" if value > cash else "LBD"
     check(f"{first} ranks first", rows.get(first, {}).get("rank") == 1, rows)
-
-    reply = probe.run("!oct market do order Alpha faction:LBD Ingot/Gold 1000 1")
-    after = re.search(
-        r"balance ([\d,]+) SC", probe.ask("!oct market show Alpha faction:LBD")
-    )
-    rows = board()
-    check(
-        "money held for an order still counts",
-        after
-        and lb.number(after[1]) == cash - 1000
-        and rows.get("LBD", {}).get("cash") == cash,
-        f"{reply} {after and after[1]} -> {rows}",
-    )
 
     reply = probe.run("!lbprobe panel Alpha")
     check(

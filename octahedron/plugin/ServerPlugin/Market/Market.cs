@@ -234,11 +234,8 @@ internal static class Market
     }
 
     /// <summary>Items into OCT's stock, an acquisition contract's; the same id applies once.</summary>
-    public static void AddStock(Guid operationId, string station, string item, long raw)
-    {
-        if (On)
-            Change(operationId, Verb.Add, station, item, raw);
-    }
+    public static void AddStock(Guid operationId, string station, string item, long raw) =>
+        Change(operationId, Verb.Add, station, item, raw);
 
     /// <summary>The station's store as text to <paramref name="done"/> on the game thread; null with the reason on failure.</summary>
     public static void Read(string station, Action<string, string> done)

@@ -1,6 +1,6 @@
 """Checks paid shipyard builds and the shipyard queue on the test server with the
 headless client, at Alpha Station, with OmniArc, ToolCore and Multigrid Projector
-as on the Octahedron servers, and the kiosk mods and probe of tests/test_kiosks.py.
+as on the Octahedron servers, and the station probe.
 
 The tables hold "PaidTest": 45 armor blocks and a small H2 tank (1,000,000 L).
 With FreeBuildPcuLimit 0 every build is paid, with a labor fee of OCT_LABOR_FEE
@@ -8,19 +8,15 @@ With FreeBuildPcuLimit 0 every build is paid, with a labor fee of OCT_LABOR_FEE
 uses !oct order, which presses the hologram table's button for an admin (the
 button itself is pressed once at the end).
 
-- Quote, then order: the first press shows the quote (the components in the
-  player's ledger first, the 55 plates missing from OCT, any labor fee), the second
-  orders it. The
-  player pays the quoted total, the hydrogen comes from the H2 tank of the
-  player's ship docked at Alpha (half of it drained), and the build starts at
-  once with the components loaded from the build ledger.
+- Quote, then order: the first press shows the quote, the second orders it. The
+  player's account pays the quoted total, OCT's stock at Alpha goes down by the
+  components, the hydrogen comes from the H2 tank of the player's ship docked at
+  Alpha (half of it drained), and the build starts at once.
 - Pressing again while it builds doesn't cancel it. When the ship is ready its
-  H2 tank holds 500,000 L and the build ledger is gone.
-- The finished ship stays in the shipyard, so the next order waits in the queue:
-  the Faction switch on at the kiosk (the player a leader of faction KME) makes the
-  faction pay, from its ledger first. After a server restart the queue entry is
-  still there, and pressing again cancels it: the components are in the faction's
-  ledger and any fee is back.
+  H2 tank holds 500,000 L.
+- The finished ship stays in the shipyard, so the next order waits in the queue,
+  bought too. After a server restart the queue entry is still there, and pressing
+  again cancels it: all the player paid and OCT's stock are back.
 - A free build (FreeBuildPcuLimit back at 10,000) queues behind the ship too and is
   canceled by pressing again. The confirm button has the toolbar item the plugin
   gives it (checked through the probe).
@@ -45,8 +41,7 @@ import time
 os.environ.setdefault("OCT_TASK", "SE-685")
 import rig  # noqa: E402
 import test_client as tc  # noqa: E402
-import test_kiosks as kiosks  # noqa: E402
-import test_projection_limits as pl  # noqa: E402
+import station_tests as st  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 from test_client import log, with_config  # noqa: E402
 
@@ -71,90 +66,46 @@ BLUEPRINT = rig.grid(
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
-# What the player brings: the tank's components but its plates, and 1,150 of the 1,205 plates
-DEPOSIT = {
-    "Component/LargeTube": 40,
-    "Component/SmallTube": 60,
-    "Component/Computer": 8,
-    "Component/Construction": 40,
-    PLATE: 1150,
+# OCT's stock at Alpha: more than the build takes
+STOCK = {
+    "Component/LargeTube": 100,
+    "Component/SmallTube": 100,
+    "Component/Computer": 100,
+    "Component/Construction": 100,
+    PLATE: 2000,
 }
+# Enough to pay it, with a low balance otherwise
+FUNDS = 300_000
 HYDROGEN = 500_000
 LABOR_FEE = int(os.environ.get("OCT_LABOR_FEE", "10"))
-check = kiosks.check
-
-
-def prepare() -> None:
-    so.prepare(BLUEPRINT, 60)
-    # The kiosk mods and probe on top of the shipyard's
-    items = "".join(
-        f'<ModItem FriendlyName="{name}"><Name>{id_}.sbm</Name><PublishedFileId>{id_}'
-        "</PublishedFileId><PublishedServiceName>Steam</PublishedServiceName></ModItem>"
-        for id_, (name, _) in kiosks.MODS.items()
-    )
-    for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
-        path = rig.WORLD / name
-        text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("</Mods>", f"{items}</Mods>", 1), "utf-8")
-    for mods in (rig.SERVER_DATA / "Mods", rig.APPDATA / "Mods"):
-        for id_, (_, folder) in kiosks.MODS.items():
-            link = mods / f"{id_}.sbm"
-            link.unlink(missing_ok=True)
-            link.symlink_to(folder)
-    rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP, kiosks.PROBE])
+check = st.check
 
 
 def admin(remote, text: str, wait: float = 3.0) -> str:
-    reply = " ".join(rig.chat(remote, text, wait))
-    log(f"{text} -> {reply}")
-    return reply
+    return st.admin(remote, text, wait)
 
 
 def press(remote, wait: float = 5.0) -> str:
     return admin(remote, "!oct order", wait)
 
 
-def ledger(remote, owner: str) -> str:
-    return admin(remote, f"!oct ledger show Alpha {owner}", 4)
+def balance(remote) -> int:
+    return st.money(remote)["You"]
 
 
-def amount(shown: str, item: str) -> float:
-    """The free amount of the item in a ledger show reply, 0 if none"""
-    match = re.search(
-        rf"(?<!: ){re.escape(item)} ([\d,.]+)", shown.split("reserved")[0]
-    )
-    return float(match[1].replace(",", "")) if match else 0.0
-
-
-def balances(remote, faction: bool = False) -> tuple[int, int]:
-    """The player's and their faction's balance, from the kiosk; the request sets the
-    kiosk's Faction switch too"""
-    time.sleep(0.6)
-    lines = rig.chat(remote, "/kiosk market" + (" faction" if faction else ""), 4)
-    for line in lines:
-        if line.startswith("balance "):
-            fields = dict(w.split("=", 1) for w in line.split(" ") if "=" in w)
-            return int(fields["mine"]), int(fields["faction"])
-    raise AssertionError(f"no balance: {lines}")
+def plates(remote) -> float:
+    return st.stock(remote, "Alpha", PLATE)[0]
 
 
 def gas(remote, grid: str) -> int:
-    match = re.search(r"GAS \d+ (\d+)", kiosks.probe(remote, f"gas {grid}"))
+    match = re.search(r"GAS \d+ (\d+)", st.probe(remote, f"gas {grid}"))
     return int(match[1]) if match else -1
 
 
 def at_table(remote) -> None:
-    kiosks_stand(remote)
+    st.stand(remote, "Alpha")
     table = min(tc.tables(remote), key=lambda b: b["distance"])
     tc.stand_by(remote, table)
-
-
-def kiosks_stand(remote) -> None:
-    reply = kiosks.probe(remote, "kiosk Alpha")
-    match = re.search(r"STAND (\S+) (\S+) (\S+)", reply)
-    if match:
-        remote.character_teleport(*(float(v) for v in match.groups()))
-        time.sleep(3)
 
 
 def latest(remote) -> tuple[int, set]:
@@ -185,7 +136,7 @@ def wait_chat(remote, text: str, timeout: float, after=(0, set())) -> str | None
 
 
 def total(reply: str) -> int:
-    match = re.search(r"([\d,]+) SC paid by", reply)
+    match = re.search(r"([\d,]+) SC from your account", reply)
     return int(match[1].replace(",", "")) if match else -1
 
 
@@ -210,16 +161,16 @@ def order(remote) -> tuple[str, str]:
 
 def paid_build(remote) -> None:
     with_config(remote, FreeBuildPcuLimit=0, ShipyardLaborFeePer100Pcu=LABOR_FEE)
-    me = re.search(r"\(P(\d+)\)", ledger(remote, "me"))
-    for item, count in DEPOSIT.items():
-        admin(remote, f"!oct ledger deposit Alpha me {item} {count}")
-    docked = re.search(r"SHIP (\d+)", kiosks.probe(remote, "dock Alpha mine H2=1"))
+    for item, count in STOCK.items():
+        admin(remote, f"!oct market set Alpha {item} {count}")
+    st.probe(remote, f"pay me {FUNDS - balance(remote)}")
+    docked = re.search(r"SHIP (\d+)", st.probe(remote, "dock Alpha mine H2=1"))
     check(docked is not None, "a ship with a full H2 tank docked at Alpha")
     ship = docked[1] if docked else "0"
-    check(kiosks.wait_docked(remote, ship), "the ship is docked")
+    check(st.wait_docked(remote, ship), "the ship is docked")
     check(gas(remote, ship) == 1_000_000, "its tank holds 1,000,000 L")
     at_table(remote)
-    mine, _ = balances(remote)
+    mine = balance(remote)
 
     quote = press(remote)
     cost = total(quote)
@@ -240,19 +191,12 @@ def paid_build(remote) -> None:
     check(builds is not None, f"the build starts at once: {builds}")
     busy = press(remote)
     check("can't be canceled now" in busy, f"a press while it builds: {busy}")
-    now, _ = balances(remote)
+    now = balance(remote)
     check(now == mine - cost, f"the player paid the quote: {mine} -> {now}, {cost}")
+    check(plates(remote) == STOCK[PLATE] - 1205, "the plates left OCT's stock")
     check(
         gas(remote, ship) == 500_000,
         "half the docked ship's hydrogen went into the build",
-    )
-    shown = ledger(remote, "me")
-    check(
-        amount(shown, PLATE) == 0, f"the ledger's plates went into the build: {shown}"
-    )
-    check(
-        "reserved build" not in shown or "Ore/Ice" in shown,
-        f"only the ice stays reserved: {shown}",
     )
 
     ready = wait_chat(remote, "is ready", 900, mark)
@@ -261,84 +205,54 @@ def paid_build(remote) -> None:
         f"the ship is ready, its H2 filled: {ready}",
     )
     check(gas(remote, SHIP) == HYDROGEN, f"the new ship's H2 tank holds {HYDROGEN:,} L")
-    shown = ledger(remote, "me")
-    check("reserved build" not in shown, f"the build ledger is gone: {shown}")
-    if me:
-        log(f"player P{me[1]}")
 
 
-def faction_build(remote) -> tuple[int, int]:
-    """Queues a faction-paid order behind the finished ship; returns the faction's
-    balance before it and what the components cost"""
-    kiosks.probe(remote, "faction KME leader")
-    kiosks.probe(remote, "pay KME 100000")
-    for item, count in DEPOSIT.items():
-        admin(remote, f"!oct ledger deposit Alpha faction:KME {item} {count}")
-    kiosks_stand(remote)
-    _, before = balances(remote, faction=True)
+def queued_build(remote) -> tuple[int, float]:
+    """Queues a paid order behind the finished ship; returns the balance and OCT's plates
+    before it"""
+    for item, count in STOCK.items():
+        admin(remote, f"!oct market set Alpha {item} {count}")
+    st.probe(remote, f"pay me {FUNDS - balance(remote)}")
     at_table(remote)
+    before = balance(remote)
     mark = latest(remote)
     quote, queued = order(remote)
-    log(f"faction quote: {quote or 'on the screen already'}")
-    check(
-        not quote or "paid by your faction KME" in quote,
-        f"the Faction switch: the faction pays: {quote}",
-    )
-    check("is in the queue" in queued, f"the faction's order: {queued}")
+    log(f"quote: {quote or 'on the screen already'}")
+    check("is in the queue" in queued, f"the second order: {queued}")
     components, fee = paid(queued)
     check(
         wait_chat(remote, f"builds '{SHIP}' for you now", 25, mark) is None,
         "it waits: the finished ship is still in the shipyard",
     )
-    kiosks_stand(remote)
-    _, after = balances(remote, faction=True)
+    after = balance(remote)
     check(
         components > 0 and after == before - components - fee,
-        f"the faction paid: {before} -> {after}, {components} + {fee}",
+        f"the player paid at the order: {before} -> {after}, {components} + {fee}",
     )
-    shown = ledger(remote, "faction:KME")
-    check(
-        amount(shown, PLATE) == 0 and "reserved build" in shown,
-        f"the faction's plates are in its build ledger: {shown}",
-    )
-    return before, components
+    check(plates(remote) == STOCK[PLATE] - 1205, "bought from OCT's stock")
+    return before, STOCK[PLATE]
 
 
-def cancel_after_restart(remote, before: int, components: int) -> None:
-    kiosks_stand(remote)
-    balances(remote, faction=True)
+def cancel_after_restart(remote, before: int, stock: float) -> None:
     at_table(remote)
     canceled = press(remote)
     check(
         "left the queue" in canceled, f"after the restart the press cancels: {canceled}"
     )
-    check(
-        ("labor fee of" in canceled) == (LABOR_FEE > 0),
-        f"the cancel's message and the labor fee: {canceled}",
-    )
-    kiosks_stand(remote)
-    _, after = balances(remote, faction=True)
-    shown = ledger(remote, "faction:KME")
-    check("reserved build" not in shown, f"the build ledger is gone: {shown}")
-    check(
-        amount(shown, PLATE) == 1205, f"the plates are back, bought ones too: {shown}"
-    )
-    check(
-        after == before - components,
-        f"the fee is back, the bought components stay bought: {before} -> {after}",
-    )
+    check("is paid back" in canceled, f"the cancel pays back: {canceled}")
+    after = balance(remote)
+    check(after == before, f"all of it is back: {before} -> {after}")
+    check(plates(remote) == stock, "and OCT's plates")
 
 
 def free_build(remote) -> None:
     with_config(remote, FreeBuildPcuLimit=10000)
-    kiosks_stand(remote)
-    balances(remote)  # the Faction switch off
     at_table(remote)
     quote, queued = order(remote)
     check(not quote or "a free build" in quote, f"a free build: {quote}")
     check("is in the queue, a free build" in queued, f"the free order queues: {queued}")
 
-    armed = kiosks.probe(remote, "buttons Alpha")
+    armed = st.probe(remote, "buttons Alpha")
     check(
         re.search(
             r"'Button Panel - Station ShipyardConfirm' MyToolbarItemTerminalBlock",
@@ -369,25 +283,25 @@ def saved_screens() -> None:
 def main() -> int:
     rig.stop_client()
     rig.stop_server()
-    prepare()
+    so.prepare(BLUEPRINT, 60)
     rig.start_server()
     remote = rig.start_client()
     log("joined")
-    before = components = None
+    before = stock = None
     try:
         paid_build(remote)
-        before, components = faction_build(remote)
+        before, stock = queued_build(remote)
     finally:
         rig.stop_client()
         rig.stop_server()
     sandbox = (rig.WORLD / "Sandbox.sbc").read_text(encoding="utf-8")
-    check("octahedron-builds 1" in sandbox, "the saved Sandbox.sbc holds the queues")
+    check("octahedron-builds 2" in sandbox, "the saved Sandbox.sbc holds the queues")
     saved_screens()
     rig.start_server()
     remote = rig.start_client()
     try:
         if before is not None:
-            cancel_after_restart(remote, before, components)
+            cancel_after_restart(remote, before, stock)
         free_build(remote)
     finally:
         rig.stop_client()
@@ -395,14 +309,7 @@ def main() -> int:
     for line in rig.server_game_log().splitlines():
         if "Octahedron" in line and ("rror" in line or "Shipyard" in line):
             log("server: " + line.strip())
-    failed = [what for passed, what in kiosks.checks if not passed]
-    print(
-        f"{len(kiosks.checks) - len(failed)}/{len(kiosks.checks)} paid build checks passed",
-        flush=True,
-    )
-    for what in failed:
-        print(f"FAILED: {what}", flush=True)
-    return 1 if failed else 0
+    return st.summary("paid build")
 
 
 if __name__ == "__main__":

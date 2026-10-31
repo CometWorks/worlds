@@ -20,10 +20,10 @@ using VRage.ObjectBuilders;
 using VRage.Plugins;
 using VRageMath;
 
-namespace KioskProbe;
+namespace StationProbe;
 
-// Test-only server plugin of the kiosk test (tests/test_kiosks.py): admin commands that set up
-// what the kiosks work with, so the client only has to stand at the kiosk and use it.
+// Test-only server plugin of the station tests (tests/station_tests.py): admin commands that set
+// up what a test works with, like docked ships and factions, so the client only has to use it.
 public class Probe : IPlugin
 {
     public void Init(object gameInstance) =>
@@ -34,10 +34,9 @@ public class Probe : IPlugin
     public void Dispose() { }
 }
 
-[CommandRoot("kprobe", "Kiosk probe", "Kiosk test commands")]
+[CommandRoot("sprobe", "Station probe", "Station test commands")]
 public sealed class ProbeCommands : CommandModule
 {
-    private const string KioskName = "LCD Panel - Station Lounge StationStorefront";
     private static readonly List<(
         MyShipConnector Ship,
         MyShipConnector Station,
@@ -45,57 +44,48 @@ public sealed class ProbeCommands : CommandModule
     )> connecting = [];
 
     [Command(
-        "kiosk",
-        "Where the station's kiosk is: KIOSK id x y z STAND x y z",
-        "!kprobe kiosk <station>"
+        "store",
+        "Where the station's Store block is: STORE id x y z STAND x y z",
+        "!sprobe store <station>"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string Kiosk(string station)
+    public string Store(string station)
     {
-        var kiosk = StationGrids(station)
-            .SelectMany(g => g.GetFatBlocks<MyTextPanel>())
-            .FirstOrDefault(p =>
-                string.Equals(
-                    p.CustomName?.ToString(),
-                    KioskName,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            );
-        if (kiosk == null)
-            return $"NOKIOSK {station}";
-        var m = kiosk.WorldMatrix;
-        // TouchScreenAPI's coordinates of this LCD put the screen on the block's local +X face
-        var stand = m.Translation + m.Right * 2.2 - m.Up * 0.3;
-        return $"KIOSK {kiosk.EntityId} {V(m.Translation)} STAND {V(stand)} SCRIPT {((Sandbox.ModAPI.Ingame.IMyTextSurface)kiosk).Script}";
+        var store = StationGrids(station)
+            .SelectMany(g => g.GetFatBlocks<MyStoreBlock>())
+            .FirstOrDefault(b => b.BlockDefinition.Id.SubtypeName == "StoreBlock");
+        if (store == null)
+            return $"NOSTORE {station}";
+        var m = store.WorldMatrix;
+        // In front of the block's screen
+        var stand = m.Translation + m.Forward * 2.2;
+        return $"STORE {store.EntityId} {V(m.Translation)} STAND {V(stand)}";
     }
 
     [Command(
-        "kioskaxes",
-        "The kiosk's position and axes: AXES x y z right up forward",
-        "!kprobe kioskaxes <station>"
+        "rep",
+        "Sets the caller's reputation with a faction: REP tag value",
+        "!sprobe rep <tag> <value>"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string KioskAxes(string station)
+    public string Rep(string tag, int value)
     {
-        var kiosk = StationGrids(station)
-            .SelectMany(g => g.GetFatBlocks<MyTextPanel>())
-            .First(p =>
-                string.Equals(
-                    p.CustomName?.ToString(),
-                    KioskName,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            );
-        var m = kiosk.WorldMatrix;
-        string Fixed(Vector3D v) =>
-            string.Create(CultureInfo.InvariantCulture, $"{v.X:0.0000} {v.Y:0.0000} {v.Z:0.0000}");
-        return $"AXES {Fixed(m.Translation)} {Fixed(m.Right)} {Fixed(m.Up)} {Fixed(m.Forward)}";
+        var faction = MySession.Static.Factions.TryGetFactionByTag(tag);
+        if (faction == null)
+            return $"NOREP {tag}";
+        MySession.Static.Factions.SetReputationBetweenPlayerAndFaction(
+            Context.Caller.IdentityId,
+            faction.FactionId,
+            value,
+            VRage.Game.ModAPI.ReputationChangeReason.Admin
+        );
+        return $"REP {tag} {value}";
     }
 
     [Command(
         "safezone",
         "The safe zone blocks' upkeep: SAFEZONE subtype chips minutes, one per block",
-        "!kprobe safezone"
+        "!sprobe safezone"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string SafeZone() =>
@@ -112,7 +102,7 @@ public sealed class ProbeCommands : CommandModule
     [Command(
         "dock",
         "Builds a ship with a cargo container at a free connector of the station and connects it: SHIP grid-id",
-        "!kprobe dock <station> <mine|stranger> [Type/Subtype=amount ...]"
+        "!sprobe dock <station> <mine|stranger> [Type/Subtype=amount ...]"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Dock(
@@ -124,7 +114,7 @@ public sealed class ProbeCommands : CommandModule
         long ownerId =
             owner == "mine"
                 ? Context.Caller.IdentityId
-                : MySession.Static.Players.CreateNewIdentity("Kiosk Stranger").IdentityId;
+                : MySession.Static.Players.CreateNewIdentity("Dock Stranger").IdentityId;
         var free = StationGrids(station)
             .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
             .FirstOrDefault(c =>
@@ -163,7 +153,7 @@ public sealed class ProbeCommands : CommandModule
             GridSizeEnum = MyCubeSize.Large,
             IsStatic = false,
             PersistentFlags = MyPersistentEntityFlags2.InScene,
-            DisplayName = owner == "mine" ? "Kiosk Hauler" : "Stranger Hauler",
+            DisplayName = owner == "mine" ? "Dock Hauler" : "Stranger Hauler",
             PositionAndOrientation = new MyPositionAndOrientation(
                 position,
                 (Vector3)forward,
@@ -217,7 +207,7 @@ public sealed class ProbeCommands : CommandModule
     [Command(
         "docked",
         "Whether the ship is connected: DOCKED grid-id yes|no",
-        "!kprobe docked <grid id>"
+        "!sprobe docked <grid id>"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Docked(string gridId)
@@ -235,7 +225,7 @@ public sealed class ProbeCommands : CommandModule
     [Command(
         "gas",
         "The hydrogen in the H2 tanks of a grid and its subgrids: GAS grid-id liters tanks",
-        "!kprobe gas <grid id|grid name>"
+        "!sprobe gas <grid id|grid name>"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Gas(string grid)
@@ -265,22 +255,25 @@ public sealed class ProbeCommands : CommandModule
     [Command(
         "pay",
         "Adds money to a faction's account, by its tag: PAID tag balance",
-        "!kprobe pay <tag> <SC>"
+        "!sprobe pay <tag> <SC>"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Pay(string tag, long amount)
     {
-        var faction = MySession.Static.Factions.TryGetFactionByTag(tag);
-        if (faction == null || !MyBankingSystem.ChangeBalance(faction.FactionId, amount))
+        long id =
+            tag == "me"
+                ? Context.Caller.IdentityId
+                : MySession.Static.Factions.TryGetFactionByTag(tag)?.FactionId ?? 0;
+        if (id == 0 || !MyBankingSystem.ChangeBalance(id, amount))
             return $"NOPAY {tag}";
-        MyBankingSystem.Static.TryGetAccountInfo(faction.FactionId, out var account);
+        MyBankingSystem.Static.TryGetAccountInfo(id, out var account);
         return $"PAID {tag} {account.Balance}";
     }
 
     [Command(
         "buttons",
         "The first toolbar slot of the station's button panels: BUTTON id name slot0",
-        "!kprobe buttons <station>"
+        "!sprobe buttons <station>"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Buttons(string station) =>
@@ -295,7 +288,7 @@ public sealed class ProbeCommands : CommandModule
                 )
         );
 
-    [Command("undock", "Disconnects and deletes the probe's ships", "!kprobe undock")]
+    [Command("undock", "Disconnects and deletes the probe's ships", "!sprobe undock")]
     [Permission(MyPromoteLevel.Admin)]
     public string Undock()
     {
@@ -304,7 +297,7 @@ public sealed class ProbeCommands : CommandModule
             var grid in MyEntities
                 .GetEntities()
                 .OfType<MyCubeGrid>()
-                .Where(g => g.DisplayName is "Kiosk Hauler" or "Stranger Hauler")
+                .Where(g => g.DisplayName is "Dock Hauler" or "Stranger Hauler")
                 .ToList()
         )
         {
@@ -319,7 +312,7 @@ public sealed class ProbeCommands : CommandModule
     [Command(
         "faction",
         "Puts the caller into the faction with the tag at the rank, creating it with an NPC founder; founder makes a faction of the caller's own; none leaves",
-        "!kprobe faction <tag> <founder|leader|member|none>"
+        "!sprobe faction <tag> <founder|leader|member|none>"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Faction(string tag, string rank)
@@ -341,13 +334,13 @@ public sealed class ProbeCommands : CommandModule
         {
             if (faction != null)
                 return $"FACTION {tag} taken";
-            factions.CreateFaction(me, tag, tag + " Kiosk Testers", "", "", MyFactionTypes.None);
+            factions.CreateFaction(me, tag, tag + " Station Testers", "", "", MyFactionTypes.None);
             return "FACTION " + tag + " founder";
         }
         if (faction == null)
         {
             long npc = MySession.Static.Players.CreateNewIdentity(tag + " Founder").IdentityId;
-            factions.CreateFaction(npc, tag, tag + " Kiosk Testers", "", "", MyFactionTypes.None);
+            factions.CreateFaction(npc, tag, tag + " Station Testers", "", "", MyFactionTypes.None);
             faction = factions.TryGetFactionByTag(tag);
             if (faction == null)
                 return "FACTION " + tag + " not created";
@@ -364,7 +357,7 @@ public sealed class ProbeCommands : CommandModule
         return "FACTION " + tag + " " + rank;
     }
 
-    [Command("whoami", "The caller's faction and rank: ME tag rank", "!kprobe whoami")]
+    [Command("whoami", "The caller's faction and rank: ME tag rank", "!sprobe whoami")]
     [Permission(MyPromoteLevel.Admin)]
     public string WhoAmI()
     {

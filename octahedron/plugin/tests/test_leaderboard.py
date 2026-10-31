@@ -1,5 +1,5 @@
 """Checks the faction leaderboard on the test server with the headless client. The
-kiosk probe (tests/kiosks/probe) makes the factions and docks a ship at Alpha
+station probe (tests/station-probe) makes the factions and docks a ship at Alpha
 Station: the player founds LBT, and LBB is a faction of a fresh identity's.
 
 The leaderboard probe (tests/leaderboard/probe) reads a station panel's text on the
@@ -10,8 +10,7 @@ Checked: only the players' factions are ranked, not OCT or the NPC factions; a
 faction's cash is its bank account; a docked ship of 1,000 iron ingots counts for
 its owner's faction with its PCU and with its value worked out here from the game's
 block definitions and the middle of OCT's prices at every station (`!oct market
-show`), which ranks LBT above LBB; money held for a faction's market order still
-counts; the station panels show the board in Monospace and refresh on their own;
+show`), which ranks LBT above LBB; the station panels show the board in Monospace and refresh on their own;
 and the count of the whole world takes little time per tick. Prints one line per
 check and a pass/fail summary; exit code 0 = all passed.
 
@@ -37,7 +36,7 @@ from decimal import ROUND_HALF_EVEN, Decimal
 
 os.environ.setdefault("OCT_TASK", "SE-698")
 import rig  # noqa: E402
-import test_kiosks as kiosks  # noqa: E402
+import station_tests as st  # noqa: E402
 from test_client import log  # noqa: E402
 
 PANEL = "Curved LCD Panel - Station Lounge Leaderboard"
@@ -63,8 +62,8 @@ PANEL_AT = re.compile(r"AT (\S+) (\S+) (\S+) FORWARD (\S+) (\S+) (\S+)")
 COUNTED = re.compile(
     r"Leaderboard: counted (\d+) grids in (\d+) ticks, (\d+) ms of work"
 )
-check = kiosks.check
-probe = kiosks.probe
+check = st.check
+probe = st.probe
 
 
 def number(text: str) -> int:
@@ -122,23 +121,23 @@ def expected(price: dict[str, int], iron: int, ships: int = 1) -> tuple[int, int
 
 
 def stations(remote) -> list[str]:
-    reply = " ".join(rig.chat(remote, "!oct ledger stations", 3))
+    reply = " ".join(rig.chat(remote, "!oct market stations", 3))
     names = [s.strip() for s in reply.split(",") if s.strip()]
     log(f"stations: {names}")
     return names
 
 
-def market(remote, station: str, owner: str = "faction:LBT") -> str:
-    return " ".join(rig.chat(remote, f'!oct market show "{station}" {owner} all', 5))
+def market(remote, station: str) -> str:
+    return " ".join(rig.chat(remote, f'!oct market show "{station}" all', 5))
 
 
 def prices(show, names: list[str]) -> dict[str, int]:
     """milli-SC per unit: the middle of OCT's bid and ask, averaged over the stations.
-    show(station) is what `!oct market show <station> <owner> all` answered there."""
+    show(station) is what `!oct market show <station> all` answered there."""
     mids: dict[str, list[Decimal]] = {}
     for station in names:
         for m in re.finditer(
-            r"(\S+/\S+): OCT buys ([\d,.]+) SC(?: \(specialty\))?, sells ([\d,.]+) SC",
+            r"(\S+/\S+): OCT buys ([\d,.]+) SC up to [\d,.]+, sells ([\d,.]+) SC",
             show(station),
         ):
             bid, ask = (Decimal(v.replace(",", "")) * 1000 for v in (m[2], m[3]))
@@ -148,11 +147,6 @@ def prices(show, names: list[str]) -> dict[str, int]:
         item: int((sum(v) / len(v)).quantize(Decimal(1), rounding=ROUND_HALF_EVEN))
         for item, v in mids.items()
     }
-
-
-def balance(remote, owner: str = "faction:LBT") -> int:
-    m = re.search(r"balance ([\d,]+) SC", market(remote, "Alpha", owner))
-    return number(m[1]) if m else -1
 
 
 def panels(remote) -> list[dict]:
@@ -200,13 +194,7 @@ def screenshots(remote, at: list[float]) -> None:
 
 
 def run(remote) -> None:
-    reply = probe(remote, "kiosk Alpha")
-    stand = re.search(r"STAND (\S+) (\S+) (\S+)", reply)
-    # A world from the blueprint since SE-832 has no kiosk; the character spawned at Alpha anyway
-    log(f"Alpha's kiosk: {reply}")
-    if stand:
-        remote.character_teleport(*(float(v) for v in stand.groups()))
-        time.sleep(3)
+    st.stand(remote, "Alpha")
     probe(remote, "faction LBB member")
     probe(remote, "faction LBT founder")
     check("LBT founder" in probe(remote, "whoami"), "the player founded LBT")
@@ -217,13 +205,9 @@ def run(remote) -> None:
     check(set(rows) == {"LBT", "LBB"}, f"only the players' factions: {sorted(rows)}")
     lbt, lbb = rows.get("LBT", {}), rows.get("LBB", {})
     check(lbt.get("cash") == lbb.get("cash") == 0, f"new factions have 0 SC: {rows}")
-    # LBB sells iron to OCT for some cash
-    for line in (
-        "!oct ledger deposit Alpha faction:LBB Ingot/Iron 500",
-        "!oct market do sell Alpha faction:LBB Ingot/Iron 500",
-    ):
-        log(f"{line} -> {' '.join(rig.chat(remote, line, 4))}")
-    cash = balance(remote, "faction:LBB")
+    # LBB has some cash
+    cash = 12_345
+    check(f"PAID LBB {cash}" in probe(remote, f"pay LBB {cash}"), "LBB got its cash")
     rows = board(remote)
     lbt, lbb = rows.get("LBT", {}), rows.get("LBB", {})
     check(lbb.get("cash") == cash > 0, f"LBB's cash is its account: {lbb} vs {cash}")
@@ -235,7 +219,7 @@ def run(remote) -> None:
     ship = re.search(r"SHIP (\d+)", reply)
     check(ship is not None, f"the probe docked a ship: {reply}")
     if ship:
-        kiosks.wait_docked(remote, ship[1])
+        st.wait_docked(remote, ship[1])
     price = prices(lambda station: market(remote, station), names)
     value, pcu = expected(price, iron=1000)
     check(price.get(IRON, 0) > 0, "iron has a price")
@@ -247,16 +231,6 @@ def run(remote) -> None:
     check(lbt.get("total") == value, f"LBT's total is its ship: {lbt}")
     first = "LBT" if value > cash else "LBB"
     check(rows.get(first, {}).get("rank") == 1, f"{first} ranks first: {rows}")
-
-    # Money held for a faction's market order is still the faction's
-    reply = " ".join(
-        rig.chat(remote, "!oct market do order Alpha faction:LBB Ingot/Gold 1000 1", 4)
-    )
-    log(f"order -> {reply}")
-    after = balance(remote, "faction:LBB")
-    check(after == cash - 1000, f"the order holds 1,000 SC: {cash} -> {after}")
-    rows = board(remote)
-    check(rows.get("LBB", {}).get("cash") == cash, f"held money still counts: {rows}")
 
     # The station panels
     found = panels(remote)
@@ -310,7 +284,7 @@ def main() -> int:
     rig.stop_client()
     rig.stop_server()
     rig.prepare_world()
-    rig.prepare_server(extra_dev_folders=[kiosks.PROBE, LB_PROBE])
+    rig.prepare_server(extra_dev_folders=[st.PROBE, LB_PROBE])
     config = rig.CONFIG_SOURCE.read_text(encoding="utf-8").replace(
         "</OctahedronConfig>",
         f"  <LeaderboardIntervalSeconds>{INTERVAL}</LeaderboardIntervalSeconds>\n"
@@ -328,14 +302,7 @@ def main() -> int:
     for line in rig.server_game_log().splitlines():
         if "Octahedron" in line and ("rror" in line or "Critical" in line):
             log("server: " + line.strip())
-    failed = [what for passed, what in kiosks.checks if not passed]
-    print(
-        f"{len(kiosks.checks) - len(failed)}/{len(kiosks.checks)} leaderboard checks passed",
-        flush=True,
-    )
-    for what in failed:
-        print(f"FAILED: {what}", flush=True)
-    return 1 if failed else 0
+    return st.summary("leaderboard")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@
     <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../../ServerPlugin/Ledgers/LedgerBook.cs" />
+    <Compile Include="../../../ServerPlugin/Market/Amounts.cs" />
     <Compile Include="../../../ServerPlugin/LeaderboardMath.cs" />
   </ItemGroup>
 </Project>

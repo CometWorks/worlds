@@ -19,7 +19,7 @@ void Check(bool ok, string what)
     Console.WriteLine("FAIL " + what);
 }
 
-const long Unit = LedgerBook.Unit;
+const long Unit = Amounts.Unit;
 
 // Values: raw amounts at milli-SC per unit
 Check(

@@ -58,6 +58,10 @@ public sealed class MarketCommands : CommandModule
                     + $"sells {MarketBook.Price(row.Ask)}, stock {Amounts.Units(row.Stock)}";
     }
 
+    [Command("market stations", "The stations that have a market", "!oct market stations")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string StationList() => string.Join(", ", Stations.StationNames().OrderBy(s => s));
+
     [Command(
         "market set",
         "Sets OCT's stock of an item at a station, on the World Authority of a cluster",

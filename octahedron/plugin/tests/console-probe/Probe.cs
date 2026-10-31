@@ -6,16 +6,16 @@ using Sandbox.Game.World;
 using VRage.Game.ModAPI;
 using VRage.Plugins;
 
-namespace LedgerProbe;
+namespace ConsoleProbe;
 
 /// <summary>
-/// Test hook of the ledger cluster test (tests/ledgers/ledger_cluster.py): runs the chat command lines of
-/// the file LEDGERPROBE_PLAN as the server console, owner level, once the session is ready, on the node
-/// LEDGERPROBE_NODE (CLUSTER_NODE_ID) only. Lines appended later run as they arrive. Every reply goes to
-/// LEDGERPROBE_OUT as "STEP\tTEXT", STEP counting the plan's command lines from 0; replies of a command
-/// that answers later (a ledger change on the World Authority) come when they come.
+/// Test hook of the cluster tests (tests/console_probe.py): runs the chat command lines of
+/// the file CONSOLEPROBE_PLAN as the server console, owner level, once the session is ready, on the node
+/// CONSOLEPROBE_NODE (CLUSTER_NODE_ID) only. Lines appended later run as they arrive. Every reply goes to
+/// CONSOLEPROBE_OUT as "STEP\tTEXT", STEP counting the plan's command lines from 0; replies of a command
+/// that answers later (a change on the World Authority) come when they come.
 ///   wait SECONDS     let the game run
-///   anything else    a chat command line, for example "!oct ledger show Alpha"
+///   anything else    a chat command line, for example "!oct market show Alpha"
 /// </summary>
 public class Probe : IPlugin, ICommandResponder
 {
@@ -31,17 +31,17 @@ public class Probe : IPlugin, ICommandResponder
     private static readonly CommandCaller Console = new(
         0UL,
         0L,
-        "LedgerProbe",
+        "ConsoleProbe",
         MyPromoteLevel.Owner,
         isConsole: true
     );
 
     public void Init(object gameInstance)
     {
-        var path = Environment.GetEnvironmentVariable("LEDGERPROBE_PLAN");
-        var outPath = Environment.GetEnvironmentVariable("LEDGERPROBE_OUT");
+        var path = Environment.GetEnvironmentVariable("CONSOLEPROBE_PLAN");
+        var outPath = Environment.GetEnvironmentVariable("CONSOLEPROBE_OUT");
         var node = Environment.GetEnvironmentVariable("CLUSTER_NODE_ID");
-        var only = Environment.GetEnvironmentVariable("LEDGERPROBE_NODE");
+        var only = Environment.GetEnvironmentVariable("CONSOLEPROBE_NODE");
         if (path == null || outPath == null || (only != null && node != only))
             return;
         planPath = path;
@@ -88,7 +88,7 @@ public class Probe : IPlugin, ICommandResponder
     }
 
     // A reply that comes later belongs to the command whose step was current when it was sent; the
-    // ledger commands answer once, so the test waits for each answer before the next command
+    // commands answer once, so the test waits for each answer before the next command
     public void Send(in CommandReply reply, in CommandCaller caller) => Write(replying, reply.Text);
 
     private void Write(int index, string text) =>

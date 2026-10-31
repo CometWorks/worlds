@@ -338,9 +338,6 @@ MODS = [
     (2756894170, "Definition Extension API"),
     (2687324923, "[QoL] Radio Spectrometry"),
     (3730092649, "Arthur's Lcd Mod"),
-    # The station kiosks: our client mod, after TouchScreenAPI which it builds on
-    (2668820525, "Touch Screen API"),
-    (3827916260, "Octahedron Kiosk"),
     # Inventory sorting and assembler quotas, worked out on the client
     (3082595868, "GV Inventory Sorter/Assembly Quota"),
     # Two Kevin MacLeod songs for the Jukebox, our own mod (CometWorks/octahedron-music)
