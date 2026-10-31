@@ -370,14 +370,14 @@ public class OctahedronConfig : PluginConfig
 
     [LongOption(
         0,
-        description: "Labor fee of a paid shipyard build, paid to OCT: SC per 10 PCU of the blueprint, rounded up. 0: no fee.",
+        description: "Labor fee of a paid shipyard build, paid to OCT: SC per 100 PCU of the blueprint, rounded up. 0: no fee.",
         Parent = "shipyard"
     )]
-    public long ShipyardLaborFeePer10Pcu
+    public long ShipyardLaborFeePer100Pcu
     {
         get;
         set => SetField(ref field, value);
-    } = 1;
+    }
 
     [IntOption(
         1,
