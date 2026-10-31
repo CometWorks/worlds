@@ -107,7 +107,7 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     return r;
 }
 
-// The labor fee: 1 SC per 10 PCU, rounded up
+// The labor fee: SC per 100 PCU, rounded up
 {
     Check(
         ShipyardPlacement.Offset(70, 282.5) == 282.5 / 6,
@@ -115,9 +115,9 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     );
     Check(ShipyardPlacement.Offset(282.5 / 4, 282.5) == 0, "placement: a quarter long is centered");
     Check(ShipyardPlacement.Offset(100, 282.5) == 0, "placement: long ship centered");
-    Check(BuildBook.Fee(60_000, 1) == 6_000, "fee: 60k PCU is 6,000 SC");
-    Check(BuildBook.Fee(15, 1) == 2, "fee: rounded up");
-    Check(BuildBook.Fee(0, 1) == 0 && BuildBook.Fee(500, 0) == 0, "fee: none");
+    Check(BuildBook.Fee(60_000, 10) == 6_000, "fee: 60k PCU at 10 SC is 6,000 SC");
+    Check(BuildBook.Fee(15, 10) == 2 && BuildBook.Fee(101, 1) == 2, "fee: rounded up");
+    Check(BuildBook.Fee(0, 10) == 0 && BuildBook.Fee(500, 0) == 0, "fee: none");
 }
 
 // Quote: ledger first, then the cheapest listings, then OCT; what nobody has is missing
@@ -166,6 +166,70 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         "parts text: " + parts
     );
     Check(new BuildSettings().QueueMax == 6, "the queue holds 6 ships by default");
+}
+
+// What the player reads, with a fee and without one
+{
+    var (w, m, market, b) = Setup();
+    var needed = Needs((Plate, 10 * U));
+    var withFee = BuildBook.Quote(w, market, A, p1, needed, 100);
+    var noFee = BuildBook.Quote(w, market, A, p1, needed, 0);
+    string Text(BuildQuote q) =>
+        BuildBook.QuoteText(q, Ice, 0, i => i, (i, raw) => LedgerBook.Units(raw));
+    Check(Text(withFee).Contains("Labor fee: 100 SC"), "quote text with a fee");
+    Check(
+        !Text(noFee).Contains("Labor") && noFee.Total == withFee.Total - 100,
+        "quote text without a fee: " + Text(noFee)
+    );
+
+    var ordered = Ok(
+        w,
+        "order with a fee",
+        () => b.Order(w, market, s, Paid(p1), needed, none, long.MaxValue)
+    );
+    Check(ordered.Message.Contains("and 100 SC labor paid."), "order: " + ordered.Message);
+    var canceled = Ok(w, "cancel with a fee", () => b.Cancel(w, A, 1));
+    Check(
+        canceled.Message.Contains("and the labor fee of 100 SC is paid back."),
+        "cancel: " + canceled.Message
+    );
+
+    ordered = Ok(
+        w,
+        "order without a fee",
+        () => b.Order(w, market, s, Paid(p1, fee: 0), needed, none, long.MaxValue)
+    );
+    Check(
+        ordered.Message.EndsWith("for the components paid."),
+        "order without a fee: " + ordered.Message
+    );
+    canceled = Ok(w, "cancel without a fee", () => b.Cancel(w, A, 1));
+    Check(
+        canceled.Message.EndsWith($"at {A}.") && !canceled.Message.Contains("fee"),
+        "cancel without a fee: " + canceled.Message
+    );
+
+    string id = Ok(
+        w,
+        "order to refund, with a fee",
+        () => b.Order(w, market, s, Paid(p1), needed, none, long.MaxValue)
+    ).Order.Id;
+    var refunded = Ok(w, "refund with a fee", () => b.Finish(w, s, id, none, 0, refund: true));
+    Check(refunded.Message == "The labor fee of 100 SC is paid back.", refunded.Message);
+    id = Ok(
+        w,
+        "order to refund, without a fee",
+        () => b.Order(w, market, s, Paid(p1, fee: 0), needed, none, long.MaxValue)
+    ).Order.Id;
+    refunded = Ok(w, "refund without a fee", () => b.Finish(w, s, id, none, 0, refund: true));
+    Check(refunded.Message == "", "refund without a fee: " + refunded.Message);
+    id = Ok(
+        w,
+        "order to finish",
+        () => b.Order(w, market, s, Paid(p1), needed, none, long.MaxValue)
+    ).Order.Id;
+    var finished = Ok(w, "finish keeps the fee", () => b.Finish(w, s, id, none, 0, refund: false));
+    Check(finished.Message == "", "finish keeps the fee: " + finished.Message);
 }
 
 // A paid order: the build ledger gets every item, the payer pays the quote and the fee

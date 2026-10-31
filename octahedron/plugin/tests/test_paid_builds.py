@@ -3,12 +3,13 @@ headless client, at Alpha Station, with OmniArc, ToolCore and Multigrid Projecto
 as on the Octahedron servers, and the kiosk mods and probe of tests/test_kiosks.py.
 
 The tables hold "PaidTest": 45 armor blocks and a small H2 tank (1,000,000 L).
-With FreeBuildPcuLimit 0 every build is paid. The client uses !oct order, which
-presses the hologram table's button for an admin (the button itself is pressed
-once at the end).
+With FreeBuildPcuLimit 0 every build is paid, with a labor fee of OCT_LABOR_FEE
+(default 10) SC per 100 PCU; 0 checks that nothing mentions the fee. The client
+uses !oct order, which presses the hologram table's button for an admin (the
+button itself is pressed once at the end).
 
 - Quote, then order: the first press shows the quote (the components in the
-  player's ledger first, the 55 plates missing from OCT, the labor fee), the second
+  player's ledger first, the 55 plates missing from OCT, any labor fee), the second
   orders it. The
   player pays the quoted total, the hydrogen comes from the H2 tank of the
   player's ship docked at Alpha (half of it drained), and the build starts at
@@ -19,7 +20,7 @@ once at the end).
   the Faction switch on at the kiosk (the player a leader of faction KME) makes the
   faction pay, from its ledger first. After a server restart the queue entry is
   still there, and pressing again cancels it: the components are in the faction's
-  ledger and the fee is back.
+  ledger and any fee is back.
 - A free build (FreeBuildPcuLimit back at 10,000) queues behind the ship too and is
   canceled by pressing again. The confirm button has the toolbar item the plugin
   gives it (checked through the probe).
@@ -79,6 +80,7 @@ DEPOSIT = {
     PLATE: 1150,
 }
 HYDROGEN = 500_000
+LABOR_FEE = int(os.environ.get("OCT_LABOR_FEE", "10"))
 check = kiosks.check
 
 
@@ -188,11 +190,13 @@ def total(reply: str) -> int:
 
 
 def paid(reply: str) -> tuple[int, int]:
-    """What an order paid: the components and the labor fee"""
-    match = re.search(r"([\d,]+) SC for the components and ([\d,]+) SC labor", reply)
+    """What an order paid: the components and the labor fee, which it leaves out at 0"""
+    match = re.search(
+        r"([\d,]+) SC for the components(?: and ([\d,]+) SC labor)? paid", reply
+    )
     if not match:
         return -1, -1
-    return int(match[1].replace(",", "")), int(match[2].replace(",", ""))
+    return int(match[1].replace(",", "")), int((match[2] or "0").replace(",", ""))
 
 
 def order(remote) -> tuple[str, str]:
@@ -205,7 +209,7 @@ def order(remote) -> tuple[str, str]:
 
 
 def paid_build(remote) -> None:
-    with_config(remote, FreeBuildPcuLimit=0)
+    with_config(remote, FreeBuildPcuLimit=0, ShipyardLaborFeePer100Pcu=LABOR_FEE)
     me = re.search(r"\(P(\d+)\)", ledger(remote, "me"))
     for item, count in DEPOSIT.items():
         admin(remote, f"!oct ledger deposit Alpha me {item} {count}")
@@ -227,6 +231,11 @@ def paid_build(remote) -> None:
     mark = latest(remote)
     started = press(remote, 8)
     check("is in the queue" in started, f"the second press orders: {started}")
+    check(
+        (paid(started)[1] > 0) == (LABOR_FEE > 0)
+        and ("labor" in started) == (LABOR_FEE > 0),
+        f"the order's message and the labor fee: {started}",
+    )
     builds = wait_chat(remote, f"builds '{SHIP}' for you now", 60, mark)
     check(builds is not None, f"the build starts at once: {builds}")
     now, _ = balances(remote)
@@ -300,6 +309,10 @@ def cancel_after_restart(remote, before: int, components: int) -> None:
     canceled = press(remote)
     check(
         "left the queue" in canceled, f"after the restart the press cancels: {canceled}"
+    )
+    check(
+        ("labor fee of" in canceled) == (LABOR_FEE > 0),
+        f"the cancel's message and the labor fee: {canceled}",
     )
     kiosks_stand(remote)
     _, after = balances(remote, faction=True)

@@ -352,7 +352,7 @@ def waits_for_a_build(a, b) -> None:
 def paid_cancel(a) -> None:
     """A paid build canceled while it runs ends as when its time runs out: the ship as it
     is, what wasn't used back in the ledger, the labor fee stays paid"""
-    with_config(a, **CONFIG, FreeBuildPcuLimit=0)
+    with_config(a, **CONFIG, FreeBuildPcuLimit=0, ShipyardLaborFeePer100Pcu=10)
     log(
         sa.admin(
             a, f"!oct ledger deposit {STATION} me Component/SteelPlate {PAID_PLATES}"

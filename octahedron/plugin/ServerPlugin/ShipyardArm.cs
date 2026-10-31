@@ -602,6 +602,8 @@ internal static class ShipyardArm
                 layout.Components.TryGetValue(component.Definition.Id, out var count);
                 layout.Components[component.Definition.Id] = count + component.Count;
             }
+            // A frame already has one of its first component, the welders never take that one
+            layout.Components[definition.Components[0].Definition.Id]--;
         }
         return null;
     }

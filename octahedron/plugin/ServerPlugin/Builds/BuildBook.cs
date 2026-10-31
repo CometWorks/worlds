@@ -211,9 +211,9 @@ public sealed class BuildBook
         return queue.Count == 0 || queue[0].Started ? null : queue[0];
     }
 
-    /// <summary>The labor fee: per10Pcu SC per 10 PCU, rounded up.</summary>
-    public static long Fee(int pcu, long per10Pcu) =>
-        pcu <= 0 || per10Pcu <= 0 ? 0 : checked((pcu * per10Pcu + 9) / 10);
+    /// <summary>The labor fee: per100Pcu SC per 100 PCU, rounded up.</summary>
+    public static long Fee(int pcu, long per100Pcu) =>
+        pcu <= 0 || per100Pcu <= 0 ? 0 : checked((pcu * per100Pcu + 99) / 100);
 
     // --- quote and order ---
 
@@ -392,8 +392,9 @@ public sealed class BuildBook
         orders[order.Id] = order;
         return new BuildResult(
             true,
-            $"'{order.Ship}' is in the queue: {MarketBook.Sc(quote.Cost)} for the components and "
-                + $"{MarketBook.Sc(order.Fee)} labor paid.",
+            $"'{order.Ship}' is in the queue: {MarketBook.Sc(quote.Cost)} for the components"
+                + (order.Fee > 0 ? $" and {MarketBook.Sc(order.Fee)} labor" : "")
+                + " paid.",
             order
         );
     }
@@ -441,8 +442,12 @@ public sealed class BuildBook
         orders.Remove(order.Id);
         return new BuildResult(
             true,
-            $"'{order.Ship}' left the queue. Its components are in the ledger at {station} and "
-                + $"the labor fee of {MarketBook.Sc(order.Fee)} is paid back.",
+            $"'{order.Ship}' left the queue. Its components are in the ledger at {station}"
+                + (
+                    order.Fee > 0
+                        ? $" and the labor fee of {MarketBook.Sc(order.Fee)} is paid back."
+                        : "."
+                ),
             order
         );
     }
@@ -493,6 +498,7 @@ public sealed class BuildBook
     /// returns the rest. With <paramref name="refund"/> (the build couldn't start, or its ship
     /// was removed) every component comes back, whatever the leftovers, and the fee too. An order
     /// that never started still has its components in the build ledger, so only that comes back.
+    /// The result's message says when a fee came back, which only the authority's order knows.
     /// </summary>
     public BuildResult Finish(
         IMarketWorld w,
@@ -553,7 +559,13 @@ public sealed class BuildBook
         if (refund)
             Refund(w, order);
         orders.Remove(id);
-        return new BuildResult(true, "", order);
+        return new BuildResult(
+            true,
+            refund && order.Fee > 0
+                ? $"The labor fee of {MarketBook.Sc(order.Fee)} is paid back."
+                : "",
+            order
+        );
     }
 
     // --- persistence: a line per order, tab-separated ---
@@ -673,7 +685,8 @@ public sealed class BuildBook
         text.AppendLine();
         text.AppendLine($"From listings: {quote.Lines.Sum(l => l.ListingsCost):N0} SC");
         text.AppendLine($"From OCT: {quote.Lines.Sum(l => l.OctCost):N0} SC");
-        text.AppendLine($"Labor fee: {quote.Fee:N0} SC");
+        if (quote.Fee > 0)
+            text.AppendLine($"Labor fee: {quote.Fee:N0} SC");
         text.AppendLine($"Total: {quote.Total:N0} SC");
         text.AppendLine($"The account has {Math.Max(0, quote.Balance):N0} SC");
         return text.ToString();

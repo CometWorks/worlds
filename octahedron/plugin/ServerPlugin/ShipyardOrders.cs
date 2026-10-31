@@ -308,7 +308,7 @@ internal static class ShipyardOrders
                 ? LedgerOwner.OfFaction(faction.FactionId)
                 : LedgerOwner.Player(identityId);
         plan.PayerName = plan.Payer.Faction ? $"your faction {faction.Tag}" : "you";
-        plan.Fee = BuildBook.Fee(plan.Pcu, Config.ShipyardLaborFeePer10Pcu);
+        plan.Fee = BuildBook.Fee(plan.Pcu, Config.ShipyardLaborFeePer100Pcu);
         foreach (var c in Components(blueprint, skipFirst: false))
             plan.Needed[Ledgers.ItemName(c.Key)] = c.Value * LedgerBook.Unit;
         plan.HydrogenLiters =
@@ -1727,6 +1727,7 @@ internal static class ShipyardOrders
         first.ConstructionStockpile = null;
         first.Owner = first.BuiltBy = next.Player;
         first.ShareMode = MyOwnershipShareModeEnum.Faction;
+        TargetNeutrals.Clear(first);
         ship.CubeBlocks =
         [
             first,
@@ -1828,7 +1829,10 @@ internal static class ShipyardOrders
                 if (!ok)
                     Plugin.Log.Error($"Shipyard order {order.Id} could not finish: {answer}");
                 if (message != null)
-                    Tell(order.Player, message);
+                    Tell(
+                        order.Player,
+                        ok && answer.Length > 0 ? $"{message.TrimEnd('.')}. {answer}" : message
+                    );
             }
         );
         Plugin.Log.Info(
@@ -1927,7 +1931,7 @@ internal static class ShipyardOrders
                     + (
                         order.Free
                             ? ", and the free build doesn't count."
-                            : ", its components are back in the ledger and the labor fee is paid back."
+                            : ", its components are back in the ledger."
                     )
             : order.Missing != null && !gone
                 ? $"{stalled}. The ship is yours without {order.Missing}"

@@ -169,6 +169,23 @@ checked the same way. Its own limit, `ProjectionPcuLimitPercent`, applies when a
 blueprint is loaded and is counted apart from the player's PCU, so nothing is
 counted twice.
 
+### Target Neutrals
+
+With `ClearTargetNeutralsEnabled` on, a new turret or custom turret controller, modded
+ones too, starts with Target Neutrals off however it is built: placed by hand, as the
+first block of a new grid, welded from a projection by any tool, pasted, as a starter
+ship or by a shipyard. Ships and stations then shoot only at those whose reputation
+makes them enemies, and players can turn their weapons off around stations.
+Searchlights keep their setting, they don't shoot.
+
+A prefab ship gets the same when it is made for a player: one bought from a store
+block and a respawn ship. Ships NPCs own keep their design, like encounter ships and
+wrecks.
+
+It happens once. A player who turns the setting back on keeps it: a grid loaded from a
+save or moved to another cluster node isn't built, so it isn't cleared again. Grids
+already in a world keep what they have.
+
 ### PCU per ship or station
 
 A ship or station may have at most `GroupPcuLimit` (60,000) PCU: all grids
@@ -236,7 +253,7 @@ button. The first screen of the billboard next to it (`ShipyardDetailsPanelName`
 `Billboard LCD Ship Build Details`) keeps its first line and lists the ship's bill
 of materials under it; a station from before the billboard shows the list on the
 table's screen until the world is wiped. The billboard's second screen, how to
-order, comes from `build_world.py`.
+order, is the blueprint's own text, as are the station's other signs.
 
 A player who loads a blueprint holds the table: it is their block, shared with
 nobody, so nobody else can load over it or remove the blueprint. Loading another
@@ -286,8 +303,8 @@ up, with the idle time starting over.
 
 The plugin gives the button a toolbar item (its own On switch) so that clients
 offer it; the item never runs. `!oct order [table name]` (admin) presses the button
-of the nearest table and `!oct table remove [table name]` (admin) removes the blueprint
-of a table nobody else holds.
+of the nearest table, `!oct table remove [table name]` (admin) removes the blueprint
+of a table nobody else holds and `!oct table show [table name]` (admin) prints its screens.
 
 - A ship is a free build for a player with less than `FreeBuildPcuLimit`
   (10,000) PCU, counted as for the starter ship, once `FreeBuildCooldownMinutes`
@@ -312,8 +329,9 @@ of a table nobody else holds.
   rank. The quote lists each component of every block with where it comes from:
   the payer's ledger at the station first (free), then bought from the cheapest
   player listings and OCT, as the market's Buy does. On top comes the labor fee,
-  `ShipyardLaborFeePer10Pcu` (1) SC per 10 PCU of the blueprint, rounded up,
-  paid to OCT on every build. The materials also include the hydrogen to fill
+  `ShipyardLaborFeePer100Pcu` (0) SC per 100 PCU of the blueprint, rounded up,
+  paid to OCT on every build. At 0 there is no fee, and the quote and the
+  messages don't mention one. The materials also include the hydrogen to fill
   the ship's H2 tanks to `ShipyardHydrogenFillPercent` (50 %): from the H2 tanks
   of the payer's ships docked at the station's connectors first, the rest as
   ice (`ShipyardHydrogenLitersPerIce`, 20 L per kg) from the ledger and the
@@ -448,10 +466,11 @@ once, never the rotor head itself; the shipyard starts its next build after
 that. An idle shipyard takes down anything an NPC built that is left on its
 rotor heads. An unfinished ship that is delivered leaves the arm's projector
 behind, and it comes down with the arm. A ship built without an arm loses its
-scaffold projector the same way. What
-the arm didn't use of its components is removed with the ship's leftovers, and
-only the ship's go back to the ledger. The `!oct shipyards` admin command lists
-the shipyards, their arm rotors and the running builds with their arm.
+scaffold projector the same way. The shipyard loads what the arm's blocks still
+need, without the first component each frame already has. What the arm didn't
+use of them is removed with the ship's leftovers, and only the ship's go back to
+the ledger. The `!oct shipyards` admin command lists the shipyards, their arm
+rotors and the running builds with their arm.
 `!oct shipyard strip <station> <item>` takes an item out of a shipyard's
 containers and welders, so tests can stall a build.
 
@@ -668,8 +687,8 @@ With Hangar 1.1.0 or later on the server, set to `AdminSafeZonesOnly`, players s
 and retrieve their ships only inside a station's safe zone, the world's only admin
 safe zones, and Hangar records the zone on each stored ship. A ship comes back free at
 the station it was stored at. At another station it costs `HangarRetrieveFeePer10Pcu`
-(1) SC per 10 PCU, rounded up, paid to OCT: the labor fee of building it, with no wait,
-and the ship keeps its inventory. A player who can't pay is told the price and the
+(1) SC per 10 PCU, rounded up, paid to OCT, with no wait, and the ship keeps its
+inventory. A player who can't pay is told the price and the
 ship stays stored. The plugin hooks Hangar by reflection, so it still runs without
 Hangar, or with an older one, where retrieval is free.
 
@@ -729,7 +748,7 @@ salvage) a contract as the caller, for tests and support.
 ### Leaderboard
 
 The station panels named `LeaderboardBlockName` ("Curved LCD Panel - Station Lounge
-Leaderboard", 4 at every station) rank the factions by their value in SC: the cash in
+Leaderboard", 1 at every station) rank the factions by their value in SC: the cash in
 the faction's bank account, with the money held for its market orders, plus its grids.
 They also show each faction's PCU. A grid is the faction's when its biggest owner is a
 member. Its value is what its blocks are built of, their mounted components, plus its
@@ -1030,6 +1049,15 @@ Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
 blocks to their functional level, two grids merging and a rotor attaching a
 head, each stopped by the cap, next to a copy built by nobody that isn't.
+`tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
+with the client, welding them through shipyard orders, with the rule off too, and a
+test mod's turret whose definition has it on. It buys ships at a store block and
+respawns in one, through the tests/neutrals-probe plugin, and spawns one for an NPC,
+which keeps it. It reads the setting on the client and in the saved world, across a
+restart.
+`tests/target_neutrals_cluster.py` does it on a cluster with a shipyard order, a paste
+and blocks placed by hand, and keeps a player's later choice through handovers and
+a cluster restart.
 `tests/test_shipyard_zone.py` restricts the zones as the world does, then checks
 with the client that Alpha Station's shipyard welds a projection, while in the
 same zone a player's hand welder and grinder, ship welder and grinder, and an
