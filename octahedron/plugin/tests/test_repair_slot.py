@@ -158,7 +158,7 @@ def book_and_idle_out(a, b) -> None:
     state = yard(a)
     check(theirs(state, "OctTester"), f"the blocks are the player's: {state}")
     power_stays(state, "in the slot")
-    reply = " ".join(rig.chat(a, f"!kprobe yard {STATION} OctOther", 3))
+    reply = " ".join(rig.chat(a, f"!sprobe yard {STATION} OctOther", 3))
     check(
         "access cargo=False welders=False connectors=False reactors=False" in reply,
         f"another player has no access: {reply}",
@@ -171,7 +171,7 @@ def book_and_idle_out(a, b) -> None:
     probe(a, "faction KRS founder")
     with Second():
         probe(b, "faction KRS member")
-    reply = " ".join(rig.chat(a, f"!kprobe yard {STATION} OctOther", 3))
+    reply = " ".join(rig.chat(a, f"!sprobe yard {STATION} OctOther", 3))
     check(
         "access cargo=True welders=True connectors=True reactors=False" in reply,
         f"their faction has access, but to the reactors: {reply}",
