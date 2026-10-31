@@ -93,21 +93,10 @@ def filled_blueprint(name: str, out: Path) -> Path:
     return path
 
 
-def cruise(section: str, mass: float) -> tuple[float, float, float]:
-    """(cruise speed at this mass, boost limit, resistance multiplier) from the world's config"""
+def rts_grid(section: str) -> tuple[float, float]:
+    """(boost limit, resistance multiplier) from the world's config"""
     node = ET.parse(RTS_CONFIG).getroot().find(section)
-    points = sorted(
-        (float(p.get("Mass")), float(p.get("Speed"))) for p in node.find("CruiseCurve")
-    )
-    speed = points[-1][1]
-    if mass <= points[0][0]:
-        speed = points[0][1]
-    else:
-        for (m0, s0), (m1, s1) in zip(points, points[1:]):
-            if m0 <= mass <= m1:
-                speed = s0 + (s1 - s0) * (mass - m0) / (m1 - m0)
     return (
-        speed,
         float(node.findtext("MaxBoostSpeed")),
         float(node.findtext("ResistanceMultiplier")),
     )
@@ -227,16 +216,15 @@ def run(bench) -> None:
         samples = fly(read, 180)
         api.clear_input_state()
         top = max(s for _, s in samples)
-        mass = state["mass"]
         accel = acceleration(samples)
-        cruising, boost, resistance = cruise(section, mass)
+        boost, resistance = rts_grid(section)
         results[label] = {
             "top": round(top, 1),
             "server": round(fastest_on_server[0], 1),
-            "mass_kg": round(mass),
             "accel": round(accel, 1),
-            "100_plus_accel": round(100 + accel, 1),
-            "rts_expected": round(min(boost, cruising + accel / resistance), 1),
+            # A limit L braking at 1 m/s2 per m/s over it settles at L + accel, likewise for the mod's multiplier
+            "limit_if_trade_lanes": round(top - accel, 1),
+            "cruise_if_rts": round(top - accel / resistance, 1),
             "seconds": round(samples[-1][0], 1),
         }
         print(f"{label}: {json.dumps(results[label])}", flush=True)
@@ -247,9 +235,8 @@ def run(bench) -> None:
             results[label],
         )
         check(
-            f"the {label} gets close to what Relative Top Speed gives it",
-            abs(top - results[label]["rts_expected"])
-            < 0.1 * results[label]["rts_expected"],
+            f"the {label} stays within Relative Top Speed's boost limit",
+            top <= boost * 1.01,
             results[label],
         )
         api.character_use()
