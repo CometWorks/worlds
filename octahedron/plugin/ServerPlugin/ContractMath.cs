@@ -6,6 +6,34 @@ namespace ServerPlugin;
 // tests (tests/contracts/ContractTests) check them without a server
 internal static class ContractMath
 {
+    public enum TowResult
+    {
+        Take,
+
+        // Taken, and the player is over their limit
+        TakeOverLimit,
+
+        // Over the limit of a ship
+        TooBig,
+
+        // More than 10 % over the player's limit
+        OverLimit,
+    }
+
+    /// <summary>
+    /// A grid of pcu towed in by a player with used PCU, against their limit and a ship's. A limit of
+    /// zero or less, or int.MaxValue for the player's, is no limit.
+    /// </summary>
+    public static TowResult Tow(int pcu, int used, int limit, int shipLimit)
+    {
+        if (shipLimit > 0 && pcu > shipLimit)
+            return TowResult.TooBig;
+        long after = (long)used + pcu;
+        if (limit <= 0 || limit == int.MaxValue || after <= limit)
+            return TowResult.Take;
+        return after * 10 <= limit * 11L ? TowResult.TakeOverLimit : TowResult.OverLimit;
+    }
+
     // Rewards are an int in the game's contracts
     private static int Sc(double amount) => (int)Math.Min(int.MaxValue, Math.Ceiling(amount));
 

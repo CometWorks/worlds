@@ -278,14 +278,18 @@ internal static class StarterShip
     // The player's PCU: built blocks on this node and, on a cluster, on the other nodes (the
     // cluster plugin's ledger), plus the ships the player keeps in Hangar. The ledger knows only
     // the grids some node has loaded, not those in offline partitions.
-    internal static int PlayerPcu(MyIdentity identity)
+    internal static int PlayerPcu(MyIdentity identity) =>
+        BuiltPcu(identity) + HangarPcu(MySession.Static.Players.TryGetSteamId(identity.IdentityId));
+
+    // Without Hangar: what the game's limit counts
+    internal static int BuiltPcu(MyIdentity identity)
     {
         var pcu = identity.BlockLimits.PCUBuilt;
         if (RemoteUsage.Value != null)
             pcu += (
                 (ValueTuple<int, int>)RemoteUsage.Value.Invoke(null, [identity.IdentityId])
             ).Item1;
-        return pcu + HangarPcu(MySession.Static.Players.TryGetSteamId(identity.IdentityId));
+        return pcu;
     }
 
     private static readonly Lazy<MethodInfo> RemoteUsage = new(() =>

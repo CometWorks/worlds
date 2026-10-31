@@ -37,7 +37,7 @@ internal static class GroupPcuLimit
         return pcu;
     }
 
-    private static int GroupPcu(MyCubeGrid grid)
+    internal static int GroupPcu(MyCubeGrid grid)
     {
         var group = MyCubeGridGroups.Static.Mechanical.GetGroup(grid);
         if (group == null)

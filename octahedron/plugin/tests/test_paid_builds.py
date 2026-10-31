@@ -2,7 +2,8 @@
 headless client, at Alpha Station, with OmniArc, ToolCore and Multigrid Projector
 as on the Octahedron servers, and the station probe.
 
-The tables hold "PaidTest": 45 armor blocks and a small H2 tank (1,000,000 L).
+The tables hold "PaidTest": 45 armor blocks, a small H2 tank (1,000,000 L) and a
+remote control, which keeps the finished ship from counting as a wreck.
 With FreeBuildPcuLimit 0 every build is paid, with a labor fee of OCT_LABOR_FEE
 (default 10) SC per 100 PCU; 0 checks that nothing mentions the fee. The client
 uses !oct order, which presses the hologram table's button for an admin (the
@@ -59,6 +60,7 @@ BLUEPRINT = rig.grid(
         rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, z))
         for z in range(2, 6)
     ]
+    + [rig.block("MyObjectBuilder_RemoteControl", "LargeBlockRemoteControl", (0, 0, 6))]
     # Enough blocks to keep the welders busy for a while
     + [
         rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
@@ -73,6 +75,8 @@ STOCK = {
     "Component/SmallTube": 100,
     "Component/Computer": 100,
     "Component/Construction": 100,
+    "Component/InteriorPlate": 100,
+    "Component/Motor": 100,
     PLATE: 2000,
 }
 # Enough to pay it, with a low balance otherwise
