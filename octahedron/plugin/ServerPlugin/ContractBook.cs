@@ -196,18 +196,18 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             && last - row.Seen >= goneAfter;
     }
 
+    // A grid in an offline partition is where it was: once that partition wakes, its node gets
+    // goneAfter to load it and report it, counted from now and not from before it slept
     public void Forget(DateTime now)
     {
         if (Offline == null)
             return;
+        foreach (var row in Grids.Values.Where(r => Offline.ContainsKey(r.Id)))
+            row.Seen = now;
         var targeted = Targets.Values.Select(t => t.Grid).ToHashSet();
         foreach (
             var id in Grids
-                .Values.Where(r =>
-                    !targeted.Contains(r.Id)
-                    && !Offline.ContainsKey(r.Id)
-                    && now - r.Seen >= StaleAfter
-                )
+                .Values.Where(r => !targeted.Contains(r.Id) && now - r.Seen >= StaleAfter)
                 .Select(r => r.Id)
                 .ToList()
         )
@@ -425,11 +425,13 @@ internal sealed class ContractBook(TimeSpan goneAfter)
 
     public string SerializeGrids() => string.Join("\n", Grids.Values.Select(g => g.Encode()));
 
-    public void LoadGrids(string text)
+    // The time the authority was down doesn't count against them: they count as seen now
+    public void LoadGrids(string text, DateTime now)
     {
         foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var row = ContractGrid.Decode(line);
+            row.Seen = now;
             Grids[row.Id] = row;
         }
     }

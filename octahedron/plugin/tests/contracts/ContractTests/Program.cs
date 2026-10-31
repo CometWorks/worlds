@@ -236,6 +236,16 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     book.Offline = null;
     Check(!book.IsGone(1, t0 + week), "an unknown table says nothing");
 
+    // Its partition wakes after a week: its node gets its time from then, not from before it slept
+    book = Book(Row(1, Dead));
+    book.Offline[1] = t0;
+    book.Forget(t0 + week);
+    book.Offline.Remove(1);
+    book.Report("n1", [], t0 + week + TimeSpan.FromSeconds(10));
+    Check(!book.IsGone(1, t0 + week + TimeSpan.FromSeconds(10)), "just woken: not gone");
+    book.Report("n1", [], t0 + week + goneAfter);
+    Check(book.IsGone(1, t0 + week + goneAfter), "woken and not reported for 3 minutes: gone");
+
     // A plain server reports everything every time, so it knows at once
     book = new ContractBook(TimeSpan.Zero) { Offline = [] };
     book.Report("local", [Row(1, Dead)], t0);
@@ -340,7 +350,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     };
     var back = new ContractBook(goneAfter) { Offline = [] };
     back.LoadTargets(book.SerializeTargets());
-    back.LoadGrids(book.SerializeGrids());
+    back.LoadGrids(book.SerializeGrids(), t0 + week);
     var target = back.Targets[7];
     Check(
         target.Kind == 'w'
@@ -357,7 +367,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
             && grid.Blocks == 100
             && grid.MassKg == 100_000
             && grid.Node == "n1"
-            && grid.Seen == t0
+            && grid.Seen == t0 + week
             && grid.Name == "with tab",
         "the grid comes back"
     );

@@ -180,7 +180,7 @@ internal static class Contracts
             if (MyAPIGateway.Utilities.GetVariable<string>(VariableName, out var targets))
                 loaded.LoadTargets(targets);
             if (MyAPIGateway.Utilities.GetVariable<string>(GridsVariableName, out var grids))
-                loaded.LoadGrids(grids);
+                loaded.LoadGrids(grids, DateTime.UtcNow);
         }
         catch (Exception e) when (e is FormatException or IndexOutOfRangeException)
         {
