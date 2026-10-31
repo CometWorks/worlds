@@ -25,6 +25,8 @@ so the world's Trade Lane Computers would count.
 - A node restart keeps the contracts, and so does a graceful cluster stop and warm start, with the player's
   ownership and the memory of the given grid.
 
+- A derelict refused while the player is more than 10% over their limit: the contract stays open, then
+  finishes once they are back within it.
 - An NPC ship held by a player's tug at the shipyard, with no contract: refused over a ship's PCU limit
   and more than 10% over the player's, with a chat message and the owner unchanged; then 5% over, the
   player's with a warning, unpaid. The test's probe gives the tug and joins the grids as a connector would,
@@ -540,8 +542,20 @@ def run(bench) -> None:
         balances(api) == before and not grid_owner("Test Derelict"),
         f"{balances(api)} owner {grid_owner('Test Derelict')}",
     )
-    # The radius grows instead of the grid moving: it is in reach now
+    # The radius grows instead of the grid moving: it is in reach now, but too much for the player
+    set_pcu_limit(1)
     reconfigure(ContractSalvageRadius=3000)
+    over = chat('"Test Derelict" stays as it is: with its', 150)
+    check(
+        "more than 10% over the player's limit: refused, in chat, the contract open",
+        over
+        and named(contracts()[0], "Test Derelict", "salvage")[0][2] == "Active"
+        and balances(api) == before
+        and not grid_owner("Test Derelict"),
+        over,
+    )
+    # Back within the limit it goes on by itself
+    set_pcu_limit(1_000_000)
     now = paid(api, before, salvage[0][3])
     still_paid("salvage at the shipyard", before, now, salvage[0][3])
     holder = owner("Test Derelict")
@@ -622,7 +636,7 @@ def run(bench) -> None:
     set_pcu_limit(1)
     reconfigure(GroupPcuLimit=60000)
     # A refusal is repeated only every 5 minutes
-    over = chat("more than 10% over your limit", 400)
+    over = chat('"Towed Pirate" stays as it is: with its', 400)
     check(
         "more than 10% over the player's limit: refused, in chat",
         over and grid_owner("Towed Pirate") == pirate,
@@ -655,6 +669,7 @@ def run(bench) -> None:
     before = balances(api)
     reply = " ".join(command(f"!oct contract accept {big_contract[0]} {identity}"))
     check("take the wreck", "Success" in reply, reply)
+    bench.wait_spawned(CLIENT_ID)
     api.character_teleport(at[0] + 300, at[1], at[2])
     wait_until(lambda: owner("Wreck Big"), 180, "Wreck Big awake")
     # Past a report and a check after it woke
