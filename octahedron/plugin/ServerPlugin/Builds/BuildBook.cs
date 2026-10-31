@@ -38,6 +38,9 @@ public sealed class BuildOrder
     // settings.
     public bool Exempt;
 
+    // A slot for the player to repair a ship with the shipyard's welders: no blueprint or payer
+    public bool Repair;
+
     // The blueprint, opaque here: base64, no tabs or line breaks
     public string Blueprint = "";
 
@@ -257,15 +260,11 @@ public sealed class BuildBook
     {
         if (!Amounts.ValidName(order.Station))
             return BuildResult.No("Unknown station.");
-        var mine = orders.Values.FirstOrDefault(o =>
-            o.Station == order.Station && o.Player == order.Player
-        );
+        var mine = orders.Values.FirstOrDefault(o => o.Player == order.Player);
         if (mine != null)
             return BuildResult.No(
-                $"'{mine.Ship}' is in this shipyard's queue for you already, one ship at a time."
+                $"'{mine.Ship}' is in a shipyard's queue for you already, one entry at a time."
             );
-        if (order.Free && orders.Values.Any(o => o.Free && o.Player == order.Player))
-            return BuildResult.No("The shipyards build one free ship at a time for you.");
         if (orders.Values.Count(o => o.Station == order.Station) >= s.QueueMax)
             return BuildResult.No($"The shipyard's queue is full, {s.QueueMax} ships.");
 
@@ -278,7 +277,13 @@ public sealed class BuildBook
         {
             nextId++;
             orders[order.Id] = order;
-            return new BuildResult(true, $"'{order.Ship}' is in the queue, a free build.", order);
+            return new BuildResult(
+                true,
+                order.Repair
+                    ? $"'{order.Ship}' is in the queue."
+                    : $"'{order.Ship}' is in the queue, a free build.",
+                order
+            );
         }
 
         var rest = new Dictionary<string, long>();
@@ -490,8 +495,10 @@ public sealed class BuildBook
                 o.Pcu.ToString(CultureInfo.InvariantCulture),
                 Clean(o.Ship),
                 BuildQuote.N(o.Created),
-                // Flags: 1 started, 2 exempt
-                ((o.Started ? 1 : 0) | (o.Exempt ? 2 : 0)).ToString(CultureInfo.InvariantCulture),
+                // Flags: 1 started, 2 exempt, 4 repair
+                ((o.Started ? 1 : 0) | (o.Exempt ? 2 : 0) | (o.Repair ? 4 : 0)).ToString(
+                    CultureInfo.InvariantCulture
+                ),
                 blueprint ? o.Blueprint ?? "" : ""
             )
         );
@@ -522,6 +529,7 @@ public sealed class BuildBook
         var flags = int.Parse(f[11], CultureInfo.InvariantCulture);
         order.Started = (flags & 1) != 0;
         order.Exempt = (flags & 2) != 0;
+        order.Repair = (flags & 4) != 0;
         for (int i = 13; i < f.Length; i += 2)
             order.Items[f[i]] = BuildQuote.L(f[i + 1]);
         return order;
@@ -641,6 +649,7 @@ public sealed class BuildRequest
     public long HydrogenUsed;
     public bool Refund;
     public bool Exempt;
+    public bool Repair;
     public Dictionary<string, long> Needed = new();
     public Dictionary<string, long> Provided = new();
 
@@ -661,7 +670,8 @@ public sealed class BuildRequest
             BuildQuote.N(MaxTotal),
             BuildQuote.N(HydrogenUsed),
             Refund ? "1" : "0",
-            Exempt ? "1" : "0"
+            Exempt ? "1" : "0",
+            Repair ? "1" : "0"
         )
         + "\n"
         + Items(Needed)
@@ -689,7 +699,7 @@ public sealed class BuildRequest
     {
         var lines = text.Split('\n');
         var f = lines[0].Split('\t');
-        if (lines.Length != 3 || f.Length != 13)
+        if (lines.Length != 3 || f.Length != 14)
             throw new FormatException("Malformed build request");
         return new BuildRequest
         {
@@ -706,6 +716,7 @@ public sealed class BuildRequest
             HydrogenUsed = BuildQuote.L(f[10]),
             Refund = f[11] == "1",
             Exempt = f[12] == "1",
+            Repair = f[13] == "1",
             Needed = Items(lines[1]),
             Provided = Items(lines[2]),
         };
@@ -746,6 +757,7 @@ public sealed class BuildRequest
                     Ship = Ship,
                     Blueprint = Blueprint,
                     Exempt = Exempt,
+                    Repair = Repair,
                 },
                 Needed,
                 Provided,

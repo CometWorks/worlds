@@ -62,6 +62,8 @@ internal static class StarterShip
             );
         if (!Plugin.Simulated(table.CubeGrid))
             return CommandReply.Error("The station is busy, try again in a few seconds.");
+        if (ShipyardOrders.Holder(table) is var holder && holder != 0 && holder != identityId)
+            return CommandReply.Error("Another player holds this hologram table for now.");
 
         var builder = (MyObjectBuilder_ProjectorBase)table.GetObjectBuilderCubeBlock(true);
         var grids = builder.ProjectedGrids;
@@ -121,7 +123,7 @@ internal static class StarterShip
         );
     }
 
-    // The nearest NPC-owned hologram table within reach, of the given name if there is one
+    // The nearest station hologram table within reach, of the given name if there is one
     internal static MyProjectorBase FindTable(
         MyCharacter character,
         string name,
@@ -142,8 +144,7 @@ internal static class StarterShip
             foreach (var table in grid.GetFatBlocks<MyProjectorBase>())
             {
                 if (
-                    table.BlockDefinition.Id.SubtypeName != config.StarterShipTableSubtype
-                    || !MySession.Static.Players.IdentityIsNpc(table.OwnerId)
+                    !ShipyardOrders.IsTable(table)
                     || (
                         name != null
                         && !string.Equals(

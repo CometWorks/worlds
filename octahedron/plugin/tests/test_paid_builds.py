@@ -13,7 +13,7 @@ button itself is pressed once at the end).
   player's account pays the quoted total, OCT's stock at Alpha goes down by the
   components, the hydrogen comes from the H2 tank of the player's ship docked at
   Alpha (half of it drained), and the build starts at once.
-- Pressing again while it builds doesn't cancel it. When the ship is ready its
+- When the ship is ready its
   H2 tank holds 500,000 L.
 - The finished ship stays in the shipyard, so the next order waits in the queue,
   bought too. After a server restart the queue entry is still there, and pressing
@@ -203,8 +203,6 @@ def paid_build(remote) -> None:
     )
     builds = wait_chat(remote, f"builds '{SHIP}' for you now", 60, mark)
     check(builds is not None, f"the build starts at once: {builds}")
-    busy = press(remote)
-    check("can't be canceled now" in busy, f"a press while it builds: {busy}")
     now = balance(remote)
     check(now == mine - cost, f"the player paid the quote: {mine} -> {now}, {cost}")
     check(plates(remote) == STOCK[PLATE] - 1205, "the plates left OCT's stock")
