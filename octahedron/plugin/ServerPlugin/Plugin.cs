@@ -157,6 +157,7 @@ public class Plugin : IPlugin
     {
         MesCluster.Dispose();
         Kiosks.Dispose();
+        ShipyardArm.Dispose();
         // Harmony patches stay: unpatching all may break other plugins
     }
 }

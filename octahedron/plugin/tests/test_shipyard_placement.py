@@ -5,15 +5,19 @@ the delivered ship from the saved world.
 A ship shorter than 1/4 of the shipyard (287.5 m: 71.9 m) goes 1/6 of the length from the middle,
 to the 1/3 point nearer the station:
 
-- "north", "south", "alpha": a 25 m large grid ship at a pole station and an equatorial one
+- "north", "alpha": a 25 m large grid ship at a pole station and an equatorial one
 - "under" at Gamma Station: 70 m long, just short enough
 - "small" at Delta Station: a small grid ship on a small arm rotor
+- "wide" at Moon Station: a thin small grid cross, 70 m wide and high, the largest search there is
 
-These stay in the middle:
+"quarter" at Beta Station, 72.5 m long, at least 1/4, stays in the middle.
 
-- "quarter" at Beta Station: 72.5 m long, at least 1/4
-- "wide" at Moon Station: a thin small grid cross, 70 m wide and high, whose support arm to the
-  1/3 point outgrows the planner's search box
+"limit" at South Station forces the support arm's time limit, ShipyardArmPlanSeconds 0:
+
+- A press gets the refusal and orders nothing. With the limit back, the press gets a quote.
+- A paid order waits behind a grid in the shipyard. The server restarts with the limit at 0 and
+  that grid gone: the order ends with its reason, its components and fee are back in the ledger,
+  and the rotor head has no arm.
 
     OCT_TASK=SE-824 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_shipyard_placement.py [case ...]
@@ -24,11 +28,13 @@ Prints one line per check and a pass/fail summary; exit code 0 = all passed.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 
 os.environ.setdefault("OCT_TASK", "SE-824")
 import rig  # noqa: E402
+import test_client as tc  # noqa: E402
 import test_support_arm as sa  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 from test_client import log  # noqa: E402
@@ -78,7 +84,7 @@ def wide_cross() -> tuple[str, int]:
 # The tables in the world's order: North, South, Alpha, Beta, Gamma, Delta, Moon
 SHIPS = {
     "north": ("North", "PlaceNorth", hull("PlaceNorth", 777000824000100, (3, 3, 10))),
-    "south": ("South", "PlaceSouth", hull("PlaceSouth", 777000824000200, (3, 3, 10))),
+    "limit": ("South", "PlaceLimit", sa.large("PlaceLimit", 777000824000200, False)),
     "alpha": ("Alpha", "PlaceAlpha", hull("PlaceAlpha", 777000824000300, (3, 3, 10))),
     "quarter": ("Beta", "PlaceQuarter", hull("PlaceQuarter", 777000824000400, (2, 2, 29))),
     "under": ("Gamma", "PlaceUnder", hull("PlaceUnder", 777000824000500, (2, 2, 28))),
@@ -86,7 +92,8 @@ SHIPS = {
     "wide": ("Moon", "PlaceWide", wide_cross()),
 }  # fmt: skip
 SIZES = {"small": "Small", "wide": "Small"}
-CENTERED = ("quarter", "wide")
+CENTERED = ("quarter",)
+BLOCKER = 777000824000800
 
 
 def frame(grid: ET.Element):
@@ -174,6 +181,88 @@ def check_place(root: ET.Element, case: str) -> None:
         )
 
 
+def blocker(root: ET.Element) -> str:
+    """A grid in South Station's shipyard: an order there waits for it to leave"""
+    yard = next(
+        e
+        for e in root.iter("MyObjectBuilder_EntityBase")
+        if e.findtext("DisplayName") == "South Station Shipyard"
+    )
+    pos, _, up, _ = frame(yard)
+    at = tuple(pos[i] - 2.5 * 16.5 * up[i] for i in range(3))
+    blocks = [rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, 0))]
+    grid = rig.grid("PlaceBlocker", BLOCKER, blocks, position=at)
+    return grid.replace("<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>")
+
+
+def ledger(remote) -> str:
+    return sa.admin(remote, "!oct ledger show South me", 4)
+
+
+def forced_limit(remote):
+    """Returns the client, joined again after the restart"""
+    tc.with_config(remote, ShipyardArmPlanSeconds=0, FreeBuildPcuLimit=0)
+    sa.at_table(remote, "South")
+    reply = sa.admin(remote, "!oct order", 8)
+    sa.check(
+        "could not plan a support arm" in reply, f"limit: the press is refused: {reply}"
+    )
+    sa.check(
+        "'PlaceLimit'" not in " ".join(sa.shipyard(remote, "South")),
+        "limit: nothing is ordered",
+    )
+    tc.with_config(remote, FreeBuildPcuLimit=0)
+    for item, count in sa.DEPOSIT.items():
+        sa.admin(remote, f"!oct ledger deposit South me {item} {count}", 3)
+    before = ledger(remote)
+    sa.at_table(remote, "South")
+    reply = sa.admin(remote, "!oct order", 8)
+    sa.check("Your quote for" in reply, f"limit: back at 5 s it quotes: {reply}")
+    reply = sa.admin(remote, "!oct order", 8)
+    sa.check("is in the queue" in reply, f"limit: ordered: {reply}")
+    sa.check(
+        "reserved build" in ledger(remote),
+        "limit: the components are in a build ledger",
+    )
+    # The server ends the order when it starts; no player needed
+    rig.stop_client()
+    rig.stop_server()
+    sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
+    text, count = re.subn(
+        rf"<MyObjectBuilder_EntityBase(?:(?!</MyObjectBuilder_EntityBase>).)*?<EntityId>{BLOCKER}</EntityId>.*?</MyObjectBuilder_EntityBase>\s*",
+        "",
+        sector.read_text(encoding="utf-8"),
+        count=1,
+        flags=re.S,
+    )
+    sa.check(count == 1, "limit: the grid in the shipyard is gone")
+    sector.write_text(text, encoding="utf-8")
+    config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
+    rig.write_plugin_config(
+        config.replace(
+            "</OctahedronConfig>",
+            "<FreeBuildPcuLimit>0</FreeBuildPcuLimit>"
+            "<ShipyardArmPlanSeconds>0</ShipyardArmPlanSeconds></OctahedronConfig>",
+        )
+    )
+    rig.start_server()
+    remote = rig.start_client()
+    line = sa.wait_log(
+        r"'PlaceLimit' can't be built: .*could not plan a support arm", 120
+    )
+    sa.check(line is not None, f"limit: the order ends with the reason: {line}")
+    rig.ensure_character(remote)
+    after = ledger(remote)
+    sa.check("reserved build" not in after, f"limit: the build ledger is gone: {after}")
+    sa.check(after == before, f"limit: everything is back: {before} -> {after}")
+    lines = sa.shipyard(remote, "South")
+    sa.check(
+        not any("'PlaceLimit'" in line for line in lines[1:]),
+        f"limit: no build in the shipyard: {lines}",
+    )
+    return remote
+
+
 def main() -> int:
     cases = sys.argv[1:] or list(SHIPS)
     tables = [SHIPS[c][2][0] for c in SHIPS]
@@ -194,6 +283,9 @@ def main() -> int:
         encoding="utf-8",
     )
     rig.CONFIG_SOURCE = patched
+    prepare_world = rig.prepare_world
+    source = ET.parse(rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").getroot()
+    rig.prepare_world = lambda **kw: prepare_world(extra_grids=[blocker(source)], **kw)
     so.prepare(tables, 60)
     rig.start_server()
     try:
@@ -201,6 +293,9 @@ def main() -> int:
         log("joined")
         for case in cases:
             rig.ensure_character(remote)
+            if case == "limit":
+                remote = forced_limit(remote)
+                continue
             mark = sa.order(remote, case)
             if mark is not None:
                 sa.finish(remote, case, mark)
@@ -209,7 +304,14 @@ def main() -> int:
         rig.stop_server()
     root = ET.parse(rig.WORLD / "SANDBOX_0_0_0_.sbs").getroot()
     for case in cases:
-        check_place(root, case)
+        if case != "limit":
+            check_place(root, case)
+    sa.check(
+        "PlaceLimit"
+        not in (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+        or "limit" not in cases,
+        "limit: no ship was started",
+    )
     for line in rig.server_game_log().splitlines():
         if "Shipyard arm" in line or "xception" in line:
             log("server: " + line.strip())
