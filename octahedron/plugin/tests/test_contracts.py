@@ -81,6 +81,12 @@ def test_grids() -> list[str]:
     # the shipyard, out of the test's reach of 500 m until the test widens it
     derelict = [
         rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 1, 0)),
+        rig.block(
+            "MyObjectBuilder_InteriorTurret",
+            "LargeInteriorTurret",
+            (1, 1, 0),
+            "<Flags><TargetNeutrals>true</TargetNeutrals></Flags>",
+        ),
         *(
             rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
             for x in range(6)
@@ -98,6 +104,14 @@ def set_options(remote, **values) -> None:
     OPTIONS.update(values)
     rig.write_plugin_config(config_text())
     rig.chat(remote, "!oct reload", 4)
+
+
+def target_neutrals(name: str) -> list[str]:
+    """Target Neutrals of the weapons of the grid named name in the saved sector file"""
+    sbs = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    end = sbs.index(f"<DisplayName>{name}</DisplayName>")
+    start = sbs.rindex("<CubeBlocks>", 0, end)
+    return re.findall(r"<TargetNeutrals>(\w+)</TargetNeutrals>", sbs[start:end])
 
 
 def owners(name: str) -> set[str]:
@@ -314,6 +328,12 @@ def main() -> int:
     check(
         owners("Test Derelict") == {str(identity)},
         f"the save: the derelict is the player's {owners('Test Derelict')}",
+    )
+    check(
+        target_neutrals("Test Derelict") == ["false"]
+        and target_neutrals("Yard Derelict") == ["true"],
+        "the save: Target Neutrals off on the given derelict's turret, not on the other's: "
+        f"{target_neutrals('Test Derelict')} {target_neutrals('Yard Derelict')}",
     )
     # The restarted server starts its log anew
     log_text = "".join(

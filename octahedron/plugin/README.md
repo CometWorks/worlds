@@ -705,6 +705,8 @@ Every minute the plugin fills each station up again:
   or withdraws it if nobody took it; the player who took it may repair it themselves.
   It pays per tonne as above; the time limit is `ContractSalvageMinutes` plus a minute
   for every 3 km.
+- A grid given to a player, with a contract or without, has Target Neutrals off on its
+  weapons from then on.
 - Any movable NPC grid, of any faction but OCT and no station, joined by a connector or
   landing gear to a player's ship and brought within `ContractSalvageRadius` of a
   shipyard becomes that player's, with its rotor and piston parts, if they are within
