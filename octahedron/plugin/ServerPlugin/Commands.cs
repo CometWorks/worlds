@@ -60,6 +60,30 @@ public sealed class Commands : CommandModule
             table.Length == 0 ? null : string.Join(" ", table)
         );
 
+    [Command(
+        "table show",
+        "Shows what the nearest hologram table's screen and billboard show",
+        "!oct table show [table name]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string TableShow(params string[] table) =>
+        ShipyardOrders.Show(
+            Context.Caller.IdentityId,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+
+    [Command(
+        "table remove",
+        "Removes the blueprint of the nearest hologram table, as the Remove button of its terminal does",
+        "!oct table remove [table name]: anyone can do this in the table's terminal to get the table."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string TableRemove(params string[] table) =>
+        ShipyardOrders.Remove(
+            Context.Caller.IdentityId,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+
     [Command("shipyards", "Lists the shipyards, their arm rotors and the builds running in them")]
     [Permission(MyPromoteLevel.Admin)]
     public IEnumerable<string> Shipyards() => ShipyardOrders.Describe();

@@ -124,6 +124,15 @@ LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 FREE_TOOLS = "Free Tools"
 FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
+# What the Octahedron plugin looks up by name on every station for the shipyard: its hologram
+# table, button, queue panel and bill of materials billboard. A new blueprint that lost one
+# fails here instead of silently losing the feature.
+PLUGIN_BLOCKS = (
+    "Console Block - Station ShipyardProjection",
+    "Button Panel - Station ShipyardConfirm",
+    "Text Panel - Station ShipyardQueue",
+    "Billboard LCD Ship Build Details",
+)
 # Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
 # pressurized back half: behind the station and away from the planet, which keeps it off the
 # lanes. The pair is centered on the safe zone, and spread apart as far as their block bounds
@@ -699,6 +708,9 @@ def station(template, ids, name, center, forward, up, owner):
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
     loot, free_tools = None, 0
+    named = [block.findtext("CustomName") for block in grid.find("CubeBlocks")]
+    for wanted in PLUGIN_BLOCKS:
+        assert wanted in named, f"the station blueprint has no {wanted}"
     for block in grid.find("CubeBlocks"):
         recolor(block, STATION_COLORS[name])
         if block.find("Owner") is None:
