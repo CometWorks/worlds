@@ -510,11 +510,14 @@ def run(bench) -> None:
 
     # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
     reconfigure(ContractSalvageRadius=500, ContractSalvageMinBlocks=1)
+    # Creative tools: the character has no building materials
+    api.set_admin_flag("creativeTools", True)
     built = api.character_build_grid(
         "LargeBlockArmorBlock",
         (shipyard[0] + 10, shipyard[1] - 900, shipyard[2]),
         static=False,
     )
+    api.set_admin_flag("creativeTools", False)
     check("the player builds an armor block", built.get("reply") is True, built)
     time.sleep(70)
     found = post()

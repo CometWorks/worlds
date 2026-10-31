@@ -242,9 +242,12 @@ def main() -> int:
 
     # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
     set_options(remote, ContractSalvageRadius=500, ContractSalvageMinBlocks=1)
+    # Creative tools: the character has no building materials
+    remote.set_admin_flag("creativeTools", True)
     built = remote.character_build_grid(
         "LargeBlockArmorBlock", (sx + 10, sy - 900, sz), static=False
     )
+    remote.set_admin_flag("creativeTools", False)
     check(built.get("reply") is True, f"the player builds an armor block: {built}")
     time.sleep(70)
     own = next(
