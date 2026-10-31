@@ -109,6 +109,12 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
 
 // The labor fee: 1 SC per 10 PCU, rounded up
 {
+    Check(
+        ShipyardPlacement.Offset(70, 282.5) == 282.5 / 6,
+        "placement: short ship at the 1/3 point"
+    );
+    Check(ShipyardPlacement.Offset(282.5 / 4, 282.5) == 0, "placement: a quarter long is centered");
+    Check(ShipyardPlacement.Offset(100, 282.5) == 0, "placement: long ship centered");
     Check(BuildBook.Fee(60_000, 1) == 6_000, "fee: 60k PCU is 6,000 SC");
     Check(BuildBook.Fee(15, 1) == 2, "fee: rounded up");
     Check(BuildBook.Fee(0, 1) == 0 && BuildBook.Fee(500, 0) == 0, "fee: none");

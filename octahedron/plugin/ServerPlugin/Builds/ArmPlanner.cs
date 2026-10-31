@@ -369,13 +369,24 @@ public static class ArmPlanner
             terminals.Max(t => t.Tee.Y),
             terminals.Max(t => t.Tee.Z)
         );
-        int Heuristic(Cell c) =>
-            Math.Max(0, lo.X - c.X)
-            + Math.Max(0, c.X - hi.X)
-            + Math.Max(0, lo.Y - c.Y)
-            + Math.Max(0, c.Y - hi.Y)
-            + Math.Max(0, lo.Z - c.Z)
-            + Math.Max(0, c.Z - hi.Z);
+        // The cells left to the goals' box, and a turn for each axis left but the one going along
+        // it. Without the turns a far ship floods every staircase of equal length.
+        int Heuristic(Cell c, int d)
+        {
+            var dx = Math.Max(lo.X - c.X, c.X - hi.X);
+            var dy = Math.Max(lo.Y - c.Y, c.Y - hi.Y);
+            var dz = Math.Max(lo.Z - c.Z, c.Z - hi.Z);
+            var axes = (dx > 0 ? 1 : 0) + (dy > 0 ? 1 : 0) + (dz > 0 ? 1 : 0);
+            var dir = Cell.Directions[d];
+            var on =
+                (dir.X != 0 && dx > 0 && (dir.X > 0) == (c.X < lo.X))
+                || (dir.Y != 0 && dy > 0 && (dir.Y > 0) == (c.Y < lo.Y))
+                || (dir.Z != 0 && dz > 0 && (dir.Z > 0) == (c.Z < lo.Z));
+            return Math.Max(0, dx)
+                + Math.Max(0, dy)
+                + Math.Max(0, dz)
+                + (axes - (on ? 1 : 0)) * p.TurnCost;
+        }
 
         var cost = new Dictionary<int, double>();
         var from = new Dictionary<int, int>();
@@ -384,7 +395,7 @@ public static class ArmPlanner
         var start = Index(p.Start, up);
         cost[start] = 1;
         from[start] = -1;
-        queue.Enqueue(start, 1 + Heuristic(p.Start));
+        queue.Enqueue(start, 1 + Heuristic(p.Start, up));
         // A finished line: the goal's state and its total, kept until nothing cheaper is left
         var best = (State: -1, Total: double.MaxValue);
         while (queue.Count > 0)
@@ -395,7 +406,7 @@ public static class ArmPlanner
             var c = CellOf(state);
             var d = state % 6;
             var g = cost[state];
-            if (priority > g + Heuristic(c) + 1e-9)
+            if (priority > g + Heuristic(c, d) + 1e-9)
                 continue;
             if (goals.TryGetValue(state, out var goal) && g + goal.Extra < best.Total)
                 best = (state, g + goal.Extra);
@@ -415,7 +426,7 @@ public static class ArmPlanner
                     return (null, null, 0);
                 cost[n] = ng;
                 from[n] = state;
-                queue.Enqueue(n, ng + Heuristic(next));
+                queue.Enqueue(n, ng + Heuristic(next, e));
             }
         }
         if (best.State < 0)

@@ -72,19 +72,19 @@ internal static class ShipyardArm
         );
 
     /// <summary>
-    /// The cheapest arm of any rotor for the blueprint, built in the shipyard's free space with
-    /// its main grid's orientation in the world; null with the reason in error.
+    /// The cheapest arm of any rotor for the blueprint, built with its bounds centered on center
+    /// and its main grid's orientation in the world; null with the reason in error.
     /// </summary>
     public static Layout Plan(
         MyCubeGrid shipyard,
-        MyOrientedBoundingBoxD space,
+        Vector3D center,
         MatrixD orientation,
         List<MyObjectBuilder_CubeGrid> blueprint,
         out string error
     )
     {
         var key =
-            $"{shipyard.EntityId}|{Config.ShipyardArmTurnCost}|{Signature(blueprint)}|{space.Center:F1}";
+            $"{shipyard.EntityId}|{Config.ShipyardArmTurnCost}|{Signature(blueprint)}|{center:F1}";
         if (cache.TryGetValue(key, out var cached) && cached.Grid?.MarkedForClose == false)
         {
             error = null;
@@ -97,7 +97,7 @@ internal static class ShipyardArm
         {
             if (rotor.TopGrid.GridSizeEnum != blueprint[0].GridSizeEnum)
                 continue;
-            var layout = PlanFor(shipyard, rotor, space, orientation, blueprint, out var why);
+            var layout = PlanFor(shipyard, rotor, center, orientation, blueprint, out var why);
             if (layout == null)
             {
                 Note(rotor.EntityId, $"Shipyard arm on '{rotor.CustomName}': {why}");
@@ -140,7 +140,7 @@ internal static class ShipyardArm
     private static Layout PlanFor(
         MyCubeGrid shipyard,
         MyMotorStator rotor,
-        MyOrientedBoundingBoxD space,
+        Vector3D center,
         MatrixD orientation,
         List<MyObjectBuilder_CubeGrid> blueprint,
         out string error
@@ -169,7 +169,7 @@ internal static class ShipyardArm
         var world = (MatrixD)turnMatrix * armRotation;
         var bounds = TableHologram.Bounds(blueprint);
         var origin = grid.WorldToGridInteger(
-            space.Center - Vector3D.TransformNormal(bounds.Center, world)
+            center - Vector3D.TransformNormal(bounds.Center, world)
         );
         var toArm = new MatrixI(origin, forward, up);
 

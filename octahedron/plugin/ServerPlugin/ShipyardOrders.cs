@@ -316,13 +316,7 @@ internal static class ShipyardOrders
             return $"The ship's components take {needed:N0} m³, {shipyard.DisplayName}'s containers hold {capacity:N0} m³.";
         if (arms)
         {
-            ShipyardArm.Plan(
-                shipyard,
-                space,
-                ShipRotation(shipyard, main),
-                blueprint,
-                out var error
-            );
+            ArmLayout(shipyard, space, blueprint, size.Z, out var error);
             return error;
         }
         return null;
@@ -1135,7 +1129,7 @@ internal static class ShipyardOrders
         main.CubeBlocks.Insert(0, start);
         Vector3I startCell = start.Min;
         var scaffold = new[] { startCell + outward, startCell + 2 * outward };
-        Size(blueprint, start, outward, out var bounds);
+        var size = Size(blueprint, start, outward, out var bounds);
         var (forward, up) = StarterShip.CockpitFrame(main);
         var turn = MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
 
@@ -1158,7 +1152,7 @@ internal static class ShipyardOrders
         ship.PersistentFlags =
             MyPersistentEntityFlags2.InScene | MyPersistentEntityFlags2.CastShadows;
         ship.PositionAndOrientation = new MyPositionAndOrientation(
-            space.Center - Vector3D.TransformNormal(bounds.Center, world),
+            ShipCenter(shipyard, space, size.Z) - Vector3D.TransformNormal(bounds.Center, world),
             (Vector3)world.Forward,
             (Vector3)world.Up
         );
@@ -1492,6 +1486,24 @@ internal static class ShipyardOrders
 
     // --- the support arm ---
 
+    // The support arm of a ship at its place, or in the middle when none reaches a short ship's
+    // place: its search box grows with the way there, and a wide small grid ship outgrows it
+    private static ShipyardArm.Layout ArmLayout(
+        MyCubeGrid shipyard,
+        MyOrientedBoundingBoxD space,
+        List<MyObjectBuilder_CubeGrid> blueprint,
+        double length,
+        out string error
+    )
+    {
+        var rotation = ShipRotation(shipyard, blueprint[0]);
+        var center = ShipCenter(shipyard, space, length);
+        var layout = ShipyardArm.Plan(shipyard, center, rotation, blueprint, out error);
+        return layout == null && center != space.Center
+            ? ShipyardArm.Plan(shipyard, space.Center, rotation, blueprint, out error)
+            : layout;
+    }
+
     private static string CreateWithArm(
         MyCubeGrid shipyard,
         BuildOrder next,
@@ -1500,13 +1512,8 @@ internal static class ShipyardOrders
     )
     {
         var main = blueprint[0];
-        var layout = ShipyardArm.Plan(
-            shipyard,
-            space,
-            ShipRotation(shipyard, main),
-            blueprint,
-            out var error
-        );
+        var length = Size(blueprint, null, Vector3I.Zero, out _).Z;
+        var layout = ArmLayout(shipyard, space, blueprint, length, out var error);
         if (layout == null)
             return error;
 
@@ -2518,6 +2525,39 @@ internal static class ShipyardOrders
             new BoundingBoxD(((Vector3D)box.Min - 0.5) * cube, ((Vector3D)box.Max + 0.5) * cube),
             shipyard.WorldMatrix
         );
+    }
+
+    // Where the center of a ship of this length goes: on the free space's center line, a short
+    // ship toward the end nearer the station's hologram table, which stands in the lobby
+    private static Vector3D ShipCenter(
+        MyCubeGrid shipyard,
+        MyOrientedBoundingBoxD space,
+        double length
+    )
+    {
+        var offset = ShipyardPlacement.Offset(length, space.HalfExtent.Z * 2);
+        var table = offset > 0 ? NearestTable(shipyard) : null;
+        if (table == null)
+            return space.Center;
+        var along = shipyard.WorldMatrix.Forward;
+        var toTable = table.PositionComp.GetPosition() - space.Center;
+        return space.Center + along * (Vector3D.Dot(toTable, along) > 0 ? offset : -offset);
+    }
+
+    // The nearest station hologram table within 1 km of the shipyard
+    private static MyProjectorBase NearestTable(MyCubeGrid shipyard)
+    {
+        var position = shipyard.PositionComp.GetPosition();
+        var sphere = new BoundingSphereD(position, 1000);
+        var entities = MyEntities.GetTopMostEntitiesInSphere(ref sphere);
+        var table = entities
+            .OfType<MyCubeGrid>()
+            .SelectMany(g => g.GetFatBlocks<MyProjectorBase>())
+            .Where(IsTable)
+            .OrderBy(t => Vector3D.DistanceSquared(t.PositionComp.GetPosition(), position))
+            .FirstOrDefault();
+        entities.Clear();
+        return table;
     }
 
     private static bool Free(MyCubeGrid grid, BoundingBoxI box)

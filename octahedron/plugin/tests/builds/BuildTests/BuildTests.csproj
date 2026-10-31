@@ -12,5 +12,6 @@
     <Compile Include="../../../ServerPlugin/Kiosks/KioskProtocol.cs" />
     <Compile Include="../../../ServerPlugin/Market/MarketBook.cs" />
     <Compile Include="../../../ServerPlugin/Builds/BuildBook.cs" />
+    <Compile Include="../../../ServerPlugin/ShipyardPlacement.cs" />
   </ItemGroup>
 </Project>
