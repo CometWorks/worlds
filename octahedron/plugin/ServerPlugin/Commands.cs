@@ -207,14 +207,18 @@ public sealed class Commands : CommandModule
     [Command(
         "contract",
         "Takes, delivers or completes one of OCT's contracts as the caller, for tests and support",
-        "!oct contract accept <id> | deliver <id> [fill] | complete <id>: deliver hands in a hauling or acquisition "
-            + "contract from the caller's inventory, fill adds the items first; complete finishes a bounty or salvage."
+        "!oct contract accept <id> [identity] | deliver <id> [fill] | complete <id>: accept takes it as the caller or "
+            + "the identity, deliver hands in a hauling or acquisition contract from the caller's inventory, fill adds "
+            + "the items first; complete finishes a bounty or salvage."
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string ContractAction(string action, long id, string fill = null) =>
         action switch
         {
-            "accept" => Contracts.Accept(Context.Caller.IdentityId, id),
+            "accept" => Contracts.Accept(
+                long.TryParse(fill, out var identity) ? identity : Context.Caller.IdentityId,
+                id
+            ),
             "deliver" => Contracts.Deliver(Context.Caller.IdentityId, id, fill == "fill"),
             "complete" => Contracts.Complete(id),
             _ => "accept, deliver or complete",

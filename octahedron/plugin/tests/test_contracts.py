@@ -4,9 +4,11 @@ station and none of the game's own, an acquisition at each station for the stock
 ledger lacks, a bounty on an NPC grid and a salvage contract on a derelict placed near
 Alpha Station. Then the client takes and hands in a hauling and an acquisition
 contract (paid by OCT, the items in OCT's Alpha ledger, no new acquisition for them),
-takes the salvage contract with the derelict already at the shipyard (the plugin
-finishes it and scraps the derelict) and completes the bounty. After a save and restart
-the open contracts must be the same ones, not posted again. Prints one line per check
+takes the salvage contract and completes the bounty. A larger salvage radius stands in for the tow:
+the derelict is the player's once it is in reach, and the reward is paid. A derelict already
+at the shipyard gets no contract, and a ship the player built and left ownerless can't be
+sold to OCT. After a save and restart the open contracts must be the same ones, not posted
+again, and the save shows the derelict's new owner. Prints one line per check
 and a pass/fail summary; exit code 0 = all passed.
 
     OCT_TASK=SE-688 OCT_WORLD_SOURCE=<world built by build_world.py> \\
@@ -31,7 +33,9 @@ OPTIONS = {
     "MarketDailyStock": "Ingot/Gold=10",
     "ContractAcquisitionMaxAmount": 10,
     "ContractBountyMinThreat": 1,
-    "ContractSalvageRadius": 3000,
+    "ContractSalvageRadius": 500,
+    # The hourly split would change the balances the test compares
+    "MoneySubsidyPerActivePlayer": 0,
 }
 STATIONS = 7
 LINE = re.compile(r"^\s*(\d+) (\w+) (\w+) ([\d,]+) SC ?(.*)$")
@@ -73,15 +77,49 @@ def test_grids() -> list[str]:
         rig.small_ship_blocks(SPRT_MEMBER),
         position=(sx, sy + 3000, sz),
     )
-    # Nobody's 30 armor blocks (trash removal takes grids under 20), 1 km from the
-    # shipyard: inside the test's 3 km radius
-    armor = [
-        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
-        for x in range(6)
-        for z in range(5)
+    # Nobody's cockpit and 30 armor blocks (trash removal takes grids under 20), 1 km from
+    # the shipyard, out of the test's reach of 500 m until the test widens it
+    derelict = [
+        rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 1, 0)),
+        rig.block(
+            "MyObjectBuilder_InteriorTurret",
+            "LargeInteriorTurret",
+            (1, 1, 0),
+            "<Flags><TargetNeutrals>true</TargetNeutrals></Flags>",
+        ),
+        *(
+            rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
+            for x in range(6)
+            for z in range(5)
+        ),
     ]
-    derelict = rig.grid("Test Derelict", None, armor, position=(sx, sy - 1000, sz))
-    return [target, derelict]
+    return [
+        target,
+        rig.grid("Test Derelict", None, derelict, position=(sx, sy - 1000, sz)),
+        rig.grid("Yard Derelict", None, derelict, position=(sx, sy - 400, sz)),
+    ]
+
+
+def set_options(remote, **values) -> None:
+    OPTIONS.update(values)
+    rig.write_plugin_config(config_text())
+    rig.chat(remote, "!oct reload", 4)
+
+
+def target_neutrals(name: str) -> list[str]:
+    """Target Neutrals of the weapons of the grid named name in the saved sector file"""
+    sbs = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    end = sbs.index(f"<DisplayName>{name}</DisplayName>")
+    start = sbs.rindex("<CubeBlocks>", 0, end)
+    return re.findall(r"<TargetNeutrals>(\w+)</TargetNeutrals>", sbs[start:end])
+
+
+def owners(name: str) -> set[str]:
+    """The block owners of the grid named name in the saved sector file"""
+    sbs = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    end = sbs.index(f"<DisplayName>{name}</DisplayName>")
+    start = sbs.rindex("<CubeBlocks>", 0, end)
+    return set(re.findall(r"<Owner>(\d+)</Owner>", sbs[start:end]))
 
 
 def contracts(remote, post: bool = False) -> dict[str, list[tuple]]:
@@ -198,11 +236,66 @@ def main() -> int:
     ledger = " | ".join(rig.chat(remote, "!oct ledger show Alpha faction:OCT", 4))
     check("Ingot/Gold 10" in ledger, f"the gold in OCT's Alpha ledger: {ledger}")
 
-    # Salvage: the derelict is at the shipyard already, so taking it is enough
+    check(
+        not any("Yard Derelict" in c[4] for c in alpha),
+        "a derelict already at the shipyard gets no contract",
+    )
+
+    # Salvage: taken, with the player beside the derelict, it waits for the tow
+    identity = remote.get_faction()["identityId"]
+    sbs = (rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    sx, sy, sz = position("Alpha Station Shipyard", sbs)
+    remote.character_teleport(sx, sy - 900, sz)
     before = balances(remote)
     act(remote, f"accept {salvage[0]}", "Success", "take the salvage contract")
-    time.sleep(15)
+    # The plugin checks its targets every 30 seconds
+    time.sleep(40)
+    check(balances(remote) == before, "not at the shipyard yet: not paid")
+    # The radius grows instead of the grid moving: it is in reach now
+    set_options(remote, ContractSalvageRadius=3000)
+    time.sleep(40)
     paid_for(remote, salvage, before, "salvage finished by the plugin, paid by OCT")
+
+    # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
+    set_options(remote, ContractSalvageRadius=500)
+    # Creative tools: the character has no building materials
+    remote.set_admin_flag("creativeTools", True)
+    built = remote.character_build_grid(
+        "LargeBlockArmorBlock", (sx + 10, sy - 900, sz), static=False
+    )
+    remote.set_admin_flag("creativeTools", False)
+    check(built.get("reply") is True, f"the player builds an armor block: {built}")
+    time.sleep(70)
+    check(
+        not any(
+            c[1] == "salvage" and "Grid" in c[4]
+            for c in contracts(remote, post=True)["Alpha Station"]
+        ),
+        "under the minimum blocks: no contract",
+    )
+    set_options(remote, ContractSalvageMinBlocks=1)
+    time.sleep(70)
+    own = next(
+        (
+            c
+            for c in contracts(remote, post=True)["Alpha Station"]
+            if c[1] == "salvage" and "Grid" in c[4]
+        ),
+        None,
+    )
+    check(own is not None, f"their ownerless block gets a contract: {own}")
+    if own:
+        before = balances(remote)
+        act(remote, f"accept {own[0]}", "Success", "they take it")
+        time.sleep(40)
+        check(balances(remote) == before, "their own ship: not paid")
+        check(
+            not any(c[0] == own[0] for c in contracts(remote)["Alpha Station"]),
+            "and the contract is over",
+        )
+    # Back to the default: past a scan and a check, its next contract is withdrawn
+    set_options(remote, ContractSalvageMinBlocks=20)
+    time.sleep(70)
 
     before = balances(remote)
     act(remote, f"accept {bounty[0]}", "Success", "take the bounty")
@@ -222,7 +315,7 @@ def main() -> int:
     )
     check(
         not any(c[1] == "salvage" for c in alpha),
-        "the scrapped derelict gets no new contract",
+        "the towed derelict gets no new contract",
     )
     check(
         any(c[1] == "bounty" for c in alpha),
@@ -232,6 +325,17 @@ def main() -> int:
 
     rig.stop_client()
     rig.stop_server()
+    check(
+        owners("Test Derelict") == {str(identity)},
+        f"the save: the derelict is the player's {owners('Test Derelict')}",
+    )
+    check(
+        # The save leaves out a flag that is off
+        target_neutrals("Test Derelict") == []
+        and target_neutrals("Yard Derelict") == ["true"],
+        "the save: Target Neutrals off on the given derelict's turret, not on the other's: "
+        f"{target_neutrals('Test Derelict')} {target_neutrals('Yard Derelict')}",
+    )
     # The restarted server starts its log anew
     log_text = "".join(
         p.read_text(errors="replace")

@@ -1134,7 +1134,7 @@ public class OctahedronConfig : PluginConfig
     [BoolOption(
         "OCT posts the stations' contracts instead of the game: hauling between stations, acquisitions of what its ledger at a "
             + "station lacks, bounties on NPC grids near a station and salvage of derelicts towed to a station's shipyard. "
-            + "OCT's account pays every reward. Runs on the World Authority of a cluster, without bounties and salvage there.",
+            + "OCT's account pays every reward. Runs on the World Authority of a cluster, where the nodes report the grids.",
         Parent = "contracts"
     )]
     public bool ContractsEnabled
@@ -1340,6 +1340,39 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 180;
+
+    [IntOption(
+        0,
+        description: "On a cluster: open salvage contracts kept on wrecks in offline partitions, at any distance from a station.",
+        Parent = "contracts"
+    )]
+    public int ContractWreckContracts
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
+
+    [IntOption(
+        1,
+        description: "Wreck contracts pick at random from this many of the biggest wrecks, by blocks.",
+        Parent = "contracts"
+    )]
+    public int ContractWreckPool
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
+    [DoubleOption(
+        0,
+        description: "A movable grid without power counts as a wreck once its partition has been offline for this many days.",
+        Parent = "contracts"
+    )]
+    public double ContractWreckOfflineDays
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 7;
 
     [StringOption(
         description: "Name of the text panels that show the faction leaderboard (case-insensitive). Empty: no leaderboard.",
