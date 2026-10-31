@@ -11,6 +11,7 @@ namespace ServerPlugin;
 [Section("edge", caption: "World Edge")]
 [Section("starter", caption: "Starter Ship")]
 [Section("projections", caption: "Projections")]
+[Section("weapons", caption: "Weapons")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
@@ -287,7 +288,7 @@ public class OctahedronConfig : PluginConfig
 
     [BoolOption(
         "Turn Target Neutrals off on a new turret, custom turret controller or searchlight, however it is built. A player can turn it back on.",
-        Parent = "projections"
+        Parent = "weapons"
     )]
     public bool ClearTargetNeutralsEnabled
     {

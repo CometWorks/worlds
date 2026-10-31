@@ -31,7 +31,6 @@ os.environ.setdefault("OCT_TASK", "SE-830")
 import rig  # noqa: E402
 from se_remote import CallOp  # noqa: E402
 import test_client as tc  # noqa: E402
-import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 import test_support_arm as sa  # noqa: E402
 
@@ -85,9 +84,9 @@ def weapons(x: int, modded: bool, welded: bool) -> list[str]:
             kind,
             subtype,
             at,
-            # As in a real blueprint: without an id, client and server each make up their own for
-            # a welded block, and the client's changes go nowhere. A controller's builder must
-            # have the rest
+            # As in a real blueprint: without an id, the client's changes to a welded block were
+            # lost, probably since client and server each make up their own. A controller's
+            # builder must have the rest
             f"<EntityId>{777000830001000 + at[0]}</EntityId>"
             + FLAG_ON
             + ("<ToolIds /><Toolbar><Slots /></Toolbar>" if "Control" in kind else ""),
@@ -195,7 +194,6 @@ def prepare() -> None:
         encoding="utf-8",
     )
     rig.write_plugin_config(config_text())
-    rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP])
 
 
 def config_text(**values) -> str:
