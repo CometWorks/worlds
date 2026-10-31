@@ -8,7 +8,6 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 #endif
 
-
 namespace ServerPlugin;
 
 // On the World Authority: which grids are in offline partitions and since when, from the gateway's

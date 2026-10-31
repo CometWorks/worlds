@@ -41,7 +41,7 @@ namespace ServerPlugin;
 // (ShipyardDetailsPanelName), and press the button next to it (ShipyardConfirmButtonName) to queue
 // the ship at the station's shipyard. Who presses decides what the press means, whoever holds the
 // table: it queues the ship of the presser's blueprint, or else cancels their queue entry or
-// running build, or else books them a repair slot. The queue and the build ledgers are kept by
+// running build, or else books them a repair slot. The queue is kept by
 // Builds, on the authority; the station's queue panels show it.
 //
 // A repair slot is a queue entry too. When its turn comes the shipyard's welders go on and
@@ -55,19 +55,17 @@ namespace ServerPlugin;
 // FreeBuildBlockedBlocks. An admin with "Ignore PCU limits" on (FreePrints.Exempt) gets every
 // ship as a free build: no PCU limit, cool-down or blocked blocks, and no per-ship cap of
 // GroupPcuLimit. The order keeps that, for the node that builds it. Any other ship is a paid build: its components, and the ice for the
-// hydrogen to fill its H2 tanks to ShipyardHydrogenFillPercent, come from the payer's ledger at
-// the station (the player's, or their faction's with the kiosk's Faction switch on), then the
-// cheapest listings and OCT, plus the labor fee; hydrogen in the tanks of the player's ships
+// hydrogen to fill its H2 tanks to ShipyardHydrogenFillPercent, are bought at the station's Store
+// from the player's account, plus the labor fee; hydrogen in the tanks of the player's ships
 // docked at the station counts as ice first.
 //
 // When the shipyard is free, the next order starts. The ship starts as a static grid of one of
 // its blocks, centered in the shipyard's free space, with an NPC-owned projector and battery
 // (the scaffold) next to that block projecting the whole blueprint. The shipyard's cargo
-// containers get the components of the remaining blocks, from the build ledger for a paid
-// build, and its OmniArc welders (ToolCore) are switched on. Projected blocks welded onto the
+// containers get the components of the remaining blocks and its OmniArc welders (ToolCore) are switched on. Projected blocks welded onto the
 // ship are the player's, owner and BuiltBy. The order ends when every block is complete or
 // after ShipyardOrderMinutes: the welders go off, the scaffold is removed, the leftover
-// components go back to the payer's ledger (a free build's are removed), a paid build's H2
+// components are sold back for the player (a free build's are removed), a paid build's H2
 // tanks are filled, and the ship, finished or not, becomes the player's dynamic ship.
 //
 // The running order lives in the world, in the scaffold projector's CustomData, so it survives
@@ -225,8 +223,7 @@ internal static class ShipyardOrders
         // Why it is a paid build, and which rule: pcu, blocked or cooldown
         public string Paid;
         public string PaidRule = "";
-        public LedgerOwner Payer;
-        public string PayerName = "";
+        public long Payer;
         public long Fee;
 
         // Every block's components and the ice for the hydrogen, raw
@@ -302,15 +299,10 @@ internal static class ShipyardOrders
         if (plan.Free)
             return plan;
 
-        var faction = MySession.Static.Factions.GetPlayerFaction(identityId);
-        plan.Payer =
-            Kiosks.FactionSwitch(identityId) && faction != null
-                ? LedgerOwner.OfFaction(faction.FactionId)
-                : LedgerOwner.Player(identityId);
-        plan.PayerName = plan.Payer.Faction ? $"your faction {faction.Tag}" : "you";
+        plan.Payer = identityId;
         plan.Fee = BuildBook.Fee(plan.Pcu, Config.ShipyardLaborFeePer100Pcu);
         foreach (var c in Components(blueprint, skipFirst: false))
-            plan.Needed[Ledgers.ItemName(c.Key)] = c.Value * LedgerBook.Unit;
+            plan.Needed[Stations.ItemName(c.Key)] = c.Value * Amounts.Unit;
         plan.HydrogenLiters =
             HydrogenCapacity(blueprint) * Config.ShipyardHydrogenFillPercent / 100;
         if (plan.HydrogenLiters > 0)
@@ -895,7 +887,7 @@ internal static class ShipyardOrders
                                 + (
                                     plan.Free
                                         ? ", a free build."
-                                        : $": a paid build ({plan.Paid}), {quote.Total:N0} SC paid by {plan.PayerName}."
+                                        : $": a paid build ({plan.Paid}), {quote.Total:N0} SC from your account."
                                 )
                                 + " Press the button to order."
                     )
@@ -922,7 +914,7 @@ internal static class ShipyardOrders
                 tell(
                     $"'{plan.Ship}' is a paid build ({plan.Paid}), and this station has "
                         + $"{Units(missing.Item, missing.Missing)} {Market.ItemTitle(missing.Item)} "
-                        + "too few for sale. Deposit them into the ledger first."
+                        + "too few for sale."
                 );
                 return;
             }
@@ -1070,16 +1062,14 @@ internal static class ShipyardOrders
             text.AppendLine("A free build.");
         else if (quote != null)
             text.AppendLine($"A paid build: {plan.Paid}.")
-                .AppendLine($"{quote.Total:N0} SC, paid by {plan.PayerName}.");
+                .AppendLine($"{quote.Total:N0} SC from your account.");
         if (plan.Error == null)
         {
             text.AppendLine();
             if (plan.Blocker != null)
                 text.AppendLine(plan.Blocker);
             else if (quote?.Short(Hydrogen) != null)
-                text.AppendLine(
-                    "Not everything is for sale here: deposit it into the ledger first."
-                );
+                text.AppendLine("Not everything is for sale here.");
             else
                 text.AppendLine("Press the button to confirm the build.");
         }
@@ -1125,7 +1115,7 @@ internal static class ShipyardOrders
                 BuildBook.PartsText(
                     Components(plan.Blueprint, skipFirst: false)
                         .ToDictionary(
-                            c => Market.ItemTitle(Ledgers.ItemName(c.Key)),
+                            c => Market.ItemTitle(Stations.ItemName(c.Key)),
                             c => (long)c.Value
                         )
                 )
@@ -1623,7 +1613,7 @@ internal static class ShipyardOrders
                 }
                 if (error != null)
                 {
-                    // Not started: the build ledger is still whole
+                    // Not started: nothing left the order
                     Finish(
                         next,
                         new Dictionary<string, long>(),
@@ -1667,7 +1657,7 @@ internal static class ShipyardOrders
         );
     }
 
-    // What a started paid build took out of its build ledger, raw
+    // What a started paid build loaded into the shipyard, raw
     private static Dictionary<string, long> Taken(BuildOrder order) =>
         order.Free
             ? new Dictionary<string, long>()
@@ -1741,7 +1731,7 @@ internal static class ShipyardOrders
         var hydrogen =
             next.Free || !next.Items.TryGetValue(Hydrogen, out var ice)
                 ? 0
-                : ice / (double)LedgerBook.Unit * Config.ShipyardHydrogenLitersPerIce;
+                : ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce;
         var projector = grid.GetFatBlocks<MyProjectorBase>().First();
         projector.CustomData = string.Join(
             "\n",
@@ -1794,7 +1784,7 @@ internal static class ShipyardOrders
         lost.Remove(shipyard.EntityId);
         var left = RemoveLeftovers(
             shipyard,
-            Taken(running).ToDictionary(t => ItemId(t.Key), t => (int)(t.Value / LedgerBook.Unit))
+            Taken(running).ToDictionary(t => ItemId(t.Key), t => (int)(t.Value / Amounts.Unit))
         );
         Finish(
             running,
@@ -1907,7 +1897,7 @@ internal static class ShipyardOrders
         Report(shipyard, order, name, gone ? "gone" : null, why, filled, left, "");
     }
 
-    // Tells the player how the build ended and gives the build ledger back
+    // Tells the player how the build ended and settles the order
     private static void Report(
         MyCubeGrid shipyard,
         Order order,
@@ -1928,14 +1918,9 @@ internal static class ShipyardOrders
                     + (gone ? "No ship was built yet." : "The unfinished ship is yours.")
             : order.Refund
                 ? $"{stalled}, with {order.Missing} missing. The ship was removed"
-                    + (
-                        order.Free
-                            ? ", and the free build doesn't count."
-                            : ", its components are back in the ledger."
-                    )
+                    + (order.Free ? ", and the free build doesn't count." : ".")
             : order.Missing != null && !gone
-                ? $"{stalled}. The ship is yours without {order.Missing}"
-                    + (order.Free ? "." : "; their components are back in the ledger.")
+                ? $"{stalled}. The ship is yours without {order.Missing}" + "."
             : missing == "unbuilt"
                 ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
             : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
@@ -1945,14 +1930,12 @@ internal static class ShipyardOrders
                 + "The unfinished ship is yours.";
         if (!order.Free)
         {
-            if (left.Count > 0 && order.Missing == null)
-                message += " The leftover components are back in the ledger.";
             if (order.Hydrogen > 0 && !gone)
                 message +=
                     filled <= 0
-                        ? " Warning: the ship's H2 tanks took no hydrogen, the ice for it is back in the ledger."
+                        ? " Warning: the ship's H2 tanks took no hydrogen, the ice for it is sold back."
                     : filled < order.Hydrogen - 1
-                        ? $" Its H2 tanks took {filled:N0} of {order.Hydrogen:N0} L, the ice for the rest is back in the ledger."
+                        ? $" Its H2 tanks took {filled:N0} of {order.Hydrogen:N0} L, the ice for the rest is sold back."
                     : $" Its H2 tanks have {filled:N0} L of hydrogen.";
         }
         message += extra;
@@ -1986,7 +1969,7 @@ internal static class ShipyardOrders
     /// <summary>Removes every unit of the item from the station shipyard's containers and welders.</summary>
     public static string Strip(string station, string item)
     {
-        if (!Ledgers.TryItemId(item, out var id))
+        if (!Stations.TryItemId(item, out var id))
             return $"Unknown item {item}.";
         var shipyard = MyEntities
             .GetEntities()
@@ -2093,7 +2076,7 @@ internal static class ShipyardOrders
         var hydrogen =
             next.Free || !next.Items.TryGetValue(Hydrogen, out var ice)
                 ? 0
-                : ice / (double)LedgerBook.Unit * Config.ShipyardHydrogenLitersPerIce;
+                : ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce;
         var arm = layout
             .Plan.Blocks.Select(b => new Vector3I(b.Cell.X, b.Cell.Y, b.Cell.Z))
             .ToList();
@@ -2344,8 +2327,8 @@ internal static class ShipyardOrders
             || missing.Where(m => !Functional(m.Key.Id)).Sum(m => m.Value)
                 > MaxMissingPlain * plain;
         order.Refunded = parts.ToDictionary(
-            p => Ledgers.ItemName(new MyDefinitionId(typeof(MyObjectBuilder_Component), p.Key)),
-            p => p.Value * LedgerBook.Unit
+            p => Stations.ItemName(new MyDefinitionId(typeof(MyObjectBuilder_Component), p.Key)),
+            p => p.Value * Amounts.Unit
         );
         Plugin.Log.Info(
             $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
@@ -2885,7 +2868,7 @@ internal static class ShipyardOrders
 
     private static long IceFor(double liters, bool up)
     {
-        var raw = liters / Config.ShipyardHydrogenLitersPerIce * LedgerBook.Unit;
+        var raw = liters / Config.ShipyardHydrogenLitersPerIce * Amounts.Unit;
         return (long)(up ? Math.Ceiling(raw - 1e-6) : Math.Floor(raw + 1e-6));
     }
 
@@ -2904,14 +2887,10 @@ internal static class ShipyardOrders
                     : 0
             );
 
-    // The H2 tanks with hydrogen of the payer's ships docked at the station: the player's own,
-    // or with the faction paying any member's
+    // The H2 tanks with hydrogen of the player's ships docked at the station
     private static List<MyGasTank> ShipTanks(Plan plan)
     {
         var station = Grids(plan.Table.CubeGrid);
-        var faction = plan.Payer.Faction
-            ? MySession.Static.Factions.TryGetFactionById(plan.Payer.Id)
-            : null;
         var ships = station
             .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
             .Where(c => c.Connected && c.Other != null)
@@ -2919,10 +2898,7 @@ internal static class ShipyardOrders
             .Where(g => !station.Contains(g))
             .Distinct();
         return ships
-            .Where(g =>
-                g.BigOwners.Contains(plan.Player)
-                || (faction != null && g.BigOwners.Any(o => faction.IsMember(o)))
-            )
+            .Where(g => g.BigOwners.Contains(plan.Player))
             .SelectMany(g => g.GetFatBlocks<MyGasTank>())
             .Where(t => IsHydrogen(t) && t.IsFunctional && t.FilledRatio > 0)
             .ToList();
@@ -3021,7 +2997,7 @@ internal static class ShipyardOrders
     }
 
     private static string StationOf(MyCubeGrid grid) =>
-        Grids(grid).Select(Ledgers.StationOf).FirstOrDefault(s => s != null);
+        Grids(grid).Select(Stations.StationOf).FirstOrDefault(s => s != null);
 
     // The nearest shipyard within 1 km of the table
     private static MyCubeGrid FindShipyard(MyProjectorBase table)
@@ -3315,7 +3291,7 @@ internal static class ShipyardOrders
     }
 
     // Takes back what is left of the loaded components from the shipyard's containers and
-    // welders; returns what it took, raw by ledger item name
+    // welders; returns what it took, raw by the market's item name
     private static Dictionary<string, long> RemoveLeftovers(
         MyCubeGrid shipyard,
         Dictionary<MyDefinitionId, int> components
@@ -3335,7 +3311,7 @@ internal static class ShipyardOrders
                     continue;
                 inventory.RemoveItemsOfType(amount, id);
                 left[id] -= amount;
-                var name = Ledgers.ItemName(id);
+                var name = Stations.ItemName(id);
                 taken[name] = (taken.TryGetValue(name, out var had) ? had : 0) + amount.RawValue;
             }
         }
@@ -3343,7 +3319,7 @@ internal static class ShipyardOrders
     }
 
     private static MyDefinitionId ItemId(string item) =>
-        Ledgers.TryItemId(item, out var id) ? id : default;
+        Stations.TryItemId(item, out var id) ? id : default;
 
     private static IEnumerable<MyInventory> Containers(MyCubeGrid shipyard) =>
         shipyard.GetFatBlocks<MyCargoContainer>().Select(c => c.GetInventory());
@@ -3476,7 +3452,7 @@ internal static class ShipyardOrders
     // An amount in its item's unit: whole components, kg of ore and ingots
     private static string Units(string item, long raw)
     {
-        var units = (decimal)raw / LedgerBook.Unit;
+        var units = (decimal)raw / Amounts.Unit;
         return item.StartsWith("Component/")
             ? units.ToString("N0", CultureInfo.InvariantCulture)
             : units.ToString("N0", CultureInfo.InvariantCulture) + " kg";

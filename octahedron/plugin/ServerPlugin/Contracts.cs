@@ -26,8 +26,8 @@ namespace ServerPlugin;
 // OCT posts the stations' contracts in the game's own contract system, in place of the game's
 // generator, and pays every reward from its account:
 // - hauling: a package to another station, the game's delivery contract;
-// - acquisition: items OCT's ledger at the station lacks (the market's daily stock), delivered at
-//   the station's contract block into OCT's ledger there;
+// - acquisition: items OCT's stock at the station lacks (the station's profile), delivered at
+//   the station's contract block into OCT's stock there;
 // - bounty: an NPC grid near the station, done when its threat score drops to a quarter or it is
 //   gone while the hunter is near;
 // - salvage: an unowned or wrecked grid near the station, done when the player who took it has
@@ -93,7 +93,7 @@ internal static class Contracts
     private static ContractBook book;
     private static MySession bookSession;
 
-    // Tests only, set by reflection (tests/ledgers/probe): moves the clock that ages offline
+    // Tests only, set by reflection (tests/console-probe): moves the clock that ages offline
     // partitions, so a test doesn't wait a week
     internal static TimeSpan OfflineClockShift = TimeSpan.Zero;
 
@@ -103,8 +103,8 @@ internal static class Contracts
     private static OctahedronConfig Config => Plugin.Config;
     public static bool On => Config.Enabled && Config.ContractsEnabled;
 
-    // The contract system and the ledgers are kept there
-    private static bool Authority => Ledgers.IsAuthority;
+    // The contract system and the market are kept there
+    private static bool Authority => Stations.IsAuthority;
 
     // A regular node of a cluster, or a plain server: has grids
     private static bool Simulates => !PluginCluster.IsClusterProcess || !Authority;
@@ -240,7 +240,7 @@ internal static class Contracts
         do
         {
             reportsInFlight++;
-            Ledgers.Ask(
+            Stations.Ask(
                 ReportTopic,
                 string.Join(
                     "\n",
@@ -388,7 +388,7 @@ internal static class Contracts
         List<MyContract> active
     )
     {
-        if (!LedgerBook.ValidName(station.Name))
+        if (!Amounts.ValidName(station.Name))
             return 0;
         var pending = open.Concat(active.Where(c => c.StartStation == station.Id))
             .Select(Items)
@@ -398,10 +398,10 @@ internal static class Contracts
         // The market's daily stock is OCT's target at every station
         foreach (var (item, missing) in Market.Missing(station.Name))
         {
-            if (!Ledgers.TryItemId(item, out var id) || open.Any(c => Items(c)?.ItemType == id))
+            if (!Stations.TryItemId(item, out var id) || open.Any(c => Items(c)?.ItemType == id))
                 continue;
             var amount = ContractMath.AcquisitionAmount(
-                missing / LedgerBook.Unit,
+                missing / Amounts.Unit,
                 pending.Where(i => i.ItemType == id).Sum(i => (long)i.ItemAmount),
                 Config.ContractAcquisitionMaxAmount
             );
@@ -423,7 +423,7 @@ internal static class Contracts
             );
             if (!Add(system, contract, station, out var contractId))
                 continue;
-            // The items go into OCT's ledger, not into the station's containers
+            // The items go into OCT's stock, not into the station's containers
             if (
                 system.GetContractById(contractId) is MyContract added
                 && Items(added) is { } condition
@@ -855,7 +855,7 @@ internal static class Contracts
         contract switch
         {
             MyContractObtainAndDeliver when Items(contract) is { } items =>
-                $" {Ledgers.ItemName(items.ItemType)} {items.ItemAmount}",
+                $" {Stations.ItemName(items.ItemType)} {items.ItemAmount}",
             MyContractDeliver when contract.ContractCondition is { } c => " to "
                 + (Oct?.Stations.FirstOrDefault(s => s.Id == c.StationEndId)?.Name ?? "?"),
             MyContractCustom custom => $" {((IMyContractCustom)custom).Name}",
@@ -906,7 +906,7 @@ internal static class Contracts
             ? $"Complete {contractId}: {(System.TryFinishCustomContract(contractId) ? "finished" : "not an active custom contract")}"
             : "The contracts run on the World Authority.";
 
-    // OCT pays what the game gave the player, and an acquisition's items go into its ledger
+    // OCT pays what the game gave the player, and an acquisition's items go into its stock
     [HarmonyPatch(typeof(MyContract), nameof(MyContract.Finish))]
     private static class Paid
     {
@@ -942,27 +942,15 @@ internal static class Contracts
         );
         if (Items(contract) is not { } items || station == null)
             return;
-        var item = Ledgers.ItemName(items.ItemType);
-        var op = new LedgerOp
-        {
-            Action = LedgerAction.Deposit,
-            Station = station.Name,
-            Owner = LedgerOwner.OfFaction(oct.FactionId),
-        }.Add(item, items.ItemAmount * LedgerBook.Unit);
         // The same id for the same contract, so a retried deposit applies once
         var bytes = new byte[16];
         BitConverter.GetBytes(contract.Id).CopyTo(bytes, 0);
         "contract"u8.CopyTo(bytes.AsSpan(8));
-        Ledgers.Execute(
+        Market.AddStock(
             new Guid(bytes),
-            [op],
-            r =>
-            {
-                if (!r.Applied)
-                    Plugin.Log.Error(
-                        $"Contract {contract.Id}: {item} {items.ItemAmount} into OCT's ledger at {station.Name}: {r.Outcome} {r.Message}"
-                    );
-            }
+            station.Name,
+            Stations.ItemName(items.ItemType),
+            items.ItemAmount * Amounts.Unit
         );
     }
 

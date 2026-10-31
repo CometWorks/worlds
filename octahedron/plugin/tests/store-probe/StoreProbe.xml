@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<PluginData
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="GitHubPlugin"
+>
+  <Id>store-probe</Id>
+  <GroupId>store-probe</GroupId>
+  <RepoId>local/store-probe</RepoId>
+
+  <FriendlyName>Store Probe</FriendlyName>
+  <Author>Viktor</Author>
+
+  <Tooltip>Test only: uses the nearest Store block through chat commands</Tooltip>
+  <Description>Test only. /store list, buy, sell and have send the same requests as the
+        game's Store screen does, from the client.
+    </Description>
+
+  <Runtimes>CoreCLR</Runtimes>
+
+  <Hidden>true</Hidden>
+
+  <Commit>TODO</Commit>
+</PluginData>

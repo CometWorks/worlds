@@ -11,8 +11,8 @@ each other's plugins in a shared cache, and a node can then fail at start. The z
 global save. WA + 2 regular
 nodes + one headless admin client, the Octahedron world as tests/test_shipyard_order.py prepares it (no
 asteroids, ToolCore and OmniArc staged, a 10 block blueprint on every table). Octahedron runs on all
-three, Multigrid Projector (the hub's cached build) on the nodes, and the ledger probe
-(tests/ledgers/probe) on the WA, because !oct payday and !oct taxday only run there.
+three, Multigrid Projector (the hub's cached build) on the nodes, and the console probe
+(tests/console-probe) on the WA, because !oct payday and !oct taxday only run there.
 
 Money: the WA cuts OCT's 1e9, a new account has 25,000 SC, a node refuses !oct payday, the tax and the
 payout on the WA count the client through the merged online list and reach its balance, nodes log nothing
@@ -48,7 +48,6 @@ sys.path[:0] = [
     str(TEST_DIR),
     str(TEST_DIR.parent / "Cli"),
     str(PLUGIN / "tests"),
-    str(PLUGIN / "tests/ledgers"),
 ]
 os.environ.setdefault("OCT_TASK", "SE-695")
 
@@ -63,7 +62,7 @@ from scenarios_core import (  # noqa: E402
 )
 
 import rig  # noqa: E402
-import ledger_cluster as lc  # noqa: E402  (the probe's build and its plan file protocol)
+import console_probe as lc  # noqa: E402  (the probe's build and its plan file protocol)
 import test_client as tc  # noqa: E402
 import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
@@ -137,13 +136,13 @@ def prepare() -> Path:
         [
             str(lc.PLUGINS / "Octahedron"),
             f"node:{mgp}",
-            f"wa:{lc.PLUGINS / 'LedgerProbe'}",
+            f"wa:{lc.PLUGINS / 'ConsoleProbe'}",
         ]
     )
     os.environ.update(
-        LEDGERPROBE_PLAN=str(lc.PLAN),
-        LEDGERPROBE_OUT=str(lc.OUT),
-        LEDGERPROBE_NODE="wa-1",
+        CONSOLEPROBE_PLAN=str(lc.PLAN),
+        CONSOLEPROBE_OUT=str(lc.OUT),
+        CONSOLEPROBE_NODE="wa-1",
         OCTAHEDRON_CONFIG=str(CONFIG),
         OCTAHEDRON_ENCOUNTERS=str(PLUGIN / "Encounters"),
     )

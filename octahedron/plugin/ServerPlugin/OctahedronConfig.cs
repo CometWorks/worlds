@@ -19,8 +19,6 @@ namespace ServerPlugin;
 [Section("drops", caption: "Container Drops")]
 [Section("encounters", caption: "Encounters")]
 [Section("mes", caption: "MES Spawn Pattern")]
-[Section("ledgers", caption: "Station Ledgers")]
-[Section("kiosks", caption: "Station Kiosks")]
 [Section("market", caption: "Station Market")]
 [Section("contracts", caption: "Contracts")]
 [Section("leaderboard", caption: "Leaderboard")]
@@ -856,78 +854,9 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "b6de8061483bbd9a";
 
-    [DoubleOption(
-        0,
-        description: "The most a player may keep in one station's warehouse ledger, free and listed items together, in tonnes. "
-            + "0: no limit.",
-        Parent = "ledgers"
-    )]
-    public double LedgerPlayerLimitTonnes
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 100;
-
-    [DoubleOption(
-        0,
-        description: "The most a faction may keep in one station's warehouse ledger, free and listed items together, in tonnes. "
-            + "0: no limit.",
-        Parent = "ledgers"
-    )]
-    public double LedgerFactionLimitTonnes
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 100;
-
-    [StringOption(
-        description: "Name of the station text panels that are kiosks (case-insensitive). The blueprints must keep them clear of the landing pads. "
-            + "Empty: no kiosks.",
-        Parent = "kiosks"
-    )]
-    public string KioskBlockName
-    {
-        get;
-        set => SetField(ref field, value);
-    } = "LCD Panel - Station Lounge StationStorefront";
-
-    [StringOption(
-        description: "Screen script of the kiosk client mod the plugin selects on every kiosk. Empty: the kiosks keep what they show.",
-        Parent = "kiosks"
-    )]
-    public string KioskScript
-    {
-        get;
-        set => SetField(ref field, value);
-    } = "Octahedron_Kiosk";
-
-    [DoubleOption(
-        1,
-        20,
-        "A player must stand this close to a kiosk to use it (m).",
-        Parent = "kiosks"
-    )]
-    public double KioskReachMeters
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 5;
-
-    [DoubleOption(
-        0,
-        10,
-        "The least time between two requests of a player at the kiosks (s).",
-        Parent = "kiosks"
-    )]
-    public double KioskCooldownSeconds
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 0.5;
-
     [BoolOption(
-        "The kiosks' market: players list offers and orders, OCT (MoneyAuthorityFactionTag) buys and sells the catalog at every station, "
-            + "and the game's generated station store items are gone. Runs on the World Authority of a cluster.",
+        "The station markets: the Store blocks of OCT's (MoneyAuthorityFactionTag) stations show its real stock and prices, "
+            + "and the game generates no store items for them. Kept on the World Authority of a cluster.",
         Parent = "market"
     )]
     public bool MarketEnabled
@@ -938,33 +867,14 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        100,
-        "Share of every sale between players that goes to OCT (%).",
+        description: "OCT's tax: what it sells for is this much above its price, what it pays this much below (%).",
         Parent = "market"
     )]
-    public int MarketFeePercent
+    public int MarketTaxPercent
     {
         get;
         set => SetField(ref field, value);
-    } = 5;
-
-    [IntOption(1, description: "Days a listing stays on the market.", Parent = "market")]
-    public int MarketListingDays
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 7;
-
-    [IntOption(
-        1,
-        description: "The most listings a player or faction may have at one station.",
-        Parent = "market"
-    )]
-    public int MarketMaxListings
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 20;
+    } = 2;
 
     [StringOption(
         description: "Items OCT buys and sells at every station, comma separated, as type/subtype, where * matches any text.",
@@ -988,25 +898,25 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "OCT buys catalog items at this share of the reference price, the game's minimal price / 10 (%).",
+        description: "OCT buys catalog items at this share of the reference price, the game's minimal price / 10, less the tax (%).",
         Parent = "market"
     )]
     public int MarketOctBuyPercent
     {
         get;
         set => SetField(ref field, value);
-    } = 60;
+    } = 100;
 
     [IntOption(
         0,
-        description: "OCT sells catalog items at this share of the reference price (%).",
+        description: "OCT sells catalog items at this share of the reference price, plus the tax (%).",
         Parent = "market"
     )]
     public int MarketOctSellPercent
     {
         get;
         set => SetField(ref field, value);
-    } = 140;
+    } = 100;
 
     [DoubleOption(
         0,
@@ -1020,11 +930,11 @@ public class OctahedronConfig : PluginConfig
     } = 200;
 
     [StringOption(
-        description: "What OCT adds to its stock at every station each UTC day, as Type/Subtype=units, comma separated; "
-            + "at most up to MarketOctMaxStockTonnes. OCT's acquisition contracts ask for what it lacks of these.",
+        description: "OCT's minimum stock at every station, as Type/Subtype=units, comma separated. Once an hour what is completely out "
+            + "comes back to this, at most up to MarketOctMaxStockTonnes. OCT's acquisition contracts ask for what it lacks of these.",
         Parent = "market"
     )]
-    public string MarketDailyStock
+    public string MarketMinStock
     {
         get;
         set => SetField(ref field, value);
@@ -1033,6 +943,17 @@ public class OctahedronConfig : PluginConfig
         + "Component/SmallTube=200,Component/LargeTube=40,Component/Motor=60,Component/Computer=200,Component/Display=30,"
         + "Component/BulletproofGlass=30,Component/Girder=50,Ingot/Iron=2000,Ingot/Nickel=500,Ingot/Silicon=500,"
         + "Ingot/Cobalt=300,Ore/Ice=330";
+
+    [StringOption(
+        description: "The stations' profiles: what a station stocks besides or instead of MarketMinStock, "
+            + "as Station name=Type/Subtype=units,..., stations separated by ;.",
+        Parent = "market"
+    )]
+    public string MarketStationStock
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
 
     [StringOption(
         description: "Each station's specialties, which OCT buys at MarketSpecialtyPercent: Station name=Type/Subtype,..., stations separated by ;.",
@@ -1051,14 +972,14 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "OCT buys a station's specialties at this share of the reference price (%).",
+        description: "OCT buys a station's specialties at this share of the reference price, less the tax, and sells them at no less (%).",
         Parent = "market"
     )]
     public int MarketSpecialtyPercent
     {
         get;
         set => SetField(ref field, value);
-    } = 80;
+    } = 120;
 
     [DoubleOption(
         0,
@@ -1144,7 +1065,7 @@ public class OctahedronConfig : PluginConfig
     } = 100;
 
     [BoolOption(
-        "OCT posts the stations' contracts instead of the game: hauling between stations, acquisitions of what its ledger at a "
+        "OCT posts the stations' contracts instead of the game: hauling between stations, acquisitions of what its stock at a "
             + "station lacks, bounties on NPC grids near a station and salvage of derelicts towed to a station's shipyard. "
             + "OCT's account pays every reward. Runs on the World Authority of a cluster, where the nodes report the grids.",
         Parent = "contracts"

@@ -36,6 +36,7 @@ from pathlib import Path
 
 os.environ.setdefault("OCT_TASK", "SE1-0151")
 import rig  # noqa: E402
+import station_tests as st  # noqa: E402
 import test_client as tc  # noqa: E402
 import test_projection_limits as pl  # noqa: E402
 import test_shipyard_zone as sz  # noqa: E402
@@ -119,7 +120,9 @@ def prepare(blueprint: str, minutes: int, plugins=()) -> None:
             "<ShipyardTableMinutes>600</ShipyardTableMinutes></OctahedronConfig>",
         )
     )
-    rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP, *plugins])
+    rig.prepare_server(
+        extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP, st.PROBE, *plugins]
+    )
 
 
 def chat_lines(remote, after: int) -> tuple[list[str], int]:

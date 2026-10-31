@@ -24,7 +24,7 @@ import time
 
 os.environ.setdefault("OCT_TASK", "SE-850r")
 import rig  # noqa: E402
-import test_kiosks as kiosks  # noqa: E402
+import station_tests as st  # noqa: E402
 import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 import test_support_arm as sa  # noqa: E402
@@ -46,7 +46,7 @@ CONFIG = tr.CONFIG
 IDLE_SECONDS = 300
 OCT = "Octahedron_Authority"
 PLATES = 2000
-# Armor only, so a paid build needs nothing but the plates put in the ledger
+# Armor only, so a paid build needs nothing but the plates in OCT's stock
 PAID = rig.grid(
     "Paid Cancel",
     777000850000100,
@@ -62,7 +62,7 @@ STASH = 50
 
 
 def probe(remote, args: str) -> str:
-    return kiosks.probe(remote, args)
+    return st.probe(remote, args)
 
 
 def yard(remote, player: str | None = None) -> dict[str, str]:
@@ -192,7 +192,7 @@ def book_and_idle_out(a, b) -> None:
     docked = re.search(r"SHIP (\d+)", probe(a, f"yardship {STATION}"))
     check(docked is not None, f"a ship with the components at a connector: {docked}")
     ship = docked[1] if docked else "0"
-    check(kiosks.wait_docked(a, ship), "it docks")
+    check(st.wait_docked(a, ship), "it docks")
     state = yard(a)
     check(
         state["connected"] == "1" and state["trading"] == "0", f"not trading: {state}"
@@ -285,7 +285,7 @@ def second_press(a) -> None:
     check(theirs(yard(a), "OctTester"), "the blocks are the player's")
     docked = re.search(r"SHIP (\d+)", probe(a, f"yardship {STATION}"))
     ship = docked[1] if docked else "0"
-    check(kiosks.wait_docked(a, ship), "a ship docks")
+    check(st.wait_docked(a, ship), "a ship docks")
     reply = press(a)
     check("you canceled it" in reply, f"the second press ends it: {reply}")
     state = yard(a)
@@ -349,20 +349,21 @@ def waits_for_a_build(a, b) -> None:
 
 def paid_cancel(a) -> None:
     """A paid build canceled while it runs ends as when its time runs out: the ship as it
-    is, what wasn't used back in the ledger, the labor fee stays paid"""
-    with_config(a, **CONFIG, FreeBuildPcuLimit=0, ShipyardLaborFeePer100Pcu=10)
-    log(
-        sa.admin(
-            a, f"!oct ledger deposit {STATION} me Component/SteelPlate {PAID_PLATES}"
-        )
+    is, what wasn't used sold back to OCT, the labor fee stays paid"""
+    # At cheap prices, as the plates would make the account very rich
+    with_config(
+        a,
+        **CONFIG,
+        FreeBuildPcuLimit=0,
+        ShipyardLaborFeePer100Pcu=10,
+        MarketOctSellPercent=2,
+        MarketOctBuyPercent=1,
+        MarketPriceDriftTonnes=0,
     )
+    log(sa.admin(a, f"!oct market set {STATION} Component/SteelPlate {PAID_PLATES}"))
 
     def plates() -> float:
-        shown = " ".join(rig.chat(a, f"!oct ledger show {STATION} me", 3))
-        found = re.search(
-            r"(?<!: )Component/SteelPlate ([\d,.]+)", shown.split("reserved")[0]
-        )
-        return float(found[1].replace(",", "")) if found else 0.0
+        return st.stock(a, STATION, "Component/SteelPlate")[0]
 
     def money() -> int:
         return int(re.search(r"BALANCE (-?\d+)", probe(a, "balance"))[1])
@@ -381,21 +382,22 @@ def paid_cancel(a) -> None:
         sa.wait_chat(a, "builds 'Paid Cancel' for you now", 60, mark), "its build runs"
     )
     check(wait_for(lambda: building(a), 120), "it has blocks")
-    check(plates() == before[0] - PAID_PLATES, f"the ledger paid: {plates()}")
+    check(plates() == before[0] - PAID_PLATES, f"bought from the stock: {plates()}")
     paid = money()
-    check(paid < before[1], f"the labor fee is paid: {before[1]} -> {paid}")
+    check(paid < before[1], f"it is paid: {before[1]} -> {paid}")
     reply = press(a)
     check(
         "The unfinished ship is yours" in reply,
         f"a press cancels the running build, they get the ship: {reply}",
     )
-    time.sleep(3)
+    st.wait_until(lambda: plates() > before[0] - PAID_PLATES, 15)
     back = plates()
     check(
         before[0] - PAID_PLATES < back < before[0],
-        f"what wasn't used is back in the ledger: {back} of {before[0]}",
+        f"what wasn't used is sold back: {back} of {before[0]}",
     )
-    check(money() == paid, f"the labor fee stays paid: {money()}")
+    now = money()
+    check(paid < now < before[1], f"for money, not all of it: {paid} -> {now}")
     check(yard(a)["items"] == "0", "nothing stays in the shipyard")
     text = settled(a, "queue", "No ships in the queue")
     check("Paid Cancel" not in text, f"it left the queue: {text!r}")
@@ -437,7 +439,7 @@ def main() -> int:
     with Second():
         rig.stop_client()
     rig.stop_server()
-    so.prepare(so.SMALL, 60, plugins=[kiosks.PROBE])
+    so.prepare(so.SMALL, 60)
     tr.both_admins()
     with Second():
         folder = rig.APPDATA / "Mods"

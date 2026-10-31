@@ -1,9 +1,9 @@
 """Checks OCT's contracts on the test server with the headless client, through the admin
 commands (!oct contracts, !oct contract ...): three hauling contracts posted at every
-station and none of the game's own, an acquisition at each station for the stock OCT's
-ledger lacks, a bounty on an NPC grid and a salvage contract on a derelict placed near
+station and none of the game's own, an acquisition at each station for the stock OCT
+lacks, a bounty on an NPC grid and a salvage contract on a derelict placed near
 Alpha Station. Then the client takes and hands in a hauling and an acquisition
-contract (paid by OCT, the items in OCT's Alpha ledger, no new acquisition for them),
+contract (paid by OCT, the items in OCT's stock at Alpha, no new acquisition for them),
 takes the salvage contract and completes the bounty. A larger salvage radius stands in for the tow:
 the derelict is the player's once it is in reach, and the reward is paid. A derelict already
 at the shipyard gets no contract, and a ship the player built and left ownerless can't be
@@ -26,11 +26,11 @@ from test_client import log
 
 checks: list[tuple[bool, str]] = []
 # Options of the test on top of the world's config: a gold stock a character can carry,
-# without the market's daily restock, which would fill it before the first contracts;
+# without the market's hourly restock, which would fill it before the first contracts;
 # a low threat for the small test grid
 OPTIONS = {
     "MarketEnabled": "false",
-    "MarketDailyStock": "Ingot/Gold=10",
+    "MarketMinStock": "Ingot/Gold=10",
     "ContractAcquisitionMaxAmount": 10,
     "ContractBountyMinThreat": 1,
     "ContractSalvageRadius": 500,
@@ -226,15 +226,13 @@ def main() -> int:
     act(remote, f"deliver {haul[0]}", "Success", "hand in the package")
     paid_for(remote, haul, before, "hauling paid by OCT")
 
-    # Acquisition: the gold goes into OCT's ledger at Alpha
+    # Acquisition: the gold goes into OCT's stock at Alpha
     gold = one(found, "Alpha Station", "acquisition")
     before = balances(remote)
     act(remote, f"accept {gold[0]}", "Success", "take the acquisition")
     act(remote, f"deliver {gold[0]}", "NotEnoughItems", "no gold, no delivery")
     act(remote, f"deliver {gold[0]} fill", "Success", "deliver 10 gold")
     paid_for(remote, gold, before, "acquisition paid by OCT")
-    ledger = " | ".join(rig.chat(remote, "!oct ledger show Alpha faction:OCT", 4))
-    check("Ingot/Gold 10" in ledger, f"the gold in OCT's Alpha ledger: {ledger}")
 
     check(
         not any("Yard Derelict" in c[4] for c in alpha),

@@ -91,7 +91,7 @@ public sealed class Commands : CommandModule
     [Command(
         "shipyard strip",
         "Takes an item out of a shipyard's containers and welders, for tests",
-        "!oct shipyard strip <station> <item>: item as in the ledger, like Component/Display. "
+        "!oct shipyard strip <station> <item>: item like Component/Display. "
             + "A running build then stalls on the blocks that need it."
     )]
     [Permission(MyPromoteLevel.Admin)]

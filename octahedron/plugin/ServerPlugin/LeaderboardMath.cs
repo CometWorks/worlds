@@ -29,14 +29,14 @@ public sealed class LeaderboardRow
 
 /// <summary>
 /// The leaderboard's arithmetic, text and wire formats, without the game, so tests/leaderboard
-/// checks them alone. Prices are milli-SC per unit and amounts raw ledger units, as in the market.
+/// checks them alone. Prices are milli-SC per unit and amounts raw units, as in the market.
 /// </summary>
 public static class LeaderboardMath
 {
     public const int Width = 45;
 
     /// <summary>milli-SC of a raw amount at a price.</summary>
-    public static decimal Value(long raw, long price) => (decimal)raw / LedgerBook.Unit * price;
+    public static decimal Value(long raw, long price) => (decimal)raw / Amounts.Unit * price;
 
     /// <summary>milli-SC as whole SC, rounded down, at most long.MaxValue.</summary>
     public static long Sc(decimal milli) =>

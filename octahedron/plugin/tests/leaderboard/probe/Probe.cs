@@ -7,6 +7,7 @@ using PluginSdk.Commands;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
+using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using VRage;
@@ -143,6 +144,16 @@ public sealed class ProbeCommands : CommandModule
         return faction == null
             ? $"FACTION {tag} requested"
             : $"FACTION {tag} {faction.FactionId} {founder}";
+    }
+
+    [Command("pay", "Pays into the faction's account: PAID tag SC", "!lbprobe pay <tag> <SC>")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Pay(string tag, long amount)
+    {
+        var faction = MySession.Static.Factions.TryGetFactionByTag(tag);
+        return faction != null && MyBankingSystem.ChangeBalance(faction.FactionId, amount)
+            ? $"PAID {tag} {amount}"
+            : $"NOPAY {tag}";
     }
 
     [Command(

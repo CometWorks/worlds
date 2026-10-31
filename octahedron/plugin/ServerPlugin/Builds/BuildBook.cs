@@ -6,7 +6,7 @@ using System.Text;
 
 namespace ServerPlugin;
 
-/// <summary>An entry of a shipyard's queue: a free build, or a paid one with its build ledger.</summary>
+/// <summary>An entry of a shipyard's queue: a free build, or a paid one with what it bought.</summary>
 public sealed class BuildOrder
 {
     public string Id = "";
@@ -15,11 +15,17 @@ public sealed class BuildOrder
     // The player who ordered; only they cancel it
     public long Player;
 
-    // Who pays and gets the leftovers back: the player or their faction. Unset: a free build.
-    public LedgerOwner Payer;
+    // The account that paid and gets the leftovers' money: the player's. 0: a free build.
+    public long Payer;
 
     // The labor fee paid to OCT, SC
     public long Fee;
+
+    // What the components and ice cost at the Store, SC
+    public long Paid;
+
+    // Of the ice in Items, what came from the hydrogen of the player's ships, raw
+    public long Provided;
     public int Pcu;
     public string Ship = "";
 
@@ -38,31 +44,22 @@ public sealed class BuildOrder
     // The blueprint, opaque here: base64, no tabs or line breaks
     public string Blueprint = "";
 
-    // What the build ledger got: every block's components and the ice for the hydrogen, raw
+    // What the order holds: every block's components and the ice for the hydrogen, raw
     public Dictionary<string, long> Items = new();
 
-    public bool Free => !Payer.IsSet;
-
-    /// <summary>The ledger reservation of the payer that is the build ledger.</summary>
-    public string Reservation => "build " + Id;
+    public bool Free => Payer == 0;
 }
 
-/// <summary>Where one item of a paid build comes from, raw amounts, costs in SC.</summary>
+/// <summary>What one item of a paid build costs at the station's Store, raw amounts, costs in SC.</summary>
 public sealed class QuoteLine
 {
     public string Item = "";
     public long Needed;
-    public long Ledger;
-    public long Listings;
-    public long ListingsCost;
-    public long Oct;
-    public long OctCost;
+    public long Bought;
+    public long Cost;
 
-    // Nobody has it at the station
+    // The Store doesn't have it
     public long Missing;
-
-    public long Bought => Listings + Oct;
-    public long Cost => ListingsCost + OctCost;
 }
 
 /// <summary>The price of a paid build at a station for a payer.</summary>
@@ -78,7 +75,7 @@ public sealed class BuildQuote
     public long Total => Cost + Fee;
     public bool Complete => Lines.All(l => l.Missing == 0);
 
-    /// <summary>The first item nobody has enough of, the hydrogen left out: a ship gets less of that.</summary>
+    /// <summary>The first item the Store has too little of, the hydrogen left out: a ship gets less of that.</summary>
     public QuoteLine Short(string hydrogenItem) =>
         Lines.FirstOrDefault(l => l.Missing > 0 && l.Item != hydrogenItem);
 
@@ -94,11 +91,8 @@ public sealed class BuildQuote
                         "L",
                         l.Item,
                         N(l.Needed),
-                        N(l.Ledger),
-                        N(l.Listings),
-                        N(l.ListingsCost),
-                        N(l.Oct),
-                        N(l.OctCost),
+                        N(l.Bought),
+                        N(l.Cost),
                         N(l.Missing)
                     )
                 )
@@ -117,18 +111,15 @@ public sealed class BuildQuote
                 quote.Fee = L(f[1]);
                 quote.Balance = L(f[2]);
             }
-            else if (f[0] == "L" && f.Length == 9)
+            else if (f[0] == "L" && f.Length == 6)
                 quote.Lines.Add(
                     new QuoteLine
                     {
                         Item = f[1],
                         Needed = L(f[2]),
-                        Ledger = L(f[3]),
-                        Listings = L(f[4]),
-                        ListingsCost = L(f[5]),
-                        Oct = L(f[6]),
-                        OctCost = L(f[7]),
-                        Missing = L(f[8]),
+                        Bought = L(f[3]),
+                        Cost = L(f[4]),
+                        Missing = L(f[5]),
                     }
                 );
             else
@@ -142,12 +133,18 @@ public sealed class BuildQuote
     internal static long L(string text) => long.Parse(text, CultureInfo.InvariantCulture);
 }
 
-/// <summary>The market as a build needs it: plan a purchase and buy into a reservation.</summary>
+/// <summary>The market as a build needs it: the Store's terms, purchases and what is left over.</summary>
 public interface IBuildMarket
 {
-    List<MarketFill> PlanBuy(string station, LedgerOwner buyer, string item, long raw);
+    MarketFill PlanBuy(string station, string item, long raw);
 
-    MarketResult Buy(string station, LedgerOwner buyer, string item, long raw, string reservation);
+    MarketResult Buy(string station, long buyer, string item, long raw);
+
+    /// <summary>Items a canceled purchase gives back to the stock; the caller pays the money back.</summary>
+    void Return(string station, string item, long raw);
+
+    /// <summary>Sells the items for the seller on Store terms; returns the SC they got.</summary>
+    long SellOff(string station, long seller, IReadOnlyDictionary<string, long> items);
 }
 
 public sealed class BuildSettings
@@ -176,17 +173,15 @@ public readonly struct BuildResult
 }
 
 /// <summary>
-/// The shipyards' queues and their build ledgers. A paid build's components are reserved
-/// in the payer's ledger at the station (an uncounted reservation, the build ledger): first
-/// what the payer has there, then bought from the cheapest listings and OCT, and the labor fee
-/// goes to OCT. Canceling gives it all back. At build start the components leave the ledger
-/// for the shipyard's containers; at the end the leftovers come back. Pure bookkeeping without
-/// game types, so it is tested on its own (tests/builds). Runs on the authority's game thread,
-/// the World Authority's on a cluster.
+/// The shipyards' queues. A paid build buys its components at the station's Store when it is
+/// ordered and pays the labor fee to OCT; canceling gives it all back. At build start the
+/// components go into the shipyard's containers, and at the end what is left of them is sold back
+/// on Store terms. Pure bookkeeping without game types, so it is tested on its own (tests/builds).
+/// Runs on the authority's game thread, the World Authority's on a cluster.
 /// </summary>
 public sealed class BuildBook
 {
-    private const string Header = "octahedron-builds 1";
+    private const string Header = "octahedron-builds 2";
     private readonly Dictionary<string, BuildOrder> orders = new();
     private long nextId;
 
@@ -217,55 +212,41 @@ public sealed class BuildBook
 
     // --- quote and order ---
 
-    /// <summary>
-    /// Where the items would come from: the payer's free stock at the station, then the market
-    /// (the cheapest listings, OCT among them at its price), what is left missing. No market: the
-    /// ledger only.
-    /// </summary>
+    /// <summary>What the items would cost at the station's Store, what it doesn't have left missing. No market: all missing.</summary>
     public static BuildQuote Quote(
         IMarketWorld w,
         IBuildMarket market,
         string station,
-        LedgerOwner payer,
+        long payer,
         IReadOnlyDictionary<string, long> needed,
         long fee
     )
     {
         var quote = new BuildQuote { Fee = fee, Balance = w.Balance(payer) };
-        var free = w.Ledger.FreeOf(station, payer);
         foreach (
             var item in needed.Where(n => n.Value > 0).OrderBy(n => n.Key, StringComparer.Ordinal)
         )
         {
-            var line = new QuoteLine { Item = item.Key, Needed = item.Value };
-            line.Ledger = Math.Min(
-                item.Value,
-                free.TryGetValue(item.Key, out long have) ? have : 0
+            var fill = market?.PlanBuy(station, item.Key, item.Value) ?? default;
+            quote.Lines.Add(
+                new QuoteLine
+                {
+                    Item = item.Key,
+                    Needed = item.Value,
+                    Bought = fill.Amount,
+                    Cost = fill.Cost,
+                    Missing = item.Value - fill.Amount,
+                }
             );
-            long rest = item.Value - line.Ledger;
-            if (rest > 0 && market != null)
-                foreach (var fill in market.PlanBuy(station, payer, item.Key, rest))
-                    if (fill.Oct)
-                    {
-                        line.Oct += fill.Amount;
-                        line.OctCost += fill.Cost;
-                    }
-                    else
-                    {
-                        line.Listings += fill.Amount;
-                        line.ListingsCost += fill.Cost;
-                    }
-            line.Missing = rest - line.Bought;
-            quote.Lines.Add(line);
         }
         return quote;
     }
 
     /// <summary>
-    /// Queues an order. A paid one (Payer set) gets its build ledger: <paramref name="provided"/>
-    /// comes from outside (the hydrogen of a ship at the station, as ice), the rest of
-    /// <paramref name="needed"/> from the payer's ledger and the market as quoted, and the fee
-    /// is paid, all as long as the quote's total is at most <paramref name="maxTotal"/>.
+    /// Queues an order. A paid one (Payer set) holds <paramref name="needed"/>:
+    /// <paramref name="provided"/> comes from outside (the hydrogen of a ship at the station, as
+    /// ice), the rest is bought at the Store as quoted, and the fee is paid, all as long as the
+    /// quote's total is at most <paramref name="maxTotal"/>.
     /// </summary>
     public BuildResult Order(
         IMarketWorld w,
@@ -277,7 +258,7 @@ public sealed class BuildBook
         long maxTotal
     )
     {
-        if (!LedgerBook.ValidName(order.Station))
+        if (!Amounts.ValidName(order.Station))
             return BuildResult.No("Unknown station.");
         var mine = orders.Values.FirstOrDefault(o => o.Player == order.Player);
         if (mine != null)
@@ -316,7 +297,7 @@ public sealed class BuildBook
         var missing = quote.Short(s.HydrogenItem);
         if (missing != null)
             return BuildResult.No(
-                $"{LedgerBook.Units(missing.Missing)} {missing.Item} more than this station has for sale."
+                $"{Amounts.Units(missing.Missing)} {missing.Item} more than this station has for sale."
             );
         if (quote.Total > maxTotal)
             return BuildResult.No(
@@ -329,65 +310,43 @@ public sealed class BuildBook
                 $"That costs {MarketBook.Sc(quote.Total)}, the account has {MarketBook.Sc(quote.Balance)}."
             );
 
-        var ops = new List<LedgerOp>();
-        var fromLedger = quote.Lines.Where(l => l.Ledger > 0).ToList();
-        if (fromLedger.Count > 0)
-        {
-            var reserve = new LedgerOp
-            {
-                Action = LedgerAction.Reserve,
-                Station = order.Station,
-                Owner = order.Payer,
-                Reservation = order.Reservation,
-            };
-            foreach (var l in fromLedger)
-                reserve.Add(l.Item, l.Ledger);
-            ops.Add(reserve);
-        }
-        if (ops.Count > 0)
-        {
-            string error = w.ApplyLedger(ops);
-            if (error != null)
-                return BuildResult.No(error);
-        }
-
+        var bought = new List<QuoteLine>();
         foreach (var l in quote.Lines.Where(l => l.Bought > 0))
         {
-            var bought = market.Buy(
-                order.Station,
-                order.Payer,
-                l.Item,
-                l.Bought,
-                order.Reservation
-            );
-            if (!bought.Ok)
-                return Undo(w, order, $"Buying {l.Item} failed: {bought.Message}");
+            var bill = market.Buy(order.Station, order.Payer, l.Item, l.Bought);
+            if (!bill.Ok)
+            {
+                foreach (var b in bought)
+                    market.Return(order.Station, b.Item, b.Bought);
+                PayBack(w, order.Payer, bought.Sum(b => b.Cost));
+                return BuildResult.No($"Buying {l.Item} failed: {bill.Message}");
+            }
+            bought.Add(l);
         }
         if (order.Fee > 0)
         {
             if (!w.ChangeBalance(order.Payer, -order.Fee))
-                return Undo(w, order, "The labor fee could not be paid.");
+            {
+                foreach (var b in bought)
+                    market.Return(order.Station, b.Item, b.Bought);
+                PayBack(w, order.Payer, bought.Sum(b => b.Cost));
+                return BuildResult.No("The labor fee could not be paid.");
+            }
             w.ChangeBalance(w.Oct, order.Fee);
         }
-        // Last, so that a refusal before leaves what came from outside with the caller
-        var fill = new LedgerOp
-        {
-            Action = LedgerAction.Fill,
-            Station = order.Station,
-            Owner = order.Payer,
-            Reservation = order.Reservation,
-        };
-        foreach (var p in provided.Where(p => p.Value > 0 && needed.ContainsKey(p.Key)))
-            fill.Add(p.Key, Math.Min(p.Value, needed[p.Key]));
-        if (fill.Items.Count > 0)
-            w.ApplyLedger([fill]);
 
+        order.Paid = quote.Cost;
         // The hydrogen the station doesn't have is left out: the ship's tanks get less
         foreach (var n in needed.Where(n => n.Value > 0))
             order.Items[n.Key] =
                 n.Value - (quote.Lines.FirstOrDefault(l => l.Item == n.Key)?.Missing ?? 0);
         if (order.Items.TryGetValue(s.HydrogenItem, out long ice) && ice <= 0)
             order.Items.Remove(s.HydrogenItem);
+        if (
+            provided.TryGetValue(s.HydrogenItem, out long fromShips)
+            && needed.TryGetValue(s.HydrogenItem, out long iceNeeded)
+        )
+            order.Provided = Math.Min(fromShips, iceNeeded);
         nextId++;
         orders[order.Id] = order;
         return new BuildResult(
@@ -399,109 +358,85 @@ public sealed class BuildBook
         );
     }
 
-    // A purchase failed half way: what is in the build ledger goes back to the payer
-    private static BuildResult Undo(IMarketWorld w, BuildOrder order, string why)
+    private static void PayBack(IMarketWorld w, long account, long sc)
     {
-        Release(w, order);
-        return BuildResult.No(why + " What was bought for it is in the ledger.");
+        if (sc <= 0)
+            return;
+        // OCT keeps a floor, so it can pay; should it not, the payer still gets it back
+        w.ChangeBalance(w.Oct, -sc);
+        w.ChangeBalance(account, sc);
     }
 
-    private static bool HasReservation(IMarketWorld w, BuildOrder order) =>
-        w.Ledger.Get(order.Station)?.Reservations.ContainsKey(order.Reservation) == true;
+    // All of a paid order undone: what was bought goes back to the stock and the money with the fee
+    // to the player, and the hydrogen of their ships, which can't go back, is sold for them.
+    // Returns what the player got, SC.
+    private static long Undo(IMarketWorld w, IBuildMarket market, BuildSettings s, BuildOrder order)
+    {
+        foreach (var i in order.Items)
+        {
+            long bought = i.Key == s.HydrogenItem ? i.Value - order.Provided : i.Value;
+            if (bought > 0)
+                market?.Return(order.Station, i.Key, bought);
+        }
+        PayBack(w, order.Payer, order.Paid + order.Fee);
+        long sold =
+            order.Provided > 0 && market != null
+                ? market.SellOff(
+                    order.Station,
+                    order.Payer,
+                    new Dictionary<string, long> { [s.HydrogenItem] = order.Provided }
+                )
+                : 0;
+        return order.Paid + order.Fee + sold;
+    }
 
-    private static string Release(IMarketWorld w, BuildOrder order) =>
-        HasReservation(w, order)
-            ? w.ApplyLedger([
-                new LedgerOp
-                {
-                    Action = LedgerAction.Release,
-                    Station = order.Station,
-                    Owner = order.Payer,
-                    Reservation = order.Reservation,
-                },
-            ])
-            : null;
-
-    /// <summary>The player's order at the station leaves the queue, if it hasn't started: the build ledger goes back to the payer, and the fee.</summary>
-    public BuildResult Cancel(IMarketWorld w, string station, long player)
+    /// <summary>The player's order at the station leaves the queue, if it hasn't started: they get what they paid back.</summary>
+    public BuildResult Cancel(
+        IMarketWorld w,
+        IBuildMarket market,
+        BuildSettings s,
+        string station,
+        long player
+    )
     {
         var order = orders.Values.FirstOrDefault(o => o.Station == station && o.Player == player);
         if (order == null)
             return BuildResult.No("You have no ship in this shipyard's queue.");
         if (order.Started)
             return BuildResult.No($"'{order.Ship}' is being built, it can't be canceled now.");
-        if (order.Free)
-        {
-            orders.Remove(order.Id);
-            return new BuildResult(true, $"'{order.Ship}' left the queue.", order);
-        }
-        string error = Release(w, order);
-        if (error != null)
-            return BuildResult.No(error);
-        Refund(w, order);
         orders.Remove(order.Id);
+        if (order.Free)
+            return new BuildResult(true, $"'{order.Ship}' left the queue.", order);
+        long back = Undo(w, market, s, order);
         return new BuildResult(
             true,
-            $"'{order.Ship}' left the queue. Its components are in the ledger at {station}"
-                + (
-                    order.Fee > 0
-                        ? $" and the labor fee of {MarketBook.Sc(order.Fee)} is paid back."
-                        : "."
-                ),
+            $"'{order.Ship}' left the queue, {MarketBook.Sc(back)} is paid back.",
             order
         );
     }
 
-    private static void Refund(IMarketWorld w, BuildOrder order)
-    {
-        if (order.Fee <= 0)
-            return;
-        // OCT keeps a floor, so it can pay; should it not, the payer still gets the fee back
-        w.ChangeBalance(w.Oct, -order.Fee);
-        w.ChangeBalance(order.Payer, order.Fee);
-    }
-
-    /// <summary>
-    /// The build starts: a paid build's components leave the build ledger for the shipyard. The
-    /// hydrogen stays in it until the end. Returns the items to load (none for a free build).
-    /// </summary>
-    public BuildResult Start(IMarketWorld w, BuildSettings s, string id)
+    /// <summary>The build starts: its components go into the shipyard. The node loads <see cref="BuildOrder.Items"/> but the hydrogen.</summary>
+    public BuildResult Start(string id)
     {
         var order = Get(id);
         if (order == null)
             return BuildResult.No($"No order {id}.");
         if (order.Started)
             return BuildResult.No($"'{order.Ship}' is being built already.");
-        var components = order.Items.Where(i => i.Key != s.HydrogenItem).ToList();
-        if (!order.Free && components.Count > 0)
-        {
-            var take = new LedgerOp
-            {
-                Action = LedgerAction.Take,
-                Station = order.Station,
-                Owner = order.Payer,
-                Reservation = order.Reservation,
-            };
-            foreach (var c in components)
-                take.Add(c.Key, c.Value);
-            string error = w.ApplyLedger([take]);
-            if (error != null)
-                return BuildResult.No(error);
-        }
         order.Started = true;
         return new BuildResult(true, $"'{order.Ship}' is being built.", order);
     }
 
     /// <summary>
-    /// The build ended: the order leaves the queue. A paid build gets the leftover components
-    /// back into the payer's ledger, uses up the ice of the hydrogen that went into the ship and
-    /// returns the rest. With <paramref name="refund"/> (the build couldn't start, or its ship
-    /// was removed) every component comes back, whatever the leftovers, and the fee too. An order
-    /// that never started still has its components in the build ledger, so only that comes back.
-    /// The result's message says when a fee came back, which only the authority's order knows.
+    /// The build ended: the order leaves the queue. A paid build sells the leftover components and
+    /// the ice of the hydrogen that didn't go into the ship back on Store terms, for the player.
+    /// With <paramref name="refund"/> (the build couldn't start, or its ship was removed) everything
+    /// is undone instead, whatever the leftovers. The result's message says what the player got,
+    /// which only the authority's order knows.
     /// </summary>
     public BuildResult Finish(
         IMarketWorld w,
+        IBuildMarket market,
         BuildSettings s,
         string id,
         IReadOnlyDictionary<string, long> leftovers,
@@ -512,58 +447,27 @@ public sealed class BuildBook
         var order = Get(id);
         if (order == null)
             return BuildResult.No($"No order {id}.");
-        if (order.Free)
-        {
-            orders.Remove(id);
-            return new BuildResult(true, "", order);
-        }
-        if (refund)
-            leftovers = order.Started
-                ? order
-                    .Items.Where(i => i.Key != s.HydrogenItem)
-                    .ToDictionary(i => i.Key, i => i.Value)
-                : new Dictionary<string, long>();
-        var ops = new List<LedgerOp>();
-        var back = new LedgerOp
-        {
-            Action = LedgerAction.Fill,
-            Station = order.Station,
-            Owner = order.Payer,
-            Reservation = order.Reservation,
-        };
-        foreach (var l in leftovers.Where(l => l.Value > 0 && l.Key != s.HydrogenItem))
-            back.Add(l.Key, l.Value);
-        if (back.Items.Count > 0)
-            ops.Add(back);
-        long reserved = 0;
-        if (
-            w.Ledger.Get(order.Station)?.Reservations.TryGetValue(order.Reservation, out var r)
-            == true
-        )
-            r.Items.TryGetValue(s.HydrogenItem, out reserved);
-        long used = Math.Min(Math.Max(0, hydrogenUsed), reserved);
-        if (used > 0)
-            ops.Add(
-                new LedgerOp
-                {
-                    Action = LedgerAction.Take,
-                    Station = order.Station,
-                    Owner = order.Payer,
-                    Reservation = order.Reservation,
-                }.Add(s.HydrogenItem, used)
-            );
-        string error = ops.Count > 0 ? w.ApplyLedger(ops) : null;
-        error ??= Release(w, order);
-        if (error != null)
-            return BuildResult.No(error);
-        if (refund)
-            Refund(w, order);
         orders.Remove(id);
+        if (order.Free)
+            return new BuildResult(true, "", order);
+        if (refund)
+            return new BuildResult(
+                true,
+                $"{MarketBook.Sc(Undo(w, market, s, order))} is paid back.",
+                order
+            );
+        var sale = leftovers
+            .Where(l => l.Value > 0 && l.Key != s.HydrogenItem)
+            .ToDictionary(l => l.Key, l => l.Value);
+        order.Items.TryGetValue(s.HydrogenItem, out long ice);
+        long iceLeft = ice - Math.Min(Math.Max(0, hydrogenUsed), ice);
+        if (iceLeft > 0)
+            sale[s.HydrogenItem] = iceLeft;
+        long sold =
+            sale.Count > 0 && market != null ? market.SellOff(order.Station, order.Payer, sale) : 0;
         return new BuildResult(
             true,
-            refund && order.Fee > 0
-                ? $"The labor fee of {MarketBook.Sc(order.Fee)} is paid back."
-                : "",
+            sold > 0 ? $"What was left over is sold for {MarketBook.Sc(sold)}." : "",
             order
         );
     }
@@ -584,12 +488,14 @@ public sealed class BuildBook
                 o.Id,
                 o.Station,
                 BuildQuote.N(o.Player),
-                o.Payer.IsSet ? o.Payer.ToString() : "",
+                BuildQuote.N(o.Payer),
                 BuildQuote.N(o.Fee),
+                BuildQuote.N(o.Paid),
+                BuildQuote.N(o.Provided),
                 o.Pcu.ToString(CultureInfo.InvariantCulture),
                 Clean(o.Ship),
                 BuildQuote.N(o.Created),
-                // Flags: 1 started, 2 exempt, 4 repair; orders from before Exempt have 0 or 1
+                // Flags: 1 started, 2 exempt, 4 repair
                 ((o.Started ? 1 : 0) | (o.Exempt ? 2 : 0) | (o.Repair ? 4 : 0)).ToString(
                     CultureInfo.InvariantCulture
                 ),
@@ -604,26 +510,27 @@ public sealed class BuildBook
     public static BuildOrder DecodeOrder(string line)
     {
         var f = line.Split('\t');
-        if (f.Length < 11 || f[0] != "O" || (f.Length - 11) % 2 != 0)
+        if (f.Length < 13 || f[0] != "O" || (f.Length - 13) % 2 != 0)
             throw new FormatException("Malformed build order");
         var order = new BuildOrder
         {
             Id = f[1],
             Station = f[2],
             Player = BuildQuote.L(f[3]),
+            Payer = BuildQuote.L(f[4]),
             Fee = BuildQuote.L(f[5]),
-            Pcu = int.Parse(f[6], CultureInfo.InvariantCulture),
-            Ship = f[7],
-            Created = BuildQuote.L(f[8]),
-            Blueprint = f[10],
+            Paid = BuildQuote.L(f[6]),
+            Provided = BuildQuote.L(f[7]),
+            Pcu = int.Parse(f[8], CultureInfo.InvariantCulture),
+            Ship = f[9],
+            Created = BuildQuote.L(f[10]),
+            Blueprint = f[12],
         };
-        var flags = int.Parse(f[9], CultureInfo.InvariantCulture);
+        var flags = int.Parse(f[11], CultureInfo.InvariantCulture);
         order.Started = (flags & 1) != 0;
         order.Exempt = (flags & 2) != 0;
         order.Repair = (flags & 4) != 0;
-        if (f[4].Length > 0 && !LedgerOwner.TryParse(f[4], out order.Payer))
-            throw new FormatException("Malformed build payer");
-        for (int i = 11; i < f.Length; i += 2)
+        for (int i = 13; i < f.Length; i += 2)
             order.Items[f[i]] = BuildQuote.L(f[i + 1]);
         return order;
     }
@@ -683,8 +590,7 @@ public sealed class BuildBook
                 $"Hydrogen: {units(hydrogenItem, hydrogenFromShip)} ice worth from your ship"
             );
         text.AppendLine();
-        text.AppendLine($"From listings: {quote.Lines.Sum(l => l.ListingsCost):N0} SC");
-        text.AppendLine($"From OCT: {quote.Lines.Sum(l => l.OctCost):N0} SC");
+        text.AppendLine($"From the Store: {quote.Cost:N0} SC");
         if (quote.Fee > 0)
             text.AppendLine($"Labor fee: {quote.Fee:N0} SC");
         text.AppendLine($"Total: {quote.Total:N0} SC");
@@ -733,7 +639,7 @@ public sealed class BuildRequest
     public BuildVerb Verb;
     public string Station = "";
     public long Player;
-    public LedgerOwner Payer;
+    public long Payer;
     public string Id = "";
     public long Fee;
     public int Pcu;
@@ -755,7 +661,7 @@ public sealed class BuildRequest
             Verb.ToString(),
             Station,
             BuildQuote.N(Player),
-            Payer.IsSet ? Payer.ToString() : "",
+            BuildQuote.N(Payer),
             Id ?? "",
             BuildQuote.N(Fee),
             Pcu.ToString(CultureInfo.InvariantCulture),
@@ -793,14 +699,14 @@ public sealed class BuildRequest
     {
         var lines = text.Split('\n');
         var f = lines[0].Split('\t');
-        // 12 or 13 fields: from a node from before Exempt or Repair
-        if (lines.Length != 3 || f.Length is not (12 or 13 or 14))
+        if (lines.Length != 3 || f.Length != 14)
             throw new FormatException("Malformed build request");
-        var r = new BuildRequest
+        return new BuildRequest
         {
             Verb = (BuildVerb)Enum.Parse(typeof(BuildVerb), f[0]),
             Station = f[1],
             Player = BuildQuote.L(f[2]),
+            Payer = BuildQuote.L(f[3]),
             Id = f[4],
             Fee = BuildQuote.L(f[5]),
             Pcu = int.Parse(f[6], CultureInfo.InvariantCulture),
@@ -809,14 +715,11 @@ public sealed class BuildRequest
             MaxTotal = BuildQuote.L(f[9]),
             HydrogenUsed = BuildQuote.L(f[10]),
             Refund = f[11] == "1",
-            Exempt = f.Length > 12 && f[12] == "1",
-            Repair = f.Length > 13 && f[13] == "1",
+            Exempt = f[12] == "1",
+            Repair = f[13] == "1",
             Needed = Items(lines[1]),
             Provided = Items(lines[2]),
         };
-        if (f[3].Length > 0 && !LedgerOwner.TryParse(f[3], out r.Payer))
-            throw new FormatException("Malformed build payer");
-        return r;
     }
 
     /// <summary>
@@ -849,7 +752,7 @@ public sealed class BuildRequest
                     Station = Station,
                     Player = Player,
                     Payer = Payer,
-                    Fee = Payer.IsSet ? Fee : 0,
+                    Fee = Payer != 0 ? Fee : 0,
                     Pcu = Pcu,
                     Ship = Ship,
                     Blueprint = Blueprint,
@@ -860,9 +763,9 @@ public sealed class BuildRequest
                 Provided,
                 MaxTotal
             ),
-            BuildVerb.Cancel => book.Cancel(w, Station, Player),
-            BuildVerb.Start => book.Start(w, s, Id),
-            BuildVerb.Finish => book.Finish(w, s, Id, Needed, HydrogenUsed, Refund),
+            BuildVerb.Cancel => book.Cancel(w, market, s, Station, Player),
+            BuildVerb.Start => book.Start(Id),
+            BuildVerb.Finish => book.Finish(w, market, s, Id, Needed, HydrogenUsed, Refund),
             _ => BuildResult.No("Unknown request."),
         };
         return (r.Ok ? "1\t" : "0\t")

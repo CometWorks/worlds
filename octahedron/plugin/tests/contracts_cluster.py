@@ -1,6 +1,6 @@
 """Bounties, salvage and wreck salvage on a local test cluster (SE-702), through the cluster's own scenario
 bench. Same bench and world as wa_economy_cluster.py; read its docstring for host.env. The nodes report the
-grids, the World Authority posts and decides; the ledger probe on the WA runs !oct contracts there, and its
+grids, the World Authority posts and decides; the console probe on the WA runs !oct contracts there, and its
 `clock` line moves the clock that ages offline partitions.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/contracts_cluster.py CLUSTER_TEST_DIR     (from plugin/)
@@ -868,7 +868,7 @@ def main() -> int:
     run.world_template = wa.prepare()
     # The probe on the nodes too, for the conversion; it runs its plan on the World Authority only
     os.environ["CLUSTER_EXTRA_PLUGINS"] = os.environ["CLUSTER_EXTRA_PLUGINS"].replace(
-        f"wa:{wa.lc.PLUGINS / 'LedgerProbe'}", str(wa.lc.PLUGINS / "LedgerProbe")
+        f"wa:{wa.lc.PLUGINS / 'ConsoleProbe'}", str(wa.lc.PLUGINS / "ConsoleProbe")
     )
     Path(f"{wa.lc.PLAN}.convert").unlink(missing_ok=True)
     Path(f"{wa.lc.PLAN}.converted").unlink(missing_ok=True)

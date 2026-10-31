@@ -6,8 +6,8 @@ Each case orders a blueprint at another station's hologram table with !oct order
 table's button for an admin) and follows the build with !oct shipyards:
 
 - "dock" at Alpha Station: "ArmDock", a large grid ship with a connector at its back, an
-  H2 tank and a battery, a paid build with the ice for its hydrogen in the player's
-  ledger. The arm is placed as frames on a large arm rotor's head, with a connector; the
+  H2 tank and a battery, a paid build, its components and the ice for its hydrogen bought from
+  the Store's stock. The arm is placed as frames on a large arm rotor's head, with a connector; the
   projector is switched off until the welders complete it. The server restarts while the
   arm is built and picks the order up. When the ship is complete it docks to the arm's
   connector: the tank gets its 500,000 L, the battery is charged.
@@ -235,8 +235,9 @@ STALLS = {
     "scrap": ("Component/Display", "The ship was removed"),
     "armor": ("Component/MetalGrid", "The ship was removed"),
 }
-# For the paid builds: the components, and the ice for 500,000 L of hydrogen
-DEPOSIT = {
+# For the paid builds: OCT's stock of the components, and of the ice for 500,000 L of hydrogen
+BUILD_MONEY = 800_000
+STOCK = {
     "Component/SteelPlate": 1500,
     "Component/Construction": 300,
     "Component/InteriorPlate": 200,
@@ -262,6 +263,14 @@ checks: list[tuple[bool, str]] = []
 def check(ok: bool, what: str) -> None:
     checks.append((ok, what))
     log(("PASS " if ok else "FAIL ") + what)
+
+
+def fund(remote) -> None:
+    """Enough for a paid build, with a low balance otherwise: a very rich account earns a
+    no-Steam client an achievement that disconnects it"""
+    short = BUILD_MONEY - money(remote)["You"]
+    if short > 0:
+        admin(remote, f"!sprobe pay me {short}")
 
 
 def admin(remote, text: str, wait: float = 4.0) -> str:
@@ -411,14 +420,16 @@ def order(remote, case: str) -> tuple:
         remote,
         FreeBuildPcuLimit=0 if paid or exempt else 10000,
         ShipyardLaborFeePer100Pcu=LABOR_FEE,
+        ShipyardTableMinutes=600,
         ShipyardRepasteShips=(
             "false" if os.environ.get("OCT_REPASTE") == "0" else "true"
         ),
         **(EXEMPT_CONFIG if exempt else {}),
     )
     if paid:
-        for item, count in DEPOSIT.items():
-            admin(remote, f"!oct ledger deposit {station} me {item} {count}", 3)
+        for item, count in STOCK.items():
+            admin(remote, f"!oct market set {station} {item} {count}", 3)
+        fund(remote)
     at_table(remote, station)
     mark = so_latest(remote)
     before = money(remote)
@@ -537,8 +548,8 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
             f"{case}: its H2 tank has {HYDROGEN:,} L: {ready}",
         )
         check(
-            ready is not None and "leftover" not in ready,
-            f"{case}: a finished ship leaves no components for the ledger: {ready}",
+            ready is not None and "left over" not in ready,
+            f"{case}: a finished ship leaves nothing to sell: {ready}",
         )
     lines = arms_gone(remote, case)
     check(
@@ -566,17 +577,14 @@ def stall(remote, case: str, mark: int) -> None:
         seen_by_client(remote, case)
     if case in ("scrap", "armor"):
         check(
-            ended is not None
-            and "components are back in the ledger" in ended
-            and ("labor fee of" in ended) == (LABOR_FEE > 0),
+            ended is not None and "is paid back" in ended,
             f"{case}: the build cost is paid back: {ended}",
         )
-        before, components = BEFORE[case]
+        before, _ = BEFORE[case]
         now = money(remote)
         check(
-            now["You"] == before["You"] - components
-            and now["OCT"] == before["OCT"] + components,
-            f"{case}: the fee is back from OCT: {before} -> {now}",
+            now["You"] == before["You"] and now["OCT"] == before["OCT"],
+            f"{case}: all of it is back from OCT: {before} -> {now}",
         )
     lines = arms_gone(remote, case)
     check(
