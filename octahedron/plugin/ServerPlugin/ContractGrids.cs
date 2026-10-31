@@ -23,6 +23,11 @@ internal static class ContractGrids
             f.Value.Stations.Any(s => s.StationEntityId == grid.EntityId)
         ) || ShipyardZoneWelding.IsShipyard(grid);
 
+    // The Trade Lanes mod's block has no computer component, so the game gives it no owner whatever
+    // the world says: it stays ownerless and, with no charge, without power. Never a wreck.
+    private static bool LaneComputer(MyCubeGrid grid) =>
+        grid.GetFatBlocks().Any(b => b.BlockDefinition.Id.SubtypeName == "TradeLaneComputer");
+
     private static HashSet<string> WreckTags =>
         Config
             .ContractSalvageFactionTags.Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -150,7 +155,7 @@ internal static class ContractGrids
             row.Flags |= ContractGridFlags.Derelict;
 
         // A dead hull docked to a live ship or a base is no wreck, but a wreck on a tug stays one
-        if (big && !group.Any(g => IsStation(g) || OwnedBy(g, octId)))
+        if (big && !group.Any(g => IsStation(g) || OwnedBy(g, octId) || LaneComputer(g)))
         {
             var terminals = group.SelectMany(g => g.GetFatBlocks<MyTerminalBlock>()).ToList();
             if (!terminals.Any(Producing))

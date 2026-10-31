@@ -7,19 +7,18 @@ grids, the World Authority posts and decides; the ledger probe on the WA runs !o
 
 Near Alpha: an NPC ship, a derelict with an arm on a rotor, and another derelict already at the shipyard. Far
 from every station, each in its own partition once the bench takes them offline: three armor-only wrecks of
-different sizes, a hull without power, a hull with a charged battery, a static hull without power and a wreck
-too small to count.
+different sizes, a hull without power, a hull with a charged battery and a static hull without power. The minimum blocks is one,
+so the world's Trade Lane Computers would count.
 
 - With no target anywhere a node reports once a minute, the full scan; with targets every 30 seconds.
 - A bounty and a salvage contract from the nodes' reports, none on the derelict already at the shipyard. A
   larger salvage radius stands in for the tow: the taken derelict and its arm then belong to the player on the
   node holding them, the World Authority having decided, and it stays out of later contracts. A completed
   bounty is paid by OCT.
-- A block the player built and left ownerless gets a contract, which they can't take for pay. The lane
-  computers don't get one, even with the minimum at one block.
+- A block the player built and left ownerless gets a contract, which they can't take for pay.
 - The one biggest wreck with a pool of one, at the nearest station, then the other two.
 - The hulls without power, static or not: not at 6.9 days offline, yes at 7.01, paying for the static one's
-  mass too. The live and small ones never.
+  mass too. The live one and the lane computers never.
 - Taken wreck with the player there: its partition waking changes nothing; deleted, it counts as done.
   Taken with the player away: fails. Nobody took it: withdrawn.
 - A taken static wreck stays taken when converted to a ship; deleted, it counts as done.
@@ -73,7 +72,6 @@ GRIDS = {
     "Dead Hull": LARGE_ID + 6,
     "Live Hull": LARGE_ID + 7,
     "Static Hull": LARGE_ID + 8,
-    "Too Small": LARGE_ID + 9,
     "Yard Derelict": LARGE_ID + 10,
     "Derelict Arm": LARGE_ID + 11,
 }
@@ -136,7 +134,6 @@ def add_grids() -> None:
         "Dead Hull": hull(0),
         "Live Hull": hull(1),
         "Static Hull": hull(0),
-        "Too Small": armor(10),
     }
     grids = [
         rig.grid(
@@ -355,6 +352,19 @@ def run(bench) -> None:
         time.sleep(seconds)
         return int(KNOWN_LINE.search(contracts()[1])[4]) - before
 
+    lanes = [
+        entity
+        for section in bench.sections(bench.diag()).values()
+        for partition in section["partitions"]
+        for entity in partition["entities"] or []
+        if entity["displayName"].startswith("TL ")
+    ]
+    check(
+        "the world's lane computers are up, ownerless",
+        len(lanes) == 22 and not any(e["ownerIdentityId"] for e in lanes),
+        [(e["displayName"], e["ownerIdentityId"]) for e in lanes][:3],
+    )
+
     # Three minutes on two nodes: 3 full reports each, one more at the edges of the window
     idle = reports_in(180)
     check("no target anywhere: only the full reports", idle <= 8, idle)
@@ -452,6 +462,11 @@ def run(bench) -> None:
         wreck_names(found) == armor_only | {"Dead Hull", "Static Hull"},
         wreck_names(found),
     )
+    check(
+        "no lane computer, ownerless and without power as they are",
+        not named(found, "TL "),
+        named(found, "TL "),
+    )
     static = named(found, "Static Hull", "wreck")
     check("the static hull pays by its mass", static and static[0][3] > 0, static)
     shift_clock(0)
@@ -509,7 +524,7 @@ def run(bench) -> None:
     )
 
     # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
-    reconfigure(ContractSalvageRadius=500, ContractSalvageMinBlocks=1)
+    reconfigure(ContractSalvageRadius=500)
     # Creative tools: the character has no building materials
     api.set_admin_flag("creativeTools", True)
     built = api.character_build_grid(
@@ -523,11 +538,6 @@ def run(bench) -> None:
     found = post()
     own = named(found, "Grid", "salvage")
     check("their ownerless block gets a contract", own, found.get("Alpha Station"))
-    check(
-        "the lane computers don't, even at one block: they are OCT's",
-        not named(found, "TL "),
-        named(found, "TL "),
-    )
     if own:
         before = balances(api)
         reply = " ".join(command(f"!oct contract accept {own[0][0]} {identity}"))
@@ -538,7 +548,6 @@ def run(bench) -> None:
             "and the contract is over",
             not any(c[0] == own[0][0] for c in named(contracts()[0], "Grid")),
         )
-    reconfigure(ContractSalvageMinBlocks=20)
     found = post()
 
     before = balances(api)
@@ -703,6 +712,13 @@ run.administrators = [CLIENT_ID]
 
 
 def main() -> int:
+    # Its computers are the static, ownerless grids the wreck rule has to leave alone
+    wa.pl.MODS[3816175430] = "Trade Lanes MP"
+    wa.pl.MOD_ITEMS += (
+        '<ModItem FriendlyName="Trade Lanes MP"><Name>3816175430.sbm</Name>'
+        "<PublishedFileId>3816175430</PublishedFileId>"
+        "<PublishedServiceName>Steam</PublishedServiceName></ModItem>"
+    )
     run.world_template = wa.prepare()
     # The probe on the nodes too, for the conversion; it runs its plan on the World Authority only
     os.environ["CLUSTER_EXTRA_PLUGINS"] = os.environ["CLUSTER_EXTRA_PLUGINS"].replace(
@@ -715,6 +731,7 @@ def main() -> int:
         ContractsEnabled="true",
         MoneyEnabled="true",
         ContractBountyMinThreat=1,
+        ContractSalvageMinBlocks=1,
         ContractSalvageRadius=500,
         ContractWreckContracts=0,
         ContractBountiesPerStation=0,

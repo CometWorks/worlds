@@ -141,8 +141,7 @@ station and shipyard blueprints are in `blueprints/`.
   lane goes both ways: each end is an entry toward the other. Every end is a
   one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
   the Earth stations for the Moon lanes, clear of their other lane ends),
-  indestructible and not editable, owned by OCT's NPC like the stations and shared with
-  everyone: no contract takes it for a wreck, and the cluster keeps it. Its Custom Data ends with a Target GPS at
+  indestructible and not editable. Its Custom Data ends with a Target GPS at
   the other end's computer, so a computer the cluster loads before its partner
   still knows where its lane leads. `GpsMarkers:false` in it keeps the lanes
   off the players' GPS lists ([DF-716](https://tasks.cometworks.se/tasks/1530);

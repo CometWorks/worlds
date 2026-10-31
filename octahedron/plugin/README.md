@@ -652,8 +652,8 @@ Every minute the plugin fills each station up again:
   offline for `ContractWreckOfflineDays` (7); a visit brings the partition online and
   starts that time anew. No power means no battery with charge, no reactor or engine
   with fuel, and no working solar panel or wind turbine. That includes a player's ship
-  or base, static or not. Stations, OCT's grids and a grid someone sits in are never
-  wrecks. A static wreck pays by the mass of its blocks. It is done like a ship: ground
+  or base, static or not. Stations, OCT's grids, Trade Lane Computers and a grid someone
+  sits in are never wrecks. A static wreck pays by the mass of its blocks. It is done like a ship: ground
   down, or cut free of the voxels, converted to a ship and towed; only its big owner can
   convert a grid, so a static wreck that still has an owner needs that first.
   Done when towed to the shipyard as above, which also gives the player the grid, or

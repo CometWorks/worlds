@@ -241,7 +241,7 @@ def main() -> int:
     paid_for(remote, salvage, before, "salvage finished by the plugin, paid by OCT")
 
     # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
-    set_options(remote, ContractSalvageRadius=500, ContractSalvageMinBlocks=1)
+    set_options(remote, ContractSalvageRadius=500)
     # Creative tools: the character has no building materials
     remote.set_admin_flag("creativeTools", True)
     built = remote.character_build_grid(
@@ -249,6 +249,15 @@ def main() -> int:
     )
     remote.set_admin_flag("creativeTools", False)
     check(built.get("reply") is True, f"the player builds an armor block: {built}")
+    time.sleep(70)
+    check(
+        not any(
+            c[1] == "salvage" and "Grid" in c[4]
+            for c in contracts(remote, post=True)["Alpha Station"]
+        ),
+        "under the minimum blocks: no contract",
+    )
+    set_options(remote, ContractSalvageMinBlocks=1)
     time.sleep(70)
     own = next(
         (
@@ -259,14 +268,6 @@ def main() -> int:
         None,
     )
     check(own is not None, f"their ownerless block gets a contract: {own}")
-    check(
-        not any(
-            "TL " in c[4]
-            for c in contracts(remote)["Alpha Station"]
-            if c[1] == "salvage"
-        ),
-        "the lane computers don't, even at one block: they are OCT's",
-    )
     if own:
         before = balances(remote)
         act(remote, f"accept {own[0]}", "Success", "they take it")
