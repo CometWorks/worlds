@@ -524,9 +524,10 @@ def run(bench) -> None:
         reply,
     )
     time.sleep(max(0, ended + minutes * 60 + 5 - time.time()))
-    # The character waits in the open and can die by now; the cool-down doesn't care
+    # The character waits in the open and can die by now; the cool-down doesn't care.
+    # Back on the node that reloaded the lowered cool-down.
     rig.ensure_character(api)
-    to_station_on(api, node_a)
+    to_station_on(api, node_b)
     reply = press(api)
     check(
         "free once the time has passed",
