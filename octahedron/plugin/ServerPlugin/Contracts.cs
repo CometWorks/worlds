@@ -7,8 +7,6 @@ using System.Text;
 using System.Threading.Tasks;
 using HarmonyLib;
 using PluginSdk.Clustering;
-using Sandbox.Definitions;
-using Sandbox.Engine.Physics;
 using Sandbox.Game.Contracts;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
