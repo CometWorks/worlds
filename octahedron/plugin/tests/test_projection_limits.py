@@ -148,11 +148,17 @@ IDENTITY = (
     f"<IdentityId>{PLAYER}</IdentityId><DisplayName>Projection Tester</DisplayName>"
     "<CharacterEntityId>0</CharacterEntityId></MyObjectBuilder_Identity>"
 )
-MOD_ITEMS = "".join(
-    f'<ModItem FriendlyName="{name}"><Name>{id_}.sbm</Name><PublishedFileId>{id_}'
-    "</PublishedFileId><PublishedServiceName>Steam</PublishedServiceName></ModItem>"
-    for id_, name in MODS.items()
-)
+
+
+def mod_items() -> str:
+    return "".join(
+        f'<ModItem FriendlyName="{name}"><Name>{id_}.sbm</Name><PublishedFileId>{id_}'
+        "</PublishedFileId><PublishedServiceName>Steam</PublishedServiceName></ModItem>"
+        for id_, name in MODS.items()
+    )
+
+
+MOD_ITEMS = mod_items()
 TYPE_LIMITS = (
     "<BlockTypeLimits><dictionary><item><Key>LightArmorBlock</Key>"
     f"<Value>{LIMIT}</Value></item></dictionary></BlockTypeLimits>"

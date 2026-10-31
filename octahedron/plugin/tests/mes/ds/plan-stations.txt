@@ -1,0 +1,19 @@
+# SE-829: which grids trade, and what MES may still spawn as an economy station. Run by tests/mes/ds/stations.py.
+# The world's economy tick is 30 s here, so the first refill has happened
+wait 90
+factions start
+stores start
+eligible planet PlanetaryInstallation EarthLike 60
+eligible planet PlanetaryInstallation Moon 60
+eligible space RandomEncounter 330000,330000,330000 20
+eligible cargo SpaceCargoShip 330000,330000,330000 20
+eligible atmo PlanetaryCargoShip EarthLike 20
+spawn-group PlanetaryInstallation P9_RegionalHeadquarters EarthLike
+spawn-group PlanetaryInstallation P8_ShippingPlatform EarthLike
+spawn-group PlanetaryInstallation TOC-SpawnGroup-PlanetaryTradeStationMkI EarthLike
+spawn-group RandomEncounter TOC-SpawnGroup-OrbitalTradeStation 330000,330000,330000
+spawn-group PlanetaryInstallation P15_PirateStronghold EarthLike
+wait 90
+stores end
+factions end
+done

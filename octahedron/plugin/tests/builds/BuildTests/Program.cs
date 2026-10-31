@@ -109,6 +109,12 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
 
 // The labor fee: 1 SC per 10 PCU, rounded up
 {
+    Check(
+        ShipyardPlacement.Offset(70, 282.5) == 282.5 / 6,
+        "placement: short ship at the 1/3 point"
+    );
+    Check(ShipyardPlacement.Offset(282.5 / 4, 282.5) == 0, "placement: a quarter long is centered");
+    Check(ShipyardPlacement.Offset(100, 282.5) == 0, "placement: long ship centered");
     Check(BuildBook.Fee(60_000, 1) == 6_000, "fee: 60k PCU is 6,000 SC");
     Check(BuildBook.Fee(15, 1) == 2, "fee: rounded up");
     Check(BuildBook.Fee(0, 1) == 0 && BuildBook.Fee(500, 0) == 0, "fee: none");
@@ -339,6 +345,24 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     );
     Check(w.Balances[p1] == 25_000 - paid + 100, "refund: the fee is back");
     Check(Free(w, p1, Plate) == 10 * U && Free(w, p1, Ice) == 50 * U, "refund: everything is back");
+}
+
+// Finish with a refund before the build started: its components never left the build ledger
+{
+    var (w, m, market, b) = Setup();
+    var needed = Needs((Plate, 10 * U), (Ice, 50 * U));
+    var order = Ok(
+        w,
+        "order",
+        () => b.Order(w, market, s, Paid(p1), needed, none, long.MaxValue)
+    ).Order;
+    long paid = 25_000 - w.Balances[p1];
+    Ok(w, "finish unstarted with refund", () => b.Finish(w, s, order.Id, none, 0, refund: true));
+    Check(w.Balances[p1] == 25_000 - paid + 100, "not started: the fee is back");
+    Check(
+        Free(w, p1, Plate) == 10 * U && Free(w, p1, Ice) == 50 * U,
+        "not started: everything is back once: " + LedgerBook.Units(Free(w, p1, Plate))
+    );
 }
 
 // Finish with a refund after the welders used some: the ship was removed, all comes back

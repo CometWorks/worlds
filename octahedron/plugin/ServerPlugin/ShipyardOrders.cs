@@ -210,6 +210,7 @@ internal static class ShipyardOrders
     {
         public string Error;
         public MyProjectorBase Table;
+        public bool Pending;
         public MyCubeGrid Shipyard;
         public string Station;
         public long Player;
@@ -269,7 +270,10 @@ internal static class ShipyardOrders
         plan.Pcu = blueprint.Sum(g => g.CalculatePCUs());
         // The player is on this node, so its copy of their admin settings is current
         plan.Exempt = FreePrints.Exempt(identityId);
-        var error = Fits(plan.Shipyard, blueprint, plan.Exempt);
+        var error = Fits(plan.Shipyard, blueprint, plan.Exempt, out _, out plan.Pending);
+        if (plan.Pending)
+            // Quoted again when the plan is done
+            ShipyardArm.WhenDone(() => loaded[table.EntityId] = identityId);
         if (error != null)
             return Fail(plan, error);
 
@@ -326,13 +330,18 @@ internal static class ShipyardOrders
         return plan;
     }
 
-    // Why the shipyard can't build the blueprint at all, or null
+    // Why the shipyard can't build the blueprint at all, or null, with the arm if it needs one.
+    // Pending: the arm is still being planned, that is the reason given for now.
     private static string Fits(
         MyCubeGrid shipyard,
         List<MyObjectBuilder_CubeGrid> blueprint,
-        bool exempt
+        bool exempt,
+        out ShipyardArm.Layout layout,
+        out bool pending
     )
     {
+        layout = null;
+        pending = false;
         var pcu = blueprint.Sum(g => g.CalculatePCUs());
         // The ordered ship is the player's, so GroupPcuLimit would stop welding it there, unless
         // the order is exempt (Exempt below)
@@ -356,14 +365,15 @@ internal static class ShipyardOrders
             return $"The ship's components take {needed:N0} m³, {shipyard.DisplayName}'s containers hold {capacity:N0} m³.";
         if (arms)
         {
-            ShipyardArm.Plan(
+            layout = ShipyardArm.Plan(
                 shipyard,
-                space,
+                ShipCenter(shipyard, space, size.Z),
                 ShipRotation(shipyard, main),
                 blueprint,
-                out var error
+                out var error,
+                out pending
             );
-            return error;
+            return pending ? "The shipyard is planning a support arm for the ship..." : error;
         }
         return null;
     }
@@ -630,7 +640,12 @@ internal static class ShipyardOrders
                 {
                     // Loaded before a restart or a move of the station to this node: the presser's now
                     Hold(table, identityId);
-                    Place(MakePlan(identityId, table), tell);
+                    var plan = MakePlan(identityId, table);
+                    if (plan.Pending)
+                        // The press stands: it goes on when the arm is planned
+                        ShipyardArm.WhenDone(() => Press(identityId, table, tell));
+                    else
+                        Place(plan, tell);
                 }
                 else
                     BookRepair(identityId, station, table, tell);
@@ -1203,6 +1218,7 @@ internal static class ShipyardOrders
     public static void Update()
     {
         ticks++;
+        ShipyardArm.Update();
         if (docks.Count > 0)
             UpdateDocks();
         if (ticks % QuoteTicks == 0 && loaded.Count > 0)
@@ -1590,10 +1606,19 @@ internal static class ShipyardOrders
                 }
                 var next = BuildBook.DecodeOrder(text);
                 var blueprint = DecodeBlueprint(next.Blueprint);
+                ShipyardArm.Layout layout = null;
+                var pending = false;
                 var error =
                     blueprint == null || blueprint.Count == 0
                         ? "its blueprint could not be read"
-                        : Fits(shipyard, blueprint, next.Exempt);
+                        : Fits(shipyard, blueprint, next.Exempt, out layout, out pending);
+                if (pending)
+                {
+                    // Nothing has started yet: the next check starts it, once the plan is done
+                    starting.Remove(shipyard.EntityId);
+                    ShipyardArm.WhenDone(() => Refresh(station));
+                    return;
+                }
                 if (error != null)
                 {
                     // Not started: the build ledger is still whole
@@ -1625,7 +1650,7 @@ internal static class ShipyardOrders
                             );
                             return;
                         }
-                        error = Create(shipyard, next, blueprint);
+                        error = Create(shipyard, next, blueprint, layout);
                         if (error != null)
                             Finish(
                                 next,
@@ -1650,15 +1675,16 @@ internal static class ShipyardOrders
     private static string Create(
         MyCubeGrid shipyard,
         BuildOrder next,
-        List<MyObjectBuilder_CubeGrid> blueprint
+        List<MyObjectBuilder_CubeGrid> blueprint,
+        ShipyardArm.Layout layout
     )
     {
         var space = FreeSpace(shipyard);
         var obstacle = Obstacle(shipyard);
         if (obstacle != null)
             return $"'{obstacle.DisplayName}' is in {shipyard.DisplayName}";
-        if (ShipyardArm.Rotors(shipyard).Count > 0)
-            return CreateWithArm(shipyard, next, blueprint, space);
+        if (layout != null)
+            return CreateWithArm(shipyard, next, blueprint, layout);
         var main = blueprint[0];
         FindStart(main, out var start, out var outward);
         // The projector anchors the projection's first block, so the start block goes first
@@ -1666,7 +1692,7 @@ internal static class ShipyardOrders
         main.CubeBlocks.Insert(0, start);
         Vector3I startCell = start.Min;
         var scaffold = new[] { startCell + outward, startCell + 2 * outward };
-        Size(blueprint, start, outward, out var bounds);
+        var size = Size(blueprint, start, outward, out var bounds);
         var (forward, up) = StarterShip.CockpitFrame(main);
         var turn = MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
 
@@ -1689,7 +1715,7 @@ internal static class ShipyardOrders
         ship.PersistentFlags =
             MyPersistentEntityFlags2.InScene | MyPersistentEntityFlags2.CastShadows;
         ship.PositionAndOrientation = new MyPositionAndOrientation(
-            space.Center - Vector3D.TransformNormal(bounds.Center, world),
+            ShipCenter(shipyard, space, size.Z) - Vector3D.TransformNormal(bounds.Center, world),
             (Vector3)world.Forward,
             (Vector3)world.Up
         );
@@ -2037,19 +2063,12 @@ internal static class ShipyardOrders
         MyCubeGrid shipyard,
         BuildOrder next,
         List<MyObjectBuilder_CubeGrid> blueprint,
-        MyOrientedBoundingBoxD space
+        ShipyardArm.Layout layout
     )
     {
         var main = blueprint[0];
-        var layout = ShipyardArm.Plan(
-            shipyard,
-            space,
-            ShipRotation(shipyard, main),
-            blueprint,
-            out var error
-        );
-        if (layout == null)
-            return error;
+        if (layout.Grid.MarkedForClose)
+            return "its support arm's rotor is gone";
 
         // The ship's components, the given up block's included, and the arm's, which OCT pays
         var components = Components(blueprint, skipFirst: false);
@@ -3061,6 +3080,39 @@ internal static class ShipyardOrders
         );
     }
 
+    // Where the center of a ship of this length goes: on the free space's center line, a short
+    // ship toward the end nearer the station
+    private static Vector3D ShipCenter(
+        MyCubeGrid shipyard,
+        MyOrientedBoundingBoxD space,
+        double length
+    )
+    {
+        var offset = ShipyardPlacement.Offset(length, space.HalfExtent.Z * 2);
+        var station = offset > 0 ? NearestStation(shipyard) : null;
+        if (station == null)
+            return space.Center;
+        var along = shipyard.WorldMatrix.Forward;
+        var toStation = station.PositionComp.WorldAABB.Center - space.Center;
+        return space.Center + along * (Vector3D.Dot(toStation, along) > 0 ? offset : -offset);
+    }
+
+    // The grid of the nearest station hologram table within 1 km of the shipyard
+    private static MyCubeGrid NearestStation(MyCubeGrid shipyard)
+    {
+        var position = shipyard.PositionComp.GetPosition();
+        var sphere = new BoundingSphereD(position, 1000);
+        var entities = MyEntities.GetTopMostEntitiesInSphere(ref sphere);
+        var table = entities
+            .OfType<MyCubeGrid>()
+            .SelectMany(g => g.GetFatBlocks<MyProjectorBase>())
+            .Where(IsTable)
+            .OrderBy(t => Vector3D.DistanceSquared(t.PositionComp.GetPosition(), position))
+            .FirstOrDefault();
+        entities.Clear();
+        return table?.CubeGrid;
+    }
+
     private static bool Free(MyCubeGrid grid, BoundingBoxI box)
     {
         for (var x = box.Min.X; x <= box.Max.X; x++)
@@ -3299,7 +3351,8 @@ internal static class ShipyardOrders
 
     // Through the tools' terminal switches, which ToolCore also sends to the clients. In a
     // no-welding zone the clients would turn the tools off again and show no beams (SE-441):
-    // ShowBeams keeps them on.
+    // ShowBeams keeps them on, and ShowShooting turns them on again on a client that got the
+    // shipyard streamed in during the build (SE-782).
     private static void Welders(MyCubeGrid shipyard, bool on)
     {
         ShipyardZoneWelding.ShowBeams(shipyard, on);
@@ -3318,6 +3371,7 @@ internal static class ShipyardOrders
             if (block.GetValueBool(ShootProperty) != on)
                 block.SetValueBool(ShootProperty, on);
         }
+        ShipyardZoneWelding.ShowShooting(Beams(shipyard), on);
     }
 
     // The welders stop without power: the shipyard's reactors are topped up to ReactorUranium

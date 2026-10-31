@@ -134,7 +134,9 @@ station and shipyard blueprints are in `blueprints/`.
 - Makes the stations the NPC faction's trade stations: the faction is a Trader
   with a bank account, and each station grid has a station entry, so the
   economy stocks its store and contract blocks. The game's own trade factions
-  and their procedural stations are off (`GenerateFactionsOnStart` false).
+  and their procedural stations are off (`GenerateFactionsOnStart` false,
+  `TradeFactionsCount` 0), and MES spawns no economy outposts or Trade Operators
+  Coalition stations (`NpcSpawnGroupBlacklist` in `config/storage`, `MES.md`).
   The entries name no safe zone (`SafeZoneEntityId` 0); with one, the economy
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
@@ -304,7 +306,9 @@ game update that changes the planet or voxel material definitions or maps.
   toolboxes by its "Free tools!" signs, renamed and shown in inventory screens)
   shared with all players. On the server, the Octahedron plugin's
   `RefillContainers` rule in `config/octahedron.cfg` tops each up every minute
-  to 3 of each Elite tool (welder, grinder, drill), 3 full oxygen and 3 full
+  to 3 each of welders, grinders and drills, each one Enhanced or Proficient at
+  random (the two tiers above the basic tool), 1 pair of binoculars (the
+  Binoculars mod, which has no tiers), 3 full oxygen and 3 full
   hydrogen bottles, and 3 suit battery packs (Powerkit). "Station Loot" is the blueprint's tools,
   bottles and ammo container.
 - The asteroid ore settings are vanilla's (DepositsCountCoefficient 2,

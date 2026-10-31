@@ -446,7 +446,7 @@ def server_game_log() -> str:
 # --- client ---------------------------------------------------------------------
 
 
-def prepare_client() -> None:
+def prepare_client(extra_dev_folders=()) -> None:
     if not LAUNCHER.exists():
         subprocess.run(
             [
@@ -459,9 +459,14 @@ def prepare_client() -> None:
         )
     legacy = PULSAR / "Legacy"
     (legacy / "Profiles" / "Current.xml").write_text(
-        profile_xml(["remote", "direct-transport"]), encoding="utf-8"
+        profile_xml(
+            ["remote", "direct-transport"] + [i for *_, i in extra_dev_folders]
+        ),
+        encoding="utf-8",
     )
     sources = legacy / "Sources" / "sources.xml"
+    for name, folder, file, _ in extra_dev_folders:
+        register_source(sources, name, folder, file)
     register_source(sources, "remote", REMOTE_REPO, "Remote.xml")
     register_source(
         sources, "direct-transport", DIRECT_TRANSPORT_REPO, "DirectTransportClient.xml"
@@ -503,12 +508,16 @@ def api() -> RemoteAPI:
     )
 
 
-def start_client(timeout: float = 2400.0, render: bool = False) -> RemoteAPI:
+def start_client(
+    timeout: float = 2400.0, render: bool = False, extra_dev_folders=(), connect=True
+) -> RemoteAPI:
     """Starts the client, which joins the server, and returns its API once a
-    character stands in the world. render: draw frames at 1280x720, for screenshots"""
+    character stands in the world. render: draw frames at 1280x720, for screenshots.
+    extra_dev_folders: more plugins as (name, folder, manifest, id). connect=False stops
+    at the main menu, for a world loaded offline"""
     if client_pid():
         raise RuntimeError("The test client is already running")
-    prepare_client()
+    prepare_client(extra_dev_folders)
     _start(
         [
             str(LAUNCHER),
@@ -517,7 +526,7 @@ def start_client(timeout: float = 2400.0, render: bool = False) -> RemoteAPI:
             "-appdata", str(APPDATA),
             "--quality", "minimal", "--no-audio", "--headless",
             *(["--resolution", "1280x720"] if render else ["--resolution", "640x480", "--no-render"]),
-            "--connect", f"127.0.0.1:{SERVER_PORT}",
+            *(["--connect", f"127.0.0.1:{SERVER_PORT}"] if connect else []),
         ],
         RENDER_GIB if render else CLIENT_GIB, PULSAR, CLIENT_LOG, CLIENT_PID,
         {} if render else {"PULSAR_NO_RENDER": "true"},
@@ -534,8 +543,9 @@ def start_client(timeout: float = 2400.0, render: bool = False) -> RemoteAPI:
             if time.monotonic() > deadline:
                 raise
             time.sleep(3)
-    wait_world(remote)
-    ensure_character(remote)
+    if connect:
+        wait_world(remote)
+        ensure_character(remote)
     return remote
 
 

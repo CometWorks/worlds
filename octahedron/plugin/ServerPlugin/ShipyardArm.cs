@@ -1,6 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using HarmonyLib;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
@@ -29,7 +33,20 @@ internal static class ShipyardArm
     // The integrity of a block just placed: a frame with its first component
     private const float FrameIntegrity = 1.5259022E-05f;
 
+    // The most plans waiting or under way; beyond that an order asks again later
+    private const int MaxPlans = 8;
+
+    // How long a plan's refusal stands before the same ship is planned again
+    private const int RefusedMinutes = 5;
+
     private static readonly Dictionary<string, Layout> cache = new();
+    private static readonly Dictionary<string, (string Why, DateTime Until)> refused = new();
+    private static readonly Dictionary<string, Job> jobs = new();
+    private static readonly Queue<Job> queue = new();
+    private static readonly List<Action> waiting = [];
+    private static readonly ConcurrentQueue<Job> finished = new();
+    private static readonly CancellationTokenSource stopping = new();
+    private static Job running;
 
     private static OctahedronConfig Config => Plugin.Config;
 
@@ -72,48 +89,270 @@ internal static class ShipyardArm
         );
 
     /// <summary>
-    /// The cheapest arm of any rotor for the blueprint, built in the shipyard's free space with
-    /// its main grid's orientation in the world; null with the reason in error.
+    /// The cheapest arm of any rotor for the blueprint, built with its bounds centered on center
+    /// and its main grid's orientation in the world. Planned on a worker thread: until that is
+    /// done it returns null with pending set, and WhenDone says when to ask again; after that the
+    /// arm, or null with the reason in error.
     /// </summary>
     public static Layout Plan(
         MyCubeGrid shipyard,
-        MyOrientedBoundingBoxD space,
+        Vector3D center,
         MatrixD orientation,
         List<MyObjectBuilder_CubeGrid> blueprint,
-        out string error
+        out string error,
+        out bool pending
     )
     {
-        var key =
-            $"{shipyard.EntityId}|{Config.ShipyardArmTurnCost}|{Signature(blueprint)}|{space.Center:F1}";
-        if (cache.TryGetValue(key, out var cached) && cached.Grid?.MarkedForClose == false)
-        {
-            error = null;
-            return cached;
-        }
-        error =
-            $"{shipyard.DisplayName} has no support arm for a {blueprint[0].GridSizeEnum.ToString().ToLowerInvariant()} grid ship.";
-        Layout best = null;
-        foreach (var rotor in Rotors(shipyard))
-        {
-            if (rotor.TopGrid.GridSizeEnum != blueprint[0].GridSizeEnum)
-                continue;
-            var layout = PlanFor(shipyard, rotor, space, orientation, blueprint, out var why);
-            if (layout == null)
-            {
-                Note(rotor.EntityId, $"Shipyard arm on '{rotor.CustomName}': {why}");
-                error = why;
-                continue;
-            }
-            if (best == null || Rank(layout.Plan).CompareTo(Rank(best.Plan)) < 0)
-                best = layout;
-        }
-        if (best == null)
-            return null;
+        var clock = Stopwatch.StartNew();
         error = null;
-        if (cache.Count > 32)
-            cache.Clear();
-        cache[key] = best;
-        return best;
+        pending = false;
+        var rotors = Rotors(shipyard);
+        // With the arm of a running build on a head the plan isn't the one for an empty head
+        var heads = rotors.Sum(r => ((MyCubeGrid)r.TopGrid).BlocksCount);
+        var seconds = Config.ShipyardArmPlanSeconds;
+        var key =
+            $"{shipyard.EntityId}|{Config.ShipyardArmTurnCost}|{seconds}|{heads}|{Signature(blueprint)}|{center:F1}";
+        if (cache.TryGetValue(key, out var cached) && cached.Grid?.MarkedForClose == false)
+            return cached;
+        if (refused.TryGetValue(key, out var no) && DateTime.UtcNow < no.Until)
+        {
+            error = no.Why;
+            return null;
+        }
+        if (jobs.ContainsKey(key))
+        {
+            pending = true;
+            return null;
+        }
+        var size = blueprint[0].GridSizeEnum;
+        var matching = rotors.Where(r => r.TopGrid.GridSizeEnum == size).ToList();
+        if (matching.Count == 0)
+        {
+            error =
+                $"{shipyard.DisplayName} has no support arm for a {size.ToString().ToLowerInvariant()} grid ship.";
+            return null;
+        }
+        pending = true;
+        if (jobs.Count >= MaxPlans)
+            return null;
+        var job = new Job
+        {
+            Key = key,
+            Shipyard = shipyard.DisplayName,
+            Center = center,
+            Orientation = orientation,
+            Blueprint = blueprint,
+            NoArm =
+                $"{shipyard.DisplayName} has no support arm for a {size.ToString().ToLowerInvariant()} grid ship.",
+            Limit = TimeSpan.FromSeconds(seconds),
+            TurnCost = Config.ShipyardArmTurnCost,
+            GiveUps = Patterns(Config.ShipyardArmGiveUpBlocks),
+            Pieces = Enum.GetValues(typeof(ArmPiece))
+                .Cast<ArmPiece>()
+                .ToDictionary(piece => piece, piece => Definition(piece, size)),
+            Others = Grids(shipyard).Select(g => Snapshot(g)).ToList(),
+            Rotors = matching.Select(Snapshot).ToList(),
+        };
+        job.Snapshotted = clock.Elapsed;
+        jobs[key] = job;
+        queue.Enqueue(job);
+        StartNext();
+        return null;
+    }
+
+    /// <summary>Runs the action on the game thread once a plan has finished.</summary>
+    public static void WhenDone(Action action) => waiting.Add(action);
+
+    /// <summary>On every game tick: takes finished plans and starts the next.</summary>
+    public static void Update()
+    {
+        if (running == null || !finished.TryDequeue(out var job))
+            return;
+        running = null;
+        jobs.Remove(job.Key);
+        foreach (var note in job.Notes)
+            Note(note.Key, note.Text);
+        if (job.Failure != null)
+            Plugin.Log.Error($"Shipyard arm for {job.Shipyard}", job.Failure);
+        Plugin.Log.Info(
+            $"Shipyard arm for '{job.Blueprint[0].DisplayName}' at {job.Shipyard}: "
+                + (job.Best != null ? $"{job.Best.Plan.Blocks.Count} blocks" : job.Why)
+                + $", game thread {job.Snapshotted.TotalMilliseconds:F1} ms, worker {job.Took.TotalMilliseconds:F0} ms"
+        );
+        if (job.Best != null)
+        {
+            if (cache.Count > 32)
+                cache.Clear();
+            cache[job.Key] = job.Best;
+        }
+        else
+        {
+            if (refused.Count > 32)
+                refused.Clear();
+            refused[job.Key] = (job.Why, DateTime.UtcNow.AddMinutes(RefusedMinutes));
+        }
+        StartNext();
+        var actions = waiting.ToList();
+        waiting.Clear();
+        foreach (var action in actions)
+            action();
+    }
+
+    /// <summary>The server stops: a plan under way ends, nothing has been placed for it.</summary>
+    public static void Dispose()
+    {
+        stopping.Cancel();
+        queue.Clear();
+        waiting.Clear();
+    }
+
+    // One worker at a time, so that plans can't pile up threads; each is held to its limit
+    private static void StartNext()
+    {
+        if (running != null || queue.Count == 0)
+            return;
+        running = queue.Dequeue();
+        var job = running;
+        Task.Run(() =>
+        {
+            job.Run(stopping.Token);
+            finished.Enqueue(job);
+        });
+    }
+
+    // What a plan needs of a grid and its blocks, copied on the game thread
+    private sealed class GridSnapshot
+    {
+        public long Id;
+        public MyCubeSize Size;
+        public double Cube;
+        public MatrixD World;
+        public (Vector3I Min, Vector3I Max)[] Blocks;
+    }
+
+    private sealed class RotorSnapshot
+    {
+        public MyMotorStator Rotor;
+        public string Name;
+        public MyCubeGrid Grid;
+        public long GridId;
+        public MyCubeSize Size;
+        public double Cube;
+        public MatrixD Rotation;
+        public MatrixD ToHead;
+        public (Vector3I Min, Vector3I Max) Stator;
+        public long StatorGridId;
+        public double StatorCube;
+        public MatrixD StatorToHead;
+        public Vector3I HeadMin;
+        public Vector3I HeadMax;
+        public Base6Directions.Direction HeadUp;
+        public MatrixD HeadWorld;
+        public MatrixD RotorWorld;
+    }
+
+    private static GridSnapshot Snapshot(MyCubeGrid grid)
+    {
+        var blocks = grid.GetBlocks();
+        var copy = new (Vector3I, Vector3I)[blocks.Count];
+        var i = 0;
+        foreach (var block in blocks)
+            copy[i++] = (block.Min, block.Max);
+        return new GridSnapshot
+        {
+            Id = grid.EntityId,
+            Size = grid.GridSizeEnum,
+            Cube = grid.GridSize,
+            World = grid.WorldMatrix,
+            Blocks = copy,
+        };
+    }
+
+    private static RotorSnapshot Snapshot(MyMotorStator rotor)
+    {
+        var grid = (MyCubeGrid)rotor.TopGrid;
+        var head = rotor.TopBlock;
+        var toHead =
+            grid.PositionComp.WorldMatrixNormalizedInv * MatrixD.CreateScale(1 / grid.GridSize);
+        return new RotorSnapshot
+        {
+            Rotor = rotor,
+            Name = rotor.CustomName.ToString(),
+            Grid = grid,
+            GridId = grid.EntityId,
+            Size = grid.GridSizeEnum,
+            Cube = grid.GridSize,
+            Rotation = grid.WorldMatrix.GetOrientation(),
+            ToHead = toHead,
+            Stator = (rotor.SlimBlock.Min, rotor.SlimBlock.Max),
+            StatorGridId = rotor.CubeGrid.EntityId,
+            StatorCube = rotor.CubeGrid.GridSize,
+            StatorToHead = rotor.CubeGrid.WorldMatrix * toHead,
+            HeadMin = head.Min,
+            HeadMax = head.Max,
+            HeadUp = head.Orientation.Up,
+            HeadWorld = head.WorldMatrix,
+            RotorWorld = rotor.WorldMatrix,
+        };
+    }
+
+    // A plan on its way: game thread data going in, the worker's result coming out
+    private sealed class Job
+    {
+        public string Key;
+        public string Shipyard;
+        public Vector3D Center;
+        public MatrixD Orientation;
+        public List<MyObjectBuilder_CubeGrid> Blueprint;
+        public string NoArm;
+        public TimeSpan Limit;
+        public int TurnCost;
+        public System.Text.RegularExpressions.Regex GiveUps;
+        public Dictionary<ArmPiece, MyCubeBlockDefinition> Pieces;
+        public List<GridSnapshot> Others;
+        public List<RotorSnapshot> Rotors;
+        public TimeSpan Snapshotted;
+
+        public Layout Best;
+        public string Why;
+        public TimeSpan Took;
+        public Exception Failure;
+        public readonly List<(long Key, string Text)> Notes = [];
+
+        // On the worker: nothing here touches an entity. The blueprint is this order's own copy
+        // and the block definitions don't change while the game runs
+        public void Run(CancellationToken stopping)
+        {
+            var clock = Stopwatch.StartNew();
+            bool Stop() => stopping.IsCancellationRequested || clock.Elapsed > Limit;
+            Why = NoArm;
+            try
+            {
+                foreach (var rotor in Rotors)
+                {
+                    if (Stop())
+                        break;
+                    var layout = PlanFor(this, rotor, Stop, out var why);
+                    if (layout == null)
+                    {
+                        Notes.Add((rotor.Rotor.EntityId, $"Shipyard arm on '{rotor.Name}': {why}"));
+                        Why = why;
+                    }
+                    else if (Best == null || Rank(layout.Plan).CompareTo(Rank(Best.Plan)) < 0)
+                        Best = layout;
+                }
+                if (Best == null && Stop())
+                    Why =
+                        $"{Shipyard} could not plan a support arm for the ship in {Limit.TotalSeconds:0} seconds.";
+            }
+            catch (Exception e)
+            {
+                Failure = e;
+                Best = null;
+                Why = $"{Shipyard} could not plan a support arm for the ship.";
+            }
+            Took = clock.Elapsed;
+        }
     }
 
     private static (int, double) Rank(ArmPlan plan) =>
@@ -137,22 +376,13 @@ internal static class ShipyardArm
         return $"{blueprint.Count}:{blueprint.Sum(g => g.CubeBlocks.Count)}:{hash}";
     }
 
-    private static Layout PlanFor(
-        MyCubeGrid shipyard,
-        MyMotorStator rotor,
-        MyOrientedBoundingBoxD space,
-        MatrixD orientation,
-        List<MyObjectBuilder_CubeGrid> blueprint,
-        out string error
-    )
+    private static Layout PlanFor(Job job, RotorSnapshot rotor, Func<bool> stop, out string error)
     {
-        var grid = rotor.TopGrid;
-        var head = rotor.TopBlock;
-        var size = grid.GridSize;
-        var armRotation = grid.WorldMatrix.GetOrientation();
+        var blueprint = job.Blueprint;
+        var size = rotor.Cube;
 
         // The ship's main grid turned onto the head's grid, by right angles only
-        var turn = orientation * MatrixD.Transpose(armRotation);
+        var turn = job.Orientation * MatrixD.Transpose(rotor.Rotation);
         var forward = Base6Directions.GetClosestDirection((Vector3)turn.Forward);
         var up = Base6Directions.GetClosestDirection((Vector3)turn.Up);
         if (
@@ -161,20 +391,23 @@ internal static class ShipyardArm
             || Vector3D.Dot(turn.Up, Base6Directions.GetVector(up)) < 0.99
         )
         {
-            error = $"{rotor.CustomName} is not turned by right angles to {shipyard.DisplayName}.";
+            error = $"{rotor.Name} is not turned by right angles to {job.Shipyard}.";
             return null;
         }
         var shipOrientation = new MyBlockOrientation(forward, up);
         shipOrientation.GetMatrix(out Matrix turnMatrix);
-        var world = (MatrixD)turnMatrix * armRotation;
+        var world = (MatrixD)turnMatrix * rotor.Rotation;
         var bounds = TableHologram.Bounds(blueprint);
-        var origin = grid.WorldToGridInteger(
-            space.Center - Vector3D.TransformNormal(bounds.Center, world)
+        var origin = Vector3I.Round(
+            Vector3D.Transform(
+                job.Center - Vector3D.TransformNormal(bounds.Center, world),
+                rotor.ToHead
+            )
         );
         var toArm = new MatrixI(origin, forward, up);
 
         var main = blueprint[0];
-        var problem = new ArmProblem { TurnCost = Config.ShipyardArmTurnCost };
+        var problem = new ArmProblem { TurnCost = job.TurnCost, Stop = stop };
 
         // The ship's volume: every block of every grid, the subgrids where the blueprint has them
         var toMain = MatrixD.Invert(GridMatrix(main));
@@ -188,48 +421,16 @@ internal static class ShipyardArm
             var cube = MyDefinitionManager.Static.GetCubeSize(g.GridSizeEnum);
             foreach (var block in g.CubeBlocks)
                 if (Box(block, out var min, out var max, out _))
-                    Mark(problem.Volume, min, max, cube, toCells);
+                    Mark(problem.Volume.Add, min, max, cube, toCells);
         }
-
-        // The shipyard and the grids on its rotors and pistons; the rotor head's grid itself
-        var blocked = new HashSet<Cell>();
-        var stator = new HashSet<Cell>();
-        var toHead = grid.PositionComp.WorldMatrixNormalizedInv * MatrixD.CreateScale(1 / size);
-        foreach (var other in Grids(shipyard))
-        {
-            if (other == grid)
-                continue;
-            var toCells = other.WorldMatrix * toHead;
-            foreach (var block in other.GetBlocks())
-                Mark(
-                    block == rotor.SlimBlock ? stator : blocked,
-                    block.Min,
-                    block.Max,
-                    other.GridSize,
-                    toCells
-                );
-        }
-        foreach (var block in grid.GetBlocks())
-            for (var x = block.Min.X; x <= block.Max.X; x++)
-            for (var y = block.Min.Y; y <= block.Max.Y; y++)
-            for (var z = block.Min.Z; z <= block.Max.Z; z++)
-                blocked.Add(new Cell(x, y, z));
-        problem.Blocked = blocked.Contains;
 
         // The pipe end goes on the head's top, in the middle
-        var upward = Base6Directions.GetIntVector(head.Orientation.Up);
-        var start = (head.Min + head.Max) / 2;
-        while (start.IsInsideInclusiveEnd(head.Min, head.Max))
+        var upward = Base6Directions.GetIntVector(rotor.HeadUp);
+        var start = (rotor.HeadMin + rotor.HeadMax) / 2;
+        while (start.IsInsideInclusiveEnd(rotor.HeadMin, rotor.HeadMax))
             start += upward;
         problem.Start = C(start);
         problem.Up = C(upward);
-        // An advanced rotor's head sits inside its stator's two cells, so the pipe end's cell
-        // is in the stator's box; the game builds it there ("... Arm Exam" blueprint). The
-        // stator takes only the cells up to the head's top, which on a small head leaves room
-        // for the pipes inside the large stator's box
-        var top = Math.Max(Vector3I.Dot(head.Min, upward), Vector3I.Dot(head.Max, upward));
-        stator.RemoveWhere(c => c.Dot(C(upward)) > top);
-        blocked.UnionWith(stator);
 
         // Search around the ship and the head, with room to go around
         var margin = (int)Math.Ceiling(Math.Max(4 * size, 10) / size);
@@ -243,15 +444,52 @@ internal static class ShipyardArm
         problem.Min = lo - new Cell(margin, margin, margin);
         problem.Max = hi + new Cell(margin, margin, margin);
 
+        // The shipyard and the grids on its rotors and pistons; the rotor head's grid itself
+        var occupied = new ArmGrid(problem.Min, problem.Max);
+        problem.Occupied = occupied;
+        bool taken(Cell c)
+        {
+            occupied.Mark(c);
+            return true;
+        }
+        foreach (var other in job.Others)
+        {
+            if (other.Id == rotor.GridId)
+            {
+                foreach (var (min, max) in other.Blocks)
+                    for (var x = min.X; x <= max.X; x++)
+                    for (var y = min.Y; y <= max.Y; y++)
+                    for (var z = min.Z; z <= max.Z; z++)
+                        occupied.Mark(new Cell(x, y, z));
+                continue;
+            }
+            var toCells = other.World * rotor.ToHead;
+            foreach (var (min, max) in other.Blocks)
+                if (other.Id != rotor.StatorGridId || (min, max) != rotor.Stator)
+                    Mark(taken, min, max, other.Cube, toCells, problem.Min, problem.Max);
+        }
+        // An advanced rotor's head sits inside its stator's two cells, so the pipe end's cell
+        // is in the stator's box; the game builds it there ("... Arm Exam" blueprint). The
+        // stator takes only the cells up to the head's top, which on a small head leaves room
+        // for the pipes inside the large stator's box
+        var top = Math.Max(
+            Vector3I.Dot(rotor.HeadMin, upward),
+            Vector3I.Dot(rotor.HeadMax, upward)
+        );
+        var stator = new HashSet<Cell>();
+        Mark(stator.Add, rotor.Stator.Min, rotor.Stator.Max, rotor.StatorCube, rotor.StatorToHead);
+        foreach (var c in stator)
+            if (c.Dot(C(upward)) <= top)
+                occupied.Mark(c);
+
         // Where the projector can start the main grid, its connectors and armor to give up
-        var projectorDefinition = Definition(ArmPiece.Projector, grid.GridSizeEnum);
-        var connectorDefinition = Definition(ArmPiece.Connector, grid.GridSizeEnum);
+        var projectorDefinition = job.Pieces[ArmPiece.Projector];
+        var connectorDefinition = job.Pieces[ArmPiece.Connector];
         if (projectorDefinition == null)
         {
-            error = $"No projector block for a {grid.GridSizeEnum} grid arm in the config.";
+            error = $"No projector block for a {rotor.Size} grid arm in the config.";
             return null;
         }
-        var giveUps = Patterns(Config.ShipyardArmGiveUpBlocks);
         var connectors = new List<(Cell Cell, Cell Front, int Reach)>();
         var cargo = Cargo(main);
         foreach (var block in main.CubeBlocks)
@@ -279,13 +517,13 @@ internal static class ShipyardArm
             if (
                 block is MyObjectBuilder_ShipConnector
                 && connectorDefinition != null
-                && main.GridSizeEnum == grid.GridSizeEnum
+                && main.GridSizeEnum == rotor.Size
             )
             {
                 var front = Base6Directions.GetIntVector(blockOrientation.Forward);
                 connectors.Add((cell, C(Vector3I.TransformNormal(front, ref toArm)), cargo(min)));
             }
-            if (giveUps != null && giveUps.IsMatch(TypeName(block)))
+            if (job.GiveUps != null && job.GiveUps.IsMatch(TypeName(block)))
                 problem.GiveUps.Add((cell, definition.Mass));
         }
         problem.Connectors = connectors
@@ -297,27 +535,28 @@ internal static class ShipyardArm
         var plan = ArmPlanner.Plan(problem);
         if (plan == null)
         {
-            error = $"{shipyard.DisplayName} can't reach the ship with a support arm.";
+            error = $"{job.Shipyard} can't reach the ship with a support arm.";
             var offset = Vector3D.TransformNormal(
-                head.WorldMatrix.Translation - rotor.WorldMatrix.Translation,
-                MatrixD.Transpose(rotor.WorldMatrix)
+                rotor.HeadWorld.Translation - rotor.RotorWorld.Translation,
+                MatrixD.Transpose(rotor.RotorWorld)
             );
-            Note(
-                -rotor.EntityId,
-                $"Shipyard arm on '{rotor.CustomName}' of {shipyard.DisplayName}: {ArmPlanner.Explain(problem)}; "
-                    + $"head {offset:F2} m from the rotor in its axes; "
-                    + $"pipe end cell taken by {Taker(shipyard, rotor, toHead, start) ?? "nothing"}"
+            job.Notes.Add(
+                (
+                    -rotor.Rotor.EntityId,
+                    $"Shipyard arm on '{rotor.Name}' of {job.Shipyard}: {ArmPlanner.Explain(problem)}; "
+                        + $"head {offset:F2} m from the rotor in its axes"
+                )
             );
             return null;
         }
         var layout = new Layout
         {
-            Rotor = rotor,
-            Grid = grid,
+            Rotor = rotor.Rotor,
+            Grid = rotor.Grid,
             Plan = plan,
             ToArm = toArm,
         };
-        error = Blocks(layout, shipOrientation);
+        error = Blocks(layout, shipOrientation, job.Pieces, rotor.Size);
         if (error != null)
             return null;
         Projection(layout, blueprint);
@@ -325,12 +564,16 @@ internal static class ShipyardArm
     }
 
     // The arm's frames, each turned so that its mount points face its neighbors in the arm
-    private static string Blocks(Layout layout, MyBlockOrientation ship)
+    private static string Blocks(
+        Layout layout,
+        MyBlockOrientation ship,
+        Dictionary<ArmPiece, MyCubeBlockDefinition> pieces,
+        MyCubeSize size
+    )
     {
-        var size = layout.Grid.GridSizeEnum;
         foreach (var arm in layout.Plan.Blocks.OrderBy(b => b.Piece == ArmPiece.Projector ? 1 : 0))
         {
-            var definition = Definition(arm.Piece, size);
+            var definition = pieces[arm.Piece];
             if (definition == null)
                 return $"No {arm.Piece} block for a {size} grid arm in the config.";
             MyBlockOrientation? orientation = arm.Piece switch
@@ -528,37 +771,16 @@ internal static class ShipyardArm
         Plugin.Log.Info(text);
     }
 
-    // The block whose box takes the pipe end's cell c of the head's grid, for the log; the
-    // arm's own stator may hold it
-    private static string Taker(
-        MyCubeGrid shipyard,
-        MyMotorStator rotor,
-        MatrixD toHead,
-        Vector3I c
-    )
-    {
-        foreach (var other in Grids(shipyard))
-        foreach (var block in other.GetBlocks())
-        {
-            if (block == rotor.SlimBlock)
-                continue;
-            var cells = new HashSet<Cell>();
-            Mark(cells, block.Min, block.Max, other.GridSize, other.WorldMatrix * toHead);
-            if (cells.Contains(C(c)))
-                return $"{block.BlockDefinition.Id.SubtypeName} at {block.Min} of "
-                    + (other == rotor.TopGrid ? "the head's grid" : other.DisplayName);
-        }
-        return null;
-    }
-
-    // Adds the cells of the arm's grid a box of cells of another grid overlaps; toCells takes
-    // the other grid's local meters to the arm grid's cells
+    // Adds the cells of the arm's grid a box of cells of another grid overlaps, those within
+    // the limits if any; toCells takes the other grid's local meters to the arm grid's cells
     private static void Mark(
-        HashSet<Cell> cells,
+        Func<Cell, bool> add,
         Vector3I min,
         Vector3I max,
         double cube,
-        MatrixD toCells
+        MatrixD toCells,
+        Cell? least = null,
+        Cell? most = null
     )
     {
         var box = new BoundingBoxD(((Vector3D)min - 0.5) * cube, ((Vector3D)max + 0.5) * cube);
@@ -571,22 +793,28 @@ internal static class ShipyardArm
             hi = Vector3D.Max(hi, corner);
         }
         const double eps = 0.05;
-        for (
-            var x = (int)Math.Ceiling(lo.X - 0.5 + eps);
-            x <= (int)Math.Floor(hi.X + 0.5 - eps);
-            x++
-        )
-        for (
-            var y = (int)Math.Ceiling(lo.Y - 0.5 + eps);
-            y <= (int)Math.Floor(hi.Y + 0.5 - eps);
-            y++
-        )
-        for (
-            var z = (int)Math.Ceiling(lo.Z - 0.5 + eps);
-            z <= (int)Math.Floor(hi.Z + 0.5 - eps);
-            z++
-        )
-            cells.Add(new Cell(x, y, z));
+        int fromX = (int)Math.Ceiling(lo.X - 0.5 + eps),
+            fromY = (int)Math.Ceiling(lo.Y - 0.5 + eps),
+            fromZ = (int)Math.Ceiling(lo.Z - 0.5 + eps),
+            toX = (int)Math.Floor(hi.X + 0.5 - eps),
+            toY = (int)Math.Floor(hi.Y + 0.5 - eps),
+            toZ = (int)Math.Floor(hi.Z + 0.5 - eps);
+        if (least != null)
+        {
+            fromX = Math.Max(fromX, least.Value.X);
+            fromY = Math.Max(fromY, least.Value.Y);
+            fromZ = Math.Max(fromZ, least.Value.Z);
+        }
+        if (most != null)
+        {
+            toX = Math.Min(toX, most.Value.X);
+            toY = Math.Min(toY, most.Value.Y);
+            toZ = Math.Min(toZ, most.Value.Z);
+        }
+        for (var x = fromX; x <= toX; x++)
+        for (var y = fromY; y <= toY; y++)
+        for (var z = fromZ; z <= toZ; z++)
+            add(new Cell(x, y, z));
     }
 
     // Do the mount points of block a, at its cell, and block b, in the next cell along the
@@ -684,6 +912,24 @@ internal static class ShipyardArm
             size == MyCubeSize.Large
                 ? Config.ShipyardArmLargeBlocks
                 : Config.ShipyardArmSmallBlocks;
+        var key = (piece, size, list);
+        if (!definitions.TryGetValue(key, out var definition))
+            definitions[key] = definition = FindDefinition(piece, size, list);
+        return definition;
+    }
+
+    // Going through all definitions takes milliseconds, and an arm has hundreds of blocks
+    private static readonly Dictionary<
+        (ArmPiece, MyCubeSize, string),
+        MyCubeBlockDefinition
+    > definitions = [];
+
+    private static MyCubeBlockDefinition FindDefinition(
+        ArmPiece piece,
+        MyCubeSize size,
+        string list
+    )
+    {
         var subtype = list.Split(',')
             .Select(p => p.Split(['='], 2))
             .Where(p =>

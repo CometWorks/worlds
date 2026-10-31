@@ -1,4 +1,9 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using Sandbox.Definitions;
 using Sandbox.Engine.Multiplayer;
@@ -33,6 +38,12 @@ namespace ServerPlugin;
 // is switched off there, and players see no beams (SE-441). While a build runs, ShowBeams
 // tells the clients that the zones don't hold the shipyard grid, so their ToolCore draws the
 // beams. The server keeps its own list; it welds as before.
+//
+// That can't cover a client that gets the shipyard streamed in during a build: it comes back
+// in range, joins or crosses to this node (SE-782). The zone it gets holds the grid until the
+// next ShowBeams, its ToolCore switches the tools off for good, and only a change of the
+// server's switch would tell it otherwise. So ShowShooting sends such a client the switch, as
+// ToolCore does when it changes; a client whose tool is on takes no notice.
 internal static class ShipyardZoneWelding
 {
     private const string Owner = "Octahedron Authority";
@@ -92,6 +103,112 @@ internal static class ShipyardZoneWelding
                 MyMultiplayer.RaiseEvent(zone, removeEvent, shipyard.EntityId, true);
             else
                 MyMultiplayer.RaiseEvent(zone, insertEvent, shipyard.EntityId);
+        }
+    }
+
+    // ToolCore is internal to the mod, so this goes by name
+    private sealed class ToolCore(Type session)
+    {
+        internal readonly FieldInfo Instance = AccessTools.Field(session, "Instance");
+        internal readonly FieldInfo Tools = AccessTools.Field(session, "ToolMap");
+        internal readonly FieldInfo Networking = AccessTools.Field(session, "Networking");
+        internal readonly FieldInfo Clients = AccessTools.Field(
+            AccessTools.TypeByName("ToolCore.Comp.ToolComp"),
+            "ReplicatedClients"
+        );
+        internal readonly MethodInfo Send = AccessTools.Method(
+            AccessTools.TypeByName("ToolCore.Session.Networking"),
+            "SendPacketToClients"
+        );
+        internal readonly Type Packet = AccessTools.TypeByName("ToolCore.Session.BoolUpdatePacket");
+        internal readonly object Activated = Enum.Parse(
+            AccessTools.TypeByName("ToolCore.Session.FieldType"),
+            "Activated"
+        );
+    }
+
+    private static ToolCore toolCore;
+
+    // Told twice, as the first packet may come before the zone's message of the same check
+    private const int Tellings = 2;
+
+    // Per ToolCore component, so a shipyard that comes back to this node starts clean: each
+    // client in its list, how many entries it has there, and how often it was told since that
+    // number changed. ToolCore's list is a plain one: a tool that appears on a client adds an
+    // entry, one that goes removes one, and a client that quits removes none. So a change of
+    // the number, not being in the list, tells that the client has a new tool. A client whose
+    // tool goes and comes back between two checks keeps its number and isn't told.
+    private static readonly ConditionalWeakTable<
+        object,
+        Dictionary<ulong, (int Entries, int Told)>
+    > told = new();
+
+    // Per call, on the game thread
+    private static readonly Dictionary<ulong, int> entries = [];
+    private static readonly List<ulong> toTell = [];
+
+    /// <summary>
+    /// Sends the tools' switch to the clients with a new tool, or forgets them as the build ends.
+    /// Does nothing without ToolCore.
+    /// </summary>
+    internal static void ShowShooting(IEnumerable<MyFunctionalBlock> tools, bool on)
+    {
+        var session = AccessTools.TypeByName("ToolCore.Session.ToolSession");
+        if (session == null)
+            return;
+        var core = toolCore ??= new ToolCore(session);
+        var instance = core.Instance.GetValue(null);
+        if (instance == null)
+            return;
+        var map = (IDictionary)core.Tools.GetValue(instance);
+        var networking = core.Networking.GetValue(instance);
+        foreach (var tool in tools)
+        {
+            if (map[tool.EntityId] is not { } comp)
+                continue;
+            if (!on)
+            {
+                told.Remove(comp);
+                continue;
+            }
+            ClientsToTell((List<ulong>)core.Clients.GetValue(comp), told.GetOrCreateValue(comp));
+            if (toTell.Count > 0)
+                core.Send.Invoke(
+                    networking,
+                    [
+                        Activator.CreateInstance(core.Packet, tool.EntityId, core.Activated, true),
+                        toTell,
+                        0UL,
+                    ]
+                );
+        }
+    }
+
+    private static void ClientsToTell(
+        List<ulong> clients,
+        Dictionary<ulong, (int Entries, int Told)> state
+    )
+    {
+        entries.Clear();
+        foreach (var client in clients)
+        {
+            entries.TryGetValue(client, out var count);
+            entries[client] = count + 1;
+        }
+        foreach (var client in state.Keys.Where(c => !entries.ContainsKey(c)).ToList())
+            state.Remove(client);
+        toTell.Clear();
+        foreach (var pair in entries)
+        {
+            state.TryGetValue(pair.Key, out var seen);
+            if (seen.Entries != pair.Value)
+                seen = (pair.Value, 0);
+            if (seen.Told < Tellings)
+            {
+                toTell.Add(pair.Key);
+                seen.Told++;
+            }
+            state[pair.Key] = seen;
         }
     }
 

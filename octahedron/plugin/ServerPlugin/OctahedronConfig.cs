@@ -498,6 +498,18 @@ public class OctahedronConfig : PluginConfig
         "End=ConveyorTubeSmall, Straight=ConveyorTubeSmall, Corner=ConveyorTubeSmallCurved, Tee=ConveyorTubeSmallT, "
         + "Cap=SmallBlockConveyorCap, Connector=ConnectorSmall, Support=SmallBlockArmorBlock, Projector=SmallProjector";
 
+    [DoubleOption(
+        0,
+        60,
+        "The seconds a support arm's plan may take on its worker thread. A ship with no arm by then is refused.",
+        Parent = "shipyard"
+    )]
+    public double ShipyardArmPlanSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
+
     [IntOption(
         0,
         description: "The support arm's route trades length against turns: a turn costs as much as this many pipes.",
@@ -1391,7 +1403,9 @@ public struct RefillContainer
 public struct RefillItem
 {
     [
-        StructMember("Item id as Type/Subtype, for example PhysicalGunObject/Welder4Item."),
+        StructMember(
+            "Item id as Type/Subtype, for example PhysicalGunObject/Welder4Item. Several, separated by commas, count together and each one missing is one of them at random."
+        ),
         StructCaption
     ]
     public string Item { get; set; }
