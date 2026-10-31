@@ -2,7 +2,7 @@
 with the mods of tests/test_support_arm.py, on a world built by build_world.py. The checks read
 the delivered ship from the saved world.
 
-A ship shorter than 1/4 of the shipyard (282.5 m: 70.6 m) goes 1/6 of the length from the middle,
+A ship shorter than 1/4 of the shipyard (287.5 m: 71.9 m) goes 1/6 of the length from the middle,
 to the 1/3 point nearer the station:
 
 - "north", "south", "alpha": a 25 m large grid ship at a pole station and an equatorial one
@@ -33,12 +33,15 @@ import test_support_arm as sa  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 from test_client import log  # noqa: E402
 
-LENGTH = 282.5
+# The free space along the shipyard: its grid's cells -57 to 57 along Z, across x 0, y -16.5
+LENGTH = 287.5
 CUBE = {"Large": 2.5, "Small": 0.5}
 
 
 def hull(name: str, entity: int, size: tuple[int, int, int]) -> tuple[str, int]:
-    blocks = sa.hull({}, size, "LargeBlockArmorBlock")
+    # A battery: the checks after the build need a block with an owner, which armor hasn't
+    battery = rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (0, 0, 0))  # fmt: skip
+    blocks = sa.hull({(0, 0, 0): battery}, size, "LargeBlockArmorBlock")
     return rig.grid(name, entity, blocks, tag="MyObjectBuilder_CubeGrid"), len(blocks)
 
 
@@ -48,8 +51,12 @@ def small_grid(xml: str) -> str:
     )
 
 
+def small_battery(cell) -> str:
+    return rig.block("MyObjectBuilder_BatteryBlock", "SmallBlockSmallBatteryBlock", cell)  # fmt: skip
+
+
 def small_hull() -> tuple[str, int]:
-    blocks = sa.hull({}, (4, 3, 8), "SmallBlockArmorBlock")
+    blocks = sa.hull({(0, 0, 0): small_battery((0, 0, 0))}, (4, 3, 8), "SmallBlockArmorBlock")  # fmt: skip
     grid = rig.grid(
         "PlaceSmall", 777000824000600, blocks, tag="MyObjectBuilder_CubeGrid"
     )
@@ -58,9 +65,9 @@ def small_hull() -> tuple[str, int]:
 
 def wide_cross() -> tuple[str, int]:
     cells = {(x, 70, 0) for x in range(140)} | {(70, y, 0) for y in range(140)}
-    blocks = [
+    blocks = [small_battery((70, 70, 0))] + [
         rig.block("MyObjectBuilder_CubeBlock", "SmallBlockArmorBlock", c)
-        for c in sorted(cells)
+        for c in sorted(cells - {(70, 70, 0)})
     ]
     grid = rig.grid(
         "PlaceWide", 777000824000700, blocks, tag="MyObjectBuilder_CubeGrid"
@@ -132,12 +139,7 @@ def check_place(root: ET.Element, case: str) -> None:
         for i in range(3)
     )
     pos, right, up, back = frame(yard)
-    z = [c[2] for c in cells(yard)]
-    # The free space spans the grid along its Z, its other axes from these cells: x 0, y -16.5
-    mid = tuple(
-        pos[i] + 2.5 * (-16.5 * up[i] + (min(z) + max(z)) / 2 * back[i])
-        for i in range(3)
-    )
+    mid = tuple(pos[i] - 2.5 * 16.5 * up[i] for i in range(3))
     away = sub(center, mid)
     along, across, above = dot(away, back), dot(away, right), dot(away, up)
     pos, right, up, back = frame(grids[f"{station} Station"])
