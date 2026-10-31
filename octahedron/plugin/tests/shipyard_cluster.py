@@ -97,6 +97,9 @@ def run(bench) -> None:
     (target / "bp.sbcB5").unlink(missing_ok=True)  # the game's binary copy would win
     api = bench.start_client(CLIENT_ID)
     bench.wait_spawned(CLIENT_ID)
+    # The player is an admin (run.administrators), this makes any ship a free build for them
+    api.set_admin_flag("ignorePcu", True)
+    time.sleep(3)  # the server gets the flag with the admin menu's event
 
     station = next(iter(wa.stations().values()))
     for attempt in range(24):
@@ -170,8 +173,7 @@ run.administrators = [CLIENT_ID]
 
 def main() -> int:
     run.world_template = wa.prepare()
-    # A free build whatever the blueprint has: a paid one depends on what the station has for sale
-    wa.set_config(FreeBuildPcuLimit=100000, FreeBuildBlockedBlocks="")
+    wa.set_config(FreeBuildPcuLimit=100000)
     label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-shipyard")
     results = bench_module.HOST.results / label
     results.mkdir(parents=True, exist_ok=True)
