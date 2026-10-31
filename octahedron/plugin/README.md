@@ -253,7 +253,7 @@ button. The first screen of the billboard next to it (`ShipyardDetailsPanelName`
 `Billboard LCD Ship Build Details`) keeps its first line and lists the ship's bill
 of materials under it; a station from before the billboard shows the list on the
 table's screen until the world is wiped. The billboard's second screen, how to
-order, comes from `build_world.py`.
+order, is the blueprint's own text, as are the station's other signs.
 
 One press of the first button of the button panel next to the table
 (`ShipyardConfirmButtonName`, `Button Panel - Station ShipyardConfirm`) orders the
@@ -723,7 +723,7 @@ salvage) a contract as the caller, for tests and support.
 ### Leaderboard
 
 The station panels named `LeaderboardBlockName` ("Curved LCD Panel - Station Lounge
-Leaderboard", 4 at every station) rank the factions by their value in SC: the cash in
+Leaderboard", 1 at every station) rank the factions by their value in SC: the cash in
 the faction's bank account, with the money held for its market orders, plus its grids.
 They also show each faction's PCU. A grid is the faction's when its biggest owner is a
 member. Its value is what its blocks are built of, their mounted components, plus its

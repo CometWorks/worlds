@@ -158,6 +158,15 @@ def first_order(a, b) -> None:
     )
     check("Need" in parts and "Steel Plate" in parts, "billboard lists the parts")
     check("Order Test" in parts, "billboard names the ship")
+    check(
+        "a repair time slot" in shown["how"] and "most 6 entries" in shown["how"],
+        f"the how-to screen shows the blueprint's text: {shown['how']!r}",
+    )
+    sector = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    check(
+        sector.count("=== Octahedron Credits ===") == 7,
+        "the credits panel's text is on all 7 stations",
+    )
 
     reply = press(b)
     check(
@@ -310,6 +319,9 @@ def shots(a, name: str) -> None:
     shoot(a, f"{name}-billboard-2", grid, (x + 1, y, z + 1), (x + 2, y, z))
     shoot(a, f"{name}-table", grid, (x, y, z + 1), (x, y, z))
     shoot(a, f"{name}-queue", grid, (x + 1, y, z + 2), (x + 1, y + 1, z))
+    # The panels' pillar: the credits look toward -z, the leaderboard toward +x
+    shoot(a, f"{name}-credits", grid, (-4, y, 2), (-4, y, 4))
+    shoot(a, f"{name}-leaderboard", grid, (-3, y, 3), (-4, y, 5))
     sa.at_table(a, STATION)
 
 

@@ -133,18 +133,6 @@ PLUGIN_BLOCKS = (
     "Text Panel - Station ShipyardQueue",
     "Billboard LCD Ship Build Details",
 )
-# The billboard's second screen, how to order a ship: Debug font at size 1, 301 pixels wide at
-# most as the font's glyphs count them, 12 lines at most. The plugin writes the first screen.
-SHIP_BUILD_DETAILS = "Billboard LCD Ship Build Details"
-HOW_TO_ORDER = """Load a blueprint into
-the holo table in its
-terminal, then check
-the parts list. Press
-the button to order,
-again to cancel.
-
-The queue holds at
-most 6 ships."""
 # Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
 # pressurized back half: behind the station and away from the planet, which keeps it off the
 # lanes. The pair is centered on the safe zone, and spread apart as far as their block bounds
@@ -725,10 +713,6 @@ def station(template, ids, name, center, forward, up, owner):
         assert wanted in named, f"the station blueprint has no {wanted}"
     for block in grid.find("CubeBlocks"):
         recolor(block, STATION_COLORS[name])
-        if block.findtext("CustomName") == SHIP_BUILD_DETAILS:
-            block.findall(".//MySerializedTextPanelData")[1].find(
-                "Text"
-            ).text = HOW_TO_ORDER
         if block.find("Owner") is None:
             continue
         block.find("Owner").text = str(owner)
