@@ -894,7 +894,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = "*/*Prototech*, */Scrap, Component/ZoneChip, Component/*Plushie*";
+    } = "*/*Prototech*, */Scrap, Component/ZoneChip, Component/*Plushie*, Component/InhibitorChip";
 
     [IntOption(
         0,

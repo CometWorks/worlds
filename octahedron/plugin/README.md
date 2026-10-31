@@ -539,7 +539,12 @@ stock as long as its entry keeps the name.
 - OCT (`MoneyAuthorityFactionTag`) is the only seller and buyer. Its catalog is the
   same at every station: the items matching `MarketCatalog` but not
   `MarketCatalogExcluded` with a reference price, the game's minimal price / 10
-  (`MarketPrices` sets one where the game has none).
+  (`MarketPrices` sets one where the game has none). The Inhibitor Chip
+  (`Component/InhibitorChip`, MES loot worth 1,000,000 SC by its minimal price) is
+  excluded, so no Store sells or buys it and a paid build can't buy one: a blueprint
+  that needs it is refused as more than the station has for sale. The value is in
+  `config/octahedron.cfg` too, because a running cluster keeps the values it has
+  for options that file doesn't name.
 - It sells at `MarketOctSellPercent` (100 %) of the reference plus
   `MarketTaxPercent` (2 %), and buys at `MarketOctBuyPercent` (100 %) less the tax,
   until it holds `MarketOctMaxStockTonnes` (200 t) of the item there. Selling
