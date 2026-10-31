@@ -118,7 +118,7 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = new();
 
-    // On by default: a Quasar cluster starts from these defaults, not from octahedron.cfg
+    // On by default: a Quasar cluster starts from these defaults until octahedron.cfg is staged over them
     [BoolOption(
         "Keep the world a sphere: brake grids and characters flying out of it, shorten jumps at the braking radius, move back what is beyond the radius. Needs no WorldSizeKm, which should stay 0.",
         Parent = "edge"

@@ -911,12 +911,15 @@ pending update from Maintenance. Quasar's content update monitoring doesn't
 see new commits of a dev folder.
 
 On a Quasar cluster the plugin gets its config from Quasar, not from a file:
-cluster setup starts from the plugin's compiled defaults, and nothing copies
-`../config/octahedron.cfg` over them. Set the values in the cluster's plugin
-configuration editor. `OCTAHEDRON_CONFIG` and `Octahedron.cfg` in the instance
-folder are ignored there. An update keeps the saved values while the config's
-schema (option names, types, descriptions) stays the same; when it changes, the
-values go back to the defaults.
+cluster setup starts from the plugin's compiled defaults. Deploy Octahedron
+(`scripts/deploy-octahedron/deploy.py` in the workspace) stages the values of
+`../config/octahedron.cfg` over them: with `--wipe` before the new cluster's first
+start, and in every later update of that cluster. An update keeps the saved values
+while the config's schema (option names, types, descriptions) stays the same; when
+it changes, the values go back to the defaults, and the deploy stages the file
+again. By hand, use the cluster's plugin configuration editor or
+`POST /api/v1/clusters/{name}/plugin-configuration-preparation`. `OCTAHEDRON_CONFIG`
+and `Octahedron.cfg` in the instance folder are ignored there.
 
 The cluster CLI (`se1/cluster`, also the test bench) loads compiled local
 plugins only. For it, `package.sh <folder>` builds
