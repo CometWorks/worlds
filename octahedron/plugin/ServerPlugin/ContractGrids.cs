@@ -261,6 +261,8 @@ internal static class ContractGrids
         )
             return;
         var owner = grid.BigOwners.FirstOrDefault();
+        if (!grid.BigOwners.Contains(player))
+            ShipyardOrders.GivenByTow(grid, player);
         foreach (var member in Attached(grid))
         {
             if (member.BigOwners.Count > 0 && !member.BigOwners.Contains(owner))
@@ -272,6 +274,16 @@ internal static class ContractGrids
             foreach (var builder in member.GetBlocks().Select(b => b.BuiltBy).Distinct().ToList())
                 member.TransferBlocksBuiltByID(builder, player);
         }
+    }
+
+    public static void BreakDown(long gridId, long player, string station)
+    {
+        if (
+            MyEntities.TryGetEntityById(gridId, out var entity)
+            && entity is MyCubeGrid { MarkedForClose: false } grid
+            && Plugin.Simulated(grid)
+        )
+            ShipyardOrders.Tow(station, player, grid);
     }
 
     // Scrapped, with its rotor and piston parts; a tug's connector lets go of it

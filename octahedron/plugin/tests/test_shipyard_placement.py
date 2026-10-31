@@ -16,8 +16,8 @@ to the 1/3 point nearer the station:
 
 - A press gets the refusal and orders nothing. With the limit back, it can order.
 - A paid order waits behind a grid in the shipyard. The server restarts with the limit at 0 and
-  that grid gone: the order ends with its reason, all it paid is back and OCT's stock with it,
-  and the rotor head has no arm.
+  that grid gone: the order ends with its reason, no money or stock moved, and the rotor head has
+  no arm.
 
     OCT_TASK=SE-824 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_shipyard_placement.py [case ...]
@@ -230,10 +230,7 @@ def forced_limit(remote):
     sa.check("is in the queue" in reply, f"limit: back at 5 s it orders: {reply}")
     sa.check("builds 'PlaceLimit'" not in reply, f"limit: the order waits: {reply}")
     held = state(remote)
-    sa.check(
-        held[0] < before[0] and held[1] < before[1],
-        f"limit: the components are bought: {before} -> {held}",
-    )
+    sa.check(held == before, f"limit: nothing is bought yet: {before} -> {held}")
     # The server ends the order when it starts; no player needed
     rig.stop_client()
     rig.stop_server()

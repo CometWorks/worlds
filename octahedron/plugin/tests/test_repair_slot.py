@@ -4,7 +4,7 @@ player's and shared with their faction, its reactors stay OCT's; a ship docked t
 gives the welders the components to weld a ship in the shipyard from its repair projector; the
 slot ends after the real 5 minutes without building or welding, or at the player's next press,
 and everything is back as before. Also: a slot waits for a running build, which its owner's press
-cancels, which hands the ship over as when its time runs out, a paid one too; a restart in the middle of a slot; and a build after a slot.
+cancels, which hands the ship over as when its time runs out; a restart in the middle of a slot; and a build after a slot.
 On a world built by build_world.py. The presses are !oct order: see test_table_rules.py.
 
     OCT_TASK=SE-850r OCT_WORLD_SOURCE=<world from build_world.py> \\
@@ -47,18 +47,6 @@ CONFIG = tr.CONFIG
 IDLE_SECONDS = 300
 OCT = "Octahedron_Authority"
 PLATES = 2000
-# Armor only, so a paid build needs nothing but the plates in OCT's stock
-PAID = rig.grid(
-    "Paid Cancel",
-    777000850000100,
-    [
-        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
-        for x in range(20)
-        for z in range(20)
-    ],
-    tag="MyObjectBuilder_CubeGrid",
-)
-PAID_PLATES = 400 * 25
 STASH = 50
 
 
@@ -68,7 +56,8 @@ def probe(remote, args: str) -> str:
 
 def yard(remote, player: str | None = None) -> dict[str, str]:
     reply = probe(remote, f"yard {STATION}" + (f" {player}" if player else ""))
-    return dict(re.findall(r"(\w+)=(\S+)", reply))
+    # The access line after it has the same names
+    return dict(re.findall(r"(\w+)=(\S+)", reply.split(" access ")[0]))
 
 
 def info(remote, grid: str) -> dict[str, str]:
@@ -100,7 +89,7 @@ def theirs(state: dict, name: str) -> bool:
 
 
 def octs(state: dict) -> bool:
-    return all(state[k] == f"{OCT}/All" for k in ("cargo", "welders", "connectors"))
+    return all(state[k] == f"{OCT}/Faction" for k in ("cargo", "welders", "connectors"))
 
 
 def power_stays(state: dict, what: str) -> None:
@@ -134,7 +123,7 @@ def book_and_idle_out(a, b) -> None:
     """The whole of a slot: booked, worked in, and ended by the real 5 idle minutes"""
     home = yard(a)
     power_stays(home, "before")
-    check(octs(home), f"before: the blocks are OCT's and shared with all: {home}")
+    check(octs(home), f"before: the blocks are OCT's, not shared with players: {home}")
     uranium = float(home["uranium"])
     mark = sa.so_latest(a)
 
@@ -213,7 +202,7 @@ def book_and_idle_out(a, b) -> None:
         PLATES - 100 <= left < PLATES,
         f"the components come from the docked ship: {PLATES} -> {left}",
     )
-    # What a player leaves in the containers; the welders pulled only what they used
+    # What a player leaves in the containers; the welders may still hold a few
     probe(a, f"yardstash {STATION} {STASH}")
     held = float(yard(a)["items"])
     check(held >= STASH, f"plates in the shipyard's container: {held}")
@@ -230,6 +219,18 @@ def book_and_idle_out(a, b) -> None:
         IDLE_SECONDS - 20 <= took <= IDLE_SECONDS + 30,
         f"after 5 idle minutes: {took:.0f} s",
     )
+    # As a build's end: the window to take what is left, then the sale
+    state = yard(a)
+    check(theirs(state, "OctTester"), f"the window: still the player's: {state}")
+    check(state["connected"] == "1", f"the ship stays docked: {state['connected']}")
+    held = float(state["items"])
+    check(held >= STASH, f"what the player left is still there: {held}")
+    before_sale = int(re.search(r"BALANCE (-?\d+)", probe(a, "balance"))[1])
+    reply = " ".join(rig.chat(a, "!oct shipyard done", 4))
+    check("Your turn ends now" in reply, f"the chat command sells it now: {reply}")
+    told = sa.wait_chat(a, "floats free", 15, mark)
+    check(told is not None, f"the docked ship floats free: {told}")
+    wait_for(lambda: octs(yard(a)), 15)
     state = yard(a)
     check(octs(state), f"the blocks are OCT's again: {state}")
     power_stays(state, "after")
@@ -241,15 +242,12 @@ def book_and_idle_out(a, b) -> None:
     check(
         state["items"] == "0", f"the shipyard's inventories are empty: {state['items']}"
     )
-    back = float(info(a, ship).get("plates", -1))
-    check(
-        back == left + held,
-        f"what the shipyard held went back to the ship: {left} + {held} -> {back}",
-    )
+    after_sale = int(re.search(r"BALANCE (-?\d+)", probe(a, "balance"))[1])
+    check(after_sale > before_sale, f"sold: {before_sale} -> {after_sale}")
     check(wait_for(lambda: sa.shoots(a, yard_id) is False, 20), "the welders are off")
     check(
-        client_owner(a, yard_id, state["cell"])[1] == "All",
-        "the client sees the blocks shared with all again",
+        client_owner(a, yard_id, state["cell"])[1] == "Faction",
+        "the client sees them shared with OCT's faction again",
     )
     text = settled(a, "queue", "No ships in the queue")
     check("Repair" not in text, f"the slot is off the queue panel: {text!r}")
@@ -326,7 +324,7 @@ def waits_for_a_build(a, b) -> None:
     check(bool(big), f"the unfinished ship is there: {big}")
     reply = press(b)
     check("you canceled it" in reply, f"their press ends it: {reply}")
-    check(octs(yard(a)), "OCT's again")
+    check(wait_for(lambda: octs(yard(a)), 25), "OCT's again")
     load(a)
     main = " ".join(settled(a, "table", "next free").split())
     check("next free ship" in main, f"the cool-down runs: {main!r}")
@@ -334,65 +332,6 @@ def waits_for_a_build(a, b) -> None:
     with_config(a, **CONFIG)
     for grid in big:
         a.close_grid(grid["entityId"])
-
-
-def paid_cancel(a) -> None:
-    """A paid build canceled while it runs ends as when its time runs out: the ship as it
-    is, what wasn't used sold back to OCT, the labor fee stays paid"""
-    # At cheap prices, as the plates would make the account very rich
-    with_config(
-        a,
-        **CONFIG,
-        FreeBuildPcuLimit=0,
-        ShipyardLaborFeePer100Pcu=10,
-        MarketOctSellPercent=2,
-        MarketOctBuyPercent=1,
-        MarketPriceDriftTonnes=0,
-    )
-    log(sa.admin(a, f"!oct market set {STATION} Component/SteelPlate {PAID_PLATES}"))
-
-    def plates() -> float:
-        return st.stock(a, STATION, "Component/SteelPlate")[0]
-
-    def money() -> int:
-        return int(re.search(r"BALANCE (-?\d+)", probe(a, "balance"))[1])
-
-    probe(a, "balance 100000")
-    before = (plates(), money())
-    load(a, PAID)
-    settled(a, "table", "paid")
-    mark = sa.so_latest(a)
-    reply = press(a)
-    if "Your quote for" in reply:
-        reply = press(a)
-    check("is in the queue" in reply, f"the paid order: {reply}")
-    check(
-        sa.wait_chat(a, "builds 'Paid Cancel' for you now", 60, mark), "its build runs"
-    )
-    check(wait_for(lambda: building(a), 120), "it has blocks")
-    check(plates() == before[0] - PAID_PLATES, f"bought from the stock: {plates()}")
-    paid = money()
-    check(paid < before[1], f"it is paid: {before[1]} -> {paid}")
-    reply = press(a)
-    check(
-        "The unfinished ship is yours" in reply,
-        f"a press cancels the running build, they get the ship: {reply}",
-    )
-    st.wait_until(lambda: plates() > before[0] - PAID_PLATES, 15)
-    back = plates()
-    check(
-        before[0] - PAID_PLATES < back < before[0],
-        f"what wasn't used is sold back: {back} of {before[0]}",
-    )
-    now = money()
-    check(paid < now < before[1], f"for money, not all of it: {paid} -> {now}")
-    check(yard(a)["items"] == "0", "nothing stays in the shipyard")
-    text = settled(a, "queue", "No ships in the queue")
-    check("Paid Cancel" not in text, f"it left the queue: {text!r}")
-    with_config(a, **CONFIG)
-    for grid in a.list_grids():
-        if grid.get("name") == "Paid Cancel":
-            a.close_grid(grid["entityId"])
 
 
 def restart(a):
@@ -406,7 +345,10 @@ def restart(a):
     check(theirs(state, "OctTester"), f"the blocks are still the player's: {state}")
     reply = press(a)
     check("you canceled it" in reply, f"the press ends it: {reply}")
-    check(octs(yard(a)), "OCT's again")
+    check(
+        wait_for(lambda: octs(yard(a)), 25),
+        "OCT's again: nothing to take, over at once",
+    )
     return a
 
 
@@ -455,7 +397,6 @@ def main() -> int:
         book_and_idle_out(a, b)
         second_press(a)
         waits_for_a_build(a, b)
-        paid_cancel(a)
         with Second():
             rig.stop_client()
         a = restart(a)

@@ -47,31 +47,34 @@ namespace ServerPlugin;
 // A repair slot is a queue entry too. When its turn comes the shipyard's welders go on and
 // ShipyardTurn gives its blocks to the player, who docks a ship with a repair projector and the
 // components. It ends when no building or welding happened for ShipyardRepairIdleMinutes, or at
-// the player's next press. The running slot's state is the queue's: a restart or a move of the
+// the player's next press, and goes on to the last part of the turn. The running slot's state is the queue's: a restart or a move of the
 // station to another node picks it up from there.
 //
 // A ship is a free build for a player under FreeBuildPcuLimit, once FreeBuildCooldownMinutes
 // passed since their last free build ended (FreePrints), without the blocks in
 // FreeBuildBlockedBlocks. An admin with "Ignore PCU limits" on (FreePrints.Exempt) gets every
 // ship as a free build: no PCU limit, cool-down or blocked blocks, and no per-ship cap of
-// GroupPcuLimit. The order keeps that, for the node that builds it. Any other ship is a paid build: its components, and the ice for the
-// hydrogen to fill its H2 tanks to ShipyardHydrogenFillPercent, are bought at the station's Store
-// from the player's account, plus the labor fee; hydrogen in the tanks of the player's ships
-// docked at the station counts as ice first.
+// GroupPcuLimit. The order keeps that, for the node that builds it. Any other ship is a paid build
+// on the player's turn at the shipyard (ShipyardOrderTurns.cs): they load the components into its
+// containers, and pressing the button buys what is missing and the ice for the hydrogen to fill its
+// H2 tanks to ShipyardHydrogenFillPercent at the station's Store from the player's account, plus
+// the labor fee; hydrogen in the tanks of the player's ships docked at the shipyard or the station
+// counts as ice first, then ice in the shipyard's containers.
 //
 // When the shipyard is free, the next order starts. The ship starts as a static grid of one of
 // its blocks, centered in the shipyard's free space, with an NPC-owned projector and battery
 // (the scaffold) next to that block projecting the whole blueprint. The shipyard's cargo
-// containers get the components of the remaining blocks and its OmniArc welders (ToolCore) are switched on. Projected blocks welded onto the
-// ship are the player's, owner and BuiltBy. The order ends when every block is complete or
-// after ShipyardOrderMinutes: the welders go off, the scaffold is removed, the leftover
-// components are sold back for the player (a free build's are removed), a paid build's H2
-// tanks are filled, and the ship, finished or not, becomes the player's dynamic ship.
+// containers get the components of the remaining blocks for a free build, and its OmniArc welders
+// (ToolCore) are switched on. Projected blocks welded onto the ship are the player's, owner and
+// BuiltBy. The order ends when every block is complete or after ShipyardOrderMinutes: the welders
+// go off, the scaffold is removed, a free build's leftover components are removed (a paid build's
+// stay the player's for the rest of their turn), a paid build's H2 tanks are filled, and the ship,
+// finished or not, becomes the player's dynamic ship.
 //
 // The running order lives in the world, in the scaffold projector's CustomData, so it survives
 // a restart and moves with the station's partition on a cluster: every node checks the
 // shipyards it simulates every 10 s.
-internal static class ShipyardOrders
+internal static partial class ShipyardOrders
 {
     private const string ScaffoldName = "Shipyard Order";
     private const string ShootProperty = "ToolCore_Shoot";
@@ -119,12 +122,9 @@ internal static class ShipyardOrders
         public float Progress = -1;
         public int Idle;
 
-        // A build that stalled: what the ship misses, and whether it is scrapped and refunded
+        // A build that stalled: what the ship misses, and whether it is scrapped
         public string Missing;
         public bool Refund;
-
-        // The components the payer gets back for the missing pieces of a delivered ship, raw
-        public Dictionary<string, long> Refunded = [];
 
         // The arm's grid, which the projector leaves when it stays on an unfinished ship
         public MyCubeGrid ArmGrid;
@@ -139,8 +139,14 @@ internal static class ShipyardOrders
         // The blueprint's name
         public string Name = "";
 
+        // Since when a paid build waits for a top-up
+        public DateTime? ShortSince;
+
         // The player canceled the running build
         public bool Canceled;
+
+        // What a removed paid build's containers had no room for, to be sold, raw
+        public Dictionary<string, long> Sold = [];
     }
 
     // A running repair slot, by shipyard entity id
@@ -640,14 +646,14 @@ internal static class ShipyardOrders
                     tell(error);
                     return;
                 }
-                var mine = DecodeQueue(text).FirstOrDefault(o => o.Player == identityId);
+                var mine = Mine(DecodeQueue(text), identityId);
                 var holder = Holder(table);
-                if (mine != null)
-                    Cancel(mine, station, shipyard, tell);
-                else if (
+                var hasBlueprint =
                     TableHologram.Blueprint(table) != null
-                    && (holder == 0 || holder == identityId)
-                )
+                    && (holder == 0 || holder == identityId);
+                if (mine != null && mine.Phase is BuildPhase.Waiting or BuildPhase.Building)
+                    Cancel(mine, station, shipyard, tell);
+                else if (hasBlueprint)
                 {
                     // Loaded before a restart or a move of the station to this node: the presser's now
                     Hold(table, identityId);
@@ -658,6 +664,13 @@ internal static class ShipyardOrders
                     else
                         Place(plan, tell);
                 }
+                else if (mine?.Phase == BuildPhase.Loading)
+                    Begin(table, mine, tell);
+                else if (mine?.Phase == BuildPhase.After)
+                    tell(
+                        $"Your turn at this shipyard ends at {Clock(mine.TurnEnds)} UTC. "
+                            + "Load a blueprint and press to build with what is in the containers, or end the turn with !oct shipyard done."
+                    );
                 else
                     BookRepair(identityId, station, table, tell);
             }
@@ -690,9 +703,8 @@ internal static class ShipyardOrders
             EndRepair(shipyard, slot, "you canceled it");
         else if (orders.TryGetValue(shipyard.EntityId, out var order) && order.Id == entry.Id)
         {
-            // Handed over unfinished, as when its time runs out
             order.Canceled = true;
-            End(shipyard, order, "canceled");
+            End(shipyard, order, BlocksDone(shipyard, order));
         }
         else if (docks.ContainsKey(shipyard.EntityId))
             tell($"'{entry.Ship}' is finished, it can't be canceled now.");
@@ -765,15 +777,14 @@ internal static class ShipyardOrders
                     Plugin.Log.Warning($"Repair slot {next.Id} did not start: {message}");
                     return;
                 }
-                // An arm build that ended early can leave components behind, not theirs to have
-                Clear(shipyard, next.Player);
+                ClearForTurn(shipyard);
                 RunRepair(station, shipyard, next);
                 Tell(
                     next.Player,
                     $"{shipyard.DisplayName} is yours and your faction's now: dock your ship with its "
                         + "repair projector and components to one of its connectors. The slot ends after "
                         + $"{Config.ShipyardRepairIdleMinutes} min without building or welding, or when you "
-                        + "press the button again. Whatever you leave in its containers then goes to your docked ship."
+                        + "press the button again."
                 );
             }
         );
@@ -808,76 +819,34 @@ internal static class ShipyardOrders
             slot.LastWork = DateTime.UtcNow;
     }
 
+    // As a build's end: the player has their window to take what is in the shipyard
     private static void EndRepair(MyCubeGrid shipyard, RepairSlot slot, string why)
     {
         repairs.Remove(shipyard.EntityId);
         Welders(shipyard, false);
-        var lostItems = Clear(shipyard, slot.Player);
-        ShipyardTurn.Take(shipyard);
         ending.Add(slot.Id);
         Plugin.Log.Info(
             $"Repair slot {slot.Id} of {Name(slot.Player)} at {shipyard.DisplayName} ended: {why}"
         );
-        Builds.Execute(
-            Guid.NewGuid(),
-            new BuildRequest
+        After(
+            new BuildOrder
             {
-                Verb = BuildVerb.Finish,
                 Id = slot.Id,
                 Station = slot.Station,
+                Player = slot.Player,
+                Ship = RepairName,
             },
-            (ok, answer) =>
+            0,
+            false,
+            new Dictionary<string, long>(),
+            $"Your repair slot at {shipyard.DisplayName} ended: {why}. "
+                + string.Format(TakeWithin(), shipyard.DisplayName),
+            () =>
             {
                 ending.Remove(slot.Id);
-                if (!ok)
-                    Plugin.Log.Error($"Repair slot {slot.Id} could not finish: {answer}");
-                Tell(
-                    slot.Player,
-                    $"Your repair slot at {shipyard.DisplayName} ended: {why}. A ship docked to it floats free."
-                        + (
-                            lostItems
-                                ? " What your docked ship had no room for was left in the shipyard and is gone."
-                                : ""
-                        )
-                );
                 Refresh(slot.Station);
             }
         );
-    }
-
-    // Empties the shipyard's containers and welders for the next order: what is in them goes to
-    // the player's docked ships. Returns whether some of it had no room there.
-    private static bool Clear(MyCubeGrid shipyard, long player)
-    {
-        var cargo = shipyard
-            .GetFatBlocks<MyShipConnector>()
-            .Where(c => c.Connected && c.Other != null)
-            .SelectMany(c => Grids(c.Other.CubeGrid))
-            .Distinct()
-            .SelectMany(g => g.GetFatBlocks<MyCargoContainer>())
-            .Where(c => c.OwnerId == player)
-            .Select(c => c.GetInventory())
-            .ToList();
-        var lostSome = false;
-        foreach (
-            var from in Containers(shipyard).Concat(Beams(shipyard).Select(b => b.GetInventory()))
-        )
-        foreach (var item in from.GetItems().ToList())
-        {
-            var id = item.Content.GetObjectId();
-            var left = item.Amount;
-            foreach (var to in cargo)
-            {
-                var amount = MyFixedPoint.Min(left, to.ComputeAmountThatFits(id));
-                if (amount <= 0)
-                    continue;
-                to.AddItems(amount, item.Content);
-                left -= amount;
-            }
-            lostSome |= left > 0;
-            from.RemoveItems(item.ItemId);
-        }
-        return lostSome;
     }
 
     private static void Place(Plan plan, Action<string> tell)
@@ -907,7 +876,7 @@ internal static class ShipyardOrders
                                 + (
                                     plan.Free
                                         ? ", a free build."
-                                        : $": a paid build ({plan.Paid}), {quote.Total:N0} SC from your account."
+                                        : $": a paid build ({plan.Paid}), {quote.Total:N0} SC if you buy everything at your turn."
                                 )
                                 + " Press the button to order."
                     )
@@ -925,36 +894,17 @@ internal static class ShipyardOrders
             Blueprint = EncodeBlueprint(plan.Blueprint),
             Exempt = plan.Exempt,
         };
-        var drained = new List<(MyGasTank Tank, double Liters)>();
         if (!plan.Free)
         {
-            var missing = shown.Quote.Short(Hydrogen);
-            if (missing != null)
-            {
-                tell(
-                    $"'{plan.Ship}' is a paid build ({plan.Paid}), and this station has "
-                        + $"{Units(missing.Item, missing.Missing)} {Market.ItemTitle(missing.Item)} "
-                        + "too few for sale."
-                );
-                return;
-            }
             request.Payer = plan.Payer;
             request.Fee = plan.Fee;
             request.Needed = plan.Needed;
-            request.MaxTotal = shown.Quote.Total;
-            drained = Drain(plan);
-            var liters = drained.Sum(d => d.Liters);
-            if (liters > 0)
-                request.Provided[Hydrogen] = IceFor(liters, up: false);
         }
         Builds.Order(
             Guid.NewGuid(),
             request,
-            (ok, message) =>
+            (ok, message, order) =>
             {
-                if (!ok)
-                    foreach (var (tank, liters) in drained)
-                        AddHydrogen(tank, liters);
                 tell(ok ? LeftOutText(plan) + message : message);
                 if (ok)
                 {
@@ -968,6 +918,9 @@ internal static class ShipyardOrders
                     );
                     placed[plan.Table.EntityId] = plan.Player;
                     ClearTable(plan.Table);
+                    // In the player's turn: the shipyard is theirs, so it starts at once
+                    if (order?.Phase == BuildPhase.Loading)
+                        Begin(plan.Table, order, tell);
                     Refresh(plan.Station);
                 }
             }
@@ -1009,10 +962,11 @@ internal static class ShipyardOrders
             (text, _) =>
             {
                 var queue = text == null ? [] : DecodeQueue(text);
-                var mine = queue.FirstOrDefault(o => o.Player == plan.Player);
+                var mine = Mine(queue, plan.Player);
                 plan.Blocker =
-                    mine != null
-                        ? mine.Started
+                    mine?.Phase == BuildPhase.After && !plan.Free ? null
+                    : mine != null
+                        ? mine.Active
                             ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
                             : $"'{mine.Ship}' is in the queue for you. Press the button to cancel it first."
                         : queue.Count >= Config.ShipyardQueueMax
@@ -1085,7 +1039,7 @@ internal static class ShipyardOrders
             text.AppendLine("A free build.");
         else if (quote != null)
             text.AppendLine($"A paid build: {plan.Paid}.")
-                .AppendLine($"{quote.Total:N0} SC from your account.");
+                .AppendLine($"Bring the parts at your turn, or {quote.Total:N0} SC.");
         if (plan.Error == null)
         {
             if (plan.LeftOut != null)
@@ -1094,7 +1048,9 @@ internal static class ShipyardOrders
             if (plan.Blocker != null)
                 text.AppendLine(plan.Blocker);
             else if (quote?.Short(Hydrogen) != null)
-                text.AppendLine("Not everything is for sale here.");
+                text.AppendLine(
+                    "Not everything is for sale here: bring the rest at your turn."
+                );
             else
                 text.AppendLine("Press the button to confirm the build.");
         }
@@ -1345,6 +1301,12 @@ internal static class ShipyardOrders
     {
         if (TableHologram.Blueprint(table) != null)
             return;
+        var turn = queue.FirstOrDefault(o => o.Phase == BuildPhase.Loading);
+        if (turn != null)
+        {
+            ShowTurn(table, turn);
+            return;
+        }
         ShowDetails(table, DetailsIdle);
         placed.TryGetValue(table.EntityId, out var player);
         var order = queue.FirstOrDefault(o => o.Player == player && !o.Started);
@@ -1358,6 +1320,42 @@ internal static class ShipyardOrders
             table,
             $"'{order.Ship}' is in the queue for {Name(player)}.\n\n"
                 + $"{Name(player)} can cancel it by pressing the button again."
+        );
+    }
+
+    // The turn's player sees what is still missing, and what the press costs
+    private static void ShowTurn(MyProjectorBase table, BuildOrder order)
+    {
+        var shipyard = FindShipyard(table);
+        if (shipyard == null)
+            return;
+        var lacking = Lacking(shipyard, order);
+        Builds.Read(
+            new BuildRequest
+            {
+                Verb = BuildVerb.Quote,
+                Station = order.Station,
+                Payer = order.Payer,
+                Fee = order.Fee,
+                Needed = lacking,
+            },
+            (text, _) =>
+            {
+                if (text == null || table.MarkedForClose || TableHologram.Blueprint(table) != null)
+                    return;
+                var quote = BuildQuote.Decode(text);
+                ShowDetails(
+                    table,
+                    $"'{order.Ship}', {order.Pcu:N0} PCU\n\nMissing from the containers:\n"
+                        + BuildBook.QuoteText(quote, Hydrogen, 0, Market.ItemTitle, Units),
+                    PaidColumns
+                );
+                WriteTable(
+                    table,
+                    $"{Name(order.Player)}'s turn for '{order.Ship}'.\n\n"
+                        + $"Load the parts by {Clock(order.TurnEnds)} UTC, then press the button: it buys what is missing."
+                );
+            }
         );
     }
 
@@ -1412,6 +1410,8 @@ internal static class ShipyardOrders
                     + $"of {Name(order.Player)} picked up at {shipyard.DisplayName}, until {order.Ends:u}"
             );
         }
+        if (!order.Free && ShipyardTurn.Holder(shipyard) != order.Player)
+            ShipyardTurn.Give(shipyard, order.Player);
 
         if (order.Arm.Count > 0)
         {
@@ -1443,14 +1443,10 @@ internal static class ShipyardOrders
                 );
             }
         }
-        var built =
-            order.Arm.Count > 0
-                ? ShipBlocks(shipyard, order).Count(b => b.IsFullIntegrity)
-                : Built(projector.CubeGrid);
-        if (built >= order.Blocks)
+        if (Complete(shipyard, order) >= order.Blocks)
             End(shipyard, order, null);
         else if (DateTime.UtcNow >= order.Ends)
-            End(shipyard, order, $"{built} of {order.Blocks} blocks complete");
+            End(shipyard, order, BlocksDone(shipyard, order));
         else if (Stalled(shipyard, order))
             Stall(shipyard, order);
         else
@@ -1520,7 +1516,7 @@ internal static class ShipyardOrders
                     ShowEmpty(table, queue);
                 // A turn the queue doesn't know of, as after a crash between the two saves
                 if (
-                    !queue.Any(o => o.Repair && o.Started)
+                    !queue.Any(o => o.Active && (!o.Free || o.Repair))
                     && !repairs.ContainsKey(shipyard.EntityId)
                     && !starting.Contains(shipyard.EntityId)
                     && ShipyardTurn.Holder(shipyard) != 0
@@ -1529,7 +1525,12 @@ internal static class ShipyardOrders
                 if (queue.Count == 0)
                     return;
                 var next = queue[0];
-                if (next.Repair && next.Started)
+                if (next.Phase == BuildPhase.After)
+                {
+                    if (!ending.Contains(next.Id))
+                        CheckTurn(shipyard, next);
+                }
+                else if (next.Repair && next.Started)
                 {
                     if (!repairs.ContainsKey(shipyard.EntityId) && !ending.Contains(next.Id))
                         RunRepair(station, shipyard, next);
@@ -1538,8 +1539,10 @@ internal static class ShipyardOrders
                     BeginRepair(station, shipyard, next);
                 else if (next.Started)
                     Lost(shipyard, next);
+                else if (next.Active)
+                    CheckTurn(shipyard, next);
                 else
-                    Start(station, shipyard);
+                    Start(station, shipyard, queue[0]);
             }
         );
     }
@@ -1565,17 +1568,21 @@ internal static class ShipyardOrders
             if (o.Repair)
             {
                 text.AppendLine(
-                    $"{place++}. {RepairName} for {Name(o.Player)}: {(o.Started ? "repairing" : "waiting")}"
+                    $"{place++}. {RepairName} for {Name(o.Player)}: {(o.Started ? "repairing" : o.Active ? "taking parts" : "waiting")}"
                 );
                 continue;
             }
-            var state = o.Started
-                ? running != null
-                    ? $"building, done by {running.Ends:HH:mm} UTC at the latest"
-                    : "building"
-                : o.Free
-                    ? "waiting, free"
-                    : "waiting, paid";
+            var state = o.Phase switch
+            {
+                BuildPhase.Building when running != null =>
+                    $"building, done by {running.Ends:HH:mm} UTC at the latest",
+                BuildPhase.Building => o.Grid != 0 ? "breaking down" : "building",
+                BuildPhase.Loading => $"loading parts until {Clock(o.TurnEnds)} UTC",
+                BuildPhase.After => $"taking what is left until {Clock(o.TurnEnds)} UTC",
+                _ when o.Grid != 0 => "waiting, to break down",
+                _ when o.Free => "waiting, free",
+                _ => "waiting, paid",
+            };
             text.AppendLine(
                 $"{place++}. '{o.Ship}' ({o.Pcu:N0} PCU) for {Name(o.Player)}: {state}"
             );
@@ -1598,7 +1605,7 @@ internal static class ShipyardOrders
 
     // --- starting the next order ---
 
-    private static void Start(string station, MyCubeGrid shipyard)
+    private static void Start(string station, MyCubeGrid shipyard, BuildOrder front)
     {
         if (
             orders.ContainsKey(shipyard.EntityId)
@@ -1607,11 +1614,13 @@ internal static class ShipyardOrders
         )
             return;
         Sweep(shipyard, true);
-        if (Obstacle(shipyard) != null)
+        if (Obstacle(shipyard) is { } obstacle)
         {
+            ClearWay(shipyard, obstacle);
             starting.Remove(shipyard.EntityId);
             return;
         }
+        blockers.Remove(shipyard.EntityId);
         Builds.Read(
             new BuildRequest { Verb = BuildVerb.Next, Station = station },
             (text, _) =>
@@ -1661,8 +1670,13 @@ internal static class ShipyardOrders
         if (error != null)
         {
             // Not started: nothing left the order
-            Finish(next, Taken(next), 0, refund: true, $"'{next.Ship}' can't be built: {error}");
+            Finish(next, $"'{next.Ship}' can't be built: {error}");
             starting.Remove(shipyard.EntityId);
+            return;
+        }
+        if (!next.Free)
+        {
+            StartTurn(shipyard, next);
             return;
         }
         Builds.Execute(
@@ -1683,22 +1697,10 @@ internal static class ShipyardOrders
                 }
                 error = Create(shipyard, next, blueprint, layout);
                 if (error != null)
-                    Finish(
-                        next,
-                        Taken(next),
-                        0,
-                        refund: true,
-                        $"'{next.Ship}' can't be built: {error}"
-                    );
+                    Finish(next, $"'{next.Ship}' can't be built: {error}");
             }
         );
     }
-
-    // What a started paid build loaded into the shipyard, raw
-    private static Dictionary<string, long> Taken(BuildOrder order) =>
-        order.Free
-            ? new Dictionary<string, long>()
-            : order.Items.Where(i => i.Key != Hydrogen).ToDictionary(i => i.Key, i => i.Value);
 
     // The ship's first block and the scaffold, the components loaded; null when it started
     private static string Create(
@@ -1732,7 +1734,9 @@ internal static class ShipyardOrders
 
         var components = Components(blueprint, skipFirst: true);
         var containers = Containers(shipyard).ToList();
-        var needed = components.Sum(c =>
+        // A free build's are all loaded; a paid build's are there, but for what the player bought
+        var load = next.Free ? components : Bought(next);
+        var needed = load.Sum(c =>
             MyDefinitionManager.Static.GetPhysicalItemDefinition(c.Key).Volume * c.Value
         );
         var free = containers.Sum(i => (double)(i.MaxVolume - i.CurrentVolume));
@@ -1784,7 +1788,7 @@ internal static class ShipyardOrders
             $"Exempt={(next.Exempt ? 1 : 0)}",
             $"Hydrogen={hydrogen.ToString("R", CultureInfo.InvariantCulture)}"
         );
-        Load(containers, components);
+        Load(containers, load);
         orders[shipyard.EntityId] = new Order
         {
             Projector = projector,
@@ -1824,26 +1828,23 @@ internal static class ShipyardOrders
         if (count < 2)
             return;
         lost.Remove(shipyard.EntityId);
-        var left = RemoveLeftovers(
-            shipyard,
-            Taken(running).ToDictionary(t => ItemId(t.Key), t => (int)(t.Value / Amounts.Unit))
-        );
-        Finish(
-            running,
-            left,
-            0,
-            refund: false,
-            $"Your order '{running.Ship}' at {shipyard.DisplayName} ended: the ship is gone."
-        );
+        var message =
+            $"Your order '{running.Ship}' at {shipyard.DisplayName} ended: the ship is gone.";
+        if (running.Grid != 0)
+            Breakdown(shipyard, running);
+        else if (running.Free)
+            Finish(running, message);
+        else
+            After(
+                running,
+                0,
+                false,
+                new Dictionary<string, long>(),
+                $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}"
+            );
     }
 
-    private static void Finish(
-        BuildOrder order,
-        Dictionary<string, long> leftovers,
-        long hydrogenUsed,
-        bool refund,
-        string message
-    )
+    private static void Finish(BuildOrder order, string message)
     {
         Builds.Execute(
             Guid.NewGuid(),
@@ -1852,9 +1853,6 @@ internal static class ShipyardOrders
                 Verb = BuildVerb.Finish,
                 Id = order.Id,
                 Station = order.Station,
-                Needed = leftovers,
-                HydrogenUsed = hydrogenUsed,
-                Refund = refund,
             },
             (ok, answer) =>
             {
@@ -1935,11 +1933,12 @@ internal static class ShipyardOrders
                 filled = FillHydrogen(ship, order.Hydrogen);
             Dynamic(shipyard, ship);
         }
-        var left = RemoveLeftovers(shipyard, order.Components);
-        Report(shipyard, order, name, gone ? "gone" : null, why, filled, left, "");
+        if (order.Free)
+            RemoveLeftovers(shipyard, order.Components);
+        Report(shipyard, order, name, gone ? "gone" : null, why, filled, "");
     }
 
-    // Tells the player how the build ended and settles the order
+    // Tells the player how the build ended, and a paid build goes on to the last part of the turn
     private static void Report(
         MyCubeGrid shipyard,
         Order order,
@@ -1947,22 +1946,28 @@ internal static class ShipyardOrders
         string missing,
         string why,
         double filled,
-        Dictionary<string, long> left,
         string extra
     )
     {
         var gone = missing != null;
+        if (gone && order.Canceled)
+            NoteFreeEnd(order, name);
         var stalled =
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
         var message =
             order.Canceled
-                ? $"You canceled '{name}' at {shipyard.DisplayName}. "
-                    + (gone ? "No ship was built yet." : "The unfinished ship is yours.")
+                ? missing != null
+                    ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
+                    : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
             : order.Refund
-                ? $"{stalled}, with {order.Missing} missing. The ship was removed"
-                    + (order.Free ? ", and the free build doesn't count." : ".")
+                ? $"{stalled}, with {order.Missing} missing. The ship was removed, "
+                    + (
+                        order.Free
+                            ? "and the free build doesn't count."
+                            : "its components are in the containers."
+                    )
             : order.Missing != null && !gone
-                ? $"{stalled}. The ship is yours without {order.Missing}" + "."
+                ? $"{stalled}. The ship is yours without {order.Missing}."
             : missing == "unbuilt"
                 ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
             : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
@@ -1981,26 +1986,25 @@ internal static class ShipyardOrders
                     : $" Its H2 tanks have {filled:N0} L of hydrogen.";
         }
         message += extra;
-        // With a ship, its hand over started it
-        if (order.Canceled && gone)
-            NoteFreeEnd(order, name);
-        if (order.Id.Length > 0)
-            Finish(
-                new BuildOrder
-                {
-                    Id = order.Id,
-                    Player = order.Player,
-                    Ship = name,
-                },
-                order.Free ? new Dictionary<string, long>()
-                    : order.Missing != null ? order.Refunded
-                    : left,
+        var ended = new BuildOrder
+        {
+            Id = order.Id,
+            Station = StationOf(shipyard),
+            Player = order.Player,
+            Ship = name,
+        };
+        if (order.Id.Length > 0 && !order.Free)
+            After(
+                ended,
                 filled > 0
                     ? Math.Min(IceFor(filled, up: true), IceFor(order.Hydrogen, up: true))
                     : 0,
-                refund: order.Refund,
-                message
+                order.Refund,
+                order.Sold,
+                $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}"
             );
+        else if (order.Id.Length > 0)
+            Finish(ended, message);
         else
         {
             Tell(order.Player, message);
@@ -2102,7 +2106,8 @@ internal static class ShipyardOrders
 
         // The ship's components, the given up block's included, and the arm's, which OCT pays
         var components = Components(blueprint, skipFirst: false);
-        var load = new Dictionary<MyDefinitionId, int>(components);
+        // A paid build's are there, but for what the player bought
+        var load = new Dictionary<MyDefinitionId, int>(next.Free ? components : Bought(next));
         foreach (var c in layout.Components)
             load[c.Key] = (load.TryGetValue(c.Key, out var had) ? had : 0) + c.Value;
         var containers = Containers(shipyard).ToList();
@@ -2301,6 +2306,14 @@ internal static class ShipyardOrders
         return welded;
     }
 
+    private static int Complete(MyCubeGrid shipyard, Order order) =>
+        order.Arm.Count > 0
+            ? ShipBlocks(shipyard, order).Count(b => b.IsFullIntegrity)
+            : Built(order.Projector.CubeGrid);
+
+    private static string BlocksDone(MyCubeGrid shipyard, Order order) =>
+        $"{Complete(shipyard, order)} of {order.Blocks} blocks complete";
+
     // A build stalls after StallChecks checks (60 s) in which its ship's integrity didn't grow
     private const int StallChecks = 6;
 
@@ -2311,6 +2324,7 @@ internal static class ShipyardOrders
         {
             order.Progress = progress;
             order.Idle = 0;
+            order.ShortSince = null;
             return false;
         }
         return ++order.Idle >= StallChecks;
@@ -2324,10 +2338,11 @@ internal static class ShipyardOrders
                 .SelectMany(g => ((MyCubeGrid)g).GetBlocks())
                 .Where(b => !(b.FatBlock is MyTerminalBlock t && IsScaffold(t)));
 
-    // The welders stopped. A ship missing only blocks no welder can place, or only armor and other
-    // plain blocks, at most MaxMissingPlain of them, is delivered, and the payer gets the missing
-    // pieces' components back; one missing a functional block or more of the plain ones is removed
-    // and the build refunded, the labor fee with it.
+    // The welders stopped. A paid build short of components waits for them. A ship missing only
+    // blocks no welder can place is delivered without them. A free ship missing only armor and
+    // other plain blocks, at most MaxMissingPlain of them, is delivered too; one missing a
+    // functional block or more of the plain ones is removed and doesn't count. A paid build the
+    // welders stopped on with the components there is delivered as it is.
     private static void Stall(MyCubeGrid shipyard, Order order)
     {
         var projected = (
@@ -2358,13 +2373,33 @@ internal static class ShipyardOrders
                 (missing.TryGetValue(block.BlockDefinition, out var had) ? had : 0) + 1;
             block.GetMissingComponents(parts);
         }
+        var leftOut = LeftOutGrids(order, blocks);
+        var waited = order.ShortSince != null;
+        order.ShortSince ??= DateTime.UtcNow;
+        var until = order.ShortSince.Value.AddMinutes(Config.ShipyardTopUpMinutes);
+        if (
+            !order.Free
+            && leftOut == null
+            && DateTime.UtcNow < until
+            && Short(shipyard, parts) is { } shortOf
+        )
+        {
+            // Short of components: it waits for a top-up, and says so once
+            order.Idle = 0;
+            if (!waited)
+                Tell(
+                    order.Player,
+                    $"{shipyard.DisplayName} waits for {shortOf} for '{order.Name}', until {until:HH:mm} UTC. "
+                        + "You and your faction can load them into its containers."
+                );
+            return;
+        }
         order.Missing = string.Join(
             ", ",
             missing
                 .OrderByDescending(m => m.Value)
                 .Select(m => $"{m.Value} {m.Key.DisplayNameText}")
         );
-        var leftOut = LeftOutGrids(order, blocks);
         if (leftOut != null)
             order.Missing += $", left out on {leftOut}, where no welder can place them";
         order.Refund =
@@ -2374,17 +2409,17 @@ internal static class ShipyardOrders
                 || missing.Where(m => !Functional(m.Key.Id)).Sum(m => m.Value)
                     > MaxMissingPlain * plain
             );
-        order.Refunded = parts.ToDictionary(
-            p => Stations.ItemName(new MyDefinitionId(typeof(MyObjectBuilder_Component), p.Key)),
-            p => p.Value * Amounts.Unit
-        );
         Plugin.Log.Info(
             $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
                 + $"missing {order.Missing}: {(order.Refund ? "removed and refunded" : "delivered")}"
         );
         LogStall(shipyard, order, blocks, parts);
         if (order.Refund)
+        {
+            if (!order.Free)
+                KeepParts(shipyard, order);
             Scrap(shipyard, order);
+        }
         End(shipyard, order, "stalled");
     }
 
@@ -2681,7 +2716,8 @@ internal static class ShipyardOrders
         }
         // What the arm didn't use is OCT's
         RemoveLeftovers(shipyard, armLeft);
-        var left = RemoveLeftovers(shipyard, order.Components);
+        if (order.Free)
+            RemoveLeftovers(shipyard, order.Components);
         var extra = "";
         if (alive && order.GivenUp is { } givenUp)
             extra +=
@@ -2696,7 +2732,6 @@ internal static class ShipyardOrders
                 : "gone",
             why,
             filled,
-            left,
             extra
         );
     }
@@ -3032,6 +3067,8 @@ internal static class ShipyardOrders
     private static List<MyGasTank> ShipTanks(Plan plan)
     {
         var station = Grids(plan.Table.CubeGrid);
+        if (FindShipyard(plan.Table) is { } shipyard)
+            station = station.Concat(Grids(shipyard)).ToList();
         var ships = station
             .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
             .Where(c => c.Connected && c.Other != null)
@@ -3537,7 +3574,13 @@ internal static class ShipyardOrders
         var removed = new HashSet<MyCubeGrid>();
         foreach (var group in found)
         {
-            if (group.Any(g => own.Contains(g) || removed.Contains(g)) || !Garbage(group))
+            if (
+                group.Any(g =>
+                    own.Contains(g)
+                    || removed.Contains(g)
+                    || (towGiven.TryGetValue(g.EntityId, out var until) && DateTime.UtcNow < until)
+                ) || !Garbage(group)
+            )
                 continue;
             foreach (var grid in group)
             {

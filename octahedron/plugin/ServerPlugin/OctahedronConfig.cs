@@ -344,6 +344,52 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         1,
+        description: "Minutes of each window of a player's turn at a shipyard: to load the components and press the button for "
+            + "a paid build, and to take what is left after a build or a towed grid's breakdown.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardTurnMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
+    [IntOption(
+        1,
+        description: "Minutes a paid build short of components waits for a top-up before it ends by the stall rules.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardTopUpMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
+
+    [IntOption(
+        1,
+        description: "Minutes a grid a tow just gave a player is safe from the shipyard's sweep.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardTowGraceMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
+    [IntOption(
+        1,
+        description: "Minutes a ship left in a shipyard's build space may block the next order once its owner was told. "
+            + "It is then moved out of the way.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardClearMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
+
+    [IntOption(
+        1,
         description: "Minutes a player holds a station's hologram table with the blueprint they loaded, at most; loading another "
             + "restarts them. It is cleared and open to everyone again sooner once its ship is in the queue, or when the player leaves the station.",
         Parent = "shipyard"

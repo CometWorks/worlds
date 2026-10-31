@@ -294,9 +294,14 @@ The first button of the button panel next to the table
 (`ShipyardConfirmButtonName`, `Button Panel - Station ShipyardConfirm`) acts by who
 presses it, whoever holds the table:
 
-- With a build or repair slot of theirs in the shipyard's queue or running, the press
-  cancels it. It does nothing to the table. A running build's ship is handed over
-  unfinished, as when its time runs out, and a free build starts the cool-down.
+- In a window of their turn (below) the press starts the build: the blueprint they hold
+  if any, else their queued paid order. Without either, in the last part of a turn, it
+  only says when the turn ends.
+- With another build or repair slot of theirs in the shipyard's queue or running, the
+  press cancels it. It does nothing to the table. A running build's ship is handed over
+  unfinished, as when its time runs out. What is left of a paid build stays in the
+  containers for the window; a free build's leftovers are removed and its cool-down
+  starts.
 - Else, holding a blueprint the shipyard accepts, the press orders the ship. That
   clears the blueprint and the list, and the screen tells the player a second press
   cancels. It first shows the quote and asks for another press when the screen doesn't
@@ -305,8 +310,9 @@ presses it, whoever holds the table:
   reason.
 - Else the press books a repair slot.
 
-A queued order stays when its owner leaves: it is built and handed over as usual, it
-is paid for already, and the owner can cancel it when back.
+A queued order stays when its owner leaves: a free build is built and handed over as
+usual, a paid one gets its turn and leaves the queue if nobody presses, and the owner
+can cancel it when back.
 `ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
 
 A repair slot is an entry "Repair" in the shipyard's queue, without a blueprint or a
@@ -320,10 +326,9 @@ what is in the frame, projected blocks of the player's own repair projector too.
 the ship, components and projector before booking.
 
 The slot ends when no building or welding happened for `ShipyardRepairIdleMinutes` (5;
-0 turns slots off), or at the player's next press. The welders go off, what is left in
-the shipyard's containers and welders goes to the player's docked ship and what it has
-no room for is gone, all connectors unlock so a docked ship floats free, and the blocks
-are OCT's again, shared with all as the world has them between turns. The running slot
+0 turns slots off), or at the player's next press. It ends like a build: the welders go
+off and the player has the last window of their turn (below) to take what is in the
+containers and welders, which is over at once if they are empty. The running slot
 is known from the queue, so a restart or a move of the station to another node picks it
 up, with the idle time starting over.
 
@@ -356,14 +361,11 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   per 100 PCU of the blueprint, rounded up, paid to OCT on every build. At 0 there
   is no fee, and the quote and the messages don't mention one. The materials also
   include the hydrogen to fill the ship's H2 tanks to `ShipyardHydrogenFillPercent`
-  (50 %): from the H2 tanks of the player's ships docked at the station's connectors
-  first, the rest as ice (`ShipyardHydrogenLitersPerIce`, 20 L per kg) from the
-  Store. When the station has too little ice, the order goes ahead and the tanks
-  get less. A station with too little of a component refuses the order.
-- On order the plugin takes the money and the stock (a higher price refuses the
-  order and shows the new quote) and queues the order. Canceling gives all of it
-  back, at what was paid, and OCT its stock. Hydrogen drained from a docked ship
-  can't go back, so the ice for it is sold for the player.
+  (50 %): from the H2 tanks of the player's ships docked at the shipyard or the
+  station's connectors first, then ice (`ShipyardHydrogenLitersPerIce`, 20 L per kg)
+  in the shipyard's containers, then ice from the Store. When the station has too
+  little ice, the order goes ahead and the tanks get less. Nothing is paid or moved
+  when the order goes into the queue.
 - The queue of each shipyard holds at most `ShipyardQueueMax` (6) orders, the one
   being built included, one per player: more don't fit the queue panel above the
   table. A full queue shows on the table's screen and refuses the press. The
@@ -386,7 +388,7 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   player's, with an NPC-owned projector and battery named `Shipyard Order` next
   to it, outside the ship's bounds. Either way the projector projects the
   blueprint (Multigrid Projector builds its subgrids), the components go into the
-  shipyard's cargo containers, and its
+  shipyard's cargo containers (a paid build's are there already), and its
   OmniArc welders are switched on through their terminal switches. The welders
   take the components from the containers like any welder, so a free build gets
   its components loaded too, and what is left is removed at the end; no tool has
@@ -408,25 +410,69 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   at the next 10 s check and once more at the one after (SE-782), and nothing to the
   clients it already told. ToolCore is the mod's own code: this reaches its session
   and packet by reflection and does nothing if they are gone.
-- A build whose ship gains no integrity for 60 s stops. Plain blocks, armor and
-  decorations, are those of the plain `CubeBlock` type; every block of its own
-  type, lights, panels and conveyors included, is functional. When the ship
-  misses only plain blocks, at most 10% of them, it is delivered as usual, and a
-  paid build's player gets those missing pieces' components sold back at the
-  Store's price, not the labor fee. When it misses a functional block or more plain ones, the ship is
-  removed and the build refunded: what it cost and the labor fee go back to the
-  player, and a free build doesn't count. The player
-  gets a chat message either way.
+- A build whose ship gains no integrity for 60 s stops. A paid build short of
+  components in the shipyard first waits `ShipyardTopUpMinutes` (5) for a top-up and
+  tells the player. Plain blocks, armor and decorations, are those of the plain
+  `CubeBlock` type; every block of its own type, lights, panels and conveyors included,
+  is functional. When the ship misses only plain blocks, at most 10% of them, it is
+  delivered as usual. When it misses a functional block or more plain ones, the ship
+  is removed: a free build doesn't count, a paid build's components go into the
+  containers and the labor fee comes back. The player gets a chat message either way.
 - Every projected block welded onto the ship or its subgrids is the player's,
   owner and `BuiltBy`, so it counts toward the player's PCU and the projection
   limits check it for them.
 - The order ends when every block is complete, or when the time is up. The
   welders go off, the projector and battery are removed with the projection,
-  what is left of the loaded components is taken out of the shipyard's
-  containers and welders (sold to OCT at the Store's price for a paid build, the
-  SC to the player), a paid build's hydrogen goes into the ship's H2 tanks (the ice
-  of what doesn't fit is sold too, with a warning when none does), and the ship, finished or not,
-  becomes the player's dynamic ship. The player gets a chat message either way.
+  a paid build's hydrogen goes into the ship's H2 tanks (the ice of what doesn't
+  fit is sold at the Store, with a warning when none does), and the ship,
+  finished or not, becomes the player's dynamic ship. The player gets a chat
+  message either way. After a free build what is left of the components is removed
+  and the shipyard is free at once; a paid build goes on to the last part of its
+  turn.
+
+#### A player's turn
+
+A paid build, a towed grid's breakdown and a repair slot come with a turn at the
+shipyard. A free build has none: the blocks stay OCT's.
+
+- At the queue's front the player gets the shipyard's cargo containers, welders and
+  connectors, shared with their faction, connectors and welders on and connectors
+  not trading. The reactors and batteries stay OCT's, and conveyors can't pull
+  uranium out of a reactor. OCT keeps most of the blocks, so it stays the grid's big
+  owner and the grid a shipyard.
+- They get `ShipyardTurnMinutes` (10) to load components, and a chat message saying
+  so. The details screen lists what is missing. The press starts the build: the
+  Store supplies what is missing, into the containers, and the labor fee is paid. The press is refused when the player can't pay all of it, when
+  it doesn't fit the containers, or when a ship is in the way. If they don't press,
+  the order leaves the queue. While it builds they and their faction can put
+  components in and take them out.
+- After the build, the breakdown or the repair slot they get another
+  `ShipyardTurnMinutes` to take what is left. In either window a blueprint they load
+  and press starts at once on the same turn, with a new window, using what is in the
+  containers and buying the rest. A free ship can't: they end the turn first.
+- The turn ends at the deadline, once the containers, welders and connectors are
+  empty, or with `!oct shipyard done`. Every connector unlocks, a docked ship floats
+  free and its owner is told, and the blocks are OCT's again. What is left is sold to
+  the station on the Store's terms: OCT's bid, tax in it, or the item's base price
+  less tax if it has none, into OCT's stock. The money goes to the player, with a chat
+  message.
+- A ship in the build space holds up the next order. Its owner is told, and after
+  `ShipyardClearMinutes` (5) it is moved out over the shipyard. A restart starts
+  that wait over.
+- A towed grid over the player's limits is broken down at once on arrival: each block
+  yields the components it really has, and its cargo comes along. With the shipyard
+  free that is into the containers, with a turn for the player and the last window;
+  what doesn't fit is sold at once, the cheapest item first. With the shipyard busy
+  all of it is sold on the same terms, and nobody's build is disturbed. `!oct shipyard
+  tow <station> <grid id>` does it by hand, for tests.
+- A grid a tow gave a player gets a chat warning to move it and is safe from the sweep
+  for `ShipyardTowGraceMinutes` (10), then counts as any wreck. `!oct shipyard given
+  <grid id>` does it by hand, for tests. The grace is on the node, a restart or a move
+  to another node ends it.
+
+The turn and its deadline are in the queue, the
+blocks' owner in the world, so a turn goes on after a restart or a move of the
+station's partition.
 
 #### Support arm
 
@@ -490,7 +536,8 @@ rotor heads. An unfinished ship that is delivered leaves the arm's projector
 behind, and it comes down with the arm. A ship built without an arm loses its
 scaffold projector the same way. The shipyard loads what the arm's blocks still
 need, without the first component each frame already has. What the arm didn't
-use of them is removed with the ship's leftovers, and only the ship's are sold. The `!oct shipyards` admin command lists the shipyards, their arm
+use of them is removed with the ship's leftovers, and only the ship's go on to
+the player's turn. The `!oct shipyards` admin command lists the shipyards, their arm
 rotors and the running builds with their arm.
 `!oct shipyard strip <station> <item>` takes an item out of a shipyard's
 containers and welders, so tests can stall a build.
@@ -498,7 +545,8 @@ containers and welders, so tests can stall a build.
 The ship's PCU cap (`GroupPcuLimit`) leaves out the shipyard and the arm, which
 are in one mechanical group with the ship while it is built.
 
-The queues live with the market, on a plain server or the World Authority, saved as the sandbox variable `Octahedron.Builds`, the
+The queues live with the market, on a plain server or the
+World Authority, saved as the sandbox variable `Octahedron.Builds`, the
 blueprints included. A running build is kept in the world, in the projector's
 custom data, so it goes on after a restart. Every 10 seconds the node that
 simulates a shipyard checks it and starts the next order, so on a cluster the
@@ -759,9 +807,10 @@ Every minute the plugin fills each station up again:
   player's PCU limit (`TotalPCU` per player, 1,000,000 on Octahedron, against what they
   have built on all the cluster's nodes) and `GroupPcuLimit` (60,000). Up to 10% over
   their limit the grid is theirs, and chat tells them they can't build blocks until they
-  are back under it. More than 10% over, or over `GroupPcuLimit`, chat tells them it
-  stays as it is: the grid keeps its owner and a contract stays open. It is told
-  again every 5 minutes while they try.
+  are back under it. More than 10% over, or over `GroupPcuLimit`, a contract still pays
+  but the nearest station breaks the grid down at once, as told under [A player's
+  turn](#a-players-turn), and chat says why. A grid given by a tow is safe from the
+  shipyard's clearing for `ShipyardTowGraceMinutes` (10), and chat tells them to move it.
 - A grid in an enabled safe zone gets no bounty, salvage or wreck contract, and an open
   contract nobody took on it is withdrawn. A contract someone took goes on, because a
   shipyard is inside its station's zone. In an offline partition the zone counts as it
@@ -1149,11 +1198,14 @@ mid-build and loads its save offline. `tests/shipyard_beams_cluster.py` does the
 check on a test cluster, with a trip to a station on the other node.
 `tests/builds/BuildTests` checks the queues without the game
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
-from OCT's stock, paid orders all or none, cancel, start and finish with leftovers
-and hydrogen, free orders, the queue, the formats, blueprints in parts, and that no money
-is made or lost.
-`tests/test_paid_builds.py` checks paid builds in game at Alpha Station with the
-shipyard's mods: the quote and the order, the hydrogen from a docked ship's tank into
+from OCT's stock, paid orders and their turns, the purchase at the start all or none,
+hydrogen, the sale of what a turn leaves, towed grids, free orders, the queue, the
+formats, blueprints in parts, and that no money is made or lost. `tests/test_shipyard_turn.py` checks a
+player's turn in game at Alpha Station: who owns what, the window, the purchase, the
+sale, overflow, a ship in the way, a tow reaching the shipyard, restarts;
+`tests/shipyard_turn_cluster.py` does the same on a cluster with moves of the station's
+partition. `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
+the shipyard's mods: the quote and the order, the hydrogen from a docked ship's tank into
 the new ship's, the payment and OCT's stock, a press while it builds, an order queued
 behind the finished ship and canceled after a restart, and a free order canceled with
 the button itself.

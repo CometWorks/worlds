@@ -13,8 +13,8 @@ namespace ServerPlugin;
 // keeps most of the shipyard's blocks, so the grid stays its big owner and a shipyard.
 internal static class ShipyardTurn
 {
-    // As the world has them between turns (SHIPYARD_SHARED in build_world.py)
-    private const MyOwnershipShareModeEnum IdleShare = MyOwnershipShareModeEnum.All;
+    // As the world has them between turns: OCT's faction only (SHIPYARD_SHARED in build_world.py)
+    private const MyOwnershipShareModeEnum IdleShare = MyOwnershipShareModeEnum.Faction;
 
     private static IEnumerable<MyCubeBlock> Blocks(MyCubeGrid shipyard) =>
         shipyard
@@ -22,13 +22,16 @@ internal static class ShipyardTurn
             .Where(b => b is MyCargoContainer or MyShipConnector)
             .Concat(ShipyardOrders.Beams(shipyard));
 
+    /// <summary>Hands the blocks to the player, shared with their faction and on. Connectors don't trade.</summary>
     public static void Give(MyCubeGrid shipyard, long player)
     {
         foreach (var block in Blocks(shipyard))
         {
             SetOwner(block, player, MyOwnershipShareModeEnum.Faction);
+            if (block is MyFunctionalBlock functional)
+                functional.Enabled = true;
             if (block is MyShipConnector connector)
-                connector.Enabled = true;
+                connector.TradingEnabled.Value = false;
         }
     }
 
