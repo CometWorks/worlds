@@ -40,6 +40,8 @@ wa.lc.PLAN = wa.ROOT / "probe-plan.txt"
 wa.lc.OUT = wa.ROOT / "probe-out.txt"
 NODES = ("node-1", "node-2")
 PROCESSES = ("wa-1", *NODES)
+# A blueprint the client can have welded, without the searchlight, and a pasted one with it
+WELDED = 4
 BLOCKS = 5
 
 
@@ -133,8 +135,8 @@ def run(bench) -> None:
     )
     count, on = read(api, ship)
     check(
-        f"ordered ship: its {BLOCKS} blocks have it off",
-        count == BLOCKS and not on,
+        f"ordered ship: its {WELDED} blocks have it off",
+        count == WELDED and not on,
         (count, on),
     )
 
@@ -202,7 +204,7 @@ def run(bench) -> None:
     count, on = read(api, ship)
     check(
         "a restart leaves the ordered ship's blocks off",
-        count == BLOCKS and not on,
+        count == WELDED and not on,
         (count, on),
     )
 
@@ -216,7 +218,7 @@ def _try_read(api, grid: int):
 
 
 def main() -> int:
-    so.SMALL = tn.blueprint(False)
+    so.SMALL = tn.blueprint(False, welded=True)
     run.world_template = wa.prepare()
     label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-target-neutrals")
     results = bench_module.HOST.results / label

@@ -55,8 +55,9 @@ def check(label: str, passed, detail="") -> None:
     log(f"{'PASS' if passed else 'FAIL'} {label} {detail}")
 
 
-def weapons(x: int, modded: bool) -> list[str]:
-    """One of each block type with the setting, on it, standing on an armor spine along x"""
+def weapons(x: int, modded: bool, welded: bool) -> list[str]:
+    """One of each block type with the setting, on it, standing on an armor spine along x. The
+    searchlight needs a DLC, which the rig's client doesn't have to weld or place it"""
     blocks = [
         ("MyObjectBuilder_InteriorTurret", "LargeInteriorTurret", (x, 1, 0)),
         (
@@ -64,14 +65,15 @@ def weapons(x: int, modded: bool) -> list[str]:
             "LargeTurretControlBlock",
             (x + 2, 1, 0),
         ),
-        ("MyObjectBuilder_Searchlight", "LargeSearchlight", (x + 4, 1, 0)),
         ("MyObjectBuilder_LargeGatlingTurret", "", (x + 6, 1, -1)),
         ("MyObjectBuilder_LargeMissileTurret", "", (x + 10, 1, -1)),
     ]
-    if modded:
+    if not welded:
         blocks.append(
-            ("MyObjectBuilder_LargeGatlingTurret", MOD_TURRET, (x + 14, 1, -1))
+            ("MyObjectBuilder_Searchlight", "LargeSearchlight", (x + 4, 1, 0))
         )
+    if modded:
+        blocks.append(("MyObjectBuilder_InteriorTurret", MOD_TURRET, (x + 14, 1, 0)))
     return [
         rig.block(
             kind,
@@ -92,8 +94,12 @@ def armor(xs, y: int = 0) -> list[str]:
     ]
 
 
-def blueprint(modded: bool, tag: str = "MyObjectBuilder_CubeGrid") -> str:
-    return rig.grid(SHIP, None, armor(range(1, 19)) + weapons(2, modded), tag=tag)
+def blueprint(
+    modded: bool, tag: str = "MyObjectBuilder_CubeGrid", welded: bool = False
+) -> str:
+    return rig.grid(
+        SHIP, None, armor(range(1, 19)) + weapons(2, modded, welded), tag=tag
+    )
 
 
 def bp_document(grid: str) -> str:
@@ -108,18 +114,18 @@ def bp_document(grid: str) -> str:
 
 
 def write_mod() -> None:
-    """A copy of the gatling turret whose definition has Target Neutrals on"""
+    """A copy of the interior turret, a single cell, whose definition has Target Neutrals on"""
     source = (
         rig.DS64.parent / "Content/Data/CubeBlocks/CubeBlocks_Weapons.sbc"
     ).read_text(encoding="utf-8")
     definition = re.search(
         r'<Definition xsi:type="MyObjectBuilder_LargeTurretBaseDefinition">\s*<Id>\s*'
-        r"<TypeId>LargeGatlingTurret</TypeId>\s*<SubtypeId/>.*?</Definition>",
+        r"<TypeId>InteriorTurret</TypeId>\s*<SubtypeId>LargeInteriorTurret</SubtypeId>.*?</Definition>",
         source,
         re.S,
     )[0]
     definition = definition.replace(
-        "<SubtypeId/>", f"<SubtypeId>{MOD_TURRET}</SubtypeId>"
+        "<SubtypeId>LargeInteriorTurret<", f"<SubtypeId>{MOD_TURRET}<"
     )
     definition = re.sub(
         r"<BlockPairName>[^<]*", f"<BlockPairName>{MOD_TURRET}", definition
@@ -143,7 +149,7 @@ def write_mod() -> None:
 
 
 def prepare() -> None:
-    so.prepare(blueprint(modded=True), 60)
+    so.prepare(blueprint(modded=True, welded=True), 60)
     write_mod()
     item = (
         f'<ModItem FriendlyName="Neutrals Test"><Name>{MOD_ID}.sbm</Name><PublishedFileId>{MOD_ID}'
@@ -176,7 +182,7 @@ def prepare() -> None:
         None,
         [rig.block("MyObjectBuilder_Projector", "LargeProjector", (0, 0, 0))]
         + armor(range(1, 19))
-        + weapons(2, modded=True),
+        + weapons(2, modded=True, welded=True),
         tag="MyObjectBuilder_CubeGrid",
     )
     projection_rig = rig.grid(
@@ -302,7 +308,7 @@ def built(remote, label: str, grid_id: int, blocks: int) -> None:
 
 def rule_off_controls(remote, build_rig: int) -> None:
     set_rule(remote, False)
-    report = remote.character_build_block(build_rig, (4, 1, -1), MOD_TURRET)
+    report = remote.character_build_block(build_rig, (4, 1, 0), MOD_TURRET)
     log(f"hand placed with the rule off: {report}")
     pasted = remote.paste_blueprint(
         xml=bp_document(blueprint(True, "CubeGrid")),
@@ -316,7 +322,7 @@ def rule_off_controls(remote, build_rig: int) -> None:
     count, on = on_cells(remote, build_rig)
     check(
         "rule off: a turret placed by hand takes it from its definition",
-        (4, 2, 0) in on or any(c[0] in (4, 5, 6) for c in on),
+        (4, 1, 0) in on,
         on,
     )
     set_rule(remote, True)
@@ -325,9 +331,8 @@ def rule_off_controls(remote, build_rig: int) -> None:
 def hand_and_paste(remote, build_rig: int) -> tuple[tuple, int, tuple]:
     before = len(targeting_cubes(remote, build_rig))
     for cell, subtype in (
-        ((8, 1, -1), MOD_TURRET),
+        ((8, 1, 0), MOD_TURRET),
         ((12, 1, 0), "LargeTurretControlBlock"),
-        ((14, 1, 0), "LargeSearchlight"),
         ((16, 1, 0), "LargeInteriorTurret"),
     ):
         log(
@@ -344,7 +349,7 @@ def hand_and_paste(remote, build_rig: int) -> tuple[tuple, int, tuple]:
     }
     check(
         "placed by hand: off, also where the definition has it on",
-        len(new) == 4 and not any(values.values()) and len(cubes) == before + 4,
+        len(new) == 3 and not any(values.values()) and len(cubes) == before + 3,
         values,
     )
     controller = next(tuple(c["min"]) for c in new if "Control" in c["subtypeId"])
@@ -402,9 +407,9 @@ def hand_and_paste(remote, build_rig: int) -> tuple[tuple, int, tuple]:
 def weld(remote) -> int:
     grid_id = wait_grid(remote, "Neutrals Projection Rig")
     projector = next(
-        b["entityId"]
-        for b in remote.list_blocks(grid_id)["blocks"]
-        if "Projector" in str(b.get("typeId", b))
+        c["fatEntityId"]
+        for c in remote.list_cubes(grid_id)["cubes"]
+        if c["typeId"].endswith("Projector")
     )
     for attempt in range(8):
         report = remote.weld_projection(projector, instant=False)
@@ -412,7 +417,7 @@ def weld(remote) -> int:
         time.sleep(5)
         if not report.get("requested"):
             break
-    built(remote, "welded from a projection", grid_id, 6)
+    built(remote, "welded from a projection", grid_id, 5)
     return grid_id
 
 
@@ -425,7 +430,7 @@ def order_and_starter(remote) -> None:
     time.sleep(5)
     new = [g for g in remote.list_grids() if g["entityId"] not in before]
     if new:
-        built(remote, "starter ship", new[0]["entityId"], 6)
+        built(remote, "starter ship", new[0]["entityId"], 5)
     so.order(remote)
     log(so.wait_chat(remote, "is ready", 1500))
 
