@@ -515,6 +515,10 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
             ready is not None and f"{HYDROGEN:,} L" in ready,
             f"{case}: its H2 tank has {HYDROGEN:,} L: {ready}",
         )
+        check(
+            ready is not None and "leftover" not in ready,
+            f"{case}: a finished ship leaves no components for the ledger: {ready}",
+        )
     lines = arms_gone(remote, case)
     check(
         not any(f"'{ship}'" in line for line in lines[1:]),

@@ -248,7 +248,9 @@ def check_shipyards() -> None:
         if not (grid.findtext("DisplayName") or "").endswith(" Shipyard"):
             continue
         text = ET.tostring(grid, encoding="unicode")
-        components = re.findall(r'xsi:type="MyObjectBuilder_Component"', text)
+        components = re.findall(
+            r'xsi:type="MyObjectBuilder_Component">\s*<SubtypeName>(\w+)<', text
+        )
         active = 0
         for value in re.findall(
             r"<Key>75bbb4f5-4fb9-4230-aaaa-bb79c9811618</Key>\s*<Value>([^<]*)</Value>",
@@ -257,7 +259,7 @@ def check_shipyards() -> None:
             repo = base64.b64decode(value)
             active += repo[0] == 0x08 and repo[1] == 1
         log(
-            f"{grid.findtext('DisplayName')}: {len(components)} component stacks, {active} welders on"
+            f"{grid.findtext('DisplayName')}: component stacks {components}, {active} welders on"
         )
         assert not components and not active
 
