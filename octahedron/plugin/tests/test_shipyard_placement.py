@@ -240,6 +240,8 @@ def forced_limit(remote):
     )
     sa.check(count == 1, "limit: the grid in the shipyard is gone")
     sector.write_text(text, encoding="utf-8")
+    # The game prefers its binary copy of the sector
+    (rig.WORLD / "SANDBOX_0_0_0_.sbsB5").unlink(missing_ok=True)
     config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
     rig.write_plugin_config(
         config.replace(
@@ -324,7 +326,7 @@ def main() -> int:
         if case != "limit":
             check_place(root, case)
     sa.check(
-        "PlaceLimit"
+        "<DisplayName>PlaceLimit</DisplayName>"
         not in (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
         or "limit" not in cases,
         "limit: no ship was started",
