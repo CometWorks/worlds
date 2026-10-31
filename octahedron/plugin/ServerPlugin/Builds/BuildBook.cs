@@ -83,7 +83,15 @@ public sealed class BuildQuote
         text.Append("T\t").Append(N(Fee)).Append('\t').Append(N(Balance)).Append('\n');
         foreach (var l in Lines)
             text.Append(
-                    string.Join("\t", "L", l.Item, N(l.Needed), N(l.Bought), N(l.Cost), N(l.Missing))
+                    string.Join(
+                        "\t",
+                        "L",
+                        l.Item,
+                        N(l.Needed),
+                        N(l.Bought),
+                        N(l.Cost),
+                        N(l.Missing)
+                    )
                 )
                 .Append('\n');
         return text.ToString();
@@ -378,7 +386,13 @@ public sealed class BuildBook
     }
 
     /// <summary>The player's order at the station leaves the queue, if it hasn't started: they get what they paid back.</summary>
-    public BuildResult Cancel(IMarketWorld w, IBuildMarket market, BuildSettings s, string station, long player)
+    public BuildResult Cancel(
+        IMarketWorld w,
+        IBuildMarket market,
+        BuildSettings s,
+        string station,
+        long player
+    )
     {
         var order = orders.Values.FirstOrDefault(o => o.Station == station && o.Player == player);
         if (order == null)
@@ -444,7 +458,8 @@ public sealed class BuildBook
         long iceLeft = ice - Math.Min(Math.Max(0, hydrogenUsed), ice);
         if (iceLeft > 0)
             sale[s.HydrogenItem] = iceLeft;
-        long sold = sale.Count > 0 && market != null ? market.SellOff(order.Station, order.Payer, sale) : 0;
+        long sold =
+            sale.Count > 0 && market != null ? market.SellOff(order.Station, order.Payer, sale) : 0;
         return new BuildResult(
             true,
             sold > 0 ? $"What was left over is sold for {MarketBook.Sc(sold)}." : "",

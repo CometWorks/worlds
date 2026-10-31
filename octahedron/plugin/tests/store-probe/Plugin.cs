@@ -67,7 +67,9 @@ public class Plugin : IPlugin
             .SelectMany(g => g.GetFatBlocks<MyStoreBlock>())
             .Where(b => b.BlockDefinition.Id.SubtypeName == "StoreBlock")
             .OrderBy(b =>
-                (b.PositionComp.GetPosition() - character.PositionComp.GetPosition()).LengthSquared()
+                (
+                    b.PositionComp.GetPosition() - character.PositionComp.GetPosition()
+                ).LengthSquared()
             )
             .FirstOrDefault();
 
@@ -92,10 +94,7 @@ public class Plugin : IPlugin
         if (verb == "have")
         {
             MyDefinitionId.TryParse("MyObjectBuilder_" + item, out var id);
-            Say(
-                "HAVE "
-                    + ((MyFixedPoint)character.GetInventory().GetItemAmount(id)).ToString()
-            );
+            Say("HAVE " + ((MyFixedPoint)character.GetInventory().GetItemAmount(id)).ToString());
             return;
         }
         int amount = args.Length > 3 ? int.Parse(args[3], CultureInfo.InvariantCulture) : 0;

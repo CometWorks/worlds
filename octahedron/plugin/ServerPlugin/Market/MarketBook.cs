@@ -225,7 +225,8 @@ public sealed class MarketBook
     {
         if (w.Reference(station, item) <= 0)
             return 0;
-        int percent = specialty && w.Specialty(station, item) ? s.SpecialtyPercent : s.OctBuyPercent;
+        int percent =
+            specialty && w.Specialty(station, item) ? s.SpecialtyPercent : s.OctBuyPercent;
         return Math.Max(
             0,
             Math.Min(
@@ -277,7 +278,9 @@ public sealed class MarketBook
                     room,
                     Raw(s.SpecialtyDailyKg - SpecialtyBoughtKg(station), massKg, integral)
                 );
-            rows.Add(new StoreRow(item, OctAsk(w, s, station, item), have, bid, bid > 0 ? room : 0));
+            rows.Add(
+                new StoreRow(item, OctAsk(w, s, station, item), have, bid, bid > 0 ? room : 0)
+            );
         }
         return rows;
     }
@@ -565,11 +568,15 @@ public sealed class MarketBook
         string D(double v) => v.ToString("R", CultureInfo.InvariantCulture);
         var text = new StringBuilder(Header).Append('\n');
         text.Append("N\t").Append(N(Day)).Append('\t').Append(N(Hour)).Append('\n');
-        foreach (var p in stock.OrderBy(p => p.Key.Station + "\t" + p.Key.Item, StringComparer.Ordinal))
+        foreach (
+            var p in stock.OrderBy(p => p.Key.Station + "\t" + p.Key.Item, StringComparer.Ordinal)
+        )
             text.Append($"S\t{p.Key.Station}\t{p.Key.Item}\t{N(p.Value)}").Append('\n');
         foreach (var p in specialtyKg.OrderBy(p => p.Key, StringComparer.Ordinal))
             text.Append("B\t").Append(p.Key).Append('\t').Append(D(p.Value)).Append('\n');
-        foreach (var p in drift.OrderBy(p => p.Key.Station + "\t" + p.Key.Item, StringComparer.Ordinal))
+        foreach (
+            var p in drift.OrderBy(p => p.Key.Station + "\t" + p.Key.Item, StringComparer.Ordinal)
+        )
             text.Append($"D\t{p.Key.Station}\t{p.Key.Item}\t{D(p.Value.Kg)}\t{N(p.Value.At)}")
                 .Append('\n');
         return text.ToString();

@@ -53,7 +53,10 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     );
     Check(
         m.OctAsk(w, s, B, Iron) == 10_000 && m.OctBid(w, s, B, Iron) == 9_000,
-        "10 SC: rounded prices stay 1 SC apart: " + m.OctAsk(w, s, B, Iron) + " " + m.OctBid(w, s, B, Iron)
+        "10 SC: rounded prices stay 1 SC apart: "
+            + m.OctAsk(w, s, B, Iron)
+            + " "
+            + m.OctBid(w, s, B, Iron)
     );
     Check(
         m.OctAsk(w, s, B, Grit) == 1_000 && m.OctBid(w, s, B, Grit) == 0,
@@ -115,7 +118,10 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     Check(Row(m, w, s, A, Platinum).Wanted == 30_000 * U, "the quota counts down");
     m.Sold(w, s, A, Platinum, 30_000 * U);
     var normal = Row(m, w, s, A, Platinum);
-    Check(normal.Bid == 34_000 && normal.Wanted == 150_000 * U, "quota gone: normal price and limit");
+    Check(
+        normal.Bid == 34_000 && normal.Wanted == 150_000 * U,
+        "quota gone: normal price and limit"
+    );
     m.SetStock(A, Platinum, 200_000 * U);
     Check(Row(m, w, s, A, Platinum).Wanted == 0, "OCT stops buying at 200 t");
 
@@ -255,16 +261,15 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
 {
     var w = new FakeWorld();
     var m = new MarketBook();
-    var s = new MarketSettings
-    {
-        FixedAsks = { [(Moon, Chip)] = 1_000_000 },
-        FixedStock = 100 * U,
-    };
+    var s = new MarketSettings { FixedAsks = { [(Moon, Chip)] = 1_000_000 }, FixedStock = 100 * U };
     Check(m.TopUp(s, [A, B]) == null, "not at these stations");
     Check(m.TopUp(s, [Moon]) != null && m.Stock(Moon, Chip) == 100 * U, "topped up");
     Check(m.TopUp(s, [Moon]) == null, "full");
     var row = Row(m, w, s, Moon, Chip);
-    Check(row.Ask == 1_000_000 && row.Stock == 100 * U && row.Bid == 0 && row.Wanted == 0, "the row");
+    Check(
+        row.Ask == 1_000_000 && row.Stock == 100 * U && row.Bid == 0 && row.Wanted == 0,
+        "the row"
+    );
     Check(Row(m, w, s, A, Chip).Item == null, "not at Alpha");
     m.Bought(w, s, Moon, Chip, 30 * U);
     Check(m.OctAsk(w, s, Moon, Chip) == 1_000_000, "the price doesn't drift");
@@ -281,8 +286,14 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     var back = MarketBook.Deserialize(m.Serialize());
     Check(back.Serialize() == m.Serialize(), "saved: the same");
     Check(back.Stock(A, Iron) == 5 * U && back.Stock(A, Platinum) == 10 * U, "saved: the stock");
-    Check(back.SpecialtyBoughtKg(A) == 10 && back.Hour == m.Hour && back.Day == m.Day, "saved: counts");
-    Check(back.Factor(s, A, Platinum, w.Now) == m.Factor(s, A, Platinum, w.Now), "saved: the drift");
+    Check(
+        back.SpecialtyBoughtKg(A) == 10 && back.Hour == m.Hour && back.Day == m.Day,
+        "saved: counts"
+    );
+    Check(
+        back.Factor(s, A, Platinum, w.Now) == m.Factor(s, A, Platinum, w.Now),
+        "saved: the drift"
+    );
     bool old = false;
     try
     {
@@ -297,7 +308,10 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     var profiles = MarketBook.ParseProfiles(
         "Moon Station=Ore/Uranium=100,Ingot/Uranium=50; Beta Station=Ore/Gold=2.5;"
     );
-    Check(profiles["Moon Station"].Count == 2 && profiles["Beta Station"][0].Value == 5 * U / 2, "profiles");
+    Check(
+        profiles["Moon Station"].Count == 2 && profiles["Beta Station"][0].Value == 5 * U / 2,
+        "profiles"
+    );
     Check(MarketBook.ParseProfiles("").Count == 0, "profiles: none");
     bool bad = false;
     try
@@ -310,7 +324,10 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     }
     Check(bad, "profiles: no station");
     Check(MarketBook.ParseAmounts("Ingot/Iron=2,Ore/Ice=0.5")[1].Value == U / 2, "amounts");
-    Check(MarketBook.ParseStations("A=Ore/Iron,Ore/Gold; B=")["A"].Contains("Ore/Gold"), "stations");
+    Check(
+        MarketBook.ParseStations("A=Ore/Iron,Ore/Gold; B=")["A"].Contains("Ore/Gold"),
+        "stations"
+    );
     Check(MarketBook.Glob("Ore/*, Ingot/Iron").IsMatch("ingot/iron"), "glob");
     Check(MarketBook.Glob("") == null, "glob: none");
     Check(MarketBook.Price(12_500) == "12.5 SC" && MarketBook.Sc(1234) == "1,234 SC", "formats");

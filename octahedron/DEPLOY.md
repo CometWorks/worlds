@@ -198,8 +198,8 @@ It is stored in the registry and survives restarts.
 - Join with a vanilla client through the server browser or `ai:27016`.
 - On the respawn screen all 5 stations are listed; spawning at one puts you in
   its medical room.
-- The stations' stores have offers after the first economy tick (up to 10
-  minutes).
+- The stations' Store blocks show OCT's stock and prices within seconds of the
+  start, and the 2 % tax on both sides.
 - A Trade Lanes trip between two stations arrives.
 - The cluster page shows every partition placed and no handover failures in the
   Gateway log (`Automatic handover check failed`); with the safe zone fix the

@@ -1623,14 +1623,9 @@ internal static class ShipyardOrders
         var message =
             order.Refund
                 ? $"{stalled}, with {order.Missing} missing. The ship was removed"
-                    + (
-                        order.Free
-                            ? ", and the free build doesn't count."
-                            : "."
-                    )
+                    + (order.Free ? ", and the free build doesn't count." : ".")
             : order.Missing != null && !gone
-                ? $"{stalled}. The ship is yours without {order.Missing}"
-                    + "."
+                ? $"{stalled}. The ship is yours without {order.Missing}" + "."
             : missing == "unbuilt"
                 ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
             : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."

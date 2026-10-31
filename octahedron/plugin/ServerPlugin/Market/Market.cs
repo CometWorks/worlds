@@ -338,14 +338,17 @@ internal static class Market
     }
 
     private static Task<byte[]> ServeRead(PluginMessage message) =>
-        Task.FromResult(Encoding.UTF8.GetBytes(View(Encoding.UTF8.GetString(message.Payload ?? []))));
+        Task.FromResult(
+            Encoding.UTF8.GetBytes(View(Encoding.UTF8.GetString(message.Payload ?? [])))
+        );
 
     // --- the game's station stores ---
 
     private static IEnumerable<MyFactionStation> OctStations() =>
         MySession
             .Static.Factions.TryGetFactionByTag(Config.MoneyAuthorityFactionTag)
-            ?.Stations.OfType<MyFactionStation>() ?? [];
+            ?.Stations.OfType<MyFactionStation>()
+        ?? [];
 
     // The stations this process simulates: only their Store blocks can be used here
     private static void RefreshStores()
@@ -458,12 +461,7 @@ internal static class Market
             __state = storeItem.Amount;
 
         // ReSharper disable once UnusedMember.Local
-        private static void Postfix(
-            int amount,
-            long stationId,
-            MyStoreItem storeItem,
-            int __state
-        )
+        private static void Postfix(int amount, long stationId, MyStoreItem storeItem, int __state)
         {
             if (!On || stationId == 0 || storeItem.Amount != __state - amount)
                 return;
@@ -484,7 +482,9 @@ internal static class Market
     {
         // ReSharper disable once UnusedMember.Local
         private static void Prefix(long id, IMyFactionStation station, out int __state) =>
-            __state = (station as MyFactionStation)?.StoreItems.FirstOrDefault(i => i.Id == id)?.Amount ?? -1;
+            __state =
+                (station as MyFactionStation)?.StoreItems.FirstOrDefault(i => i.Id == id)?.Amount
+                ?? -1;
 
         // ReSharper disable once UnusedMember.Local
         private static void Postfix(long id, int amount, IMyFactionStation station, int __state)

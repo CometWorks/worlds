@@ -38,7 +38,12 @@ var s = new BuildSettings { QueueMax = 3 };
     var w = new FakeWorld();
     var m = new MarketBook();
     var ms = new MarketSettings { DriftKg = 0 };
-    m.Restock(w, ms, [A, B], _ => [new(Plate, 1000 * U), new(Motor, 100 * U), new(Ice, 100_000 * U)]);
+    m.Restock(
+        w,
+        ms,
+        [A, B],
+        _ => [new(Plate, 1000 * U), new(Motor, 100 * U), new(Ice, 100_000 * U)]
+    );
     return (w, m, new FakeMarket(w, m, ms), new BuildBook());
 }
 
@@ -112,7 +117,10 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     var motor = quote.Lines.First(l => l.Item == Motor);
     var gold = quote.Lines.First(l => l.Item == Gold);
     Check(plate.Bought == 10 * U && plate.Cost == 510 && plate.Missing == 0, "quote: plates");
-    Check(motor.Bought == 100 * U && motor.Cost == 10_200 && motor.Missing == 50 * U, "quote: motors");
+    Check(
+        motor.Bought == 100 * U && motor.Cost == 10_200 && motor.Missing == 50 * U,
+        "quote: motors"
+    );
     Check(gold.Bought == 0 && gold.Missing == 2 * U, "quote: gold isn't for sale");
     Check(quote.Cost == 10_710 && quote.Total == 10_810 && !quote.Complete, "quote: totals");
     Check(quote.Short(Ice) != null, "quote: short of something");
@@ -126,7 +134,10 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         BuildBook.QuoteText(q, Ice, 0, i => i, (i, raw) => Amounts.Units(raw));
     Check(Text(quote).Contains("Labor fee: 100 SC"), "quote text with a fee");
     Check(Text(quote).Contains("Total: 10,810 SC"), "quote text: the total");
-    Check(!Text(BuildBook.Quote(w, market, A, P1, Needs((Plate, U)), 0)).Contains("Labor"), "no fee");
+    Check(
+        !Text(BuildBook.Quote(w, market, A, P1, Needs((Plate, U)), 0)).Contains("Labor"),
+        "no fee"
+    );
 }
 
 // A paid order: pays the quote and the fee, stock goes down, the order holds every item
@@ -192,9 +203,20 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     w.Start = w.Total();
     market.FailOn = Plate;
     string before = w.Snapshot() + m.Serialize();
-    var failed = b.Order(w, market, s, Paid(P1), Needs((Motor, U), (Plate, U)), none, long.MaxValue);
+    var failed = b.Order(
+        w,
+        market,
+        s,
+        Paid(P1),
+        Needs((Motor, U), (Plate, U)),
+        none,
+        long.MaxValue
+    );
     market.FailOn = null;
-    Check(!failed.Ok && failed.Message.Contains("Buying"), "a purchase fails half way: " + failed.Message);
+    Check(
+        !failed.Ok && failed.Message.Contains("Buying"),
+        "a purchase fails half way: " + failed.Message
+    );
     Check(w.Total() == w.Start && w.Balances[P1] == 25_000, "the part bought is paid back");
     Check(m.Stock(A, Motor) == 100 * U, "the part bought is back in stock");
     Check(b.Queue(A).Count == 0, "no order");
@@ -221,18 +243,30 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
 {
     var (w, m, market, b) = Setup();
     var needed = Needs((Plate, 10 * U), (Ice, 100 * U));
-    var o = Ok(w, "order", () => b.Order(w, market, s, Paid(P1), needed, none, long.MaxValue)).Order;
+    var o = Ok(
+        w,
+        "order",
+        () => b.Order(w, market, s, Paid(P1), needed, none, long.MaxValue)
+    ).Order;
     Check(o.Paid == 510 + 100, "components and ice: " + o.Paid);
     Ok(w, "start", () => b.Start(o.Id));
     long paid = w.Balances[P1];
-    var r = Ok(w, "finish", () => b.Finish(w, market, s, o.Id, Needs((Plate, 2 * U)), 60 * U, false));
+    var r = Ok(
+        w,
+        "finish",
+        () => b.Finish(w, market, s, o.Id, Needs((Plate, 2 * U)), 60 * U, false)
+    );
     Check(r.Message == "What was left over is sold for 137 SC.", r.Message);
     Check(w.Balances[P1] == paid + 2 * 49 + 39, "sold at 49 and 0.98: " + (w.Balances[P1] - paid));
     Check(m.Stock(A, Plate) == 992 * U, "the plates are back in stock");
     Check(m.Stock(A, Ice) == 99_940 * U, "the ice not used is back in stock: " + m.Stock(A, Ice));
     Check(b.Get(o.Id) == null, "gone");
 
-    var clean = Ok(w, "another", () => b.Order(w, market, s, Paid(P1, fee: 0), Needs((Plate, U)), none, long.MaxValue)).Order;
+    var clean = Ok(
+        w,
+        "another",
+        () => b.Order(w, market, s, Paid(P1, fee: 0), Needs((Plate, U)), none, long.MaxValue)
+    ).Order;
     b.Start(clean.Id);
     var nothing = Ok(w, "nothing left", () => b.Finish(w, market, s, clean.Id, none, 0, false));
     Check(nothing.Message == "", "nothing left: no message: " + nothing.Message);
@@ -242,12 +276,20 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
 {
     var (w, m, market, b) = Setup();
     var needed = Needs((Plate, 10 * U));
-    string id = Ok(w, "order", () => b.Order(w, market, s, Paid(P1), needed, none, long.MaxValue)).Order.Id;
+    string id = Ok(
+        w,
+        "order",
+        () => b.Order(w, market, s, Paid(P1), needed, none, long.MaxValue)
+    ).Order.Id;
     var r = Ok(w, "refund", () => b.Finish(w, market, s, id, none, 0, refund: true));
     Check(r.Message == "610 SC is paid back.", r.Message);
     Check(w.Balances[P1] == 25_000 && m.Stock(A, Plate) == 1000 * U, "not started: all back");
 
-    id = Ok(w, "order", () => b.Order(w, market, s, Paid(P1), needed, none, long.MaxValue)).Order.Id;
+    id = Ok(
+        w,
+        "order",
+        () => b.Order(w, market, s, Paid(P1), needed, none, long.MaxValue)
+    ).Order.Id;
     b.Start(id);
     Ok(w, "refund", () => b.Finish(w, market, s, id, Needs((Plate, U)), 0, refund: true));
     Check(w.Balances[P1] == 25_000 && m.Stock(A, Plate) == 1000 * U, "started: all back");
@@ -266,16 +308,31 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(o.Items[Ice] == 100 * U && o.Provided == 60 * U, "the order holds all of it");
     Check(m.Stock(A, Ice) == 99_960 * U, "stock only for what was bought");
     var r = Ok(w, "cancel", () => b.Cancel(w, market, s, A, P1));
-    Check(w.Balances[P1] == 25_000 + 58, "paid back and the ship's sold at 0.98: " + w.Balances[P1]);
+    Check(
+        w.Balances[P1] == 25_000 + 58,
+        "paid back and the ship's sold at 0.98: " + w.Balances[P1]
+    );
     Check(m.Stock(A, Ice) == 100_060 * U, "the ice is in stock: " + m.Stock(A, Ice));
     Check(r.Message.Contains("149 SC"), r.Message);
 
     var more = Ok(
         w,
         "a ship has more than needed",
-        () => b.Order(w, market, s, Paid(P1, fee: 0), Needs((Ice, 10 * U)), Needs((Ice, 50 * U)), long.MaxValue)
+        () =>
+            b.Order(
+                w,
+                market,
+                s,
+                Paid(P1, fee: 0),
+                Needs((Ice, 10 * U)),
+                Needs((Ice, 50 * U)),
+                long.MaxValue
+            )
     ).Order;
-    Check(more.Paid == 0 && more.Provided == 10 * U && more.Items[Ice] == 10 * U, "only what it needs");
+    Check(
+        more.Paid == 0 && more.Provided == 10 * U && more.Items[Ice] == 10 * U,
+        "only what it needs"
+    );
 }
 
 // Too little ice for sale: the order goes ahead with the ice there is
@@ -285,14 +342,32 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     var o = Ok(
         w,
         "short of ice",
-        () => b.Order(w, market, s, Paid(P1, fee: 0), Needs((Plate, U), (Ice, 100 * U)), none, long.MaxValue)
+        () =>
+            b.Order(
+                w,
+                market,
+                s,
+                Paid(P1, fee: 0),
+                Needs((Plate, U), (Ice, 100 * U)),
+                none,
+                long.MaxValue
+            )
     ).Order;
     Check(o.Items[Ice] == 30 * U && m.Stock(A, Ice) == 0, "the ice there is");
     m.SetStock(B, Ice, 0);
     var o2 = Ok(
         w,
         "no ice",
-        () => b.Order(w, market, s, Paid(P2, 2, B, 0), Needs((Plate, U), (Ice, 100 * U)), none, long.MaxValue)
+        () =>
+            b.Order(
+                w,
+                market,
+                s,
+                Paid(P2, 2, B, 0),
+                Needs((Plate, U), (Ice, 100 * U)),
+                none,
+                long.MaxValue
+            )
     ).Order;
     Check(!o2.Items.ContainsKey(Ice), "no ice at all: none held");
 }
@@ -357,7 +432,11 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(loaded.Serialize() == saved, "saved format: round trip");
     var o2 = loaded.Queue(A)[0];
     Check(
-        o2.Payer == P2 && o2.Fee == 100 && o2.Paid == 51 && o2.Items[Plate] == U && o2.Blueprint == "QUJD",
+        o2.Payer == P2
+            && o2.Fee == 100
+            && o2.Paid == 51
+            && o2.Items[Plate] == U
+            && o2.Blueprint == "QUJD",
         "saved format: an order"
     );
     var wire = BuildBook.DecodeOrder(BuildBook.EncodeOrder(o2, blueprint: false));
