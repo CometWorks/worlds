@@ -152,6 +152,14 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         text.Contains("Labor fee: 100 SC") && text.Contains("Total: 4,800 SC"),
         "quote text: " + text
     );
+    string parts = BuildBook.PartsText(
+        new Dictionary<string, long> { ["Motor"] = 3, ["Bulletproof Glass"] = 1200 }
+    );
+    Check(
+        parts.IndexOf("Bulletproof Glass") < parts.IndexOf("Motor") && parts.Contains("1,200"),
+        "parts text: " + parts
+    );
+    Check(new BuildSettings().QueueMax == 6, "the queue holds 6 ships by default");
 }
 
 // A paid order: the build ledger gets every item, the payer pays the quote and the fee
