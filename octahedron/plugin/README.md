@@ -291,7 +291,10 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back.
 - The next order starts when the shipyard's free space is empty: a ship left
-  there has to fly out first. The ship is built centered in the free space, from
+  there has to fly out first. The ship is built on the free space's center line:
+  a ship shorter than 1/4 of the shipyard's length around the 1/3 point nearer the
+  station, where it shows better from the lobby; a longer one in the middle. It is
+  built from
   a support arm (below) on a shipyard with arm rotors. A shipyard without them
   starts the ship as a static grid of one of its blocks, built complete and the
   player's, with an NPC-owned projector and battery named `Shipyard Order` next
@@ -312,7 +315,13 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   which don't have the shipyard exception above, would turn the tools off and
   show no beams (SE-441): while a build runs, the plugin tells the clients every
   10 s that the zones don't hold the shipyard grid, and puts it back at the end.
-  The server's own zones are left alone.
+  The server's own zones are left alone. A client that gets the shipyard streamed
+  in during a build (it comes back in range, joins or crosses to this node) still
+  turns the tools off before that message comes, and ToolCore tells it only when
+  the server's switch changes. So the plugin sends each such client the switch itself
+  at the next 10 s check and once more at the one after (SE-782), and nothing to the
+  clients it already told. ToolCore is the mod's own code: this reaches its session
+  and packet by reflection and does nothing if they are gone.
 - A build whose ship gains no integrity for 60 s stops. Plain blocks, armor and
   decorations, are those of the plain `CubeBlock` type; every block of its own
   type, lights, panels and conveyors included, is functional. When the ship
@@ -360,6 +369,16 @@ take part. The plugin plans an arm on each and takes the best:
   it gets a cap. Without one the tee's branch ends in a cap.
 - The pieces are `ShipyardArmLargeBlocks` and `ShipyardArmSmallBlocks`, each
   turned so its mount points face its neighbors in the arm.
+
+The arm is planned on a worker thread, one plan at a time. The game thread only
+copies what the plan needs of the shipyard and places the arm when the build
+starts. A press while its plan runs goes on when the plan is done, usually a
+fraction of a second later, and an order waiting for its plan stays in the queue
+with nothing taken yet. A plan that has no arm within `ShipyardArmPlanSeconds` (5)
+is refused: the press gets the reason, a queued order ends with everything given
+back, and the same ship isn't planned again for 5 minutes. Nothing is placed for a
+plan until its build starts, so a server stopping or an order canceled in the
+meantime leaves nothing behind.
 
 The quote checks that an arm can be planned; when none fits, the server log says
 why for each rotor once. At build start the arm's blocks are
@@ -1023,10 +1042,25 @@ same zone a player's hand welder and grinder, ship welder and grinder, and an
 OmniArc welder on a player's grid named like a shipyard do nothing, and that the
 player's tools work outside the zone. It runs with the plugin's rules on, on
 with the zones holding every test grid from the start, and off.
+`tests/test_shipyard_placement.py` checks in the saved world where ships end up
+along the shipyard: short ones at the 1/3 point nearer the station, at pole and
+equatorial stations, the widest small grid ship among them, and a ship of 1/4 of
+the length in the middle. With the arm's time limit forced to 0 it checks that a
+press is refused and that a queued paid order ends with its reason and everything
+given back.
 `tests/test_shipyard_order.py` orders a ship at a station table with the client
 (the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
+`tests/test_shipyard_beams.py` checks the welders' beams as a client sees them
+during a long build: the client and the server run the `tests/beam-probe` test
+plugin, which logs once a second what ToolCore says about the shipyard's tools. The
+client goes beyond sync distance and comes back, then leaves the game and joins
+again; all welders must shoot on it afterwards and some must hit, also once only
+integrity is left. `OCT_BEAM_MIX=1` builds functional blocks too, `OCT_BEAM_ZONE=allow`
+is the control with zones that allow welding, and `OCT_BEAM_OFFLINE=1` stops the server
+mid-build and loads its save offline. `tests/shipyard_beams_cluster.py` does the same
+check on a test cluster, with a trip to a station on the other node.
 `tests/builds/BuildTests` checks the queues and build ledgers without the game
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
 from the ledger, listings and OCT, paid orders all or none, cancel, start and finish

@@ -270,6 +270,33 @@ int Pipes(ArmPlan plan) =>
     );
 }
 
+// A time limit ends the search without a plan, and Explain says so
+{
+    var p = Problem(Box(C(-5, 10, -5), C(5, 12, 5)));
+    p.Stop = () => true;
+    Check(ArmPlanner.Plan(p) == null, "stop: no plan");
+    Check(p.Stopped, "stop: says so");
+    Check(ArmPlanner.Explain(p).Contains("ran out of time"), "explain: out of time");
+}
+
+// A long way through an open box stays quick, with a ship all around in the way
+{
+    var volume = Box(C(-40, -40, 180), C(40, 40, 200));
+    var p = new ArmProblem
+    {
+        Min = C(-120, -120, -20),
+        Max = C(120, 120, 220),
+        Volume = volume,
+        Touches = AllFaces(volume),
+        Start = C(75, 75, 0),
+        Up = up,
+    };
+    var clock = Stopwatch.StartNew();
+    var plan = ArmPlanner.Plan(p);
+    Valid(plan, p, "far");
+    Check(clock.ElapsedMilliseconds < 5000, $"far: planned in {clock.ElapsedMilliseconds} ms");
+}
+
 // 10. Explain names why there is no plan
 {
     var ship = Box(C(-2, 10, -2), C(2, 12, 2));
