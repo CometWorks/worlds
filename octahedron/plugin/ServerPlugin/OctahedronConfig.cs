@@ -285,6 +285,16 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     }
 
+    [BoolOption(
+        "Turn Target Neutrals off on a new turret, custom turret controller or searchlight, however it is built. A player can turn it back on.",
+        Parent = "projections"
+    )]
+    public bool ClearTargetNeutralsEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
     [IntOption(
         0,
         description: "Most PCU of a ship or station: the grids joined by rotors, pistons and hinges, not by connectors. "

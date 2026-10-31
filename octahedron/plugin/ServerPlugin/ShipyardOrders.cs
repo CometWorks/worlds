@@ -1168,6 +1168,7 @@ internal static class ShipyardOrders
         first.ConstructionStockpile = null;
         first.Owner = first.BuiltBy = next.Player;
         first.ShareMode = MyOwnershipShareModeEnum.Faction;
+        TargetNeutrals.Clear(first);
         ship.CubeBlocks =
         [
             first,
