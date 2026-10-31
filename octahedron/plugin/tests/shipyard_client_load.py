@@ -92,6 +92,8 @@ def main() -> int:
             if "is in the queue" in reply:
                 break
         check("is in the queue" in reply, f"ordered: {reply}")
+        if "is in the queue" not in reply:
+            return 1
         deadline = time.time() + 1500
         line = None
         ended = None
