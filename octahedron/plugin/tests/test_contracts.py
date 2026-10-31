@@ -34,6 +34,8 @@ OPTIONS = {
     "ContractAcquisitionMaxAmount": 10,
     "ContractBountyMinThreat": 1,
     "ContractSalvageRadius": 500,
+    # The hourly split would change the balances the test compares
+    "MoneySubsidyPerActivePlayer": 0,
 }
 STATIONS = 7
 LINE = re.compile(r"^\s*(\d+) (\w+) (\w+) ([\d,]+) SC ?(.*)$")
@@ -277,7 +279,9 @@ def main() -> int:
             not any(c[0] == own[0] for c in contracts(remote)["Alpha Station"]),
             "and the contract is over",
         )
+    # Back to the default: past a scan and a check, its next contract is withdrawn
     set_options(remote, ContractSalvageMinBlocks=20)
+    time.sleep(70)
 
     before = balances(remote)
     act(remote, f"accept {bounty[0]}", "Success", "take the bounty")

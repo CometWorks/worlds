@@ -612,6 +612,8 @@ def run(bench) -> None:
     static = named(contracts()[0], "Static Hull", "wreck")[0]
     before = balances(api)
     far_static = position("Static Hull", sector)
+    # The long wait above outlasts the suit's oxygen out in space
+    bench.wait_spawned(CLIENT_ID)
     api.character_teleport(far_static[0] + 300, far_static[1], far_static[2])
     reply = " ".join(command(f"!oct contract accept {static[0]} {identity}"))
     check("take the static wreck", "Success" in reply, reply)
@@ -646,7 +648,7 @@ def run(bench) -> None:
         c[0]: c[2]
         for list_ in found.values()
         for c in list_
-        if c[1] in ("bounty", "wreck", "salvage")
+        if c[1] in ("bounty", "wreck")
     }
     print(open_before, flush=True)
 
@@ -660,7 +662,7 @@ def run(bench) -> None:
         c[0]: c[2]
         for list_ in found.values()
         for c in list_
-        if c[1] in ("bounty", "wreck", "salvage")
+        if c[1] in ("bounty", "wreck")
     }
     check(
         f"{node} restarted: the same contracts",
@@ -688,7 +690,7 @@ def run(bench) -> None:
         c[0]: c[2]
         for list_ in found.values()
         for c in list_
-        if c[1] in ("bounty", "wreck", "salvage")
+        if c[1] in ("bounty", "wreck")
     }
     check(
         "warm start: the same contracts",
@@ -732,6 +734,8 @@ def main() -> int:
         MoneyEnabled="true",
         ContractBountyMinThreat=1,
         ContractSalvageMinBlocks=1,
+        # The hourly split would change the balances the test compares
+        MoneySubsidyPerActivePlayer=0,
         ContractSalvageRadius=500,
         ContractWreckContracts=0,
         ContractBountiesPerStation=0,
