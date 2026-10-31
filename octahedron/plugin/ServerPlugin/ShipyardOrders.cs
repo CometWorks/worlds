@@ -895,7 +895,8 @@ internal static class ShipyardOrders
         // GetText only has what a script wrote since the world's load
         var shown = ((MyTextPanelComponent)provider.GetSurface(0)).Text;
         var first = (shown ?? "").Split('\n')[0].TrimEnd();
-        Write(provider, 0, Wrap($"{first}\n\n{text}", columns), 0.7f);
+        // Not wrapped: the first line has to stay one for the next write to find it
+        Write(provider, 0, $"{first}\n\n{Wrap(text, columns)}", 0.7f);
         return true;
     }
 
