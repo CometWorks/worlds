@@ -119,8 +119,20 @@ def run(bench) -> None:
     # Welded by a shipyard, on whichever node has the station
     station = next(iter(wa.stations().values()))
     api.character_teleport(*station)
-    table = wait_until(lambda: tc.tables(api), 120, "a table")
-    tc.stand_by(api, min(table, key=lambda b: b["distance"]))
+
+    def by_table():
+        # The client drops the grids it left and gets the new ones a little after a teleport
+        tables = tc.tables(api)
+        if not tables:
+            return None
+        try:
+            tc.stand_by(api, min(tables, key=lambda b: b["distance"]))
+            return True
+        except Exception as error:  # noqa: BLE001 -- a grid already gone
+            print(f"no stand by a table yet: {error}", flush=True)
+            return None
+
+    wait_until(by_table, 120, "a stand by a table")
     quote = press(api)
     check("the order is quoted", "Your quote for" in quote, quote)
     order = press(api)

@@ -403,7 +403,7 @@ def order(remote, station: str) -> int:
     sa.at_table(remote, station)
     before = {g["entityId"] for g in remote.list_grids()}
     ready = so_ready_lines(remote)
-    so.order(remote)
+    so.place(remote, SHIP)
     deadline = time.monotonic() + 1500
     while so_ready_lines(remote) <= ready and time.monotonic() < deadline:
         time.sleep(10)
