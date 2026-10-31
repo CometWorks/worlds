@@ -150,7 +150,7 @@ public interface IBuildMarket
 public sealed class BuildSettings
 {
     // Queue entries per shipyard, the one being built included
-    public int QueueMax = 10;
+    public int QueueMax = 6;
 
     // The item the build's hydrogen is bought as; it is not loaded into the shipyard
     public string HydrogenItem = "Ore/Ice";
@@ -648,24 +648,36 @@ public sealed class BuildBook
     )
     {
         var text = new StringBuilder();
-        text.AppendLine($"{"Item", -22}{"Need", 9}{"Ledger", 9}{"Bought", 9}{"SC", 10}");
+        text.AppendLine($"{"Item", -16}{"Need", 7}{"Buy", 7}{"SC", 8}");
         foreach (var l in quote.Lines)
+        {
             text.AppendLine(
-                $"{Cut(title(l.Item), 22), -22}{units(l.Item, l.Needed), 9}{units(l.Item, l.Ledger), 9}"
-                    + $"{units(l.Item, l.Bought), 9}{l.Cost, 10:N0}"
-                    + (l.Missing > 0 ? $"  {units(l.Item, l.Missing)} not for sale" : "")
+                $"{Cut(title(l.Item), 16), -16}{units(l.Item, l.Needed), 7}"
+                    + $"{units(l.Item, l.Bought), 7}{l.Cost, 8:N0}"
             );
+            if (l.Missing > 0)
+                text.AppendLine($"  {units(l.Item, l.Missing)} not for sale");
+        }
         if (hydrogenFromShip > 0)
             text.AppendLine(
                 $"Hydrogen: {units(hydrogenItem, hydrogenFromShip)} ice worth from your ship"
             );
-        long listings = quote.Lines.Sum(l => l.ListingsCost),
-            oct = quote.Lines.Sum(l => l.OctCost);
-        text.AppendLine($"Components: {listings:N0} SC from listings, {oct:N0} SC from OCT");
+        text.AppendLine();
+        text.AppendLine($"From listings: {quote.Lines.Sum(l => l.ListingsCost):N0} SC");
+        text.AppendLine($"From OCT: {quote.Lines.Sum(l => l.OctCost):N0} SC");
         text.AppendLine($"Labor fee: {quote.Fee:N0} SC");
-        text.AppendLine(
-            $"Total: {quote.Total:N0} SC, the account has {Math.Max(0, quote.Balance):N0} SC"
-        );
+        text.AppendLine($"Total: {quote.Total:N0} SC");
+        text.AppendLine($"The account has {Math.Max(0, quote.Balance):N0} SC");
+        return text.ToString();
+    }
+
+    /// <summary>A free build's bill of materials: the items by title and how many of each.</summary>
+    public static string PartsText(IDictionary<string, long> parts)
+    {
+        var text = new StringBuilder();
+        text.AppendLine($"{"Item", -24}{"Need", 8}");
+        foreach (var part in parts.OrderBy(p => p.Key, StringComparer.Ordinal))
+            text.AppendLine($"{Cut(part.Key, 24), -24}{part.Value, 8:N0}");
         return text.ToString();
     }
 

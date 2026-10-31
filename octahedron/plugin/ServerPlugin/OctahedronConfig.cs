@@ -370,14 +370,15 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         1,
-        description: "Most ships in a shipyard's queue, the one being built included.",
+        description: "Most ships in a shipyard's queue, the one being built included. "
+            + "The queue panel above the hologram table fits 6.",
         Parent = "shipyard"
     )]
     public int ShipyardQueueMax
     {
         get;
         set => SetField(ref field, value);
-    } = 10;
+    } = 6;
 
     [StringOption(
         description: "Name of the station button panel next to the hologram table. Its first button orders the blueprint "
@@ -400,9 +401,21 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "Text Panel - Station ShipyardQueue";
 
+    [StringOption(
+        description: "Name of the station billboard whose first screen shows the blueprint's bill of materials, "
+            + "under the screen's first line. Without one, the hologram table's screen shows it too.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardDetailsPanelName
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Billboard LCD Ship Build Details";
+
     [IntOption(
         0,
-        description: "The hologram table's screen that shows the quote, by index: 1 is the console block's large screen.",
+        description: "The hologram table's screen that shows free or paid, what's wrong and to press the button, "
+            + "by index: 1 is the console block's large screen.",
         Parent = "shipyard"
     )]
     public int ShipyardQuoteSurface

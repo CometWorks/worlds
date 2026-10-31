@@ -124,6 +124,31 @@ LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 FREE_TOOLS = "Free Tools"
 FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
+# What the Octahedron plugin looks up by name on every station (its kiosk, the shipyard's
+# hologram table, button, queue panel and bill of materials billboard). A new blueprint that
+# lost one fails here instead of silently losing the feature.
+PLUGIN_BLOCKS = (
+    "LCD Panel - Station Lounge StationStorefront",
+    "Console Block - Station ShipyardProjection",
+    "Button Panel - Station ShipyardConfirm",
+    "Text Panel - Station ShipyardQueue",
+    "Billboard LCD Ship Build Details",
+)
+# The billboard's second screen, how to order a ship: Debug font at size 1, 301 pixels wide at
+# most as the font's glyphs count them, 12 lines at most. The plugin writes the first screen.
+SHIP_BUILD_DETAILS = "Billboard LCD Ship Build Details"
+HOW_TO_ORDER = """Load a blueprint into
+the holo table in its
+terminal, then check
+the parts list. Press
+the button to order,
+again to cancel.
+Only you can press it
+until the blueprint is
+removed. Anyone can
+remove it in terminal.
+The queue holds at
+most 6 ships."""
 # Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
 # pressurized back half: behind the station and away from the planet, which keeps it off the
 # lanes. The pair is centered on the safe zone, and spread apart as far as their block bounds
@@ -699,8 +724,15 @@ def station(template, ids, name, center, forward, up, owner):
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
     loot, free_tools = None, 0
+    named = [block.findtext("CustomName") for block in grid.find("CubeBlocks")]
+    for wanted in PLUGIN_BLOCKS:
+        assert wanted in named, f"the station blueprint has no {wanted}"
     for block in grid.find("CubeBlocks"):
         recolor(block, STATION_COLORS[name])
+        if block.findtext("CustomName") == SHIP_BUILD_DETAILS:
+            block.findall(".//MySerializedTextPanelData")[1].find(
+                "Text"
+            ).text = HOW_TO_ORDER
         if block.find("Owner") is None:
             continue
         block.find("Owner").text = str(owner)

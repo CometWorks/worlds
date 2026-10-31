@@ -36,8 +36,10 @@ using IMyTextSurfaceProvider = Sandbox.ModAPI.Ingame.IMyTextSurfaceProvider;
 namespace ServerPlugin;
 
 // A player loads a blueprint into a station's hologram table, reads the quote on the table's
-// large screen and presses the button next to it (ShipyardConfirmButtonName) to queue the
-// ship at the station's shipyard; pressing it again cancels their entry before its build starts.
+// large screen, the parts on the billboard next to it (ShipyardDetailsPanelName), and presses the
+// button next to it (ShipyardConfirmButtonName) to queue the ship at the station's shipyard;
+// pressing it again cancels their entry before its build starts. While a table holds a blueprint
+// only the player who loaded it can do either; anyone can remove the blueprint to get the table.
 // The queue and the build ledgers are kept by Builds, on the authority; the station's queue
 // panels show it.
 //
@@ -72,6 +74,13 @@ internal static class ShipyardOrders
     private const string Hydrogen = "Ore/Ice";
     private const int UpdateTicks = 600;
     private const int QuoteTicks = 60;
+
+    // LCD text is neither wrapped nor shrunk to fit. The console's screen is 256x176 at half the
+    // text scale, the billboard's 307x512.
+    private const int TableColumns = 26;
+    private const int DetailsColumns = 42;
+    private const string TableIdle = "Project,\nthen press\nButton!";
+    private const string DetailsIdle = "Ordered ship details...";
 
     private sealed class Order
     {
@@ -159,6 +168,9 @@ internal static class ShipyardOrders
     // restart or a move of the station to this node
     private static readonly Dictionary<long, (long Player, DateTime At)> holders = new();
 
+    // The player who last queued a ship at each table: its empty screen offers them the cancel
+    private static readonly Dictionary<long, long> placed = new();
+
     private static int ticks;
 
     private static string blockedPatterns;
@@ -198,6 +210,9 @@ internal static class ShipyardOrders
         // Liters the player's docked ships have, at most what the build needs
         public double ShipHydrogen;
 
+        // Why a press won't queue this ship: the queue is full, or the player's order is in it
+        public string Blocker;
+
         public string Key =>
             $"{Ship}|{Pcu}|{Blueprint?.Sum(g => g.CubeBlocks.Count)}|{Free}|{PaidRule}|{Payer}|{Error}";
     }
@@ -207,7 +222,6 @@ internal static class ShipyardOrders
         public long Player;
         public string Key;
         public BuildQuote Quote;
-        public DateTime At;
     }
 
     private static Plan MakePlan(long identityId, MyProjectorBase table)
@@ -482,7 +496,20 @@ internal static class ShipyardOrders
         return $"You hold the blueprint of hologram table {table.EntityId}.";
     }
 
-    /// <summary>A press of the table's button: cancels the player's queue entry, shows their quote or orders.</summary>
+    // !oct table remove: what the Remove button of the table's terminal asks the server to do
+    public static string Remove(long identityId, string tableName)
+    {
+        var character = MySession.Static.Players.TryGetIdentity(identityId)?.Character;
+        if (character == null || character.IsDead || character.MarkedForClose)
+            return "Spawn first.";
+        var table = StarterShip.FindTable(character, tableName, Config);
+        if (table == null || TableHologram.Blueprint(table) == null)
+            return "Stand by a station's hologram table with a blueprint loaded.";
+        ((Sandbox.ModAPI.IMyProjector)table).SetProjectedGrid(null);
+        return $"The blueprint of hologram table {table.EntityId} is removed.";
+    }
+
+    /// <summary>A press of the table's button: cancels the player's queue entry, shows their quote or orders. With a blueprint on the table, only for the player who loaded it.</summary>
     public static void Press(long identityId, MyProjectorBase table, Action<string> tell)
     {
         if (Config.ShipyardOrderMinutes <= 0)
@@ -495,6 +522,21 @@ internal static class ShipyardOrders
         {
             tell("Spawn first, then order at a hologram table.");
             return;
+        }
+        if (TableHologram.Blueprint(table) != null)
+        {
+            if (!holders.TryGetValue(table.EntityId, out var holder))
+                holder = (0, DateTime.UtcNow);
+            if (holder.Player != 0 && holder.Player != identityId)
+            {
+                tell(
+                    $"{Name(holder.Player)} loaded this blueprint, only they can order it or cancel "
+                        + "for now. Anyone can remove it in the hologram table's terminal."
+                );
+                return;
+            }
+            // Loaded before a restart or a move of the station to this node: the presser's now
+            holders[table.EntityId] = (identityId, holder.At);
         }
         var plan = MakePlan(identityId, table);
         if (plan.Station == null || plan.Shipyard == null)
@@ -523,7 +565,9 @@ internal static class ShipyardOrders
                     return;
                 }
                 var mine = DecodeQueue(text).FirstOrDefault(o => o.Player == identityId);
-                if (mine == null)
+                if (mine == null && plan.Blueprint == null)
+                    tell(plan.Error);
+                else if (mine == null)
                     Place(plan, tell);
                 else if (mine.Started)
                     tell($"'{mine.Ship}' is being built for you, it can't be canceled now.");
@@ -560,7 +604,6 @@ internal static class ShipyardOrders
             || shown.Player != plan.Player
             || shown.Key != plan.Key
             || (!plan.Free && shown.Quote == null)
-            || DateTime.UtcNow - shown.At > TimeSpan.FromMinutes(5)
         )
         {
             Quote(
@@ -575,7 +618,7 @@ internal static class ShipyardOrders
                                         ? ", a free build."
                                         : $": a paid build ({plan.Paid}), {quote.Total:N0} SC paid by {plan.PayerName}."
                                 )
-                                + " Press the button again to order."
+                                + " Press the button to order."
                     )
             );
             return;
@@ -632,10 +675,8 @@ internal static class ShipyardOrders
                     Plugin.Log.Info(
                         $"Hologram table {plan.Table.EntityId}: blueprint cleared, '{plan.Ship}' is in the queue"
                     );
-                    ClearTable(
-                        plan.Table,
-                        $"'{plan.Ship}' is in the queue for {Name(plan.Player)}.\n\nLoad a blueprint for a new quote."
-                    );
+                    placed[plan.Table.EntityId] = plan.Player;
+                    ClearTable(plan.Table);
                     Refresh(plan.Station);
                 }
             }
@@ -664,12 +705,39 @@ internal static class ShipyardOrders
 
     private static void Quote(Plan plan, Action<BuildQuote> done)
     {
-        if (plan.Free || plan.Error != null)
+        if (plan.Error != null)
         {
             ShowQuote(plan, null);
             done(null);
             return;
         }
+        Builds.Read(
+            new BuildRequest { Verb = BuildVerb.Queue, Station = plan.Station },
+            (text, _) =>
+            {
+                var queue = text == null ? [] : DecodeQueue(text);
+                var mine = queue.FirstOrDefault(o => o.Player == plan.Player);
+                plan.Blocker =
+                    mine != null
+                        ? mine.Started
+                            ? $"'{mine.Ship}' is being built for you, one ship at a time."
+                            : $"'{mine.Ship}' is in the queue for you. Press the button to cancel it first."
+                        : queue.Count >= Config.ShipyardQueueMax
+                            ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
+                            : null;
+                if (plan.Free)
+                {
+                    ShowQuote(plan, null);
+                    done(null);
+                }
+                else
+                    PaidQuote(plan, done);
+            }
+        );
+    }
+
+    private static void PaidQuote(Plan plan, Action<BuildQuote> done)
+    {
         var needed = new Dictionary<string, long>(plan.Needed);
         if (plan.ShipHydrogen > 0 && needed.ContainsKey(Hydrogen))
             needed[Hydrogen] = Math.Max(0, needed[Hydrogen] - IceFor(plan.ShipHydrogen, up: false));
@@ -708,23 +776,46 @@ internal static class ShipyardOrders
             Player = plan.Player,
             Key = plan.Key,
             Quote = quote,
-            At = DateTime.UtcNow,
         };
         var text = new StringBuilder();
-        text.AppendLine($"Shipyard quote for {Name(plan.Player)}");
         if (plan.Blueprint != null)
-            text.AppendLine($"'{plan.Ship}', {plan.Pcu:N0} PCU");
+            text.AppendLine($"'{plan.Ship}' for {Name(plan.Player)}");
+        else
+            text.AppendLine($"Shipyard, for {Name(plan.Player)}");
+        text.AppendLine();
         if (plan.Error != null)
-            text.AppendLine().AppendLine(plan.Error);
+            text.AppendLine(plan.Error);
         else if (plan.Free)
-            text.AppendLine()
-                .AppendLine("A free build.")
-                .AppendLine()
-                .AppendLine("Press the button to order, again to cancel.");
+            text.AppendLine("A free build.");
         else if (quote != null)
+            text.AppendLine($"A paid build: {plan.Paid}.")
+                .AppendLine($"{quote.Total:N0} SC, paid by {plan.PayerName}.");
+        if (plan.Error == null)
         {
-            text.AppendLine($"A paid build: {plan.Paid}. Paid by {plan.PayerName}.");
             text.AppendLine();
+            if (plan.Blocker != null)
+                text.AppendLine(plan.Blocker);
+            else if (quote?.Short(Hydrogen) != null)
+                text.AppendLine(
+                    "Not everything is for sale here: deposit it into the ledger first."
+                );
+            else
+                text.AppendLine("Press the button to confirm the build.");
+        }
+        var parts = plan.Blueprint == null ? null : Parts(plan, quote);
+        if (ShowDetails(plan.Table, parts ?? DetailsIdle))
+            WriteTable(plan.Table, text.ToString());
+        else
+            // A station from before the billboard, until the world is wiped
+            WriteTable(plan.Table, text + "\n" + parts);
+    }
+
+    // The ship's bill of materials, with where each item comes from once a paid build's quote is in
+    private static string Parts(Plan plan, BuildQuote quote)
+    {
+        var text = new StringBuilder($"'{plan.Ship}', {plan.Pcu:N0} PCU\n\n");
+        if (quote != null)
+        {
             text.Append(
                 BuildBook.QuoteText(
                     quote,
@@ -740,25 +831,89 @@ internal static class ShipyardOrders
                 );
             if (quote.Lines.Any(l => l.Item == Hydrogen && l.Missing > 0))
                 text.AppendLine("Too little ice for sale here: the H2 tanks get less hydrogen.");
-            text.AppendLine();
-            text.AppendLine(
-                quote.Short(Hydrogen) == null
-                    ? "Press the button to order, again to cancel."
-                    : "Not everything is for sale here: deposit it into the ledger first."
-            );
         }
-        Write(plan.Table, Config.ShipyardQuoteSurface, text.ToString());
+        else
+            text.Append(
+                BuildBook.PartsText(
+                    Components(plan.Blueprint, skipFirst: false)
+                        .ToDictionary(
+                            c => Market.ItemTitle(Ledgers.ItemName(c.Key)),
+                            c => (long)c.Value
+                        )
+                )
+            );
+        return Wrap(text.ToString(), DetailsColumns);
     }
 
-    private static void Write(IMyTextSurfaceProvider provider, int index, string text)
+    // The billboard's first line stays what the blueprint has; false when the station has no billboard
+    private static bool ShowDetails(MyProjectorBase table, string text)
+    {
+        if (string.IsNullOrWhiteSpace(Config.ShipyardDetailsPanelName))
+            return false;
+        var position = table.PositionComp.GetPosition();
+        var panel = Grids(table.CubeGrid)
+            .SelectMany(g => g.GetFatBlocks<MyLCDPanelsBlock>())
+            .Where(p =>
+                string.Equals(
+                    p.CustomName?.ToString(),
+                    Config.ShipyardDetailsPanelName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            .OrderBy(p => Vector3D.Distance(p.PositionComp.GetPosition(), position))
+            .FirstOrDefault();
+        if (panel == null)
+            return false;
+        var provider = (IMyTextSurfaceProvider)panel;
+        var first = provider.GetSurface(0).GetText().Split('\n')[0].TrimEnd();
+        Write(provider, 0, $"{first}\n\n{text}", 0.7f);
+        return true;
+    }
+
+    private static void WriteTable(MyProjectorBase table, string text) =>
+        Write(table, Config.ShipyardQuoteSurface, Wrap(text, TableColumns), 2f);
+
+    private static string Wrap(string text, int columns)
+    {
+        var lines = new List<string>();
+        foreach (var line in text.TrimEnd().Split('\n').Select(l => l.TrimEnd('\r', ' ')))
+        {
+            var rest = line;
+            while (rest.Length > columns)
+            {
+                var cut = rest.LastIndexOf(' ', columns);
+                if (cut <= 0)
+                    cut = columns;
+                lines.Add(rest.Substring(0, cut).TrimEnd());
+                rest = rest.Substring(cut).TrimStart();
+            }
+            lines.Add(rest);
+        }
+        return string.Join("\n", lines);
+    }
+
+    // The largest font up to maxSize that fits the text, in the Monospace font's 24 x 37 pixels per
+    // character at size 1 on a 512 pixel texture
+    private static void Write(
+        IMyTextSurfaceProvider provider,
+        int index,
+        string text,
+        float maxSize = 0.7f
+    )
     {
         if (index < 0 || index >= provider.SurfaceCount)
             return;
         var surface = provider.GetSurface(index);
-        var lines = text.Split('\n').Length;
+        var lines = text.TrimEnd().Split('\n');
+        var padded = surface.SurfaceSize * 0.96f;
+        var scale = Math.Min(surface.TextureSize.X, surface.TextureSize.Y) / 512f;
+        var size = Math.Min(
+            padded.X / (Math.Max(1, lines.Max(l => l.Length)) * 24 * scale),
+            padded.Y / (lines.Length * 37 * scale)
+        );
         surface.ContentType = ContentType.TEXT_AND_IMAGE;
         surface.Font = "Monospace";
-        surface.FontSize = (float)Math.Max(0.3, Math.Min(0.7, 0.7 * 16 / Math.Max(16, lines)));
+        surface.FontSize = Math.Max(0.2f, Math.Min(maxSize, size));
         surface.TextPadding = 2;
         if (surface.GetText() != text)
             surface.WriteText(text);
@@ -781,6 +936,19 @@ internal static class ShipyardOrders
                 )
                     Quote(MakePlan(player, table), _ => { });
             loaded.Clear();
+            // A blueprint someone removed in the terminal
+            foreach (var tableId in quotes.Keys.ToList())
+                if (
+                    MyEntities.TryGetEntityById(tableId, out MyProjectorBase table)
+                    && TableHologram.Blueprint(table) == null
+                )
+                {
+                    Plugin.Log.Info($"Hologram table {tableId}: blueprint removed");
+                    holders.Remove(tableId);
+                    quotes.Remove(tableId);
+                    if (StationOf(table.CubeGrid) is { } station)
+                        Refresh(station);
+                }
         }
         if (ticks % UpdateTicks != 0)
             return;
@@ -827,7 +995,7 @@ internal static class ShipyardOrders
             if (why == null)
                 continue;
             Plugin.Log.Info($"Hologram table {table.EntityId}: blueprint cleared, {why}");
-            ClearTable(table, "Load a blueprint for a quote.");
+            ClearTable(table);
         }
     }
 
@@ -851,12 +1019,33 @@ internal static class ShipyardOrders
         return BoundingSphereD.CreateFromBoundingBox(box);
     }
 
-    private static void ClearTable(MyProjectorBase table, string text)
+    private static void ClearTable(MyProjectorBase table)
     {
         holders.Remove(table.EntityId);
         quotes.Remove(table.EntityId);
         ((Sandbox.ModAPI.IMyProjector)table).SetProjectedGrid(null);
-        Write(table, Config.ShipyardQuoteSurface, text);
+        ShowDetails(table, DetailsIdle);
+        WriteTable(table, TableIdle);
+    }
+
+    // A table without a blueprint offers the player who just queued a ship the cancel
+    private static void ShowEmpty(MyProjectorBase table, List<BuildOrder> queue)
+    {
+        if (TableHologram.Blueprint(table) != null)
+            return;
+        placed.TryGetValue(table.EntityId, out var player);
+        var order = queue.FirstOrDefault(o => o.Player == player && !o.Started);
+        if (order == null)
+        {
+            placed.Remove(table.EntityId);
+            WriteTable(table, TableIdle);
+            return;
+        }
+        WriteTable(
+            table,
+            $"'{order.Ship}' is in the queue for {Name(player)}.\n\n"
+                + $"{Name(player)} can cancel it by pressing the button again."
+        );
     }
 
     private static void Check(MyCubeGrid shipyard)
@@ -981,7 +1170,10 @@ internal static class ShipyardOrders
             if (IsConfirmButton(button))
                 ArmButton(button);
         foreach (var table in tables)
-            if (quotes.TryGetValue(table.EntityId, out var shown))
+            if (
+                TableHologram.Blueprint(table) != null
+                && quotes.TryGetValue(table.EntityId, out var shown)
+            )
                 Quote(MakePlan(shown.Player, table), _ => { });
 
         var shipyard = FindShipyard(tables[0]);
@@ -995,6 +1187,8 @@ internal static class ShipyardOrders
                     return;
                 var queue = DecodeQueue(text);
                 ShowQueue(grids, shipyard, queue);
+                foreach (var table in tables)
+                    ShowEmpty(table, queue);
                 if (queue.Count == 0)
                     return;
                 if (queue[0].Started)
