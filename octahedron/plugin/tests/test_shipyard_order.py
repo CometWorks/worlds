@@ -120,7 +120,9 @@ def prepare(blueprint: str, minutes: int, plugins=()) -> None:
             "<ShipyardTableMinutes>600</ShipyardTableMinutes></OctahedronConfig>",
         )
     )
-    rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP, st.PROBE, *plugins])
+    rig.prepare_server(
+        extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP, st.PROBE, *plugins]
+    )
 
 
 def chat_lines(remote, after: int) -> tuple[list[str], int]:

@@ -587,7 +587,10 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     var booked = slots.Queue(A)[0];
     Check(slots.Start(booked.Id).Ok, "repair: it starts");
     Check(slots.Next(A) == null, "repair: nothing next while it runs");
-    Check(!slots.Cancel(slotWorld, null, s, A, 1).Ok, "repair: the book doesn't cancel a running one");
+    Check(
+        !slots.Cancel(slotWorld, null, s, A, 1).Ok,
+        "repair: the book doesn't cancel a running one"
+    );
     Check(
         slots.Finish(slotWorld, null, s, booked.Id, new Dictionary<string, long>(), 0, false).Ok
             && slots.Queue(A).Count == 2,
