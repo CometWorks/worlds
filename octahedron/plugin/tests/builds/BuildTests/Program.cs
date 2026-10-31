@@ -228,7 +228,7 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         m,
         "a second order at this shipyard",
         () => b.Order(w, market, s, Paid(P1), Needs((Plate, U)), none, long.MaxValue),
-        "one ship at a time"
+        "one entry at a time"
     );
     Refused(w, b, m, "nobody's cancel", () => b.Cancel(w, market, s, A, P2), "no ship");
     string id = b.Queue(A)[0].Id;
