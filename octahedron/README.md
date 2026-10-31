@@ -10,6 +10,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
+| `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
@@ -76,7 +77,10 @@ station and shipyard blueprints are in `blueprints/`.
   Moon, the one such direction nearest to where Delta Station was before the
   turn. Its shipyard is placed as if it faced away from the Moon, then the
   station alone is turned 180 degrees about its up: it faces the Moon, its
-  lobby toward EarthLike. Each station sits in a 250 m admin safe zone, owned by the
+  lobby toward EarthLike. Delta Station, whose up leaned 25 degrees away from
+  EarthLike, is turned 50 degrees further with its shipyard, so its up leans
+  25 degrees toward it, like Beta Station's: the lobby sees the planet, and the
+  deck is still tilted against the Sun. Each station sits in a 250 m admin safe zone, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
   zone allows only drilling and landing gear locks: no welding, grinding or
   block placing, also not by the shipyard's welders until the Octahedron plugin
@@ -122,6 +126,11 @@ station and shipyard blueprints are in `blueprints/`.
     color, at 70 % brightness. North red, South blue, Beta green and Delta
     orange painted metal; Alpha black and Gamma cyan carbon fiber; Moon purple
     concrete.
+  - The Sun never goes behind a station's own shipyard: see "The Sun" below.
+    For that the line between Alpha, Gamma, North and South Station and their
+    shipyards is turned 33, 30, 12 and 12 degrees about the zone's center
+    (`SHIPYARD_SUN_TURN`), both keeping their orientation, and Moon Station and
+    its shipyard turn 22 degrees as one unit (`MOON_SUN_TURN_DEGREES`).
 - Makes the stations the NPC faction's trade stations: the faction is a Trader
   with a bank account, and each station grid has a station entry, so the
   economy stocks its store and contract blocks. The game's own trade factions
@@ -137,8 +146,12 @@ station and shipyard blueprints are in `blueprints/`.
   15 km from the Moon's; the lanes between two EarthLike stations pass 99 km
   from its center. No two lanes come closer than 0.8 km, and only near a
   station they share; there the closest gates of two lanes, placed the way
-  Trade Lanes MP places them, are 728 m apart (Delta-Moon and Delta-North). A
-  lane goes both ways: each end is an entry toward the other. Every end is a
+  Trade Lanes MP places them, are 654 m apart (Alpha-Delta and Delta-North). A
+  lane goes both ways: each end is an entry toward the other. The lanes of the
+  equatorial square run 200 m north of the stations' plane, on the side the
+  lobbies look at, and the ends of North Station's Moon lane are moved too, 150 m
+  south at North and 160 m north at the Moon, to keep their gates out of the
+  Sun's way (see "The Sun" below). Every end is a
   one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
   the Earth stations for the Moon lanes, clear of their other lane ends),
   indestructible and not editable. Its Custom Data ends with a Target GPS at
@@ -162,8 +175,9 @@ station and shipyard blueprints are in `blueprints/`.
   135 km from its center) and 1 km thick, evenly over its area, and 4 ice
   asteroids 120 km out, halfway between the equatorial stations. The band stays
   out of EarthLike's gravity (it ends about 103 km from the center), clear of
-  Alpha and Gamma Station at 140 km, and every asteroid stays 1 km from the
-  Trade Lanes. Its axis is EarthLike's magnetic axis as the Aurora plugin
+  Alpha and Gamma Station at 140 km, and every asteroid stays 1 km from where
+  the Trade Lanes would run without the Sun's shift, at least 0.8 km from the
+  lanes themselves. Its axis is EarthLike's magnetic axis as the Aurora plugin
   (se-aurora) draws it when the sun is where the world starts it, the north
   pole tilted 25 degrees (the plugin's default `MagneticAxisTilt`) away from
   the sun, then turned about the poles together with the octahedron. So the
@@ -189,6 +203,40 @@ converts it to the binary format and stocks the stores. It
 lists OctahedronOres as a local mod for now. Once the mod is on the Workshop,
 rebuild it with `--ore-mod <id>`; neither a server nor a Workshop world can use
 a local mod. The `thumb.jpg` is still the Star System scenario's.
+
+## The Sun
+
+A fast flicker of light is a health risk for photosensitive players. It happens
+when the Sun passes behind something with gaps, as seen from a station: a Trade
+Lanes gate or the station's own shipyard
+([SE-809](https://tasks.cometworks.se/tasks/1691),
+[SE-720](https://tasks.cometworks.se/tasks/1597)).
+
+The Sun circles about the world's Y axis, EarthLike's north (`sun_axis`), with
+its rays always level. So over a day the rays to a station stay inside a flat
+slab through it, and what stays out of that slab can't shade it at any time.
+The lanes are moved by as little as keeps every gate's bounding sphere out of the
+slab of every station's bounding sphere (`EQUATOR_LANE_NORTH`,
+`NORTH_MOON_LANE_NORTH`). `build_world.py` fails when a shipyard's blocks reach
+into the slab of its station's bounding sphere.
+
+```bash
+uv run check_sun_clearance.py <world folder>
+```
+
+sweeps a built world independently of those rules: 7,200 Sun positions over the
+day, every gate and shipyard block against each station. It prints the
+smallest clearance in meters and degrees per station, how many of 26 lobby spots
+see the shipyard's center and its corners past the blocks, and how far the
+farthest block is from the zone's center. It exits with 1 when the Sun can reach
+a station through one of them, or a block leaves the zone.
+
+The clearances are for the ray that casts shadows. Other stations aren't counted:
+one passes in front of the Sun once a day at about 200 km, which doesn't flicker.
+The asteroid ring isn't counted either: its asteroids can still pass in front of
+the Sun as seen from the equatorial stations. Nor is what a gate does to a shipyard: the
+equatorial square's gates can shade the four shipyards on that plane, though not
+their stations.
 
 ## OctahedronOres
 
