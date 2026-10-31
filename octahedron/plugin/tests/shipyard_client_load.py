@@ -43,8 +43,8 @@ def check(ok, what):
 prepare_client = rig.prepare_client
 
 
-def client_with_mgp():
-    prepare_client()
+def client_with_mgp(extra_dev_folders=None):
+    prepare_client(extra_dev_folders)
     legacy = rig.PULSAR / "Legacy"
     if MODE == "mgp":
         (legacy / "Profiles" / "Current.xml").write_text(
