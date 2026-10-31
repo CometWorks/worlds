@@ -16,7 +16,8 @@ three, Multigrid Projector (the hub's cached build) on the nodes, and the ledger
 
 Money: the WA cuts OCT's 1e9, a new account has 25,000 SC, a node refuses !oct payday, the tax and the
 payout on the WA count the client through the merged online list and reach its balance, nodes log nothing
-from Money, the state is in the WA's save and comes back.
+from Money, the state is in the WA's save and comes back, and a payout just before a WA kill leaves the
+balance and the state in step.
 
 Cool-down: a free ship ordered and completed on one node starts it. It then refuses on the other (the live
 broadcast), on the other restarted (the WA's list), after a graceful cluster stop and warm start (the global
@@ -479,9 +480,35 @@ def run(bench) -> None:
 
     # --- the WA alone ---
     to_station_on(api, node_a)
+
+    def paid_today() -> int:
+        text = " ".join(wa_command("!oct money"))
+        return number(re.search(r"paid out today: ([\d,]+) SC", text)[1])
+
+    # A payout just before the kill: the save brings the balance and the state back together, so
+    # the replacement neither pays that hour twice nor forgets it
+    balance, paid = money(api)["You"], paid_today()
+    wa_command("!oct payday")
+    wait_until(
+        lambda: money(api).get("You", 0) > balance, 60, "the payout before the kill"
+    )
     reset_probe()
     cluster.restart_node("wa-1")
     cluster.wait_ready(nodes=["wa-1"])
+
+    def in_step() -> bool:
+        return money(api).get("You", 0) - balance == paid_today() - paid
+
+    try:
+        wait_until(in_step, 120, "the balance and the state")
+    except ClusterError:
+        pass
+    check(
+        "a payout just before a WA kill: balance and state agree",
+        in_step(),
+        f"{money(api)}, before {balance}; paid today {paid_today()}, before {paid}",
+    )
+    reset_probe()
     cluster.restart_node(node_b)
     cluster.wait_ready(nodes=[node_b])
     refused(api, f"the WA killed, {node_b} restarted", node_b)
