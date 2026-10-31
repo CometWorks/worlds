@@ -184,7 +184,18 @@ public readonly struct BuildResult
 public sealed class BuildBook
 {
     private const string Header = "octahedron-builds 1";
+
+    /// <summary>
+    /// A cluster's plugin messages carry 64 KiB at most, a blueprint of over about 700 blocks
+    /// doesn't fit: it goes between a node and the authority in parts of this many characters.
+    /// </summary>
+    public const int BlueprintPartSize = 60_000;
+    private const long UploadSeconds = 600;
+
     private readonly Dictionary<string, BuildOrder> orders = new();
+
+    // The blueprints arriving for orders, not saved: an order after a restart asks for a new press
+    private readonly Dictionary<string, (long At, List<string> Parts)> uploads = new();
     private long nextId;
 
     public IEnumerable<BuildOrder> Orders => orders.Values;
@@ -206,6 +217,53 @@ public sealed class BuildBook
     {
         var queue = Queue(station);
         return queue.Count == 0 || queue[0].Started ? null : queue[0];
+    }
+
+    /// <summary>The parts a blueprint goes in, one at least.</summary>
+    public static List<string> BlueprintParts(string blueprint)
+    {
+        var parts = new List<string>();
+        for (int at = 0; at == 0 || at < blueprint.Length; at += BlueprintPartSize)
+            parts.Add(blueprint.Substring(at, Math.Min(BlueprintPartSize, blueprint.Length - at)));
+        return parts;
+    }
+
+    /// <summary>Keeps a part of an upload; the parts come in order, a repeated one replaces itself.</summary>
+    public bool Upload(long now, string id, int part, string text)
+    {
+        foreach (var old in uploads.Where(u => now - u.Value.At > UploadSeconds).ToList())
+            uploads.Remove(old.Key);
+        var parts = uploads.TryGetValue(id, out var upload) ? upload.Parts : new List<string>();
+        if (part < 0 || part > parts.Count)
+            return false;
+        if (part == parts.Count)
+            parts.Add(text);
+        else
+            parts[part] = text;
+        uploads[id] = (now, parts);
+        return true;
+    }
+
+    /// <summary>The blueprint of a finished upload, null unless exactly that many parts arrived.</summary>
+    public string TakeUpload(string id, int parts)
+    {
+        if (!uploads.TryGetValue(id, out var upload) || upload.Parts.Count != parts)
+            return null;
+        uploads.Remove(id);
+        return string.Concat(upload.Parts);
+    }
+
+    /// <summary>A part of the order's blueprint, shorter than a whole part at the end; null past that or without the order.</summary>
+    public string BlueprintPart(string id, int part)
+    {
+        var blueprint = Get(id)?.Blueprint;
+        long at = (long)part * BlueprintPartSize;
+        if (blueprint == null || part < 0 || at > blueprint.Length)
+            return null;
+        return blueprint.Substring(
+            (int)at,
+            Math.Min(BlueprintPartSize, blueprint.Length - (int)at)
+        );
     }
 
     /// <summary>The labor fee: per10Pcu SC per 10 PCU, rounded up.</summary>
@@ -679,8 +737,16 @@ public enum BuildVerb
     /// <summary>Read: the station's queue, without blueprints.</summary>
     Queue,
 
-    /// <summary>Read: the next order to build at the station, with its blueprint.</summary>
+    /// <summary>Read: the next order to build at the station, without its blueprint.</summary>
     Next,
+
+    /// <summary>Id: the order; Part: of its blueprint.</summary>
+    Download,
+
+    /// <summary>Id: the upload; Part and Blueprint: the part. Kept in memory until its order.</summary>
+    Upload,
+
+    /// <summary>Part above 0: the blueprint is in that many parts of upload Id.</summary>
     Order,
     Cancel,
     Start,
@@ -708,10 +774,18 @@ public sealed class BuildRequest
     public long HydrogenUsed;
     public bool Refund;
     public bool Exempt;
+    public int Part;
     public Dictionary<string, long> Needed = new();
     public Dictionary<string, long> Provided = new();
 
-    public bool Reads => Verb is BuildVerb.Quote or BuildVerb.Queue or BuildVerb.Next;
+    // What doesn't change the saved book: goes without the global command ledger
+    public bool Reads =>
+        Verb
+            is BuildVerb.Quote
+                or BuildVerb.Queue
+                or BuildVerb.Next
+                or BuildVerb.Download
+                or BuildVerb.Upload;
 
     public string Encode() =>
         string.Join(
@@ -728,7 +802,8 @@ public sealed class BuildRequest
             BuildQuote.N(MaxTotal),
             BuildQuote.N(HydrogenUsed),
             Refund ? "1" : "0",
-            Exempt ? "1" : "0"
+            Exempt ? "1" : "0",
+            Part.ToString(CultureInfo.InvariantCulture)
         )
         + "\n"
         + Items(Needed)
@@ -756,8 +831,8 @@ public sealed class BuildRequest
     {
         var lines = text.Split('\n');
         var f = lines[0].Split('\t');
-        // 12 fields: from a node from before Exempt
-        if (lines.Length != 3 || f.Length is not (12 or 13))
+        // 12 fields: from a node from before Exempt, 13: from before Part
+        if (lines.Length != 3 || f.Length is not (12 or 13 or 14))
             throw new FormatException("Malformed build request");
         var r = new BuildRequest
         {
@@ -773,6 +848,7 @@ public sealed class BuildRequest
             HydrogenUsed = BuildQuote.L(f[10]),
             Refund = f[11] == "1",
             Exempt = f.Length > 12 && f[12] == "1",
+            Part = f.Length > 13 ? int.Parse(f[13], CultureInfo.InvariantCulture) : 0,
             Needed = Items(lines[1]),
             Provided = Items(lines[2]),
         };
@@ -798,7 +874,18 @@ public sealed class BuildRequest
                 );
             case BuildVerb.Next:
                 var next = book.Next(Station);
-                return next == null ? "" : BuildBook.EncodeOrder(next, blueprint: true);
+                return next == null ? "" : BuildBook.EncodeOrder(next, blueprint: false);
+            case BuildVerb.Download:
+                var part = book.BlueprintPart(Id, Part);
+                return part == null ? "0" : "1\t" + part;
+            case BuildVerb.Upload:
+                return book.Upload(w.Now, Id, Part, Blueprint) ? "1" : "0";
+        }
+        if (Verb == BuildVerb.Order && Part > 0)
+        {
+            Blueprint = book.TakeUpload(Id, Part);
+            if (Blueprint == null)
+                return "0\tThe blueprint did not reach the shipyard, press the button again.";
         }
         BuildResult r = Verb switch
         {

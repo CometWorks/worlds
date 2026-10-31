@@ -200,6 +200,79 @@ internal static class Builds
         );
     }
 
+    /// <summary>
+    /// Orders a ship, wherever the queues are kept: a blueprint too big for one message goes
+    /// ahead in parts. <paramref name="done"/> as for <see cref="Execute"/>.
+    /// </summary>
+    public static void Order(Guid operationId, BuildRequest request, Action<bool, string> done)
+    {
+        var parts = BuildBook.BlueprintParts(request.Blueprint);
+        if (parts.Count == 1)
+        {
+            Execute(operationId, request, done);
+            return;
+        }
+        request.Id = operationId.ToString("N");
+        request.Blueprint = "";
+        request.Part = parts.Count;
+        Upload(0);
+
+        void Upload(int part)
+        {
+            if (part == parts.Count)
+            {
+                Execute(operationId, request, done);
+                return;
+            }
+            Read(
+                new BuildRequest
+                {
+                    Verb = BuildVerb.Upload,
+                    Id = request.Id,
+                    Part = part,
+                    Blueprint = parts[part],
+                },
+                (answer, error) =>
+                {
+                    if (answer == "1")
+                        Upload(part + 1);
+                    else
+                        done(false, error ?? "The blueprint did not reach the shipyard.");
+                }
+            );
+        }
+    }
+
+    /// <summary>The blueprint of an order to <paramref name="done"/>, null when it can't be read or the order is gone.</summary>
+    public static void ReadBlueprint(string orderId, Action<string> done)
+    {
+        var blueprint = new StringBuilder();
+        Download(0);
+
+        void Download(int part) =>
+            Read(
+                new BuildRequest
+                {
+                    Verb = BuildVerb.Download,
+                    Id = orderId,
+                    Part = part,
+                },
+                (answer, _) =>
+                {
+                    if (answer == null || !answer.StartsWith("1\t"))
+                    {
+                        done(null);
+                        return;
+                    }
+                    blueprint.Append(answer, 2, answer.Length - 2);
+                    if (answer.Length - 2 < BuildBook.BlueprintPartSize)
+                        done(blueprint.ToString());
+                    else
+                        Download(part + 1);
+                }
+            );
+    }
+
     // The message of a change's answer, without the order that may follow it
     private static string Message(string answer) =>
         answer.Length > 2 ? answer.Substring(2).Split('\n')[0] : "";

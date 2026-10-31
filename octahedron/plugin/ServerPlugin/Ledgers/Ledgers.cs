@@ -231,7 +231,11 @@ internal static class Ledgers
                 if (reply.Code is PluginResultCode.Invalid or PluginResultCode.Conflict)
                 {
                     outcome = LedgerOutcome.Refused;
-                    text = reply.Error ?? reply.Code.ToString();
+                    Plugin.Log.Warning(
+                        $"Global command {command} of {payload.Length} bytes refused: {reply.Code} {reply.Error}"
+                    );
+                    text =
+                        reply.Error ?? $"The World Authority refused the request ({reply.Code}).";
                     break;
                 }
                 text = $"The World Authority did not answer ({reply.Code}).";

@@ -597,7 +597,7 @@ internal static class ShipyardOrders
             if (liters > 0)
                 request.Provided[Hydrogen] = IceFor(liters, up: false);
         }
-        Builds.Execute(
+        Builds.Order(
             Guid.NewGuid(),
             request,
             (ok, message) =>
@@ -1058,53 +1058,71 @@ internal static class ShipyardOrders
                     return;
                 }
                 var next = BuildBook.DecodeOrder(text);
-                var blueprint = DecodeBlueprint(next.Blueprint);
-                var error =
-                    blueprint == null || blueprint.Count == 0
-                        ? "its blueprint could not be read"
-                        : Fits(shipyard, blueprint, next.Exempt);
-                if (error != null)
+                Builds.ReadBlueprint(
+                    next.Id,
+                    encoded =>
+                    {
+                        // Still in the queue if only the read failed: the next update tries again
+                        if (encoded == null || shipyard.MarkedForClose)
+                            starting.Remove(shipyard.EntityId);
+                        else
+                            StartOrder(shipyard, station, next, encoded);
+                    }
+                );
+            }
+        );
+    }
+
+    private static void StartOrder(
+        MyCubeGrid shipyard,
+        string station,
+        BuildOrder next,
+        string encoded
+    )
+    {
+        var blueprint = DecodeBlueprint(encoded);
+        var error =
+            blueprint == null || blueprint.Count == 0
+                ? "its blueprint could not be read"
+                : Fits(shipyard, blueprint, next.Exempt);
+        if (error != null)
+        {
+            // Not started: the build ledger is still whole
+            Finish(
+                next,
+                new Dictionary<string, long>(),
+                0,
+                refund: true,
+                $"'{next.Ship}' can't be built: {error}"
+            );
+            starting.Remove(shipyard.EntityId);
+            return;
+        }
+        Builds.Execute(
+            Guid.NewGuid(),
+            new BuildRequest
+            {
+                Verb = BuildVerb.Start,
+                Id = next.Id,
+                Station = station,
+            },
+            (ok, message) =>
+            {
+                starting.Remove(shipyard.EntityId);
+                if (!ok)
                 {
-                    // Not started: the build ledger is still whole
+                    Plugin.Log.Warning($"Shipyard order {next.Id} did not start: {message}");
+                    return;
+                }
+                error = Create(shipyard, next, blueprint);
+                if (error != null)
                     Finish(
                         next,
-                        new Dictionary<string, long>(),
+                        Taken(next),
                         0,
                         refund: true,
                         $"'{next.Ship}' can't be built: {error}"
                     );
-                    starting.Remove(shipyard.EntityId);
-                    return;
-                }
-                Builds.Execute(
-                    Guid.NewGuid(),
-                    new BuildRequest
-                    {
-                        Verb = BuildVerb.Start,
-                        Id = next.Id,
-                        Station = station,
-                    },
-                    (ok, message) =>
-                    {
-                        starting.Remove(shipyard.EntityId);
-                        if (!ok)
-                        {
-                            Plugin.Log.Warning(
-                                $"Shipyard order {next.Id} did not start: {message}"
-                            );
-                            return;
-                        }
-                        error = Create(shipyard, next, blueprint);
-                        if (error != null)
-                            Finish(
-                                next,
-                                Taken(next),
-                                0,
-                                refund: true,
-                                $"'{next.Ship}' can't be built: {error}"
-                            );
-                    }
-                );
             }
         );
     }
