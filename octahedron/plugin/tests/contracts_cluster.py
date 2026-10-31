@@ -238,7 +238,7 @@ def run(bench) -> None:
         return where[0]
 
     def delete(name: str) -> None:
-        # A grid that just arrived on its node is refused for its import grace
+        # A grid that just arrived on its node is refused for its import grace, 5 minutes after a load
         query = urllib.parse.urlencode({"entityId": GRIDS[name], "name": name})
         replies = []
 
@@ -248,7 +248,7 @@ def run(bench) -> None:
 
         check(
             f"{name}: deleted on its node",
-            wait_until(attempt, 300, f"{name} deleted", 10),
+            wait_until(attempt, 420, f"{name} deleted", 10),
             replies[-1:],
         )
 
@@ -448,6 +448,9 @@ def run(bench) -> None:
     before = balances(api)
     reply = " ".join(command(f"!oct contract accept {mid[0]} {identity}"))
     check("take a second wreck", "Success" in reply, reply)
+    # Awake together, so both import graces pass together
+    wake("Wreck Mid")
+    wake("Wreck Small")
     delete("Wreck Mid")
     delete("Wreck Small")
     gone = wait_until(
