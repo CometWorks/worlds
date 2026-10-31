@@ -25,8 +25,10 @@ so the world's Trade Lane Computers would count.
 - A node restart keeps the contracts, and so does a graceful cluster stop and warm start, with the player's
   ownership and the memory of the given grid.
 
-Grinding down, repairing a wreck and the seated, claimed and own-grid rules are checked in
+Grinding down, repairing a wreck and the seated and claimed rules are checked in
 tests/contracts/ContractTests.
+
+Takes about 50 minutes, most of it waiting out the 5 minute import grace on grid deletes.
 
 """
 
