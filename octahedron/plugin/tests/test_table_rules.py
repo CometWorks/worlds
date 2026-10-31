@@ -478,6 +478,9 @@ def main() -> int:
         rig.ensure_character(a)
         with Second():
             rig.ensure_character(b)
+        # The run outlasts the suit's oxygen and battery in an unpressurized station
+        a.set_admin_flag("invulnerable", True)
+        b.set_admin_flag("invulnerable", True)
         sa.at_table(a, STATION)
         sa.at_table(b, STATION)
         with_config(a, **CONFIG)
