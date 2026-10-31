@@ -22828,152 +22828,93 @@ ShadowRange=29.997
               </TargetData>
               <SitAnimation>0</SitAnimation>
             </MyObjectBuilder_CubeBlock>
-            <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_StoreBlock">
-              <SubtypeName>StoreBlock</SubtypeName>
-              <EntityId>118319478205506903</EntityId>
+            <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_TextPanel">
+              <SubtypeName>LargeFullBlockLCDPanel</SubtypeName>
+              <EntityId>91809489435460024</EntityId>
               <Min x="1" y="7" z="-8" />
               <BlockOrientation Forward="Right" Up="Up" />
-              <ColorMaskHSV x="0.7777778" y="0.2" z="-0.08" />
+              <ColorMaskHSV x="0" y="-0.8" z="-0.3" />
               <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
               <Owner>196498773398234354</Owner>
               <ShareMode>Faction</ShareMode>
               <ComponentContainer>
                 <Components>
                   <ComponentData>
-                    <TypeId>MyInventoryBase</TypeId>
-                    <Component xsi:type="MyObjectBuilder_Inventory">
-                      <CanPutItems>true</CanPutItems>
-                      <Items />
-                      <nextItemId>0</nextItemId>
-                      <Volume>1</Volume>
-                      <Mass>9223372036854.775807</Mass>
-                      <MaxItemCount>2147483647</MaxItemCount>
-                      <Size xsi:nil="true" />
-                      <InventoryFlags />
-                      <RemoveEntityOnEmpty>false</RemoveEntityOnEmpty>
+                    <TypeId>MyLcdSurfaceComponent</TypeId>
+                    <Component xsi:type="MyObjectBuilder_LcdSurfaceComponent">
+                      <SelectedRotationIndex>0</SelectedRotationIndex>
+                      <TextPanelContent>
+                        <ChangeInterval>0</ChangeInterval>
+                        <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
+                        <FontSize>1.5</FontSize>
+                        <ShowText>NONE</ShowText>
+                        <FontColor>
+                          <PackedValue>4294967295</PackedValue>
+                          <X>255</X>
+                          <Y>255</Y>
+                          <Z>255</Z>
+                          <R>255</R>
+                          <G>255</G>
+                          <B>255</B>
+                          <A>255</A>
+                        </FontColor>
+                        <BackgroundColor>
+                          <PackedValue>4278190080</PackedValue>
+                          <X>0</X>
+                          <Y>0</Y>
+                          <Z>0</Z>
+                          <R>0</R>
+                          <G>0</G>
+                          <B>0</B>
+                          <A>255</A>
+                        </BackgroundColor>
+                        <CurrentShownTexture>0</CurrentShownTexture>
+                        <ContentType>SCRIPT</ContentType>
+                        <SelectedScript>LcdMod_MarketApp</SelectedScript>
+                        <TextPadding>2</TextPadding>
+                        <CustomizeScripts>true</CustomizeScripts>
+                        <ScriptBackgroundColor>
+                          <PackedValue>4278650890</PackedValue>
+                          <X>10</X>
+                          <Y>8</Y>
+                          <Z>7</Z>
+                          <R>10</R>
+                          <G>8</G>
+                          <B>7</B>
+                          <A>255</A>
+                        </ScriptBackgroundColor>
+                        <ScriptForegroundColor>
+                          <PackedValue>4285909247</PackedValue>
+                          <X>255</X>
+                          <Y>200</Y>
+                          <Z>117</Z>
+                          <R>255</R>
+                          <G>200</G>
+                          <B>117</B>
+                          <A>255</A>
+                        </ScriptForegroundColor>
+                        <Sprites>
+                          <Length>0</Length>
+                        </Sprites>
+                        <UpdateStartOfFirstTexture>1320416</UpdateStartOfFirstTexture>
+                      </TextPanelContent>
                     </Component>
                   </ComponentData>
                   <ComponentData>
-                    <TypeId>MyMultiTextPanelComponent</TypeId>
-                    <Component xsi:type="MyObjectBuilder_MultiTextPanelComponent">
-                      <TextPanelsContents>
-                        <MySerializedTextPanelData>
-                          <ChangeInterval>0</ChangeInterval>
-                          <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
-                          <FontSize>1</FontSize>
-                          <ShowText>NONE</ShowText>
-                          <FontColor>
-                            <PackedValue>4294967295</PackedValue>
-                            <X>255</X>
-                            <Y>255</Y>
-                            <Z>255</Z>
-                            <R>255</R>
-                            <G>255</G>
-                            <B>255</B>
-                            <A>255</A>
-                          </FontColor>
-                          <BackgroundColor>
-                            <PackedValue>4278190080</PackedValue>
-                            <X>0</X>
-                            <Y>0</Y>
-                            <Z>0</Z>
-                            <R>0</R>
-                            <G>0</G>
-                            <B>0</B>
-                            <A>255</A>
-                          </BackgroundColor>
-                          <CurrentShownTexture>0</CurrentShownTexture>
-                          <SelectedScript />
-                          <TextPadding>2</TextPadding>
-                          <ScriptBackgroundColor>
-                            <PackedValue>4288108544</PackedValue>
-                            <X>0</X>
-                            <Y>88</Y>
-                            <Z>151</Z>
-                            <R>0</R>
-                            <G>88</G>
-                            <B>151</B>
-                            <A>255</A>
-                          </ScriptBackgroundColor>
-                          <ScriptForegroundColor>
-                            <PackedValue>4294962611</PackedValue>
-                            <X>179</X>
-                            <Y>237</Y>
-                            <Z>255</Z>
-                            <R>179</R>
-                            <G>237</G>
-                            <B>255</B>
-                            <A>255</A>
-                          </ScriptForegroundColor>
-                          <Sprites>
-                            <Length>0</Length>
-                          </Sprites>
-                          <UpdateStartOfFirstTexture>773200</UpdateStartOfFirstTexture>
-                        </MySerializedTextPanelData>
-                        <MySerializedTextPanelData>
-                          <ChangeInterval>0</ChangeInterval>
-                          <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
-                          <FontSize>1</FontSize>
-                          <ShowText>NONE</ShowText>
-                          <FontColor>
-                            <PackedValue>4294967295</PackedValue>
-                            <X>255</X>
-                            <Y>255</Y>
-                            <Z>255</Z>
-                            <R>255</R>
-                            <G>255</G>
-                            <B>255</B>
-                            <A>255</A>
-                          </FontColor>
-                          <BackgroundColor>
-                            <PackedValue>4278190080</PackedValue>
-                            <X>0</X>
-                            <Y>0</Y>
-                            <Z>0</Z>
-                            <R>0</R>
-                            <G>0</G>
-                            <B>0</B>
-                            <A>255</A>
-                          </BackgroundColor>
-                          <CurrentShownTexture>0</CurrentShownTexture>
-                          <SelectedScript />
-                          <TextPadding>2</TextPadding>
-                          <ScriptBackgroundColor>
-                            <PackedValue>4288108544</PackedValue>
-                            <X>0</X>
-                            <Y>88</Y>
-                            <Z>151</Z>
-                            <R>0</R>
-                            <G>88</G>
-                            <B>151</B>
-                            <A>255</A>
-                          </ScriptBackgroundColor>
-                          <ScriptForegroundColor>
-                            <PackedValue>4294962611</PackedValue>
-                            <X>179</X>
-                            <Y>237</Y>
-                            <Z>255</Z>
-                            <R>179</R>
-                            <G>237</G>
-                            <B>255</B>
-                            <A>255</A>
-                          </ScriptForegroundColor>
-                          <Sprites>
-                            <Length>0</Length>
-                          </Sprites>
-                          <UpdateStartOfFirstTexture>773200</UpdateStartOfFirstTexture>
-                        </MySerializedTextPanelData>
-                      </TextPanelsContents>
-                    </Component>
-                  </ComponentData>
-                  <ComponentData>
-                    <TypeId>MyModStorageComponentBase</TypeId>
+                    <TypeId>MyModStorageComponent</TypeId>
                     <Component xsi:type="MyObjectBuilder_ModStorageComponent">
                       <Storage>
                         <dictionary>
                           <item>
-                            <Key>cd844fa4-4ac0-4d9c-8a01-73416b225772</Key>
-                            <Value>74192983-3686-44d2-98cd-eb0c3ab326f8
+                            <Key>5298e210-8c77-407d-83be-a8a3c2c5fd17</Key>
+                            <Value>CAEQ6qe/wpuGxPwBGtk0CAAQABq9MwoMY29yZS5nZW5lcmFsEqwzqgaoMwgBFc7MTD8YACADKgQIABAAMtctCgVDaGVzcxLNLQpAAgAEAAAAAAABAQAGAAEBAQAAAwMAAAAAAAAAAQAAAAAAAAAAABYAABQAEQAAAAAAEQAAAAARERESAAAAABQTEhAyGAAi+CxMQ01DSEVTU0hJU1RPUlkxDQoxfDB8MXxkMnxkNHwwfDB8MHxaRFE9fFpETT18MHwxNXxjbTVpY1d0aWJuSXZjSEJ3Y0hCd2NIQXZPQzg0THpOUU5DODRMMUJRVURGUVVGQlFMMUpPUWxGTFFrNVNJR0lnUzFGcmNTQmtNeUF3SURFPQ0KMnwxfDF8ZTd8ZTV8MHwwfDB8WlRVPXxaVFk9fDB8MTV8Y201aWNXdGlibkl2Y0hCd2NERndjSEF2T0M4MGNETXZNMUEwTHpndlVGQlFNVkJRVUZBdlVrNUNVVXRDVGxJZ2R5QkxVV3R4SUdVMklEQWdNZz09DQozfDB8NnxlMXxkMnwwfDB8MHxTMlF5fExRPT18MXwxMnxjbTVpY1d0aWJuSXZjSEJ3Y0RGd2NIQXZPQzgwY0RNdk0xQTBMemd2VUZCUVMxQlFVRkF2VWs1Q1VURkNUbElnWWlCcmNTQXRJREVnTWc9PQ0KNHwxfDF8ZTV8ZDR8MXwwfDB8Wlhoa05BPT18TFE9PXwwfDEyfGNtNWljV3RpYm5JdmNIQndjREZ3Y0hBdk9DODRMek53TkM4NEwxQlFVRXRRVUZCUUwxSk9RbEV4UWs1U0lIY2dhM0VnTFNBd0lETT0NCjV8MHw2fGQyfGQzfDB8MHwwfFMyUXp8TFE9PXwxfDEyfGNtNWljV3RpYm5JdmNIQndjREZ3Y0hBdk9DODRMek53TkM4elN6UXZVRkJRTVZCUVVGQXZVazVDVVRGQ1RsSWdZaUJyY1NBdElERWdNdz09DQo2fDF8MXxjN3xjNXwwfDB8MHxZelU9fFl6WT18MHwxMnxjbTVpY1d0aWJuSXZjSEF4Y0RGd2NIQXZPQzh5Y0RVdk0zQTBMek5MTkM5UVVGQXhVRkJRVUM5U1RrSlJNVUpPVWlCM0lHdHhJR00ySURBZ05BPT0NCjd8MHwxfGMyfGMzfDB8MHwwfFl6TT18TFE9PXwwfDEyfGNtNWljV3RpYm5JdmNIQXhjREZ3Y0hBdk9DOHljRFV2TTNBMEx6SlFTelF2VUZBeVVGQlFVQzlTVGtKUk1VSk9VaUJpSUd0eElDMGdNQ0EwDQo4fDF8MXxkNHxjM3wxfDB8MHxaSGhqTXc9PXxMUT09fDB8MTJ8Y201aWNXdGlibkl2Y0hBeGNERndjSEF2T0M4eWNEVXZPQzh5Y0VzMEwxQlFNbEJRVUZBdlVrNUNVVEZDVGxJZ2R5QnJjU0F0SURBZ05RPT0NCjl8MHw2fGQzfGMzfDF8MHwwfFMzaGpNdz09fExRPT18MHwxMnxjbTVpY1d0aWJuSXZjSEF4Y0RGd2NIQXZPQzh5Y0RVdk9DOHlTelV2VUZBeVVGQlFVQzlTVGtKUk1VSk9VaUJpSUd0eElDMGdNQ0ExDQoxMHwxfDF8YzV8YzR8MHwwfDB8WXpRPXxMUT09fDB8MTJ8Y201aWNXdGlibkl2Y0hBeGNERndjSEF2T0M4NEx6SndOUzh5U3pVdlVGQXlVRkJRVUM5U1RrSlJNVUpPVWlCM0lHdHhJQzBnTUNBMg0KMTF8MHw2fGMzfGM0fDF8MHwwfFMzaGpOQT09fExRPT18MHwxMnxjbTVpY1d0aWJuSXZjSEF4Y0RGd2NIQXZPQzg0THpKTE5TODRMMUJRTWxCUVVGQXZVazVDVVRGQ1RsSWdZaUJyY1NBdElEQWdOZz09DQoxMnwxfDV8ZDh8YTV8MHwwfDB8VVdFMXxMUT09fDF8MTJ8Y201aU1XdGlibkl2Y0hBeGNERndjSEF2T0M5eE55OHlTelV2T0M5UVVESlFVRkJRTDFKT1FsRXhRazVTSUhjZ2EzRWdMU0F4SURjPQ0KMTN8MHw1fGQxfGE0fDB8MHwwfFVXRTB8TFE9PXwyfDEyfGNtNWlNV3RpYm5JdmNIQXhjREZ3Y0hBdk9DOXhOeTlSTVVzMUx6Z3ZVRkF5VUZCUVVDOVNUa0l5UWs1U0lHSWdhM0VnTFNBeUlEYz0NCjE0fDF8NXxhNXxhNHw1fDB8MHxVWGhoTkNzPXxMUT09fDB8MTJ8Y201aU1XdGlibkl2Y0hBeGNERndjSEF2T0M4NEwzRXhTelV2T0M5UVVESlFVRkJRTDFKT1FqSkNUbElnZHlCcmNTQXRJREFnT0E9PQ0KMTV8MHw2fGM0fGMzfDB8MHwwfFMyTXp8TFE9PXwxfDEyfGNtNWlNV3RpYm5JdmNIQXhjREZ3Y0hBdk9DODRMM0UzTHpKTE5TOVFVREpRVUZCUUwxSk9RakpDVGxJZ1lpQnJjU0F0SURFZ09BPT0NCjE2fDF8NXxhNHxiNHwwfDB8MHxVV0kwS3c9PXxMUT09fDJ8MTJ8Y201aU1XdGlibkl2Y0hBeGNERndjSEF2T0M4NEx6RnhOaTh5U3pVdlVGQXlVRkJRVUM5U1RrSXlRazVTSUhjZ2EzRWdMU0F5SURrPQ0KMTd8MHw2fGMzfGMyfDB8MHwwfFMyTXl8TFE9PXwzfDEyfGNtNWlNV3RpYm5JdmNIQXhjREZ3Y0hBdk9DODRMekZ4Tmk4NEwxQlFTekZRVUZCUUwxSk9RakpDVGxJZ1lpQnJjU0F0SURNZ09RPT0NCjE4fDF8NXxiNHxjM3wwfDB8MHxVV016S3c9PXxMUT09fDR8MTJ8Y201aU1XdGlibkl2Y0hBeGNERndjSEF2T0M4NEx6Z3ZNbkUxTDFCUVN6RlFVRkJRTDFKT1FqSkNUbElnZHlCcmNTQXRJRFFnTVRBPQ0KMTl8MHwxfGIyfGMzfDV8MHwwfFluaGpNdz09fExRPT18MHwxMnxjbTVpTVd0aWJuSXZjSEF4Y0RGd2NIQXZPQzg0THpndk1sQTFMMUF4U3pGUVVGQlFMMUpPUWpKQ1RsSWdZaUJyY1NBdElEQWdNVEE9DQoyMHwxfDN8Zjh8YTN8MHwwfDB8UW1FenxMUT09fDF8MTJ8Y201aU1Xc3hibkl2Y0hBeGNERndjSEF2T0M4NEx6Z3ZZakZRTlM5UU1Vc3hVRkJRVUM5U1RrSXlRazVTSUhjZ2EzRWdMU0F4SURFeA0KMjF8MHwyfGIxfGQyfDB8MHwwfFRtUXl8TFE9PXwyfDEyfGNtNWlNV3N4Ym5JdmNIQXhjREZ3Y0hBdk9DODRMemd2WWpGUU5TOVFNVXRPVUZCUVVDOVNNVUl5UWs1U0lHSWdhM0VnTFNBeUlERXgNCjIyfDF8M3xhM3xjNXwwfDB8MHxRbU0xfExRPT18M3wxMnxjbTVpTVdzeGJuSXZjSEF4Y0RGd2NIQXZPQzh5WWpVdk9DOHlVRFV2VURGTFRsQlFVRkF2VWpGQ01rSk9VaUIzSUd0eElDMGdNeUF4TWc9PQ0KMjN8MHwyfGQyfGM0fDB8MHwwfFRtTTB8TFE9PXw0fDEyfGNtNWlNV3N4Ym5JdmNIQXhjREZ3Y0hBdk9DOHlZalV2TWs0MUx6SlFOUzlRTVVzeFVGQlFVQzlTTVVJeVFrNVNJR0lnYTNFZ0xTQTBJREV5DQoyNHwxfDN8YzV8ZTN8MHwwfDB8UW1VenxMUT09fDV8MTJ8Y201aU1Xc3hibkl2Y0hBeGNERndjSEF2T0M4NEx6Sk9OUzh5VURGaU15OVFNVXN4VUZCUVVDOVNNVUl5UWs1U0lIY2dhM0VnTFNBMUlERXoNCjI1fDB8M3xjMXxhM3wwfDB8MHxRbUV6fExRPT18NnwxMnxjbTVpTVdzeGJuSXZjSEF4Y0RGd2NIQXZPQzg0THpKT05TOUNNVkF4WWpNdlVERkxNVkJRVUZBdlVqUkNUbElnWWlCcmNTQXRJRFlnTVRNPQ0KMjZ8MXwyfGI4fGM2fDB8MHwwfFRtTTJ8TFE9PXw3fDEyfGNqRmlNV3N4Ym5JdmNIQXhjREZ3Y0hBdk1tNDFMemd2TWs0MUwwSXhVREZpTXk5UU1Vc3hVRkJRVUM5U05FSk9VaUIzSUd0eElDMGdOeUF4TkE9PQ0KMjd8MHwyfGM0fGU1fDB8MHwwfFRtVTF8TFE9PXw4fDEyfGNqRmlNV3N4Ym5JdmNIQXhjREZ3Y0hBdk1tNDFMelJPTXk4NEwwSXhVREZpTXk5UU1Vc3hVRkJRVUM5U05FSk9VaUJpSUd0eElDMGdPQ0F4TkE9PQ0KMjh8MXwxfGQ3fGQ1fDB8MHwwfFpEVT18WkRZPXwwfDEyfGNqRmlNV3N4Ym5JdmNIQXpjSEJ3THpKdU5TOHpjRTR6THpndlFqRlFNV0l6TDFBeFN6RlFVRkJRTDFJMFFrNVNJSGNnYTNFZ1pEWWdNQ0F4TlE9PQ0KMjl8MHwyfGU1fGQ3fDB8MHwwfFRtUTN8TFE9PXwxfDEyfGNqRmlNV3N4Ym5JdmNIQXhUakZ3Y0hBdk1tNDFMek53TkM4NEwwSXhVREZpTXk5UU1Vc3hVRkJRVUM5U05FSk9VaUJpSUd0eElDMGdNU0F4TlE9PQ0KMzB8MXwzfGUzfGMxfDB8MHwwfFFtTXh8TFE9PXwyfDEyfGNqRmlNV3N4Ym5JdmNIQXhUakZ3Y0hBdk1tNDFMek53TkM4NEwwSXhVRFV2VURGTE1WQlFVRkF2VWpGaU1rSk9VaUIzSUd0eElDMGdNaUF4Tmc9PQ0KMzF8MHw2fGMyfGMxfDN8MHwwfFMzaGpNUT09fExRPT18MHwxMnxjakZpTVdzeGJuSXZjSEF4VGpGd2NIQXZNbTQxTHpOd05DODRMMEl4VURVdlVETlFVRkJRTDFJeFN6SkNUbElnWWlCcmNTQXRJREFnTVRZPQ0KMzJ8MXwyfGc4fGY2fDB8MHwwfFRtWTJ8TFE9PXwxfDEyfGNqRmlNV3N5Y2k5d2NERk9NWEJ3Y0M4eWJqSnVNaTh6Y0RRdk9DOUNNVkExTDFBelVGQlFVQzlTTVVzeVFrNVNJSGNnYTNFZ0xTQXhJREUzDQozM3wwfDZ8YzF8YzJ8MHwwfDB8UzJNeXxMUT09fDJ8MTJ8Y2pGaU1Xc3ljaTl3Y0RGT01YQndjQzh5YmpKdU1pOHpjRFF2T0M5Q01WQTFMMUF4U3pGUVVGQlFMMUkwUWs1U0lHSWdhM0VnTFNBeUlERTMNCjM0fDF8NnxlOHxkN3wyfDB8MHxTM2hrTnc9PXxMUT09fDB8MHxjakZpTkhJdmNIQXhhekZ3Y0hBdk1tNHliakl2TTNBMEx6Z3ZRakZRTlM5UU1Vc3hVRkJRVUM5U05FSk9VaUIzSUMwZ0xTQXdJREU0DQozNXwwfDZ8YzJ8ZDN8MHwwfDB8UzJRenxMUT09fDF8MHxjakZpTkhJdmNIQXhhekZ3Y0hBdk1tNHliakl2TTNBMEx6Z3ZRakZRU3pRdlVETlFVRkJRTDFJMFFrNVNJR0lnTFNBdElERWdNVGc9DQozNnwxfDZ8ZDd8ZTh8MHwwfDB8UzJVNHxMUT09fDJ8MHxjakZpTVdzeWNpOXdjRE53Y0hBdk1tNHliakl2TTNBMEx6Z3ZRakZRU3pRdlVETlFVRkJRTDFJMFFrNVNJSGNnTFNBdElESWdNVGs9DQozN3wwfDZ8ZDN8ZTN8MHwwfDB8UzJVenxMUT09fDN8MHxjakZpTVdzeWNpOXdjRE53Y0hBdk1tNHliakl2TTNBMEx6Z3ZRakZRTVVzekwxQXpVRkJRVUM5U05FSk9VaUJpSUMwZ0xTQXpJREU1DQozOHwxfDR8aDh8Zjh8MHwwfDB8VW1ZNHxMUT09fDR8MHxjakZpTVd0eU1pOXdjRE53Y0hBdk1tNHliakl2TTNBMEx6Z3ZRakZRTVVzekwxQXpVRkJRVUM5U05FSk9VaUIzSUMwZ0xTQTBJREl3DQozOXwwfDZ8ZTN8ZjR8MHwwfDB8UzJZMHxMUT09fDV8MHxjakZpTVd0eU1pOXdjRE53Y0hBdk1tNHliakl2TTNBMEx6VkxNaTlDTVZBMUwxQXpVRkJRVUM5U05FSk9VaUJpSUMwZ0xTQTFJREl3DQo0MHwxfDZ8ZTh8ZDd8MHwwfDB8UzJRM3xMUT09fDZ8MHxjakZpTW5JeUwzQndNV3N4Y0hCd0x6SnVNbTR5THpOd05DODFTekl2UWpGUU5TOVFNMUJRVUZBdlVqUkNUbElnZHlBdElDMGdOaUF5TVE9PQ0KNDF8MHwxfGUyfGU0fDB8MHwwfFpUUT18WlRNPXwwfDB8Y2pGaU1uSXlMM0J3TVdzeGNIQndMekp1TW00eUx6TndOQzgwVUVzeUwwSXhVRFV2VURSUVVGQXZValJDVGxJZ1lpQXRJR1V6SURBZ01qRT0NCjQyfDF8NHxmOHxlOHwwfDB8MHxVbVU0fExRPT18MXwwfGNqRmlNWEl6TDNCd01Xc3hjSEJ3THpKdU1tNHlMek53TkM4MFVFc3lMMEl4VURVdlVEUlFVRkF2VWpSQ1RsSWdkeUF0SUMwZ01TQXlNZz09DQo0M3wwfDZ8ZjR8ZTN8MHwwfDB8UzJVenxMUT09fDJ8MHxjakZpTVhJekwzQndNV3N4Y0hCd0x6SnVNbTR5THpOd05DODBVRE12UWpGUU1Vc3pMMUEwVUZCUUwxSTBRazVTSUdJZ0xTQXRJRElnTWpJPQ0KNDR8MXw0fGU4fGU0fDF8MHwwfFVuaGxOQ3M9fExRPT18MHwwfGNqRmlOUzl3Y0RGck1YQndjQzh5YmpKdU1pOHpjRFF2TkhJekwwSXhVREZMTXk5UU5GQlFVQzlTTkVKT1VpQjNJQzBnTFNBd0lESXoNCjQ1fDB8NnxlM3xkMnwwfDB8MHxTMlF5fExRPT18MXwwfGNqRmlOUzl3Y0RGck1YQndjQzh5YmpKdU1pOHpjRFF2TkhJekwwSXhVRFV2VURKTE1WQlFVQzlTTkVKT1VpQmlJQzBnTFNBeElESXoNCjQ2fDF8NHxlNHxlM3wwfDB8MHxVbVV6fExRPT18MnwwfGNqRmlOUzl3Y0RGck1YQndjQzh5YmpKdU1pOHpjRFF2T0M5Q01WQXhjak12VURKTE1WQlFVQzlTTkVKT1VpQjNJQzBnTFNBeUlESTANCjQ3fDB8NnxkMnxlM3w0fDB8MHxTM2hsTXc9PXxMUT09fDB8MHxjakZpTlM5d2NERnJNWEJ3Y0M4eWJqSnVNaTh6Y0RRdk9DOUNNVkF4U3pNdlVEUlFVRkF2VWpSQ1RsSWdZaUF0SUMwZ01DQXlOQT09DQo0OHwxfDJ8ZjZ8ZTR8MHwwfDB8VG1VMHxMUT09fDF8MHxjakZpTlM5d2NERnJNWEJ3Y0M4eWJqVXZNM0EwTHpSdU15OUNNVkF4U3pNdlVEUlFVRkF2VWpSQ1RsSWdkeUF0SUMwZ01TQXlOUT09DQo0OXwwfDZ8ZTN8ZjR8MHwwfDB8UzJZMHxMUT09fDJ8MHxjakZpTlM5d2NERnJNWEJ3Y0M4eWJqVXZNM0EwTHpSdVN6SXZRakZRTlM5UU5GQlFVQzlTTkVKT1VpQmlJQzBnTFNBeUlESTENCjUwfDF8MnxlNHxkNnwwfDB8MHxUbVEyfExRPT18M3wwfGNqRmlOUzl3Y0RGck1YQndjQzh5Ym00MEx6TndOQzgxU3pJdlFqRlFOUzlRTkZCUVVDOVNORUpPVWlCM0lDMGdMU0F6SURJMg0KKAAwADgAQABIAVAAMq4ECg1FaWdodEJhbGxQb29sEpwEDZIYZz8NOyGHPg0mdqu7DSZ2q7sN5u9XPw2TCYo+DZUeQD8ND+w3Pg12q4A/DSZ2q7sNdquAPw0mdqu7Ddgwqz4NKsyePg0mdqu7DexWAT8NdquAPw0mdqu7DRPEbD8NWlLUPg0AAAA/DffkAT8NTO9PPw3S8uk+DV4RcD8NORqdPg2d310/DfD9Mj4NcGI5Pw2F7Fk+DQAAAD8N9+QBPxUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAVAAAAABUAAAAAFQAAAAAYABgBGAEYARgBGAEYARgBGAEYARgBGAEYARgBGAEYASAAKC4wCDgCQAJIAVACWABYAlgCWAJYAlgCWAJYAlgAWAFYAVgBWAFYAVgBWAFiJlBsYXllciAyIHdpbnMgYnkgcG9ja2V0aW5nIHRoZSA4IGJhbGwuaABwAHgIgAEAgAEBgAEBgAEBgAEBgAEBgAEBgAEBgAEAgAEBgAEBgAEBgAEBgAEBgAEBgAEBkAECmAEAoAEBoAEJoAECoAEKoAEDoAELoAEMoAEPoAENoAEEoAEOoAEFoAEHoAEGMokBCgtNaW5lc3dlZXBlchJ6CAkQCRgKIAAoADAAOK/Wi8b//////wFCUQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEoAUABYAGIAaABwqZ9geAEaLAoLY29yZS5jb2xvcnMSHbIGGgoGCgIIABAAEgYKAggAEAAaBgoCCAAQACAAGiUKEGNvcmUuaW50ZXJhY3Rpb24SEboGDg0AAEBAEAAYACUAAABAGjwKDGFwcC5zZXR0aW5ncxIssgcpCAIVAAAAABgBIAAoATABOABAAE0AAAAAVQAAAABdgZYYS2UAAKBAagAgEw==</Value>
+                          </item>
+                          <item>
+                            <Key>74de02b3-27f9-4960-b1c4-27351f2b06d1</Key>
+                            <Value>[ConnAlign]
+relativeToLcd=true
+useLargeFont=true
+connectorName=
 </Value>
                           </item>
                         </dictionary>
@@ -22982,13 +22923,35 @@ ShadowRange=29.997
                   </ComponentData>
                 </Components>
               </ComponentContainer>
+              <CustomName>LCD Panel - Station Lounge StationStorefront</CustomName>
               <ShowOnHUD>false</ShowOnHUD>
               <ShowInTerminal>true</ShowInTerminal>
               <ShowInToolbarConfig>true</ShowInToolbarConfig>
               <ShowInInventory>true</ShowInInventory>
               <NumberInGrid>1</NumberInGrid>
+              <IsSurvivalModeForced>true</IsSurvivalModeForced>
               <Enabled>true</Enabled>
-              <AnyoneCanUse>false</AnyoneCanUse>
+              <Description />
+              <Title>Title</Title>
+              <AccessFlag>READ_AND_WRITE_FACTION</AccessFlag>
+              <ChangeInterval>0</ChangeInterval>
+              <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
+              <FontSize>1</FontSize>
+              <PublicDescription />
+              <PublicTitle>Public title</PublicTitle>
+              <ShowText>NONE</ShowText>
+              <FontColor xsi:nil="true" />
+              <BackgroundColor xsi:nil="true" />
+              <CurrentShownTexture>0</CurrentShownTexture>
+              <TextPadding>2</TextPadding>
+              <Version>0</Version>
+              <ScriptBackgroundColor xsi:nil="true" />
+              <ScriptForegroundColor xsi:nil="true" />
+              <Sprites>
+                <Length>0</Length>
+              </Sprites>
+              <SelectedRotationIndex xsi:nil="true" />
+              <UpdateStartOfFirstTexture>-9223372036854775808</UpdateStartOfFirstTexture>
             </MyObjectBuilder_CubeBlock>
             <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_StoreBlock">
               <SubtypeName>AtmBlock</SubtypeName>
