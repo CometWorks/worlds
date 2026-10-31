@@ -181,7 +181,9 @@ def prepare_world(
     """A fresh copy of the server world without mods and asteroids, with extra grids
     (entity XML) added. table_blueprint (a grid builder XML, or a list of them taken in
     turn) is loaded into every station hologram table, as if a player had, and the tables
-    are switched on."""
+    are switched on. The trash collector is off unless settings turn it on: it takes a test's
+    small grids, like a probe's ship that isn't powered through its connector yet."""
+    settings = {"TrashRemovalEnabled": "false", **(settings or {})}
     shutil.rmtree(WORLD, ignore_errors=True)
     shutil.copytree(
         WORLD_SOURCE, WORLD, ignore=shutil.ignore_patterns("Octahedron-Asteroid-*.vx2")
@@ -223,7 +225,7 @@ def prepare_world(
         text = path.read_text(encoding="utf-8")
         text, count = re.subn(r"<Mods>.*?</Mods>", "<Mods />", text, flags=re.S)
         assert count == 1, name
-        for key, value in (settings or {}).items():
+        for key, value in settings.items():
             text, count = re.subn(
                 rf"<{key}>[^<]*</{key}>", f"<{key}>{value}</{key}>", text
             )
@@ -308,24 +310,49 @@ def _start(
     pid_file.write_text(str(process.pid))
 
 
-def _stop(pid_file: Path, marker: str, timeout: float) -> None:
-    """SIGTERM to the process group we started, SIGKILL after the timeout"""
+def _stop(pid_file: Path, marker: str, timeout: float) -> bool:
+    """SIGTERM to the process group we started, SIGKILL after the timeout. False if it
+    needed the SIGKILL"""
     pid = _alive(pid_file, marker)
     if pid is None:
         pid_file.unlink(missing_ok=True)
-        return
+        return True
     os.killpg(pid, signal.SIGTERM)
     deadline = time.monotonic() + timeout
+    exited = True
     while True:
+        # flock leads the group and quits on SIGTERM. Until it is reaped, its zombie
+        # keeps the group alive for killpg, however long ago the game exited
+        try:
+            os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:  # started by an earlier process, like rig.py start
+            pass
         try:
             os.killpg(pid, 0)
         except ProcessLookupError:
             break
         if time.monotonic() > deadline:
             os.killpg(pid, signal.SIGKILL)
+            exited = False
             break
         time.sleep(1)
     pid_file.unlink(missing_ok=True)
+    return exited
+
+
+def wait_until(predicate, timeout: float, description: str, interval: float = 2.0):
+    """Polls predicate until it returns something true and returns that, raising a
+    TimeoutError that says what it waited for. Use it instead of a sleep: the test takes as
+    long as the game does, and a slow machine doesn't fail it. Same use as the cluster
+    bench's wait_until"""
+    deadline = time.monotonic() + timeout
+    while not (last := predicate()):
+        if time.monotonic() > deadline:
+            raise TimeoutError(
+                f"Timed out after {timeout:.0f} s waiting for {description} (last={last!r})"
+            )
+        time.sleep(interval)
+    return last
 
 
 # --- server ---------------------------------------------------------------------
@@ -431,8 +458,17 @@ def start_server(timeout: float = 2400.0, env: dict | None = None) -> None:
 
 
 def stop_server() -> None:
-    """SIGTERM makes Magnetar save the world and quit"""
-    _stop(SERVER_PID, str(SERVER_CONFIG), 180)
+    """SIGTERM makes Magnetar save the world and quit. Raises if a server that had
+    loaded the world didn't exit or didn't finish that save"""
+    loaded = server_pid() and "Game ready" in SERVER_LOG.read_text(errors="replace")
+    if not _stop(SERVER_PID, str(SERVER_CONFIG), 180):
+        raise TimeoutError(f"The server had to be killed, see {SERVER_LOG}")
+    log = server_game_log()
+    saved = log.rfind("Session snapshot save - END")
+    if loaded and (saved < 0 or saved < log.rfind("Saving world - START")):
+        raise RuntimeError(
+            f"The server exited without finishing a save, see {SERVER_LOG}"
+        )
 
 
 def server_game_log() -> str:
