@@ -30,13 +30,19 @@ internal enum ContractGridFlags
     // Movable and nobody's or a wreck faction's, near a station
     Derelict = 2,
 
-    // Movable, nobody's, and nothing on it works: armor and decor
+    // Nobody's, and nothing on it works: armor and decor. Static or not.
     Wreck = 4,
 
-    // Movable and without power
+    // Without power. Static or not.
     Unpowered = 8,
 
     Shipyard = 16,
+
+    // Someone sits in it or controls it: it is in use, whatever else it looks like
+    Seated = 32,
+
+    // Nothing on it can have an owner, armor mostly: giving it away changes nothing
+    Unownable = 64,
 }
 
 // A grid as the node simulating it last reported it. Sent as a line to the World Authority.
@@ -51,6 +57,10 @@ internal sealed class ContractGrid
     public string Name;
     public string Node = "";
     public DateTime Seen;
+
+    // Its big owner, and who built most of it: a disowned ship still has a builder
+    public long Owner;
+    public long Builder;
 
     private static string N(double v) => v.ToString("R", CultureInfo.InvariantCulture);
 
@@ -67,7 +77,9 @@ internal sealed class ContractGrid
             N(Threat),
             Node,
             Seen.Ticks.ToString(CultureInfo.InvariantCulture),
-            (Name ?? "").Replace('\t', ' ').Replace('\n', ' ')
+            (Name ?? "").Replace('\t', ' ').Replace('\n', ' '),
+            Owner.ToString(CultureInfo.InvariantCulture),
+            Builder.ToString(CultureInfo.InvariantCulture)
         );
 
     public static ContractGrid Decode(string line)
@@ -85,6 +97,8 @@ internal sealed class ContractGrid
             Node = p[8],
             Seen = new DateTime(long.Parse(p[9], CultureInfo.InvariantCulture), DateTimeKind.Utc),
             Name = p[10],
+            Owner = long.Parse(p[11], CultureInfo.InvariantCulture),
+            Builder = long.Parse(p[12], CultureInfo.InvariantCulture),
         };
     }
 }
@@ -107,6 +121,10 @@ internal sealed class ContractTarget(
 
     // The last time the player who took it was near the target
     public DateTime HunterSeen = DateTime.MinValue;
+
+    // Salvage and wrecks: whose it was when posted. They can't sell it to OCT.
+    public long Owner;
+    public long Builder;
 }
 
 internal enum ContractVerdict
@@ -117,6 +135,9 @@ internal enum ContractVerdict
 
     // Finish, and the node holding the target closes it
     Scrap,
+
+    // Finish, and the node holding the target gives it to the player who took the contract
+    Give,
     Fail,
 }
 
@@ -143,6 +164,10 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     public readonly Dictionary<long, ContractTarget> Targets = new();
     public readonly Dictionary<long, ContractGrid> Grids = new();
 
+    // Grids towed in and given away, grid -> the player, 0 once a report shows they have it. A given
+    // grid never gets another contract, or a player could disown it and tow it in again for the pay.
+    public readonly Dictionary<long, long> Given = new();
+
     // Grids in offline partitions and since when, from the gateway; null while unknown, when nothing
     // can be said about a grid no report names
     public Dictionary<long, DateTime> Offline;
@@ -153,7 +178,18 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     private readonly Dictionary<string, DateTime> reports = new();
     private readonly Dictionary<long, DateTime> closing = new();
 
-    /// <summary>A node's rows. The answer: "watched ids;ids to close", comma separated.</summary>
+    // What the nodes must report every time: the targets, and the grids still to be given away
+    public IEnumerable<long> Watched =>
+        Targets
+            .Values.Select(t => t.Grid)
+            .Concat(Given.Where(g => g.Value != 0).Select(g => g.Key))
+            .Distinct();
+
+    /// <summary>
+    /// A node's rows. The answer, comma separated: "watched ids;ids to close;grid:player to give".
+    /// The orders go to every node; the one that holds the grid carries them out, after a handover
+    /// the new one, and they repeat until a report shows it done.
+    /// </summary>
     public string Report(string node, IEnumerable<ContractGrid> rows, DateTime now)
     {
         Reports++;
@@ -165,21 +201,43 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             row.Node = node;
             row.Seen = now;
             Grids[row.Id] = row;
+            if (
+                Given.TryGetValue(row.Id, out var taker)
+                && taker != 0
+                && (row.Owner == taker || row.Flags.HasFlag(ContractGridFlags.Unownable))
+            )
+                Given[row.Id] = 0;
         }
         foreach (var id in closing.Where(c => now >= c.Value).Select(c => c.Key).ToList())
             closing.Remove(id);
-        return string.Join(",", Targets.Values.Select(t => t.Grid).Distinct())
+        return string.Join(",", Watched)
             + ";"
-            + string.Join(",", closing.Keys);
+            + string.Join(",", closing.Keys)
+            + ";"
+            + string.Join(",", Given.Where(g => g.Value != 0).Select(g => $"{g.Key}:{g.Value}"));
     }
 
-    public static (HashSet<long> Watched, List<long> Close) ParseAnswer(string answer)
+    public static (
+        HashSet<long> Watched,
+        List<long> Close,
+        List<(long Grid, long Player)> Give
+    ) ParseAnswer(string answer)
     {
         static IEnumerable<long> Ids(string text) =>
             text.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(i => long.Parse(i, CultureInfo.InvariantCulture));
         var parts = answer.Split(';');
-        return (Ids(parts[0]).ToHashSet(), Ids(parts[1]).ToList());
+        var give = parts[2]
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(g => g.Split(':'))
+            .Select(g =>
+                (
+                    long.Parse(g[0], CultureInfo.InvariantCulture),
+                    long.Parse(g[1], CultureInfo.InvariantCulture)
+                )
+            )
+            .ToList();
+        return (Ids(parts[0]).ToHashSet(), Ids(parts[1]).ToList(), give);
     }
 
     /// <summary>
@@ -208,7 +266,9 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             return;
         foreach (var row in Grids.Values.Where(r => Offline.ContainsKey(r.Id)))
             row.Seen = now;
-        var targeted = Targets.Values.Select(t => t.Grid).ToHashSet();
+        foreach (var id in Given.Keys.Where(g => Given[g] != 0 && IsGone(g, now)).ToList())
+            Given[id] = 0;
+        var targeted = Watched.ToHashSet();
         foreach (
             var id in Grids
                 .Values.Where(r => !targeted.Contains(r.Id) && now - r.Seen >= StaleAfter)
@@ -230,7 +290,7 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     private IEnumerable<ContractGrid> Free()
     {
         var targeted = Targets.Values.Select(t => t.Grid).ToHashSet();
-        return Grids.Values.Where(r => !targeted.Contains(r.Id));
+        return Grids.Values.Where(r => !targeted.Contains(r.Id) && !Given.ContainsKey(r.Id));
     }
 
     /// <summary>The bounty targets in range of the station, the highest threat first.</summary>
@@ -251,12 +311,23 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             .Take(Math.Max(0, wanted))
             .ToList();
 
-    /// <summary>The derelicts in range of the station, the nearest first.</summary>
-    public List<ContractGrid> Derelicts(ContractPoint station, double meters, int wanted) =>
+    /// <summary>
+    /// The derelicts in range of the station, the nearest first. One already at the shipyard gets no
+    /// contract: nobody would have to tow it to own it.
+    /// </summary>
+    public List<ContractGrid> Derelicts(
+        ContractPoint station,
+        double meters,
+        int wanted,
+        double shipyardSearchMeters = 0,
+        double salvageRadius = 0
+    ) =>
         Free()
             .Where(r =>
                 r.Flags.HasFlag(ContractGridFlags.Derelict)
+                && !r.Flags.HasFlag(ContractGridFlags.Seated)
                 && r.Position.Distance(station) <= meters
+                && !InReach(r.Position, station, shipyardSearchMeters, salvageRadius)
             )
             .OrderBy(r => r.Position.Distance(station))
             .ThenBy(r => r.Id)
@@ -266,11 +337,14 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     /// <summary>
     /// A wreck in an offline partition: nothing on it works and nobody owns it, at once; any other
     /// grid without power once its partition has been offline for offlineFor. A visit brings the
-    /// partition online and starts that time anew.
+    /// partition online and starts that time anew. A grid someone sits in is no wreck.
     /// </summary>
     public static bool IsWreck(ContractGridFlags flags, TimeSpan offline, TimeSpan offlineFor) =>
-        flags.HasFlag(ContractGridFlags.Wreck)
-        || (flags.HasFlag(ContractGridFlags.Unpowered) && offline >= offlineFor);
+        !flags.HasFlag(ContractGridFlags.Seated)
+        && (
+            flags.HasFlag(ContractGridFlags.Wreck)
+            || (flags.HasFlag(ContractGridFlags.Unpowered) && offline >= offlineFor)
+        );
 
     /// <summary>Wanted wrecks picked at random from the pool biggest ones, by blocks.</summary>
     public List<ContractGrid> Wrecks(
@@ -304,7 +378,8 @@ internal sealed class ContractBook(TimeSpan goneAfter)
 
     /// <summary>
     /// What happens to a contract now. Active: a player took it. stationAt: null when the station
-    /// no longer exists. hunterNear: the player who took it is near the target.
+    /// no longer exists. hunterNear: the player who took it is near the target. hunterOwns: that
+    /// player or their faction owned or built the target when it was posted.
     /// </summary>
     public ContractVerdict Judge(
         ContractTarget target,
@@ -313,7 +388,9 @@ internal sealed class ContractBook(TimeSpan goneAfter)
         bool hunterNear,
         double shipyardSearchMeters,
         double salvageRadius,
-        DateTime now
+        DateTime now,
+        long hunter = 0,
+        bool hunterOwns = false
     )
     {
         var gone = IsGone(target.Grid, now);
@@ -326,6 +403,8 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             return !gone && stationAt != null && Wanted(target.Kind, row.Flags)
                 ? ContractVerdict.Keep
                 : ContractVerdict.Withdraw;
+        if (hunterOwns && target.Kind != 'b')
+            return ContractVerdict.Fail;
 
         var witnessed = row != null && target.HunterSeen >= row.Seen - WitnessSlack;
         switch (target.Kind)
@@ -339,22 +418,31 @@ internal sealed class ContractBook(TimeSpan goneAfter)
                     ? ContractVerdict.Finish
                     : ContractVerdict.Keep;
             case 's':
-                if (gone || stationAt == null)
+                if (gone || stationAt == null || Claimed(row, target, hunter))
                     return ContractVerdict.Fail;
-                return AtShipyard(row, stationAt.Value, shipyardSearchMeters, salvageRadius)
-                    ? ContractVerdict.Scrap
+                return
+                    hunterNear
+                    && !row.Flags.HasFlag(ContractGridFlags.Seated)
+                    && AtShipyard(row, stationAt.Value, shipyardSearchMeters, salvageRadius)
+                    ? ContractVerdict.Give
                     : ContractVerdict.Keep;
             default:
                 if (gone)
                     return witnessed ? ContractVerdict.Finish : ContractVerdict.Fail;
-                if (!row.Flags.HasFlag(ContractGridFlags.Unpowered))
+                // The hunter may repair it to fly it in; power from anyone else means its owner is back
+                if (
+                    Claimed(row, target, hunter)
+                    || (!row.Flags.HasFlag(ContractGridFlags.Unpowered) && row.Owner != hunter)
+                )
                     return ContractVerdict.Fail;
+                if (!hunterNear || row.Flags.HasFlag(ContractGridFlags.Seated))
+                    return ContractVerdict.Keep;
                 if (
                     stationAt != null
                     && AtShipyard(row, stationAt.Value, shipyardSearchMeters, salvageRadius)
                 )
-                    return ContractVerdict.Scrap;
-                return hunterNear && row.Blocks <= target.Size * DoneShare
+                    return ContractVerdict.Give;
+                return row.Blocks <= target.Size * DoneShare
                     ? ContractVerdict.Scrap
                     : ContractVerdict.Keep;
         }
@@ -362,25 +450,34 @@ internal sealed class ContractBook(TimeSpan goneAfter)
 
     // Once posted, a wreck stays one while it has no power: the contract itself wakes its partition
     private static bool Wanted(char kind, ContractGridFlags flags) =>
-        flags.HasFlag(
-            kind switch
-            {
-                'b' => ContractGridFlags.Bounty,
-                's' => ContractGridFlags.Derelict,
-                _ => ContractGridFlags.Unpowered,
-            }
-        );
+        kind == 'b'
+            ? flags.HasFlag(ContractGridFlags.Bounty)
+            : !flags.HasFlag(ContractGridFlags.Seated)
+                && flags.HasFlag(
+                    kind == 's' ? ContractGridFlags.Derelict : ContractGridFlags.Unpowered
+                );
 
-    // Awake too: only a node can scrap it, and a sleeping grid hasn't just been brought there
+    // Someone else put their own blocks on it and owns it now, its old owner by welding or hacking it
+    // back included: the hunter takes nothing from a player. Who owned it when posted, or a wreck
+    // faction, doesn't count as someone else.
+    private static bool Claimed(ContractGrid row, ContractTarget target, long hunter) =>
+        row.Owner != 0 && row.Owner != target.Owner && row.Owner != hunter;
+
+    public bool InReach(
+        ContractPoint position,
+        ContractPoint station,
+        double search,
+        double radius
+    ) =>
+        Shipyard(station, search) is { } shipyard && position.Distance(shipyard.Position) <= radius;
+
+    // Awake too: only a node can act on it, and a sleeping grid hasn't just been brought there
     private bool AtShipyard(
         ContractGrid row,
         ContractPoint station,
         double search,
         double radius
-    ) =>
-        Offline?.ContainsKey(row.Id) != true
-        && Shipyard(station, search) is { } shipyard
-        && row.Position.Distance(shipyard.Position) <= radius;
+    ) => Offline?.ContainsKey(row.Id) != true && InReach(row.Position, station, search, radius);
 
     /// <summary>The grid is to be closed by the node holding it, and is no candidate any more.</summary>
     public void Scrap(long grid, DateTime now)
@@ -389,9 +486,12 @@ internal sealed class ContractBook(TimeSpan goneAfter)
         closing[grid] = now + ClosingFor;
     }
 
+    /// <summary>The grid is to be given to the player by the node holding it.</summary>
+    public void Give(long grid, long player) => Given[grid] = player;
+
     // --- saved in the world ---
 
-    // contract:kind:grid:station:size:x:y:z:hunterSeen;...
+    // contract:kind:grid:station:size:x:y:z:hunterSeen:owner:builder;...
     public string SerializeTargets()
     {
         static string N(double v) => v.ToString("R", CultureInfo.InvariantCulture);
@@ -400,7 +500,8 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             Targets.Select(t =>
                 $"{t.Key}:{t.Value.Kind}:{t.Value.Grid}:{t.Value.Station}:{N(t.Value.Size)}:"
                 + $"{N(t.Value.Position.X)}:{N(t.Value.Position.Y)}:{N(t.Value.Position.Z)}:"
-                + t.Value.HunterSeen.Ticks.ToString(CultureInfo.InvariantCulture)
+                + $"{t.Value.HunterSeen.Ticks.ToString(CultureInfo.InvariantCulture)}:"
+                + $"{t.Value.Owner}:{t.Value.Builder}"
             )
         );
     }
@@ -423,7 +524,24 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             {
                 HunterSeen =
                     p.Length > 8 ? new DateTime(L(p[8]), DateTimeKind.Utc) : DateTime.MinValue,
+                Owner = p.Length > 9 ? L(p[9]) : 0,
+                Builder = p.Length > 10 ? L(p[10]) : 0,
             };
+        }
+    }
+
+    // grid:player, 0 once given
+    public string SerializeGiven() => string.Join(";", Given.Select(g => $"{g.Key}:{g.Value}"));
+
+    public void LoadGiven(string text)
+    {
+        foreach (var entry in text.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var p = entry.Split(':');
+            Given[long.Parse(p[0], CultureInfo.InvariantCulture)] = long.Parse(
+                p[1],
+                CultureInfo.InvariantCulture
+            );
         }
     }
 

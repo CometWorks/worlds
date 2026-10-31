@@ -53,6 +53,7 @@ var goneAfter = TimeSpan.FromMinutes(3);
 var alpha = new ContractPoint(0, 0, 0);
 const ContractGridFlags Wreck = ContractGridFlags.Wreck | ContractGridFlags.Unpowered;
 const ContractGridFlags Dead = ContractGridFlags.Unpowered;
+const long Hunter = 99;
 
 ContractGrid Row(long id, ContractGridFlags flags, int blocks = 100, double x = 100_000) =>
     new()
@@ -77,8 +78,9 @@ ContractVerdict Judge(
     ContractTarget target,
     bool active,
     bool near,
-    DateTime at
-) => book.Judge(target, active, alpha, near, 3000, 150, at);
+    DateTime at,
+    bool owns = false
+) => book.Judge(target, active, alpha, near, 3000, 150, at, Hunter, owns);
 
 // The week, both ways: a dead grid isn't a wreck a second before it and is one right at it
 Check(!ContractBook.IsWreck(Dead, week - TimeSpan.FromSeconds(1), week), "dead: under a week, no");
@@ -200,7 +202,8 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     book.Offline[1] = t0;
     Check(Judge(book, target, true, false, t0) == ContractVerdict.Keep, "there, but offline");
     book.Offline.Remove(1);
-    Check(Judge(book, target, true, false, t0) == ContractVerdict.Scrap, "150 m from it: done");
+    Check(Judge(book, target, true, false, t0) == ContractVerdict.Keep, "150 m from it, alone");
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Give, "with the player: done");
 
     // Scrapped: the node is told to close it, and its next report doesn't bring it back
     book.Scrap(1, t0);
@@ -422,7 +425,159 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
             && back.Targets[5].HunterSeen == DateTime.MinValue,
         "an older world's targets"
     );
-    Check(ContractBook.ParseAnswer(";").Watched.Count == 0, "an empty answer");
+    Check(ContractBook.ParseAnswer(";;").Watched.Count == 0, "an empty answer");
+}
+
+// Towed in, the grid goes to the player, on whichever node holds it, until a report shows it done
+{
+    var near = Row(1, Dead, 100, 1100);
+    var book = Book(near, Row(2, ContractGridFlags.Shipyard, 500, 1000));
+    book.Give(1, Hunter);
+    var answer = ContractBook.ParseAnswer(book.Report("n1", [Row(1, Dead, 100, 1100)], t0));
+    Check(answer.Give.SequenceEqual([(1L, Hunter)]), "the answer gives it to the player");
+    Check(answer.Watched.Contains(1), "and the nodes keep reporting it");
+    // Handed over before the node acted: the new node gets the same order
+    answer = ContractBook.ParseAnswer(book.Report("n2", [Row(1, Dead, 100, 1100)], t0));
+    Check(answer.Give.Count == 1, "another node holds it now: told too");
+
+    var owned = Row(1, Dead, 100, 1100);
+    owned.Owner = Hunter;
+    answer = ContractBook.ParseAnswer(book.Report("n2", [owned], t0));
+    Check(answer.Give.Count == 0 && !answer.Watched.Contains(1), "a report shows it done");
+    Check(book.Grids.ContainsKey(1), "it isn't scrapped");
+    Check(
+        book.Derelicts(alpha, 100_000, 5).Count == 0
+            && book.Wrecks(t0, week, 5, 5, new Random(1)).Count == 0,
+        "a given grid gets no new contract, or it could be disowned and sold again"
+    );
+
+    // Armor only: no block can have an owner, so nothing to wait for
+    book = Book(Row(1, Dead, 100, 1100));
+    book.Give(1, Hunter);
+    answer = ContractBook.ParseAnswer(
+        book.Report("n1", [Row(1, Dead | ContractGridFlags.Unownable, 100, 1100)], t0)
+    );
+    Check(answer.Give.Count == 0, "armor only: nothing more to do");
+
+    // Lost before the node acted: the order ends
+    book = Book(Row(1, Dead, 100, 1100));
+    book.Give(1, Hunter);
+    book.Report("n1", [], t0 + goneAfter);
+    book.Forget(t0 + goneAfter);
+    Check(book.Watched.Count() == 0, "gone before it was given: the order ends");
+
+    // A World Authority restart loses neither an order nor the memory of a given grid
+    book = Book(Row(1, Dead, 100, 1100));
+    book.Give(1, Hunter);
+    book.Give(3, 0);
+    var back = new ContractBook(goneAfter);
+    back.LoadGiven(book.SerializeGiven());
+    Check(back.Given[1] == Hunter && back.Given[3] == 0, "the orders come back from the save");
+}
+
+// Abuse: selling your own grid, someone else's claim, a grid in use, a grid already at the shipyard
+{
+    var yard = Row(2, ContractGridFlags.Shipyard, 500, 1000);
+    var book = Book(Row(1, Dead, 100, 1100), yard);
+    var target = new ContractTarget('w', 1, 1, 100, new ContractPoint(1100, 0, 0)) { Owner = 5 };
+    book.Targets[7] = target;
+    var salvage = new ContractTarget('s', 1, 1, 0, new ContractPoint(1100, 0, 0)) { Owner = 5 };
+    book.Targets[8] = salvage;
+
+    Check(Judge(book, target, true, true, t0, owns: true) == ContractVerdict.Fail, "own wreck");
+    Check(Judge(book, salvage, true, true, t0, owns: true) == ContractVerdict.Fail, "own derelict");
+    Check(Judge(book, target, false, false, t0, owns: true) == ContractVerdict.Keep, "until taken");
+    Check(
+        book.Judge(
+            new ContractTarget('b', 1, 1, 0, new ContractPoint(1100, 0, 0)),
+            true,
+            alpha,
+            true,
+            3000,
+            150,
+            t0,
+            Hunter,
+            true
+        ) != ContractVerdict.Fail,
+        "the rule is no bounty's"
+    );
+
+    // The old owner is still its owner: that's the point of a wreck contract
+    var row = Row(1, Dead, 100, 1100);
+    row.Owner = 5;
+    book.Report("n1", [row], t0);
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Give, "the old owner's: taken");
+
+    row = Row(1, Dead, 100, 1100);
+    row.Owner = 6;
+    book.Report("n1", [row], t0);
+    Check(
+        Judge(book, target, true, true, t0) == ContractVerdict.Fail,
+        "a third player's now: wreck"
+    );
+    Check(Judge(book, salvage, true, true, t0) == ContractVerdict.Fail, "and derelict");
+
+    // The hunter's own repairs: their blocks and power don't end it
+    row = Row(1, ContractGridFlags.None, 100, 1100);
+    row.Owner = Hunter;
+    book.Report("n1", [row], t0);
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Give, "repaired by the hunter");
+    row = Row(1, ContractGridFlags.None, 100, 1100);
+    row.Owner = 5;
+    book.Report("n1", [row], t0);
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Fail, "repowered by its owner");
+
+    // In use: nothing happens while someone sits in it, and a free grid doesn't qualify
+    var seated = Dead | ContractGridFlags.Seated;
+    book.Report("n1", [Row(1, seated, 100, 1100)], t0);
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Keep, "seated at the shipyard");
+    Check(Judge(book, salvage, true, true, t0) == ContractVerdict.Keep, "a seated derelict too");
+    Check(Judge(book, target, false, false, t0) == ContractVerdict.Withdraw, "seated, not taken");
+    book.Report("n1", [Row(1, seated, 25, 100_000)], t0);
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Keep, "seated: no scrapping");
+    Check(!ContractBook.IsWreck(seated, week * 52, week), "a seat in use: no wreck");
+
+    book.Report("n1", [Row(1, Dead, 100, 1100)], t0);
+    Check(Judge(book, target, true, false, t0) == ContractVerdict.Keep, "towed in by someone else");
+
+    // Already at the shipyard: nothing to tow, so no contract
+    book = Book(
+        Row(1, ContractGridFlags.Derelict, 100, 1100),
+        Row(3, ContractGridFlags.Derelict, 100, 5000),
+        Row(4, ContractGridFlags.Derelict | ContractGridFlags.Seated, 100, 5000),
+        yard
+    );
+    Check(
+        book.Derelicts(alpha, 100_000, 5, 3000, 150).Select(r => r.Id).SequenceEqual([3L]),
+        "only the derelict to tow, and nobody's in it"
+    );
+}
+
+// A static grid: the same id and row once converted to a ship
+{
+    var flags = Dead;
+    var book = Book(Row(1, flags, 100, 100_000), Row(2, ContractGridFlags.Shipyard, 500, 1000));
+    var target = new ContractTarget('w', 1, 1, 100, new ContractPoint(100_000, 0, 0));
+    book.Targets[7] = target;
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Keep, "static, not there yet");
+    book.Report("n1", [Row(1, flags, 100, 1100)], t0);
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Give, "converted and towed in");
+    book.Report("n1", [Row(1, flags, 25, 100_000)], t0);
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Scrap, "or ground down in place");
+}
+
+// A row and a target keep whose they were through the wire and the save
+{
+    var row = Row(1, Dead, 100, 1100);
+    row.Owner = 5;
+    row.Builder = 6;
+    var back = ContractGrid.Decode(row.Encode());
+    Check(back.Owner == 5 && back.Builder == 6, "a row's owner and builder");
+    var book = new ContractBook(goneAfter);
+    book.Targets[7] = new ContractTarget('w', 1, 1, 100, alpha) { Owner = 5, Builder = 6 };
+    var loaded = new ContractBook(goneAfter);
+    loaded.LoadTargets(book.SerializeTargets());
+    Check(loaded.Targets[7].Owner == 5 && loaded.Targets[7].Builder == 6, "a target's");
 }
 
 Console.WriteLine($"{checks - failures}/{checks} contract math checks passed");

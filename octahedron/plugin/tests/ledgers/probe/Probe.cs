@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using PluginSdk.Commands;
+using Sandbox.Game.Entities;
 using Sandbox.Game.World;
 using VRage.Game.ModAPI;
 using VRage.Plugins;
@@ -19,6 +20,8 @@ namespace LedgerProbe;
 ///   wait SECONDS     let the game run
 ///   clock DAYS       moves the clock that ages offline partitions in the contracts, a test's week
 ///   anything else    a chat command line, for example "!oct ledger show Alpha"
+/// Grid ids in the file LEDGERPROBE_PLAN.convert become ships on the process holding them, as the game's
+/// Convert to Ship does, and are written to LEDGERPROBE_PLAN.converted; on every process it is loaded on.
 /// </summary>
 public class Probe : IPlugin, ICommandResponder
 {
@@ -30,6 +33,8 @@ public class Probe : IPlugin, ICommandResponder
     private DateTime resumeAt = DateTime.MaxValue;
     private StreamWriter output;
     private int replying;
+    private string convertPath;
+    private DateTime nextConvert;
 
     private static readonly CommandCaller Console = new(
         0UL,
@@ -45,6 +50,7 @@ public class Probe : IPlugin, ICommandResponder
         var outPath = Environment.GetEnvironmentVariable("LEDGERPROBE_OUT");
         var node = Environment.GetEnvironmentVariable("CLUSTER_NODE_ID");
         var only = Environment.GetEnvironmentVariable("LEDGERPROBE_NODE");
+        convertPath = path == null ? null : path + ".convert";
         if (path == null || outPath == null || (only != null && node != only))
             return;
         planPath = path;
@@ -53,6 +59,7 @@ public class Probe : IPlugin, ICommandResponder
 
     public void Update()
     {
+        Convert();
         if (planPath == null || MySession.Static is not { Ready: true })
             return;
         if (line >= plan.Length)
@@ -93,6 +100,26 @@ public class Probe : IPlugin, ICommandResponder
         {
             Write(replying, "error " + e.Message);
         }
+    }
+
+    private void Convert()
+    {
+        var now = DateTime.UtcNow;
+        if (convertPath == null || now < nextConvert || MySession.Static is not { Ready: true })
+            return;
+        nextConvert = now.AddSeconds(5);
+        if (!File.Exists(convertPath))
+            return;
+        foreach (var text in File.ReadAllLines(convertPath))
+            if (
+                long.TryParse(text, out var id)
+                && MyEntities.TryGetEntityById(id, out var entity)
+                && entity is MyCubeGrid { IsStatic: true, Physics: not null } grid
+            )
+            {
+                grid.OnConvertToDynamic();
+                File.AppendAllText(convertPath + "ed", $"{id}\n");
+            }
     }
 
     private static void ShiftContractClock(double days)

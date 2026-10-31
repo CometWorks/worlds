@@ -637,34 +637,50 @@ Every minute the plugin fills each station up again:
   to nobody or to a wreck faction (`ContractSalvageFactionTags`, `WRECKS`). It pays
   `ContractSalvageRewardPerTonne` (100 SC) per tonne. Delivered when the derelict is
   within `ContractSalvageRadius` (150 m) of the station's shipyard grid, center to
-  center; the plugin then finishes the contract and scraps the derelict.
-  `ContractSalvageMinutes` (180) to tow it.
+  center, with the player who took it within 5 km and nobody in its seats. The plugin
+  then finishes the contract and gives the player the derelict, with its rotor and
+  piston parts, on top of the reward. A tug on a connector stays as it was, and so does
+  another player's ship on a rotor. A grid with no block that can have an owner, armor
+  only, stays ownerless until the player adds one. `ContractSalvageMinutes` (180) to
+  tow it. A derelict already in that radius gets no contract: there is nothing to tow.
 
 - Wrecks, on a cluster: `ContractWreckContracts` (5) open salvage contracts on wrecks
   left in offline partitions, wherever they are, each picked at random from the
   `ContractWreckPool` (10) biggest by blocks and posted at the nearest station with a
-  shipyard. A wreck is a movable grid that belongs to nobody with no working terminal
-  block (armor and decor), at once, or any movable grid without power once its
-  partition has been offline for `ContractWreckOfflineDays` (7); a visit brings the
-  partition online and starts that time anew. No power means no battery with charge,
-  no reactor or engine with fuel, and no working solar panel or wind turbine. That
-  includes a player's ship. Static grids, stations and OCT's grids are never wrecks.
-  Done when towed to the shipyard as above, or ground down to a quarter of its blocks
-  with the player within 5 km (the plugin scraps the rest), or gone with them within
-  5 km. Someone powering it up fails the contract, or withdraws it if nobody took it.
+  shipyard. A wreck is a grid that belongs to nobody with no working terminal block
+  (armor and decor), at once, or any grid without power once its partition has been
+  offline for `ContractWreckOfflineDays` (7); a visit brings the partition online and
+  starts that time anew. No power means no battery with charge, no reactor or engine
+  with fuel, and no working solar panel or wind turbine. That includes a player's ship
+  or base, static or not. Stations, OCT's grids and a grid someone sits in are never
+  wrecks. A static wreck pays by the mass of its blocks. It is done like a ship: ground
+  down, or cut free of the voxels, converted to a ship and towed; only its big owner can
+  convert a grid, so a static wreck that still has an owner needs that first.
+  Done when towed to the shipyard as above, which also gives the player the grid, or
+  ground down to a quarter of its blocks with the player within 5 km (the plugin scraps
+  the rest), or gone with them within 5 km. Its owner powering it up fails the contract,
+  or withdraws it if nobody took it; the player who took it may repair it themselves.
   It pays per tonne as above; the time limit is `ContractSalvageMinutes` plus a minute
   for every 3 km.
+- Against abuse, for salvage and wrecks: a contract on a grid its taker or their faction
+  owned or mostly built when it was posted fails at once, unpaid, so nobody sells their
+  own ship to OCT by disowning it. It also fails when a third player comes to own the
+  target. A grid once given away never gets another contract. The given grid's blocks
+  count against the new owner's limits, not the old owner's.
 
-The targets and the grids last reported are world variables (`Octahedron-Contracts`,
-`Octahedron-Contract-Grids`); the contracts themselves are saved by the game. The plugin
-checks them every 30 seconds.
+The targets, the grids last reported and the grids given away are world variables
+(`Octahedron-Contracts`, `Octahedron-Contract-Grids`, `Octahedron-Contract-Given`); the
+contracts themselves are saved by the game. The plugin checks them every 30 seconds.
 
 The contract system is kept on the World Authority of a cluster, so the plugin posts
 there; the nodes carry the deliveries, and OCT's payment and an acquisition's ledger
 deposit happen where the contract finishes, through the World Authority. The World
 Authority has no grids. Every minute each node reports the candidates among the grids it
 simulates and, every 30 seconds while there are any, the contracts' targets, on the topic
-`contracts/report`; the answer names the targets to watch and the grids to scrap. The World Authority
+`contracts/report`; the answer names the targets to watch, the grids to scrap and the
+grids to give to a player. That order goes to all nodes and the one holding the grid
+carries it out; it repeats until a report shows the new owner, also after a handover or
+a World Authority restart. The World Authority
 decides from those rows, which outlast a grid's partition going offline. It reads the
 offline partitions and the time they went offline from the gateway's
 `GET /registry/partitions/offline`, once a minute, with the cluster's join token. A
@@ -1086,8 +1102,8 @@ were saved.
 hauling contracts and an acquisition at every station and none of the game's, a bounty
 on an NPC grid and salvage of a derelict placed near Alpha Station, a hauling and an
 acquisition handed in and paid by OCT with the items in OCT's ledger, the derelict
-finished at the shipyard by the plugin, the bounty completed, and after a restart the
-same open contracts. `tests/contracts/ContractTests` checks the rewards, time limits
+finished at the shipyard by the plugin with the derelict given to the player, a player's own
+ownerless block refused, the bounty completed, and after a restart the same open contracts. `tests/contracts/ContractTests` checks the rewards, time limits
 and amounts alone (`dotnet run -c Release --project tests/contracts/ContractTests`), and
 the rules of bounties, salvage and wrecks against a clock the test sets, the offline week
 both ways among them. `tests/contracts_cluster.py` runs them on a local cluster; `clock`

@@ -8,6 +8,7 @@ using Sandbox.Game.EntityComponents;
 using Sandbox.Game.GameSystems;
 using Sandbox.Game.World;
 using Sandbox.ModAPI.Ingame;
+using VRage.Game;
 
 namespace ServerPlugin;
 
@@ -113,7 +114,7 @@ internal static class ContractGrids
             var near =
                 isWatched
                 || stations?.Any(s => VRageMath.Vector3D.Distance(s, position) <= range) == true;
-            var row = Describe(grid, group, near, octId);
+            var row = Describe(grid, group, near, isWatched, octId);
             if (row.Flags == ContractGridFlags.None && !isWatched)
                 continue;
             row.Position = new ContractPoint(position.X, position.Y, position.Z);
@@ -126,6 +127,7 @@ internal static class ContractGrids
         MyCubeGrid grid,
         List<MyCubeGrid> group,
         bool near,
+        bool isWatched,
         long octId
     )
     {
@@ -136,7 +138,6 @@ internal static class ContractGrids
             Id = grid.EntityId,
             Name = grid.DisplayName,
             Blocks = blocks,
-            MassKg = group.Sum(g => (double)(g.Physics?.Mass ?? 0)),
         };
         if (ShipyardZoneWelding.IsShipyard(grid))
             row.Flags |= ContractGridFlags.Shipyard;
@@ -149,7 +150,7 @@ internal static class ContractGrids
             row.Flags |= ContractGridFlags.Derelict;
 
         // A dead hull docked to a live ship or a base is no wreck, but a wreck on a tug stays one
-        if (big && !group.Any(g => g.IsStatic || IsStation(g) || OwnedBy(g, octId)))
+        if (big && !group.Any(g => IsStation(g) || OwnedBy(g, octId)))
         {
             var terminals = group.SelectMany(g => g.GetFatBlocks<MyTerminalBlock>()).ToList();
             if (!terminals.Any(Producing))
@@ -157,7 +158,66 @@ internal static class ContractGrids
             if (group.All(g => g.BigOwners.Count == 0) && !terminals.Any(b => b.IsFunctional))
                 row.Flags |= ContractGridFlags.Wreck;
         }
+        if (row.Flags == ContractGridFlags.None && !isWatched)
+            return row;
+
+        if (
+            group.Any(g =>
+                g.OccupiedBlocks.Count > 0
+                || MySession.Static.Players.GetControllingPlayer(g) != null
+            )
+        )
+            row.Flags |= ContractGridFlags.Seated;
+        row.MassKg = group.Sum(Mass);
+        row.Owner =
+            (
+                grid.BigOwners.Count > 0 ? grid : group.FirstOrDefault(g => g.BigOwners.Count > 0)
+            )?.BigOwners[0]
+            ?? 0;
+        row.Builder =
+            group
+                .SelectMany(g => g.GetBlocks())
+                .GroupBy(b => b.BuiltBy)
+                .OrderByDescending(b => b.Count())
+                .FirstOrDefault()
+                ?.Key
+            ?? 0;
+        if (isWatched && row.Owner == 0 && !group.Any(Ownable))
+            row.Flags |= ContractGridFlags.Unownable;
         return row;
+    }
+
+    // A static grid's physics has no mass
+    private static double Mass(MyCubeGrid grid) =>
+        grid.IsStatic ? grid.GetBlocks().Sum(b => (double)b.GetMass()) : grid.Physics?.Mass ?? 0;
+
+    private static bool Ownable(MyCubeGrid grid) =>
+        grid.GetFatBlocks()
+            .Any(b =>
+                b.IDModule != null
+                && b.SlimBlock.BlockDefinition.RatioEnoughForOwnership(b.SlimBlock.BuildLevelRatio)
+            );
+
+    // The towed grid and its rotor and piston parts become the player's, and count against their
+    // limits instead of the old owner's. A tug's connector is not part of it, and a ship of another
+    // player on a rotor stays theirs. Does nothing where the grid isn't, so all nodes can be told.
+    public static void Give(long gridId, long player)
+    {
+        if (
+            !MyEntities.TryGetEntityById(gridId, out var entity)
+            || entity is not MyCubeGrid { MarkedForClose: false } grid
+            || !Plugin.Simulated(grid)
+        )
+            return;
+        var owner = grid.BigOwners.FirstOrDefault();
+        foreach (var member in Attached(grid))
+        {
+            if (member.BigOwners.Count > 0 && !member.BigOwners.Contains(owner))
+                continue;
+            member.ChangeGridOwnership(player, MyOwnershipShareModeEnum.Faction);
+            foreach (var builder in member.GetBlocks().Select(b => b.BuiltBy).Distinct().ToList())
+                member.TransferBlocksBuiltByID(builder, player);
+        }
     }
 
     // Scrapped, with its rotor and piston parts; a tug's connector lets go of it

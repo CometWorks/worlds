@@ -879,8 +879,10 @@ def lane_up(direction, home, target, north, polar_normal):
     return norm(perpendicular_part(polar_normal, direction))
 
 
-def lane_computer(ids, position, forward, up, lane_id, home, target, partner):
-    """partner: the other end's computer. Its place goes in as a Target GPS, the last line (the
+def lane_computer(ids, position, forward, up, lane_id, home, target, partner, owner):
+    """owner: the stations' owner, so no contract takes the computer for a wreck and the cluster
+    keeps it like the stations; shared with everyone, so its terminal stays open to all as it was
+    with no owner. partner: the other end's computer. Its place goes in as a Target GPS, the last line (the
     mod finds the other keys by substring): a computer whose grid the cluster loads before its
     partner's or the lane registry's answer is paired at once, instead of telling the clients
     the lane has no target, which takes its tunnel off their screens. GpsMarkers:false keeps the
@@ -919,6 +921,9 @@ def lane_computer(ids, position, forward, up, lane_id, home, target, partner):
     el(item, "Key", "74de02b3-27f9-4960-b1c4-27351f2b06d1")
     el(item, "Value", data)
     el(block, "CustomName", "Trade Lane Computer")
+    el(block, "Owner", owner)
+    el(block, "BuiltBy", owner)
+    el(block, "ShareMode", "All")
     el(block, "ShowOnHUD", "false")
     el(block, "Enabled", "true")
     el(grid, "IsStatic", "true")
@@ -1480,7 +1485,9 @@ def main():
         ):
             # No safe zone: the computer can't be damaged and the lane's rings have no physics
             objects.append(
-                lane_computer(ids, position, facing, up, lane_id, here, there, partner)
+                lane_computer(
+                    ids, position, facing, up, lane_id, here, there, partner, owner
+                )
             )
 
     add_trade_stations(checkpoint, ids, faction, trade_stations)

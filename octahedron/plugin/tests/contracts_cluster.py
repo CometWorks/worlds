@@ -5,20 +5,29 @@ grids, the World Authority posts and decides; the ledger probe on the WA runs !o
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/contracts_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 
-Near Alpha: an NPC ship and a derelict. Far from every station, each in its own partition once the bench
-takes them offline: three armor-only wrecks of different sizes, a hull without power, a hull with a charged
-battery, a static hull and a wreck too small to count.
+Near Alpha: an NPC ship, a derelict with an arm on a rotor, and another derelict already at the shipyard. Far
+from every station, each in its own partition once the bench takes them offline: three armor-only wrecks of
+different sizes, a hull without power, a hull with a charged battery, a static hull without power and a wreck
+too small to count.
 
 - With no target anywhere a node reports once a minute, the full scan; with targets every 30 seconds.
-- A bounty and a salvage contract from the nodes' reports; a taken derelict at the shipyard is finished and
-  scrapped by its node, a completed bounty paid by OCT.
+- A bounty and a salvage contract from the nodes' reports, none on the derelict already at the shipyard. A
+  larger salvage radius stands in for the tow: the taken derelict and its arm then belong to the player on the
+  node holding them, the World Authority having decided, and it stays out of later contracts. A completed
+  bounty is paid by OCT.
+- A block the player built and left ownerless gets a contract, which they can't take for pay. The lane
+  computers don't get one, even with the minimum at one block.
 - The one biggest wreck with a pool of one, at the nearest station, then the other two.
-- The hull without power: not at 6.9 days offline, yes at 7.01. The live, static and small ones never.
+- The hulls without power, static or not: not at 6.9 days offline, yes at 7.01, paying for the static one's
+  mass too. The live and small ones never.
 - Taken wreck with the player there: its partition waking changes nothing; deleted, it counts as done.
   Taken with the player away: fails. Nobody took it: withdrawn.
-- A node restart keeps the contracts, and so does a graceful cluster stop and warm start.
+- A taken static wreck stays taken when converted to a ship; deleted, it counts as done.
+- A node restart keeps the contracts, and so does a graceful cluster stop and warm start, with the player's
+  ownership and the memory of the given grid.
 
-Towing, grinding down and powering up a wreck are checked in tests/contracts/ContractTests only.
+Grinding down, repairing a wreck and the seated, claimed and own-grid rules are checked in
+tests/contracts/ContractTests.
 
 """
 
@@ -65,8 +74,12 @@ GRIDS = {
     "Live Hull": LARGE_ID + 7,
     "Static Hull": LARGE_ID + 8,
     "Too Small": LARGE_ID + 9,
+    "Yard Derelict": LARGE_ID + 10,
+    "Derelict Arm": LARGE_ID + 11,
 }
-FAR = [name for name in GRIDS if name not in ("Bounty Target", "Test Derelict")]
+NEAR = ("Bounty Target", "Test Derelict", "Yard Derelict", "Derelict Arm")
+FAR = [name for name in GRIDS if name not in NEAR]
+STATOR, ROTOR = LARGE_ID + 12, LARGE_ID + 13
 # Ten stations' worth of room between them: a partition each, none near another
 SPACING = 40_000
 STATIONS_AWAY = 60_000
@@ -135,8 +148,42 @@ def add_grids() -> None:
         rig.grid(
             "Test Derelict",
             GRIDS["Test Derelict"],
-            armor(30),
+            [
+                rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 1, 0)),
+                rig.block(
+                    "MyObjectBuilder_MotorAdvancedStator",
+                    "LargeAdvancedStator",
+                    (2, 1, 2),
+                    f"<EntityId>{STATOR}</EntityId><TopBlockId>{ROTOR}</TopBlockId>",
+                ),
+                *armor(30),
+            ],
             position=(sx, sy - 1000, sz),
+        ),
+        rig.grid(
+            "Derelict Arm",
+            GRIDS["Derelict Arm"],
+            [
+                rig.block(
+                    "MyObjectBuilder_MotorAdvancedRotor",
+                    "LargeAdvancedRotor",
+                    (0, 0, 0),
+                    f"<EntityId>{ROTOR}</EntityId><ParentEntityId>{STATOR}</ParentEntityId>",
+                ),
+                rig.block(
+                    "MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (0, 1, 0)
+                ),
+            ],
+            position=(sx + 5, sy - 1000 + 5, sz + 5),
+        ),
+        rig.grid(
+            "Yard Derelict",
+            GRIDS["Yard Derelict"],
+            [
+                rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 1, 0)),
+                *armor(30),
+            ],
+            position=(sx, sy - 400, sz),
         ),
     ]
     for index, name in enumerate(FAR):
@@ -217,6 +264,15 @@ def run(bench) -> None:
     def owner(name: str) -> tuple[str, int] | None:
         found = bench.entity_owner(bench.diag(), GRIDS[name])
         return found[0] if found else None
+
+    def grid_owner(name: str) -> int | None:
+        """The big owner of a grid, read from the node holding it"""
+        for section in bench.sections(bench.diag()).values():
+            for partition in section["partitions"]:
+                for entity in partition["entities"] or []:
+                    if entity["entityId"] == GRIDS[name]:
+                        return entity["ownerIdentityId"]
+        return None
 
     def offline() -> dict[int, list[int]]:
         return {
@@ -317,6 +373,11 @@ def run(bench) -> None:
         found.get("Alpha Station"),
     )
     check(
+        "a derelict already at the shipyard gets no contract",
+        not named(found, "Yard Derelict"),
+        found.get("Alpha Station"),
+    )
+    check(
         "both at Alpha",
         bounty[0] in found["Alpha Station"] and salvage[0] in found["Alpha Station"],
     )
@@ -387,10 +448,12 @@ def run(bench) -> None:
     shift_clock(7.01)
     found = post()
     check(
-        "7.01 days offline: the hull without power, and nothing else",
-        wreck_names(found) == armor_only | {"Dead Hull"},
+        "7.01 days offline: the hulls without power, static too, and nothing else",
+        wreck_names(found) == armor_only | {"Dead Hull", "Static Hull"},
         wreck_names(found),
     )
+    static = named(found, "Static Hull", "wreck")
+    check("the static hull pays by its mass", static and static[0][3] > 0, static)
     shift_clock(0)
 
     # --- a player takes them ---
@@ -408,26 +471,72 @@ def run(bench) -> None:
     identity = api.get_faction()["identityId"]
     check("the client has an identity", identity, identity)
 
-    # At the shipyard, so the derelict's partition is awake
+    # Beside the derelict, so its partition is awake
     shipyard = position("Alpha Station Shipyard", sector)
     api.character_teleport(shipyard[0], shipyard[1] - 900, shipyard[2])
-    wait_until(lambda: owner("Test Derelict"), 180, "the derelict awake")
+    holder = wait_until(lambda: owner("Test Derelict"), 180, "the derelict awake")
     before = balances(api)
     reply = " ".join(command(f"!oct contract accept {salvage[0][0]} {identity}"))
     check("take the salvage contract", "Success" in reply, reply)
+    # Past a check: a taken derelict waits for the tow
+    time.sleep(40)
+    check(
+        "not at the shipyard yet: not paid, not given",
+        balances(api) == before and not grid_owner("Test Derelict"),
+        f"{balances(api)} owner {grid_owner('Test Derelict')}",
+    )
+    # The radius grows instead of the grid moving: it is in reach now
+    reconfigure(ContractSalvageRadius=3000)
     now = paid(api, before, salvage[0][3])
     still_paid("salvage at the shipyard", before, now, salvage[0][3])
+    holder = owner("Test Derelict")
     check(
-        "the node scrapped the derelict",
-        wait_until(lambda: owner("Test Derelict") is None, 60, "the derelict gone")
-        or True,
+        f"the derelict is the player's on {holder[0]}, not scrapped",
+        wait_until(lambda: grid_owner("Test Derelict") == identity, 90, "the owner")
+        and holder[0] in nodes,
+        grid_owner("Test Derelict"),
+    )
+    check(
+        "and so is its arm",
+        wait_until(lambda: grid_owner("Derelict Arm") == identity, 60, "the arm"),
+        grid_owner("Derelict Arm"),
     )
     found = post()
     check(
-        "the scrapped derelict gets no new contract",
+        "the given derelict gets no new contract",
         not named(found, "Test Derelict"),
         found.get("Alpha Station"),
     )
+
+    # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
+    reconfigure(ContractSalvageRadius=500, ContractSalvageMinBlocks=1)
+    built = api.character_build_grid(
+        "LargeBlockArmorBlock",
+        (shipyard[0] + 10, shipyard[1] - 900, shipyard[2]),
+        static=False,
+    )
+    check("the player builds an armor block", built.get("reply") is True, built)
+    time.sleep(70)
+    found = post()
+    own = named(found, "Grid", "salvage")
+    check("their ownerless block gets a contract", own, found.get("Alpha Station"))
+    check(
+        "the lane computers don't, even at one block: they are OCT's",
+        not named(found, "TL "),
+        named(found, "TL "),
+    )
+    if own:
+        before = balances(api)
+        reply = " ".join(command(f"!oct contract accept {own[0][0]} {identity}"))
+        check("they take it", "Success" in reply, reply)
+        time.sleep(40)
+        check("their own ship: not paid", balances(api) == before, balances(api))
+        check(
+            "and the contract is over",
+            not any(c[0] == own[0][0] for c in named(contracts()[0], "Grid")),
+        )
+    reconfigure(ContractSalvageMinBlocks=20)
+    found = post()
 
     before = balances(api)
     reply = " ".join(command(f"!oct contract accept {bounty[0][0]} {identity}"))
@@ -468,6 +577,7 @@ def run(bench) -> None:
     # Awake together, so both import graces pass together
     wake("Wreck Mid")
     wake("Wreck Small")
+    wake("Static Hull")
     delete("Wreck Mid")
     delete("Wreck Small")
     gone = wait_until(
@@ -484,6 +594,35 @@ def run(bench) -> None:
     )
     check(
         "withdrawn when nobody took it", "withdrawn: its target is gone" in log("wa-1")
+    )
+
+    # The static hull, converted to a ship with the player there: the same contract, on the same grid
+    static = named(contracts()[0], "Static Hull", "wreck")[0]
+    before = balances(api)
+    far_static = position("Static Hull", sector)
+    api.character_teleport(far_static[0] + 300, far_static[1], far_static[2])
+    reply = " ".join(command(f"!oct contract accept {static[0]} {identity}"))
+    check("take the static wreck", "Success" in reply, reply)
+    Path(f"{wa.lc.PLAN}.convert").write_text(f"{GRIDS['Static Hull']}\n")
+    check(
+        "converted to a ship on its node",
+        wait_until(
+            lambda: Path(f"{wa.lc.PLAN}.converted").exists(), 60, "the conversion"
+        ),
+    )
+    # Past a report and a check
+    time.sleep(70)
+    check(
+        "converted: still Active",
+        [c[2] for c in named(contracts()[0], "Static Hull", "wreck")] == ["Active"],
+        named(contracts()[0], "Static Hull"),
+    )
+    delete("Static Hull")
+    still_paid(
+        "static wreck gone with the hunter near",
+        before,
+        paid(api, before, static[3], 360),
+        static[3],
     )
 
     # --- restarts ---
@@ -521,8 +660,10 @@ def run(bench) -> None:
     check("graceful stop", cluster.stop(grace=240))
     saved = wa.global_save(bench.run_root / "wa-1-data")
     check(
-        "the World Authority's global save has the targets and grids",
-        "Octahedron-Contract-Grids" in saved and "Octahedron-Contracts" in saved,
+        "the World Authority's global save has the targets, grids and given grids",
+        "Octahedron-Contract-Grids" in saved
+        and "Octahedron-Contracts" in saved
+        and str(GRIDS["Test Derelict"]) in saved,
     )
     wa.lc.PLAN.write_text("")
     wa.lc.OUT.write_text("")
@@ -542,6 +683,12 @@ def run(bench) -> None:
         after == open_before,
         f"{open_before} -> {after}",
     )
+    check(
+        "warm start: the derelict stays the player's, with no new contract",
+        wait_until(lambda: grid_owner("Test Derelict") == identity, 180, "the owner")
+        and not named(found, "Test Derelict"),
+        grid_owner("Test Derelict"),
+    )
 
     check("graceful stop at the end", cluster.stop(grace=240))
     for process in processes:
@@ -554,12 +701,18 @@ run.administrators = [CLIENT_ID]
 
 def main() -> int:
     run.world_template = wa.prepare()
+    # The probe on the nodes too, for the conversion; it runs its plan on the World Authority only
+    os.environ["CLUSTER_EXTRA_PLUGINS"] = os.environ["CLUSTER_EXTRA_PLUGINS"].replace(
+        f"wa:{wa.lc.PLUGINS / 'LedgerProbe'}", str(wa.lc.PLUGINS / "LedgerProbe")
+    )
+    Path(f"{wa.lc.PLAN}.convert").unlink(missing_ok=True)
+    Path(f"{wa.lc.PLAN}.converted").unlink(missing_ok=True)
     add_grids()
     set_config(
         ContractsEnabled="true",
         MoneyEnabled="true",
         ContractBountyMinThreat=1,
-        ContractSalvageRadius=3000,
+        ContractSalvageRadius=500,
         ContractWreckContracts=0,
         ContractBountiesPerStation=0,
         ContractSalvagePerStation=0,
