@@ -25,7 +25,8 @@ rotor and dynamic again, and the ship is the player's dynamic ship. The large sh
 cockpit toolbars turn the battery and the tank on and off by EntityId, and the battery's
 block group by name: the client must show the three slots in the delivered cockpit and
 have the group, and the saved ship must point the slots at its own blocks and keep the
-group (SE-772). The saved world is checked at the end.
+group (SE-772). The saved world is checked at the end. Paid builds have a labor fee of
+OCT_LABOR_FEE (default 10) SC per 100 PCU; 0 checks that the refund doesn't mention it.
 
     OCT_TASK=SE-693 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_support_arm.py [case ...]
@@ -250,6 +251,7 @@ DEPOSIT = {
     "Ore/Ice": 25000,
 }
 HYDROGEN = 500_000
+LABOR_FEE = int(os.environ.get("OCT_LABOR_FEE", "10"))
 
 checks: list[tuple[bool, str]] = []
 
@@ -405,6 +407,7 @@ def order(remote, case: str) -> tuple:
     with_config(
         remote,
         FreeBuildPcuLimit=0 if paid or exempt else 10000,
+        ShipyardLaborFeePer100Pcu=LABOR_FEE,
         ShipyardRepasteShips=(
             "false" if os.environ.get("OCT_REPASTE") == "0" else "true"
         ),
@@ -541,7 +544,9 @@ def stall(remote, case: str, mark: int) -> None:
         seen_by_client(remote, case)
     if case in ("scrap", "armor"):
         check(
-            ended is not None and "labor fee is paid back" in ended,
+            ended is not None
+            and "components are back in the ledger" in ended
+            and ("labor fee of" in ended) == (LABOR_FEE > 0),
             f"{case}: the build cost is paid back: {ended}",
         )
     lines = arms_gone(remote, case)

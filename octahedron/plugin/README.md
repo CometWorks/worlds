@@ -268,8 +268,9 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   rank. The quote lists each component of every block with where it comes from:
   the payer's ledger at the station first (free), then bought from the cheapest
   player listings and OCT, as the market's Buy does. On top comes the labor fee,
-  `ShipyardLaborFeePer10Pcu` (1) SC per 10 PCU of the blueprint, rounded up,
-  paid to OCT on every build. The materials also include the hydrogen to fill
+  `ShipyardLaborFeePer100Pcu` (0) SC per 100 PCU of the blueprint, rounded up,
+  paid to OCT on every build. At 0 there is no fee, and the quote and the
+  messages don't mention one. The materials also include the hydrogen to fill
   the ship's H2 tanks to `ShipyardHydrogenFillPercent` (50 %): from the H2 tanks
   of the payer's ships docked at the station's connectors first, the rest as
   ice (`ShipyardHydrogenLitersPerIce`, 20 L per kg) from the ledger and the
@@ -620,8 +621,8 @@ With Hangar 1.1.0 or later on the server, set to `AdminSafeZonesOnly`, players s
 and retrieve their ships only inside a station's safe zone, the world's only admin
 safe zones, and Hangar records the zone on each stored ship. A ship comes back free at
 the station it was stored at. At another station it costs `HangarRetrieveFeePer10Pcu`
-(1) SC per 10 PCU, rounded up, paid to OCT: the labor fee of building it, with no wait,
-and the ship keeps its inventory. A player who can't pay is told the price and the
+(1) SC per 10 PCU, rounded up, paid to OCT, with no wait, and the ship keeps its
+inventory. A player who can't pay is told the price and the
 ship stays stored. The plugin hooks Hangar by reflection, so it still runs without
 Hangar, or with an older one, where retrieval is free.
 
