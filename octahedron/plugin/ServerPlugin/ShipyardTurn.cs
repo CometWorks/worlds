@@ -32,24 +32,34 @@ internal static class ShipyardTurn
         }
     }
 
-    // Every connector unlocks: a ship still docked floats free
-    public static void Take(MyCubeGrid shipyard)
+    // Every connector unlocks: a ship still docked floats free. Returns the grids that were docked.
+    public static List<MyCubeGrid> Take(MyCubeGrid shipyard)
     {
-        var npc = shipyard.BigOwners.First(MySession.Static.Players.IdentityIsNpc);
+        var npc = Npc(shipyard);
+        var docked = new List<MyCubeGrid>();
         foreach (var block in Blocks(shipyard))
         {
             if (block is MyShipConnector connector)
             {
+                if (connector.Connected && connector.Other != null)
+                    docked.Add(connector.Other.CubeGrid);
                 ((Sandbox.ModAPI.Ingame.IMyShipConnector)connector).Disconnect();
                 connector.TradingEnabled.Value = false;
             }
             SetOwner(block, npc, IdleShare);
         }
+        return docked;
     }
 
-    /// <summary>Whether a player has the shipyard's blocks.</summary>
-    public static bool Given(MyCubeGrid shipyard) =>
-        Blocks(shipyard).Any(b => !MySession.Static.Players.IdentityIsNpc(b.OwnerId));
+    /// <summary>The player who has the shipyard's blocks, 0 when OCT has them. The blocks say so, so it survives a restart and a move to another node.</summary>
+    public static long Holder(MyCubeGrid shipyard) =>
+        Blocks(shipyard)
+            .Select(b => b.OwnerId)
+            .FirstOrDefault(o => o != 0 && !MySession.Static.Players.IdentityIsNpc(o));
+
+    /// <summary>The NPC who owns the shipyard, in or out of a turn.</summary>
+    public static long Npc(MyCubeGrid shipyard) =>
+        shipyard.BigOwners.First(MySession.Static.Players.IdentityIsNpc);
 
     // The game's request lets the server give only a block without an owner to someone
     internal static void SetOwner(MyCubeBlock block, long owner, MyOwnershipShareModeEnum share)

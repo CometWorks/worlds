@@ -1506,7 +1506,7 @@ internal static class ShipyardOrders
                     !queue.Any(o => o.Repair && o.Started)
                     && !repairs.ContainsKey(shipyard.EntityId)
                     && !starting.Contains(shipyard.EntityId)
-                    && ShipyardTurn.Given(shipyard)
+                    && ShipyardTurn.Holder(shipyard) != 0
                 )
                     ShipyardTurn.Take(shipyard);
                 if (queue.Count == 0)
@@ -1705,7 +1705,7 @@ internal static class ShipyardOrders
         if (needed > free)
             return $"the components take {needed:N0} m³, the containers have room for {free:N0} m³";
 
-        var npc = shipyard.BigOwners.First(MySession.Static.Players.IdentityIsNpc);
+        var npc = ShipyardTurn.Npc(shipyard);
         var ends = DateTime.UtcNow.AddMinutes(Config.ShipyardOrderMinutes);
         var world = turn * shipyard.WorldMatrix.GetOrientation();
         var ship = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_CubeGrid>();
@@ -2083,7 +2083,7 @@ internal static class ShipyardOrders
         if (needed > free)
             return $"the components take {needed:N0} m³, the containers have room for {free:N0} m³";
 
-        var npc = shipyard.BigOwners.First(MySession.Static.Players.IdentityIsNpc);
+        var npc = ShipyardTurn.Npc(shipyard);
         var ends = DateTime.UtcNow.AddMinutes(Config.ShipyardOrderMinutes);
         var hydrogen =
             next.Free || !next.Items.TryGetValue(Hydrogen, out var ice)
