@@ -145,7 +145,6 @@ def run(remote) -> None:
 
     # The price drifts with the volume: 100 t at 1 SC or more
     with_config(remote, MarketPriceDriftTonnes=0.1)
-    time.sleep(2)
     _, ask_before, *_ = stock(remote, "Alpha", PLATE)
     trade(remote, "buy", PLATE, 5)
     _, ask_after, *_ = stock(remote, "Alpha", PLATE)

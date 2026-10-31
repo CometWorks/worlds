@@ -114,8 +114,7 @@ def load(remote) -> None:
     table = min(tc.tables(remote), key=lambda b: b["distance"])
     block = remote.get_block(table["gridId"], tuple(table["min"]))
     log(str(remote.load_projection(block["entityId"], xml=blueprint_xml(BLUEPRINT))))
-    # The table's screen names the blueprint once the server has it
-    st.wait_until(lambda: SHIP in st.admin(remote, "!oct table show"), 30)
+    st.wait_until(lambda: "BLUEPRINT True" in st.admin(remote, "!oct table show"), 30)
 
 
 def latest(remote) -> tuple[int, set]:
