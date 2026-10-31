@@ -94,12 +94,15 @@ def main() -> int:
         check("is in the queue" in reply, f"ordered: {reply}")
         deadline = time.time() + 1500
         line = None
-        while time.time() < deadline and not line:
-            line = re.search(
-                r".*off the arm, pasted anew as (\d+).*", rig.server_game_log()
-            )
+        ended = None
+        while time.time() < deadline and not line and not ended:
+            log = rig.server_game_log()
+            line = re.search(r".*off the arm, pasted anew as (\d+).*", log)
+            ended = re.search(r".*Shipyard order \S+ .* ended: .*", log)
             time.sleep(10)
-        check(line, f"re-pasted: {line and line[0]}")
+        for stalled in re.findall(r".*Shipyard order \S+ stalled:.*", log):
+            print(stalled, flush=True)
+        check(line, f"re-pasted: {line and line[0]} {ended and ended[0]}")
         ship = int(line[1])
         time.sleep(20)
         cockpit = ap.find_cockpit(remote, ship)
