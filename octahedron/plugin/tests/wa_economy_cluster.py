@@ -255,11 +255,15 @@ def run(bench) -> None:
     def press(api) -> str:
         """The table's button. The reply may need a trip to the World Authority"""
         reply = ""
-        # A shipyard joins its station's partition by proximity, a little after a start
+        # A shipyard joins its station's partition by proximity, a little after a start, and a
+        # node just restarted can be fenced from the World Authority for a moment
         for _ in range(12):
             reply = " ".join(rig.chat(api, "!oct order", 15))
             print(f"!oct order on {where()} -> {reply}", flush=True)
-            if "shipyard is busy" not in reply and "has no shipyard" not in reply:
+            if not any(
+                busy in reply
+                for busy in ("shipyard is busy", "has no shipyard", "did not answer")
+            ):
                 break
             time.sleep(10)
         return reply
