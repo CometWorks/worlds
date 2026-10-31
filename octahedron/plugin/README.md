@@ -225,19 +225,38 @@ without the plugin see the welded blocks.
 ### Shipyard orders
 
 A player loads a blueprint into a station's hologram table (`Console Block -
-Station ShipyardProjection`) and reads the quote on the table's large screen
-(`ShipyardQuoteSurface`, 1). The first button of the button panel next to it
+Station ShipyardProjection`). The table's large screen (`ShipyardQuoteSurface`, 1)
+shows the main message: free or paid, what is wrong if anything, and to press the
+button. The first screen of the billboard next to it (`ShipyardDetailsPanelName`,
+`Billboard LCD Ship Build Details`) keeps its first line and lists the ship's bill
+of materials under it; a station from before the billboard shows the list on the
+table's screen until the world is wiped. The billboard's second screen, how to
+order, comes from `build_world.py`.
+
+One press of the first button of the button panel next to the table
 (`ShipyardConfirmButtonName`, `Button Panel - Station ShipyardConfirm`) orders the
-ship from the station's shipyard; the same player pressing it again cancels the
-order while its build hasn't started. A press when the screen shows no quote for
-the presser, or a quote of another blueprint or more than 5 minutes old, shows
-their quote first and asks them to press again. The plugin gives the button a
-toolbar item (its own On switch) so that clients offer it; the item never runs.
-`!oct order [table name]` (admin) presses the button of the nearest table.
-The table's blueprint is cleared once the ship is in the queue, when the player
-who loaded it leaves the sphere around the station's grids or this server (a
+ship from the station's shipyard. That clears the blueprint and the list, and the
+screen tells the player a second press cancels; it does so while the build hasn't
+started. A press also shows the quote first and asks for another when the screen
+doesn't show the presser's quote of this blueprint at these terms, so a build that
+turned from free to paid is never ordered unseen.
+
+While a blueprint is on the table only the player who loaded it can order it or
+cancel an order; anyone else's press is refused, their own queued order included.
+Anyone can remove the blueprint with the Remove button of the table's terminal or
+load another one over it, which frees the table. An empty table's button cancels
+the presser's own order. A blueprint found on the table after a restart or a move
+of the station to this node has no known loader: the first player to press gets it.
+
+The plugin gives the button a toolbar item (its own On switch) so that clients
+offer it; the item never runs. `!oct order [table name]` (admin) presses the button
+of the nearest table and `!oct table remove [table name]` (admin) removes its
+blueprint. The table's blueprint is cleared once the ship is in the queue, when the
+player who loaded it leaves the sphere around the station's grids or this server (a
 log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
-(15) after it was loaded.
+(15) after it was loaded. A queued order stays when its owner leaves: it is built
+and handed over as usual, its payment is already in its build ledger, and the owner
+can cancel it when back if it hasn't started.
 `ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
 
 - A ship is a free build for a player with less than `FreeBuildPcuLimit`
@@ -276,9 +295,11 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   and shows the new quote), takes the fee and queues the order. Canceling
   releases the build ledger to the payer's ledger, the bought components and the
   hydrogen's ice included, and OCT pays the fee back.
-- The queue of each shipyard holds at most `ShipyardQueueMax` (10) orders, one
-  per player. The station's queue panels (`ShipyardQueuePanelName`, `Text Panel -
-  Station ShipyardQueue`) show it, and which ship blocks the shipyard.
+- The queue of each shipyard holds at most `ShipyardQueueMax` (6) orders, the one
+  being built included, one per player: more don't fit the queue panel above the
+  table. A full queue shows on the table's screen and refuses the press. The
+  station's queue panels (`ShipyardQueuePanelName`, `Text Panel - Station
+  ShipyardQueue`) show it, and which ship blocks the shipyard.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
   shipyard, its components the shipyard's containers, and it may have at most
@@ -657,7 +678,7 @@ salvage) a contract as the caller, for tests and support.
 ### Leaderboard
 
 The station panels named `LeaderboardBlockName` ("Curved LCD Panel - Station Lounge
-Leaderboard", 8 at every station) rank the factions by their value in SC: the cash in
+Leaderboard", 4 at every station) rank the factions by their value in SC: the cash in
 the faction's bank account, with the money held for its market orders, plus its grids.
 They also show each faction's PCU. A grid is the faction's when its biggest owner is a
 member. Its value is what its blocks are built of, their mounted components, plus its
@@ -977,6 +998,10 @@ Station with the shipyard's mods and the kiosk mods: the quote and the order, th
 hydrogen from a docked ship's tank into the new ship's, the payment, a press while
 it builds, a faction-paid order queued behind the finished ship and canceled after
 a restart, and a free order canceled with the button itself.
+`tests/test_table_rules.py` runs two players at one table on a world built by
+`build_world.py`: the screens, one press to order and one to cancel, the loader's
+sole access, removing another player's blueprint, a full queue and an owner who
+logs off; with `OCT_SHOTS` it also takes screenshots of the screens.
 `tests/arm/ArmTests` checks the support arm's path planning without the game
 (`dotnet run -c Release --project tests/arm/ArmTests`): pipes around the ship and
 obstacles, the turn cost, docking, the cap, giving up an armor block, no plan when

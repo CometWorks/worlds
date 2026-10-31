@@ -23,6 +23,7 @@ from pathlib import Path
 
 os.environ.setdefault("OCT_TASK", "SE-832")
 import rig  # noqa: E402
+import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 import test_support_arm as sa  # noqa: E402
 from test_client import log, ship_reply, tables, with_config  # noqa: E402
@@ -293,11 +294,18 @@ def main() -> int:
     rig.stop_server()
     so.prepare(so.SMALL, 60)
     both_admins()
-    rig.start_server()
-    a = rig.start_client(render=bool(SHOTS))
     with Second():
-        b = rig.start_client()
+        folder = rig.APPDATA / "Mods"
+    folder.mkdir(parents=True, exist_ok=True)
+    for id_ in pl.MODS:
+        link = folder / f"{id_}.sbm"
+        link.unlink(missing_ok=True)
+        link.symlink_to(pl.WORKSHOP / str(id_))
     try:
+        rig.start_server()
+        a = rig.start_client(render=bool(SHOTS))
+        with Second():
+            b = rig.start_client()
         rig.ensure_character(a)
         with Second():
             rig.ensure_character(b)

@@ -47,7 +47,7 @@ LB_PROBE = (
     "LeaderboardProbe.xml",
     "6D2F4A18-9B53-4E07-8C61-2E5B1F1573AA",
 )
-PANELS = 56  # 8 at each of the 7 stations
+PANELS = 28  # 4 at each of the 7 stations
 INTERVAL = 10
 IRON = "Ingot/Iron"
 # The probe's docked ship
@@ -259,13 +259,13 @@ def run(remote) -> None:
 
     # The station panels
     found = panels(remote)
-    check(len(found) == 8, f"Alpha's 8 leaderboard panels nearby: {len(found)}")
+    check(len(found) == 4, f"Alpha's 4 leaderboard panels nearby: {len(found)}")
     rank = rows.get("LBT", {}).get("rank", 0)
     text = panel_text(remote)
     log("panel:\n" + text)
     check(
-        re.match(r"PANEL 8 TEXT_AND_IMAGE \S*Monospace ", text) is not None,
-        "8 panels at Alpha, text in Monospace",
+        re.match(r"PANEL 4 TEXT_AND_IMAGE \S*Monospace ", text) is not None,
+        "4 panels at Alpha, text in Monospace",
     )
     check("FACTION LEADERBOARD" in text, "the panel shows the board")
     line = lbt_line(text)
