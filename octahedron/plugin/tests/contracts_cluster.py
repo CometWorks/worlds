@@ -9,6 +9,7 @@ Near Alpha: an NPC ship and a derelict. Far from every station, each in its own 
 takes them offline: three armor-only wrecks of different sizes, a hull without power, a hull with a charged
 battery, a static hull and a wreck too small to count.
 
+- With no target anywhere a node reports once a minute, the full scan; with targets every 30 seconds.
 - A bounty and a salvage contract from the nodes' reports; a taken derelict at the shipyard is finished and
   scrapped by its node, a completed bounty paid by OCT.
 - The one biggest wreck with a pool of one, at the nearest station, then the other two.
@@ -19,7 +20,6 @@ battery, a static hull and a wreck too small to count.
 
 Towing, grinding down and powering up a wreck are checked in tests/contracts/ContractTests only.
 
-Run on polaris on 2026-10-31: 37/37 checks in 33 minutes, most of it a recovery's 5 minute grace on deletes.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ FAR = [name for name in GRIDS if name not in ("Bounty Target", "Test Derelict")]
 SPACING = 40_000
 STATIONS_AWAY = 60_000
 KNOWN_LINE = re.compile(
-    r"Known grids: (\d+), in offline partitions (\w+), wrecks (\w+)"
+    r"Known grids: (\d+), in offline partitions (\w+), wrecks (\w+), reports (\d+)"
 )
 
 
@@ -293,6 +293,16 @@ def run(bench) -> None:
         "the nodes' reports",
     )
     print(known[0], flush=True)
+
+    def reports_in(seconds: int) -> int:
+        before = int(KNOWN_LINE.search(contracts()[1])[4])
+        time.sleep(seconds)
+        return int(KNOWN_LINE.search(contracts()[1])[4]) - before
+
+    # Three minutes on two nodes: 3 full reports each, one more at the edges of the window
+    idle = reports_in(180)
+    check("no target anywhere: only the full reports", idle <= 8, idle)
+    reconfigure(ContractBountiesPerStation=3, ContractSalvagePerStation=2)
     found = post()
     bounty = named(found, "Bounty Target", "bounty")
     salvage = named(found, "Test Derelict", "salvage")
@@ -319,6 +329,10 @@ def run(bench) -> None:
         not wreck_names(found),
         wreck_names(found),
     )
+
+    # A node learns of its target from its next full report, then reports every 30 seconds
+    busy = reports_in(180)
+    check("with targets: short reports too", busy >= 9, busy)
 
     # --- wrecks ---
     cluster.handover_config(
@@ -429,7 +443,8 @@ def run(bench) -> None:
     check("take the wreck", "Success" in reply, reply)
     api.character_teleport(at[0] + 300, at[1], at[2])
     wait_until(lambda: owner("Wreck Big"), 180, "Wreck Big awake")
-    time.sleep(30)
+    # Past a report and a check after it woke
+    time.sleep(70)
     found = contracts()[0]
     check(
         "awake with the hunter near: still Active",
@@ -440,7 +455,7 @@ def run(bench) -> None:
     still_paid(
         "wreck gone with the hunter near",
         before,
-        paid(api, before, big_contract[3], 300),
+        paid(api, before, big_contract[3], 360),
         big_contract[3],
     )
 
@@ -458,7 +473,7 @@ def run(bench) -> None:
     gone = wait_until(
         lambda: not named(contracts()[0], "Wreck Mid")
         and not named(contracts()[0], "Wreck Small"),
-        300,
+        360,
         "both contracts over",
     )
     check("gone: both contracts are over", gone)
@@ -546,6 +561,8 @@ def main() -> int:
         ContractBountyMinThreat=1,
         ContractSalvageRadius=3000,
         ContractWreckContracts=0,
+        ContractBountiesPerStation=0,
+        ContractSalvagePerStation=0,
         MarketEnabled="false",
     )
     results = bench_module.HOST.results / datetime.now(timezone.utc).strftime(

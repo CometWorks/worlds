@@ -201,7 +201,8 @@ def main() -> int:
     # Salvage: the derelict is at the shipyard already, so taking it is enough
     before = balances(remote)
     act(remote, f"accept {salvage[0]}", "Success", "take the salvage contract")
-    time.sleep(15)
+    # The plugin checks its targets every 30 seconds
+    time.sleep(40)
     paid_for(remote, salvage, before, "salvage finished by the plugin, paid by OCT")
 
     before = balances(remote)

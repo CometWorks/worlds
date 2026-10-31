@@ -50,7 +50,7 @@ internal static class Contracts
     private const double ShipyardSearchMeters = 3_000;
     private const int RowsPerReport = 500;
     private static readonly TimeSpan PostInterval = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan TrackInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan TrackInterval = TimeSpan.FromSeconds(30);
 
     // How long a target's node must report without it before it counts as gone: a handover or a
     // partition's recovery isn't its end. A plain server knows at once.
@@ -205,9 +205,13 @@ internal static class Contracts
         if (oct == null)
             return;
         if (Authority)
+            watched = Book.Targets.Values.Select(t => t.Grid).ToHashSet();
+        // Nothing to say between full scans; a full report still names what to watch and scrap
+        if (!full && watched.Count == 0)
+            return;
+        if (Authority)
         {
             var state = Book;
-            watched = state.Targets.Values.Select(t => t.Grid).ToHashSet();
             Apply(
                 state.Report(
                     Node,
@@ -217,9 +221,9 @@ internal static class Contracts
             );
             return;
         }
-        var rows = ContractGrids.Scan(full, watched, oct.FactionId);
         if (reportsInFlight > 0 || PluginCluster.Current == null)
             return;
+        var rows = ContractGrids.Scan(full, watched, oct.FactionId);
         // A message holds 64 KiB; every part gets its own answer
         var part = 0;
         do
@@ -681,7 +685,7 @@ internal static class Contracts
                         && ContractBook.IsWreck(r.Flags, now - since, days)
                     )
                     .ToString(CultureInfo.InvariantCulture);
-        yield return $"Known grids: {state.Grids.Count}, in offline partitions {state.Offline?.Count.ToString(CultureInfo.InvariantCulture) ?? "unknown"}, wrecks {wrecks}";
+        yield return $"Known grids: {state.Grids.Count}, in offline partitions {state.Offline?.Count.ToString(CultureInfo.InvariantCulture) ?? "unknown"}, wrecks {wrecks}, reports {state.Reports}";
     }
 
     private static string Kind(MyContract contract, ContractBook state) =>

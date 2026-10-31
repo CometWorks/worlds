@@ -246,6 +246,21 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     book.Report("n1", [], t0 + week + goneAfter);
     Check(book.IsGone(1, t0 + week + goneAfter), "woken and not reported for 3 minutes: gone");
 
+    // At the reports' pace, on a node that watched nothing until now: a full report every minute,
+    // whose answer names the new target, then a short one every 30 seconds. Its row, seen before the
+    // contract was posted, isn't gone meanwhile, and the short reports keep it alive.
+    book = Book(Row(1, Dead));
+    book.Targets[7] = new ContractTarget('w', 1, 1, 100, alpha);
+    var minute = TimeSpan.FromSeconds(60);
+    var half = TimeSpan.FromSeconds(30);
+    var named = ContractBook.ParseAnswer(book.Report("n1", [], t0 + minute));
+    Check(named.Watched.Contains(1) && !book.IsGone(1, t0 + minute), "the full report names it");
+    book.Report("n1", [Row(1, Dead)], t0 + minute + half);
+    book.Report("n1", [], t0 + minute + half + goneAfter - half);
+    Check(!book.IsGone(1, t0 + minute + goneAfter), "short reports count from the last with it");
+    book.Report("n1", [], t0 + minute + half + goneAfter);
+    Check(book.IsGone(1, t0 + minute + half + goneAfter), "3 minutes of short reports without it");
+
     // A plain server reports everything every time, so it knows at once
     book = new ContractBook(TimeSpan.Zero) { Offline = [] };
     book.Report("local", [Row(1, Dead)], t0);
@@ -279,6 +294,32 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
         Judge(book, target, true, false, witness + TimeSpan.FromSeconds(10))
             == ContractVerdict.Finish,
         "gone just after the hunter was near"
+    );
+
+    // The last check and the last report are up to 30 seconds apart, either way round, within the
+    // minute of slack
+    book = new ContractBook(goneAfter) { Offline = [] };
+    book.Report("n", [Row(1, ContractGridFlags.Bounty)], t0);
+    target = new ContractTarget('b', 1, 1, 100, alpha);
+    book.Targets[7] = target;
+    Judge(book, target, true, true, t0);
+    var lastSeen = t0 + TimeSpan.FromSeconds(30);
+    book.Report("n", [Row(1, ContractGridFlags.Bounty)], lastSeen);
+    book.Report("n", [], lastSeen + goneAfter);
+    Check(
+        Judge(book, target, true, false, lastSeen + goneAfter) == ContractVerdict.Finish,
+        "seen near a check before its last report: witnessed"
+    );
+
+    book = new ContractBook(goneAfter) { Offline = [] };
+    book.Report("n", [Row(1, ContractGridFlags.Bounty)], t0);
+    target = new ContractTarget('b', 1, 1, 100, alpha);
+    book.Targets[7] = target;
+    Judge(book, target, true, true, t0 - TimeSpan.FromMinutes(2));
+    book.Report("n", [], t0 + goneAfter);
+    Check(
+        Judge(book, target, true, false, t0 + goneAfter) == ContractVerdict.Fail,
+        "near two minutes before its last report: not witnessed"
     );
 
     book = new ContractBook(TimeSpan.Zero) { Offline = [] };

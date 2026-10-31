@@ -147,12 +147,16 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     // can be said about a grid no report names
     public Dictionary<long, DateTime> Offline;
 
+    // Reports served since the authority started, for !oct contracts
+    public long Reports;
+
     private readonly Dictionary<string, DateTime> reports = new();
     private readonly Dictionary<long, DateTime> closing = new();
 
     /// <summary>A node's rows. The answer: "watched ids;ids to close", comma separated.</summary>
     public string Report(string node, IEnumerable<ContractGrid> rows, DateTime now)
     {
+        Reports++;
         reports[node] = now;
         foreach (var row in rows)
         {

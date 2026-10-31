@@ -657,14 +657,14 @@ Every minute the plugin fills each station up again:
 
 The targets and the grids last reported are world variables (`Octahedron-Contracts`,
 `Octahedron-Contract-Grids`); the contracts themselves are saved by the game. The plugin
-checks them every 10 seconds.
+checks them every 30 seconds.
 
 The contract system is kept on the World Authority of a cluster, so the plugin posts
 there; the nodes carry the deliveries, and OCT's payment and an acquisition's ledger
 deposit happen where the contract finishes, through the World Authority. The World
 Authority has no grids. Every minute each node reports the candidates among the grids it
-simulates, and every 10 seconds the contracts' targets, on the topic `contracts/report`;
-the answer names the targets to watch and the grids to scrap. The World Authority
+simulates and, every 30 seconds while there are any, the contracts' targets, on the topic
+`contracts/report`; the answer names the targets to watch and the grids to scrap. The World Authority
 decides from those rows, which outlast a grid's partition going offline. It reads the
 offline partitions and the time they went offline from the gateway's
 `GET /registry/partitions/offline`, once a minute, with the cluster's join token. A
@@ -673,7 +673,7 @@ silent for 15: a handover or a node restart doesn't end a contract. A partition 
 went offline before it ran this plugin isn't known until it wakes once.
 
 `!oct contracts` (admin) lists OCT's contracts at every station and counts the
-others and the grids and wrecks it knows; `!oct contracts post` checks and posts at once
+others, the grids and wrecks it knows and the reports served; `!oct contracts post` checks and posts at once
 (run on the World Authority of a cluster). `!oct contract accept <id> [identity]`,
 `deliver <id> [fill]` and `complete <id>` take, hand in (from the caller's
 inventory; `fill` adds an acquisition's items first) and complete (a bounty or
