@@ -238,9 +238,19 @@ def run(bench) -> None:
         return where[0]
 
     def delete(name: str) -> None:
+        # A grid that just arrived on its node is refused for its import grace
         query = urllib.parse.urlencode({"entityId": GRIDS[name], "name": name})
-        reply = cluster.node(wake(name), f"/grid-delete?{query}", "POST")
-        check(f"{name}: deleted on its node", reply.get("deleted"), reply)
+        replies = []
+
+        def attempt():
+            replies.append(cluster.node(wake(name), f"/grid-delete?{query}", "POST"))
+            return replies[-1].get("deleted")
+
+        check(
+            f"{name}: deleted on its node",
+            wait_until(attempt, 300, f"{name} deleted", 10),
+            replies[-1:],
+        )
 
     def balances(api) -> tuple[int, int]:
         text = " ".join(rig.chat(api, "!oct money", 10))
