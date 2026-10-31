@@ -544,6 +544,15 @@ def api() -> RemoteAPI:
     )
 
 
+def session_gone() -> bool:
+    """A client that quits doesn't tell the server, which notices by a timeout up to some
+    20 s later. One that joins before that gets kicked along with its old session"""
+    log = SERVER_LOG.read_text(errors="replace")
+    return log.rfind(f"World request received: {CLIENT_NAME}") <= log.rfind(
+        f"User left {CLIENT_NAME}"
+    )
+
+
 def start_client(
     timeout: float = 2400.0, render: bool = False, extra_dev_folders=(), connect=True
 ) -> RemoteAPI:
@@ -554,6 +563,8 @@ def start_client(
     if client_pid():
         raise RuntimeError("The test client is already running")
     prepare_client(extra_dev_folders)
+    if connect and server_pid():
+        wait_until(session_gone, 60, "the server to drop the client's last session")
     _start(
         [
             str(LAUNCHER),
