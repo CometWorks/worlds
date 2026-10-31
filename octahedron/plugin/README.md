@@ -291,7 +291,10 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back.
 - The next order starts when the shipyard's free space is empty: a ship left
-  there has to fly out first. The ship is built centered in the free space, from
+  there has to fly out first. The ship is built on the free space's center line:
+  a ship shorter than 1/4 of the shipyard's length around the 1/3 point nearer the
+  station, where it shows better from the lobby; a longer one in the middle. It is
+  built from
   a support arm (below) on a shipyard with arm rotors. A shipyard without them
   starts the ship as a static grid of one of its blocks, built complete and the
   player's, with an NPC-owned projector and battery named `Shipyard Order` next
@@ -366,6 +369,16 @@ take part. The plugin plans an arm on each and takes the best:
   it gets a cap. Without one the tee's branch ends in a cap.
 - The pieces are `ShipyardArmLargeBlocks` and `ShipyardArmSmallBlocks`, each
   turned so its mount points face its neighbors in the arm.
+
+The arm is planned on a worker thread, one plan at a time. The game thread only
+copies what the plan needs of the shipyard and places the arm when the build
+starts. A press while its plan runs goes on when the plan is done, usually a
+fraction of a second later, and an order waiting for its plan stays in the queue
+with nothing taken yet. A plan that has no arm within `ShipyardArmPlanSeconds` (5)
+is refused: the press gets the reason, a queued order ends with everything given
+back, and the same ship isn't planned again for 5 minutes. Nothing is placed for a
+plan until its build starts, so a server stopping or an order canceled in the
+meantime leaves nothing behind.
 
 The quote checks that an arm can be planned; when none fits, the server log says
 why for each rotor once. At build start the arm's blocks are
@@ -975,6 +988,12 @@ same zone a player's hand welder and grinder, ship welder and grinder, and an
 OmniArc welder on a player's grid named like a shipyard do nothing, and that the
 player's tools work outside the zone. It runs with the plugin's rules on, on
 with the zones holding every test grid from the start, and off.
+`tests/test_shipyard_placement.py` checks in the saved world where ships end up
+along the shipyard: short ones at the 1/3 point nearer the station, at pole and
+equatorial stations, the widest small grid ship among them, and a ship of 1/4 of
+the length in the middle. With the arm's time limit forced to 0 it checks that a
+press is refused and that a queued paid order ends with its reason and everything
+given back.
 `tests/test_shipyard_order.py` orders a ship at a station table with the client
 (the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes

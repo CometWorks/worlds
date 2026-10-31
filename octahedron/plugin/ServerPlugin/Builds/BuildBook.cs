@@ -486,8 +486,8 @@ public sealed class BuildBook
     /// The build ended: the order leaves the queue. A paid build gets the leftover components
     /// back into the payer's ledger, uses up the ice of the hydrogen that went into the ship and
     /// returns the rest. With <paramref name="refund"/> (the build couldn't start, or its ship
-    /// was removed) every component the build took comes back, whatever the leftovers, and the
-    /// fee too.
+    /// was removed) every component comes back, whatever the leftovers, and the fee too. An order
+    /// that never started still has its components in the build ledger, so only that comes back.
     /// </summary>
     public BuildResult Finish(
         IMarketWorld w,
@@ -507,9 +507,11 @@ public sealed class BuildBook
             return new BuildResult(true, "", order);
         }
         if (refund)
-            leftovers = order
-                .Items.Where(i => i.Key != s.HydrogenItem)
-                .ToDictionary(i => i.Key, i => i.Value);
+            leftovers = order.Started
+                ? order
+                    .Items.Where(i => i.Key != s.HydrogenItem)
+                    .ToDictionary(i => i.Key, i => i.Value)
+                : new Dictionary<string, long>();
         var ops = new List<LedgerOp>();
         var back = new LedgerOp
         {
