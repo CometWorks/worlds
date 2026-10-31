@@ -66,7 +66,11 @@ GRID_ID = 777000123000100
 LIMIT = 2
 PLATES = 1000
 PLATES_PER_BLOCK = 25
-RUN_SECONDS = 150
+# Long enough for the welding to go past a limit that doesn't hold. Without a limit nothing
+# reports the welding, so that case runs for a fixed time: its check that all blocks are
+# welded fails if this is too short
+SETTLE = 10
+NO_LIMIT_SECONDS = 30
 
 # ToolCore's ToolRepo in the block's mod storage: the shipyard welders' value with
 # Activated and TrackTargets set
@@ -216,6 +220,10 @@ def saved_rig() -> str:
     return re.sub(r"<ProjectedGrids>.*?</ProjectedGrids>", "", match[0], flags=re.S)
 
 
+def refusals(log: str) -> int:
+    return log.count("not built: you reached the limit") + log.count("may have at most")
+
+
 def run(case: str) -> None:
     check, mgp, group = CASES[case]
     print(
@@ -226,10 +234,12 @@ def run(case: str) -> None:
     prepare(check, mgp, group)
     started = time.monotonic()
     rig.start_server()
-    print(
-        f"server ready in {time.monotonic() - started:.0f} s, running {RUN_SECONDS} s"
-    )
-    time.sleep(RUN_SECONDS)
+    print(f"server ready in {time.monotonic() - started:.0f} s")
+    if check or group:
+        rig.wait_until(lambda: refusals(rig.server_game_log()), 180, "a refusal")
+        time.sleep(SETTLE)
+    else:
+        time.sleep(NO_LIMIT_SECONDS)
     rig.stop_server()
 
     grid = saved_rig()
@@ -246,10 +256,7 @@ def run(case: str) -> None:
         grid,
     )
     plates = float(plates[1]) if plates else 0.0
-    log = rig.server_game_log()
-    refused = log.count("not built: you reached the limit") + log.count(
-        "may have at most"
-    )
+    refused = refusals(rig.server_game_log())
     print(
         f"light armor blocks: {len(blocks)}, built by {built_by}, steel plates left {plates:.0f}, "
         f"refusals logged {refused}"

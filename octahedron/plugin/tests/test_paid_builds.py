@@ -17,7 +17,8 @@ button itself is pressed once at the end).
   H2 tank holds 500,000 L.
 - The finished ship stays in the shipyard, so the next order waits in the queue,
   bought too. After a server restart the queue entry is still there, and pressing
-  again cancels it: all the player paid and OCT's stock are back.
+  again cancels it: all the player paid and OCT's stock are back. The hydrogen drained
+  from the docked ship can't go back, so the ice for it is sold for the player.
 - A free build (FreeBuildPcuLimit back at 10,000) queues behind the ship too and is
   canceled by pressing again. The confirm button has the toolbar item the plugin
   gives it (checked through the probe).
@@ -82,6 +83,8 @@ STOCK = {
 # Enough to pay it, with a low balance otherwise
 FUNDS = 300_000
 HYDROGEN = 500_000
+ICE = "Ore/Ice"
+HYDROGEN_ICE = 25_000  # for those 500,000 L
 LABOR_FEE = int(os.environ.get("OCT_LABOR_FEE", "10"))
 check = st.check
 
@@ -219,9 +222,9 @@ def paid_build(remote) -> None:
     check(gas(remote, SHIP) == HYDROGEN, f"the new ship's H2 tank holds {HYDROGEN:,} L")
 
 
-def queued_build(remote) -> tuple[int, float]:
-    """Queues a paid order behind the finished ship; returns the balance and OCT's plates
-    before it"""
+def queued_build(remote) -> tuple[int, int]:
+    """Queues a paid order behind the finished ship; returns the balance before it and
+    what it paid"""
     for item, count in STOCK.items():
         st.admin(remote, f"!oct market set Alpha {item} {count}")
     st.probe(remote, f"pay me {FUNDS - balance(remote)}")
@@ -243,10 +246,11 @@ def queued_build(remote) -> tuple[int, float]:
         f"the player paid at the order: {before} -> {after}, {components} + {fee}",
     )
     check(plates(remote) == STOCK[PLATE] - 1205, "bought from OCT's stock")
-    return before, STOCK[PLATE]
+    return before, before - after
 
 
-def cancel_after_restart(remote, before: int, stock: float) -> None:
+def cancel_after_restart(remote, before: int, paid_order: int) -> None:
+    ice = st.stock(remote, "Alpha", ICE)[0]
     at_table(remote)
     canceled = press(remote)
     check(
@@ -254,8 +258,19 @@ def cancel_after_restart(remote, before: int, stock: float) -> None:
     )
     check("is paid back" in canceled, f"the cancel pays back: {canceled}")
     after = balance(remote)
-    check(after == before, f"all of it is back: {before} -> {after}")
-    check(plates(remote) == stock, "and OCT's plates")
+    sold = after - before
+    back = re.search(r"([\d,]+) SC is paid back", canceled)
+    check(
+        sold > 0
+        and back is not None
+        and int(back[1].replace(",", "")) == paid_order + sold,
+        f"all of it is back, and the hydrogen is sold: {before} -> {after}: {canceled}",
+    )
+    check(
+        st.stock(remote, "Alpha", ICE)[0] == ice + HYDROGEN_ICE,
+        "the ice for the docked ship's hydrogen went into OCT's stock",
+    )
+    check(plates(remote) == STOCK[PLATE], "and OCT's plates are back")
 
 
 def free_build(remote) -> None:
@@ -301,10 +316,10 @@ def main() -> int:
     rig.start_server()
     remote = rig.start_client()
     log("joined")
-    before = stock = None
+    before = paid_order = None
     try:
         paid_build(remote)
-        before, stock = queued_build(remote)
+        before, paid_order = queued_build(remote)
     finally:
         rig.stop_client()
         rig.stop_server()
@@ -315,7 +330,7 @@ def main() -> int:
     remote = rig.start_client()
     try:
         if before is not None:
-            cancel_after_restart(remote, before, stock)
+            cancel_after_restart(remote, before, paid_order)
         free_build(remote)
     finally:
         rig.stop_client()

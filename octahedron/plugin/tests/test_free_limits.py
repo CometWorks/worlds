@@ -100,9 +100,25 @@ def set_tables(blueprint: str, remove: str | None = None) -> None:
         text,
         flags=re.S,
     )
+    # A press in the last run left that table the player's, and a holder who is away at the
+    # start clears it: back to OCT, who owns most of them
+    owners = re.findall(
+        r"<SubtypeName>LargeBlockConsole</SubtypeName>.*?<Owner>(\d+)</Owner>",
+        text,
+        flags=re.S,
+    )
+    oct_owner = max(set(owners), key=owners.count)
+
+    def load(m: re.Match) -> str:
+        block = re.sub(r"<Owner>\d+</Owner>", f"<Owner>{oct_owner}</Owner>", m[1])
+        block = block.replace(
+            "<ShareMode>None</ShareMode>", "<ShareMode>All</ShareMode>"
+        )
+        return f"{block}<Enabled>true</Enabled><ProjectedGrids>{blueprint}</ProjectedGrids>"
+
     text, count = re.subn(
         r"(<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>(?:true|false)</Enabled>",
-        lambda m: f"{m[1]}<Enabled>true</Enabled><ProjectedGrids>{blueprint}</ProjectedGrids>",
+        load,
         text,
         flags=re.S,
     )
@@ -173,7 +189,8 @@ def one_at_a_time() -> None:
     tc.with_config(remote, FreeBuildCooldownMinutes=0)
     so.place(remote, "Order Big")
     reply = order(remote)
-    assert "The unfinished ship is yours" in reply, reply
+    # At once, before the arm has anything: nothing is handed over yet
+    assert "You canceled 'Order Big'" in reply, reply
     stop()
 
 

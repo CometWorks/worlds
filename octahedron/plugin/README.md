@@ -336,7 +336,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   get less. A station with too little of a component refuses the order.
 - On order the plugin takes the money and the stock (a higher price refuses the
   order and shows the new quote) and queues the order. Canceling gives all of it
-  back, at what was paid, and OCT its stock.
+  back, at what was paid, and OCT its stock. Hydrogen drained from a docked ship
+  can't go back, so the ice for it is sold for the player.
 - The queue of each shipyard holds at most `ShipyardQueueMax` (6) orders, the one
   being built included, one per player: more don't fit the queue panel above the
   table. A full queue shows on the table's screen and refuses the press. The
@@ -539,7 +540,12 @@ stock as long as its entry keeps the name.
 - OCT (`MoneyAuthorityFactionTag`) is the only seller and buyer. Its catalog is the
   same at every station: the items matching `MarketCatalog` but not
   `MarketCatalogExcluded` with a reference price, the game's minimal price / 10
-  (`MarketPrices` sets one where the game has none).
+  (`MarketPrices` sets one where the game has none). The Inhibitor Chip
+  (`Component/InhibitorChip`, MES loot worth 1,000,000 SC by its minimal price) is
+  excluded, so no Store sells or buys it and a paid build can't buy one: a blueprint
+  that needs it is refused as more than the station has for sale. The value is in
+  `config/octahedron.cfg` too, because a running cluster keeps the values it has
+  for options that file doesn't name.
 - It sells at `MarketOctSellPercent` (100 %) of the reference plus
   `MarketTaxPercent` (2 %), and buys at `MarketOctBuyPercent` (100 %) less the tax,
   until it holds `MarketOctMaxStockTonnes` (200 t) of the item there. Selling

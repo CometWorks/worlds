@@ -21,8 +21,9 @@ from test_money import START, wait_log
 
 PAID = re.compile(r"Money hour (\S+ \d\d):00")
 SAVED = re.compile(r"(;hour=)(\d{4}-\d\d-\d\dT\d\d)(;)")
-# Two minutes of game: the rules run at once at the start and then every minute
-SETTLE = 130
+# The rules run at once at the start and again a minute later: a second run in the same
+# hour is as far as a restart's payout could go wrong
+SETTLE = 70
 
 
 def now() -> datetime:

@@ -101,12 +101,22 @@ def table(remote) -> dict:
     return min(tables(remote), key=lambda b: b["distance"])
 
 
+def wait_for(what, timeout: float, every: float = 3.0):
+    """what's first true value, or its last value at the timeout"""
+    deadline = time.monotonic() + timeout
+    while True:
+        value = what()
+        if value or time.monotonic() > deadline:
+            return value
+        time.sleep(every)
+
+
 def load(remote, grid: str = so.SMALL) -> None:
     """Loads a blueprint the way the blueprint screen does, as this client"""
     t = table(remote)
     block = remote.get_block(t["gridId"], tuple(t["min"]))
     log(str(remote.load_projection(block["entityId"], xml=blueprint_xml(grid))))
-    time.sleep(6)
+    wait_for(lambda: screens(remote)["blueprint"] == "True", 20, 1)
 
 
 def owner(remote) -> tuple[str, str]:
@@ -324,24 +334,16 @@ def timeout(a, b, oct_owner: str) -> None:
     """The real 3 minutes, the default: another load restarts them, then the table is open"""
     with_config(a, FreeBuildCooldownMinutes=0)
     load(a)
-    first = time.monotonic()
     check(screens(a)["holder"] == "OctTester", "the player holds the table")
-    time.sleep(max(0, first + 120 - time.monotonic()))
+
+    def cleared() -> bool:
+        return screens(a)["blueprint"] == "False"
+
+    # Long enough apart that a load which doesn't restart the time ends too early below
+    check(not wait_for(cleared, 45), "the blueprint stays while they look at it")
     load(a)
     last = time.monotonic()
-    time.sleep(max(0, first + 205 - time.monotonic()))
-    check(
-        screens(a)["holder"] == "OctTester",
-        "another load restarted the time: still held past the first 3 minutes",
-    )
-    time.sleep(max(0, last + 165 - time.monotonic()))
-    check(
-        screens(a)["blueprint"] == "True",
-        "the blueprint is there shortly before 3 minutes",
-    )
-    deadline = last + 200
-    while time.monotonic() < deadline and screens(a)["blueprint"] == "True":
-        time.sleep(2)
+    wait_for(cleared, 200)
     took = time.monotonic() - last
     shown = screens(a)
     check(
@@ -380,17 +382,16 @@ def owner_leaves(a, b, ship: int):
     """a's order from limit() is waiting. It stays when they leave and is built when its
     turn comes."""
     rig.stop_client()
-    time.sleep(20)
-    check("OctTester" in queue(b), "the order stays while its owner is away")
+
+    def gone() -> bool:
+        return "OctTester" not in queue(b)
+
+    # The server takes a moment to see them gone, nothing tells when
+    check(not wait_for(gone, 20), "the order stays while its owner is away")
     b.close_grid(ship)
     log(f"closed the ship in the shipyard, {ship}")
-    deadline = time.monotonic() + 420
-    built = False
-    while time.monotonic() < deadline and not built:
-        time.sleep(15)
-        text = queue(b)
-        built = "OctTester" not in text
-    check(built, f"the build ran and ended with its owner away: {text}")
+    built = wait_for(gone, 420, 5)
+    check(built, f"the build ran and ended with its owner away: {queue(b)}")
     a = rig.start_client()
     rig.ensure_character(a)
     sa.at_table(a, STATION)
@@ -451,7 +452,6 @@ def take_shots(a) -> None:
     shots(a, "paid")
     with_config(a, **CONFIG)
     remove(a)
-    time.sleep(3)
     settled(a, "table", "then press")
     shots(a, "idle")
 
@@ -485,7 +485,7 @@ def main() -> int:
         sa.at_table(b, STATION)
         with_config(a, **CONFIG)
         log(remove(a))
-        time.sleep(3)
+        settled(a, "table", "then press")
         oct_owner = owner(a)[0]
         log(f"OCT is {oct_owner}")
         if SHOTS:
