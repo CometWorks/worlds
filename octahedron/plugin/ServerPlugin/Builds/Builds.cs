@@ -31,7 +31,8 @@ internal static class Builds
 
     private static OctahedronConfig Config => Plugin.Config;
 
-    public static BuildSettings Settings => new() { QueueMax = Config.ShipyardQueueMax };
+    public static BuildSettings Settings =>
+        new() { QueueMax = Config.ShipyardQueueMax, TurnMinutes = Config.ShipyardTurnMinutes };
 
     /// <summary>The queues, on the authority only, loaded from the world on first use.</summary>
     public static BuildBook Book
@@ -107,6 +108,8 @@ internal static class Builds
         public void Return(string station, string item, long raw) =>
             Market.Return(station, item, raw);
 
+        public long SalePrice(string station, string item) => Market.Book.SalePrice(Market.World, Market.Settings, station, item);
+
         public long SellOff(string station, long seller, IReadOnlyDictionary<string, long> items) =>
             Market.SellOff(station, seller, items);
     }
@@ -122,7 +125,7 @@ internal static class Builds
             if (request.Verb == BuildVerb.Order && request.Payer != 0 && Market.OctId == 0)
                 return $"0\tNo faction tagged {Config.MoneyAuthorityFactionTag}.";
             if (
-                request.Verb is BuildVerb.Order or BuildVerb.Cancel
+                request.Verb is BuildVerb.Order or BuildVerb.Cancel or BuildVerb.Tow or BuildVerb.Sale
                 && !Stations.StationNames().Contains(request.Station)
             )
                 return $"0\tUnknown station '{request.Station}'.";
@@ -150,12 +153,20 @@ internal static class Builds
     /// A change wherever the queues are kept; <paramref name="done"/> gets whether it worked and
     /// the message for the player, on the game thread.
     /// </summary>
-    public static void Execute(Guid operationId, BuildRequest request, Action<bool, string> done)
+    public static void Execute(Guid operationId, BuildRequest request, Action<bool, string> done) =>
+        Execute(operationId, request, (ok, message, _) => done(ok, message));
+
+    /// <summary>As the other Execute, and gets the order as the change left it, null if it did not work or the order is gone from the answer.</summary>
+    public static void Execute(
+        Guid operationId,
+        BuildRequest request,
+        Action<bool, string, BuildOrder> done
+    )
     {
         if (Stations.IsAuthority)
         {
             var answer = Run(request);
-            done(answer.StartsWith("1"), Message(answer));
+            done(answer.StartsWith("1"), Message(answer), Order(answer));
             return;
         }
         Stations.Call(
@@ -170,20 +181,31 @@ internal static class Builds
                         false,
                         outcome == CallOutcome.Unknown
                             ? $"The station did not answer. Ask an admin about shipyard request {operationId}."
-                            : text
+                            : text,
+                        null
                     );
                     return;
                 }
-                done(text.StartsWith("1"), Message(text));
+                done(text.StartsWith("1"), Message(text), Order(text));
             }
         );
+    }
+
+    private static BuildOrder Order(string answer)
+    {
+        var lines = answer.Split('\n');
+        return lines.Length > 1 ? BuildBook.DecodeOrder(lines[1]) : null;
     }
 
     /// <summary>
     /// Orders a ship, wherever the queues are kept: a blueprint too big for one message goes
     /// ahead in parts. <paramref name="done"/> as for <see cref="Execute"/>.
     /// </summary>
-    public static void Order(Guid operationId, BuildRequest request, Action<bool, string> done)
+    public static void Order(
+        Guid operationId,
+        BuildRequest request,
+        Action<bool, string, BuildOrder> done
+    )
     {
         var parts = BuildBook.BlueprintParts(request.Blueprint);
         if (parts.Count == 1)
@@ -216,7 +238,7 @@ internal static class Builds
                     if (answer == "1")
                         Upload(part + 1);
                     else
-                        done(false, error ?? "The blueprint did not reach the shipyard.");
+                        done(false, error ?? "The blueprint did not reach the shipyard.", null);
                 }
             );
         }

@@ -172,12 +172,11 @@ SHIPYARD_ROLL_DEGREES = 30.0
 # up: center clear from 8 at +17.5 and at -17.5 (the station's kitchen blocks the other 2),
 # from none unturned.
 SHIPYARD_YAW_DEGREES = 17.5
-# Its blocks are shared with everyone, but power: the Octahedron plugin keeps the reactors at
+# Its medical rooms and lights are shared with everyone. Its containers, connectors and welders go
+# to a player for their turn at it, its power never: the Octahedron plugin keeps the reactors at
 # SHIPYARD_REACTOR_URANIUM ingots and the batteries charged (RefillContainers in
 # config/octahedron.cfg).
-SHIPYARD_SHARED = {
-    "ConveyorSorter", "ShipConnector", "CargoContainer", "MedicalRoom", "ReflectorLight",
-}  # fmt: skip
+SHIPYARD_SHARED = {"MedicalRoom", "ReflectorLight"}
 # How far the line between a station and its shipyard is turned about the zone's center, off the
 # plane of the Sun's path, so the Sun never goes behind the shipyard (SE-720). Both keep their
 # orientation. Picked for the view from the lobby among the turns that clear the Sun: the

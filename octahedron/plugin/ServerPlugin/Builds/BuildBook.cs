@@ -6,7 +6,20 @@ using System.Text;
 
 namespace ServerPlugin;
 
-/// <summary>An entry of a shipyard's queue: a free build, or a paid one with what it bought.</summary>
+/// <summary>Where an order is. A free build goes from waiting to building and leaves the queue; a paid build and a towed grid's breakdown are the player's turn at the shipyard.</summary>
+public enum BuildPhase
+{
+    Waiting,
+
+    /// <summary>A paid build's turn: the player loads the components and presses the button.</summary>
+    Loading,
+    Building,
+
+    /// <summary>The build or breakdown is over: the player takes what is in the containers.</summary>
+    After,
+}
+
+/// <summary>An entry of a shipyard's queue: a free build, a paid one, or a towed grid to break down.</summary>
 public sealed class BuildOrder
 {
     public string Id = "";
@@ -15,23 +28,24 @@ public sealed class BuildOrder
     // The player who ordered; only they cancel it
     public long Player;
 
-    // The account that paid and gets the leftovers' money: the player's. 0: a free build.
+    // The account that pays and gets the sales: the player's. 0: a free build or a breakdown.
     public long Payer;
 
-    // The labor fee paid to OCT, SC
+    // The labor fee paid to OCT when the build starts, SC
     public long Fee;
 
-    // What the components and ice cost at the Store, SC
-    public long Paid;
-
-    // Of the ice in Items, what came from the hydrogen of the player's ships, raw
-    public long Provided;
     public int Pcu;
     public string Ship = "";
 
     // Unix seconds
     public long Created;
-    public bool Started;
+    public BuildPhase Phase;
+
+    // When the turn's current window ends, Unix seconds: the build start or the taking of what is left
+    public long TurnEnds;
+
+    // A towed grid's entity id: the order breaks it down
+    public long Grid;
 
     // An admin who ignores PCU limits ordered it (FreePrints.Exempt): always a free build, without
     // the per-ship PCU cap. Kept here because the node that builds it may not know their admin
@@ -44,10 +58,15 @@ public sealed class BuildOrder
     // The blueprint, opaque here: base64, no tabs or line breaks
     public string Blueprint = "";
 
-    // What the order holds: every block's components and the ice for the hydrogen, raw
+    // A paid build's bill, every block's components and the ice for the hydrogen, raw. From the
+    // build's start: what came, and the ice of the hydrogen the ship gets.
     public Dictionary<string, long> Items = new();
 
-    public bool Free => Payer == 0;
+    public bool Free => Payer == 0 && Grid == 0;
+    public bool Started => Phase == BuildPhase.Building;
+
+    /// <summary>The player's turn at the shipyard is on: the order is at the front of the queue.</summary>
+    public bool Active => Phase != BuildPhase.Waiting;
 }
 
 /// <summary>What one item of a paid build costs at the station's Store, raw amounts, costs in SC.</summary>
@@ -140,12 +159,24 @@ public interface IBuildMarket
 
     MarketResult Buy(string station, long buyer, string item, long raw);
 
-    /// <summary>Items a canceled purchase gives back to the stock; the caller pays the money back.</summary>
+    /// <summary>Items a failed purchase gives back to the stock; the caller pays the money back.</summary>
     void Return(string station, string item, long raw);
+
+    /// <summary>What the station pays for a unit of what a turn leaves behind, SC, tax taken.</summary>
+    long SalePrice(string station, string item);
 
     /// <summary>Sells the items for the seller on Store terms; returns the SC they got.</summary>
     long SellOff(string station, long seller, IReadOnlyDictionary<string, long> items);
 }
+
+/// <summary>An item of a towed grid at its breakdown: raw amount, the liters of all of it, the price per unit.</summary>
+public readonly record struct BreakdownItem(
+    string Item,
+    long Raw,
+    double Liters,
+    long Price,
+    bool Integral
+);
 
 public sealed class BuildSettings
 {
@@ -154,6 +185,9 @@ public sealed class BuildSettings
 
     // The item the build's hydrogen is bought as; it is not loaded into the shipyard
     public string HydrogenItem = "Ore/Ice";
+
+    // How long each window of a player's turn lasts
+    public int TurnMinutes = 10;
 }
 
 public readonly struct BuildResult
@@ -173,15 +207,17 @@ public readonly struct BuildResult
 }
 
 /// <summary>
-/// The shipyards' queues. A paid build buys its components at the station's Store when it is
-/// ordered and pays the labor fee to OCT; canceling gives it all back. At build start the
-/// components go into the shipyard's containers, and at the end what is left of them is sold back
-/// on Store terms. Pure bookkeeping without game types, so it is tested on its own (tests/builds).
-/// Runs on the authority's game thread, the World Authority's on a cluster.
+/// The shipyards' queues and the player's turn at the front of one. An order costs nothing while
+/// it waits. At its turn the player loads what they have into the shipyard (<see cref="Turn"/>);
+/// the build's start (<see cref="Begin"/>) buys what is still missing at the station's Store and
+/// pays the labor fee. After the build or a towed grid's breakdown (<see cref="After"/>) the player
+/// has a while to take what is left, then the rest is sold to the Store for them
+/// (<see cref="EndTurn"/>). Pure bookkeeping without game types, so it is tested on its own
+/// (tests/builds). Runs on the authority's game thread, the World Authority's on a cluster.
 /// </summary>
 public sealed class BuildBook
 {
-    private const string Header = "octahedron-builds 2";
+    private const string Header = "octahedron-builds 3";
 
     /// <summary>
     /// A cluster's plugin messages carry 64 KiB at most, a blueprint of over about 700 blocks
@@ -204,17 +240,19 @@ public sealed class BuildBook
     public List<BuildOrder> Queue(string station) =>
         orders
             .Values.Where(o => o.Station == station)
-            .OrderByDescending(o => o.Started)
+            .OrderByDescending(o => o.Active)
             .ThenBy(o => o.Created)
             .ThenBy(o => o.Id.Length)
             .ThenBy(o => o.Id, StringComparer.Ordinal)
             .ToList();
 
-    /// <summary>The next order to build at the station; null when none waits or one is running.</summary>
+    /// <summary>The order at the front of the station's queue, unless it is building or past its build.</summary>
     public BuildOrder Next(string station)
     {
         var queue = Queue(station);
-        return queue.Count == 0 || queue[0].Started ? null : queue[0];
+        return queue.Count == 0 || queue[0].Phase is BuildPhase.Building or BuildPhase.After
+            ? null
+            : queue[0];
     }
 
     /// <summary>The parts a blueprint goes in, one at least.</summary>
@@ -301,24 +339,39 @@ public sealed class BuildBook
     }
 
     /// <summary>
-    /// Queues an order. A paid one (Payer set) holds <paramref name="needed"/>:
-    /// <paramref name="provided"/> comes from outside (the hydrogen of a ship at the station, as
-    /// ice), the rest is bought at the Store as quoted, and the fee is paid, all as long as the
-    /// quote's total is at most <paramref name="maxTotal"/>.
+    /// Queues an order. A paid one (Payer set) keeps <paramref name="needed"/> as its bill. A player
+    /// in the window of their turn goes on with it instead, for a paid order, in the Loading phase:
+    /// what they have in the containers can go into this ship.
     /// </summary>
     public BuildResult Order(
         IMarketWorld w,
-        IBuildMarket market,
         BuildSettings s,
         BuildOrder order,
-        IReadOnlyDictionary<string, long> needed,
-        IReadOnlyDictionary<string, long> provided,
-        long maxTotal
+        IReadOnlyDictionary<string, long> needed
     )
     {
         if (!Amounts.ValidName(order.Station))
             return BuildResult.No("Unknown station.");
         var mine = orders.Values.FirstOrDefault(o => o.Player == order.Player);
+        if (mine?.Station == order.Station && mine.Phase is BuildPhase.Loading or BuildPhase.After)
+        {
+            if (order.Free)
+                return BuildResult.No(
+                    "A free ship can't use your turn at this shipyard: end it first with !oct shipyard done."
+                );
+            mine.Grid = 0;
+            mine.Repair = false;
+            mine.Payer = order.Payer;
+            mine.Fee = order.Fee;
+            mine.Pcu = order.Pcu;
+            mine.Ship = Clean(order.Ship);
+            mine.Exempt = order.Exempt;
+            mine.Blueprint = order.Blueprint;
+            mine.Items = Bill(needed);
+            mine.Phase = BuildPhase.Loading;
+            mine.TurnEnds = w.Now + s.TurnMinutes * 60L;
+            return new BuildResult(true, $"'{mine.Ship}' goes on with your turn.", mine);
+        }
         if (mine != null)
             return BuildResult.No(
                 $"'{mine.Ship}' is in a shipyard's queue for you already, one entry at a time."
@@ -326,23 +379,94 @@ public sealed class BuildBook
         if (orders.Values.Count(o => o.Station == order.Station) >= s.QueueMax)
             return BuildResult.No($"The shipyard's queue is full, {s.QueueMax} ships.");
 
-        order.Id = "b" + (nextId + 1).ToString(CultureInfo.InvariantCulture);
+        Add(w, order);
+        order.Items = order.Free ? new Dictionary<string, long>() : Bill(needed);
+        return new BuildResult(
+            true,
+            order.Repair ? $"'{order.Ship}' is in the queue."
+            : order.Free ? $"'{order.Ship}' is in the queue, a free build."
+            : $"'{order.Ship}' is in the queue. At its turn you load the components and press the button.",
+            order
+        );
+    }
+
+    /// <summary>
+    /// A towed grid's breakdown takes the free shipyard: the order comes back, already building.
+    /// With anything in the shipyard's queue no order comes back, and the grid is to be sold.
+    /// </summary>
+    public BuildResult Tow(IMarketWorld w, BuildOrder order)
+    {
+        if (!Amounts.ValidName(order.Station))
+            return BuildResult.No("Unknown station.");
+        var known = orders.Values.FirstOrDefault(o => o.Grid == order.Grid);
+        if (known != null)
+            return new BuildResult(true, "", known);
+        if (orders.Values.Any(o => o.Station == order.Station))
+            return new BuildResult(true, "", null);
+        Add(w, order);
+        order.Phase = BuildPhase.Building;
+        return new BuildResult(true, "", order);
+    }
+
+    /// <summary>What a towed grid is made of is sold at once, for a busy shipyard. The answer says for how much.</summary>
+    public static BuildResult Sale(
+        IBuildMarket market,
+        string station,
+        long player,
+        IReadOnlyDictionary<string, long> items
+    ) =>
+        new(true, MarketBook.Sc(market?.SellOff(station, player, items) ?? 0));
+
+    private void Add(IMarketWorld w, BuildOrder order)
+    {
+        order.Id = "b" + (++nextId).ToString(CultureInfo.InvariantCulture);
         order.Created = w.Now;
-        order.Started = false;
+        order.Phase = BuildPhase.Waiting;
         order.Ship = Clean(order.Ship);
         order.Items = new Dictionary<string, long>();
-        if (order.Free)
-        {
-            nextId++;
-            orders[order.Id] = order;
-            return new BuildResult(
-                true,
-                order.Repair
-                    ? $"'{order.Ship}' is in the queue."
-                    : $"'{order.Ship}' is in the queue, a free build.",
-                order
-            );
-        }
+        orders[order.Id] = order;
+    }
+
+    private static Dictionary<string, long> Bill(IReadOnlyDictionary<string, long> needed) =>
+        needed.Where(n => n.Value > 0).ToDictionary(n => n.Key, n => n.Value);
+
+    /// <summary>The player's turn starts: they have a while to load the components and press the button.</summary>
+    public BuildResult Turn(IMarketWorld w, BuildSettings s, string id)
+    {
+        var order = Get(id);
+        if (order == null)
+            return BuildResult.No($"No order {id}.");
+        if (order.Phase != BuildPhase.Waiting)
+            return BuildResult.No($"'{order.Ship}' has its turn already.");
+        order.Phase = BuildPhase.Loading;
+        order.TurnEnds = w.Now + s.TurnMinutes * 60L;
+        return new BuildResult(true, $"It is the turn of '{order.Ship}'.", order);
+    }
+
+    /// <summary>
+    /// The player presses start: <paramref name="needed"/>, what the containers don't have, is
+    /// bought at the Store. <paramref name="provided"/> comes from outside (the hydrogen of a ship
+    /// at the station and the ice in the containers). All or nothing, but for the hydrogen, of
+    /// which the ship gets less if the station lacks it. The labor fee is paid. The order's Items
+    /// then say what came, for the shipyard to load.
+    /// </summary>
+    public BuildResult Begin(
+        IMarketWorld w,
+        IBuildMarket market,
+        BuildSettings s,
+        string id,
+        long player,
+        IReadOnlyDictionary<string, long> needed,
+        IReadOnlyDictionary<string, long> provided
+    )
+    {
+        var order = Get(id);
+        if (order == null)
+            return BuildResult.No($"No order {id}.");
+        if (order.Player != player)
+            return BuildResult.No("Only the player who ordered it can start it.");
+        if (order.Phase != BuildPhase.Loading)
+            return BuildResult.No($"'{order.Ship}' can't start now.");
 
         var rest = new Dictionary<string, long>();
         foreach (var n in needed.Where(n => n.Value > 0))
@@ -355,17 +479,13 @@ public sealed class BuildBook
         var missing = quote.Short(s.HydrogenItem);
         if (missing != null)
             return BuildResult.No(
-                $"{Amounts.Units(missing.Missing)} {missing.Item} more than this station has for sale."
-            );
-        if (quote.Total > maxTotal)
-            return BuildResult.No(
-                $"The price is {MarketBook.Sc(quote.Total)} now, see the new quote and press again."
+                $"{Amounts.Units(missing.Missing)} {missing.Item} more than this station has for sale: load them into the containers."
             );
         if (quote.Balance < 0)
             return BuildResult.No("No bank account.");
         if (quote.Balance < quote.Total)
             return BuildResult.No(
-                $"That costs {MarketBook.Sc(quote.Total)}, the account has {MarketBook.Sc(quote.Balance)}."
+                $"What is missing costs {MarketBook.Sc(quote.Total)}, the account has {MarketBook.Sc(quote.Balance)}: load more into the containers."
             );
 
         var bought = new List<QuoteLine>();
@@ -393,23 +513,19 @@ public sealed class BuildBook
             w.ChangeBalance(w.Oct, order.Fee);
         }
 
-        order.Paid = quote.Cost;
         // The hydrogen the station doesn't have is left out: the ship's tanks get less
+        var came = new Dictionary<string, long>();
         foreach (var n in needed.Where(n => n.Value > 0))
-            order.Items[n.Key] =
-                n.Value - (quote.Lines.FirstOrDefault(l => l.Item == n.Key)?.Missing ?? 0);
-        if (order.Items.TryGetValue(s.HydrogenItem, out long ice) && ice <= 0)
-            order.Items.Remove(s.HydrogenItem);
-        if (
-            provided.TryGetValue(s.HydrogenItem, out long fromShips)
-            && needed.TryGetValue(s.HydrogenItem, out long iceNeeded)
-        )
-            order.Provided = Math.Min(fromShips, iceNeeded);
-        nextId++;
-        orders[order.Id] = order;
+        {
+            long got = n.Value - (quote.Lines.FirstOrDefault(l => l.Item == n.Key)?.Missing ?? 0);
+            if (got > 0)
+                came[n.Key] = got;
+        }
+        order.Items = came;
+        order.Phase = BuildPhase.Building;
         return new BuildResult(
             true,
-            $"'{order.Ship}' is in the queue: {MarketBook.Sc(quote.Cost)} for the components"
+            $"'{order.Ship}' starts: {MarketBook.Sc(quote.Cost)} for what was missing"
                 + (order.Fee > 0 ? $" and {MarketBook.Sc(order.Fee)} labor" : "")
                 + " paid.",
             order
@@ -425,109 +541,148 @@ public sealed class BuildBook
         w.ChangeBalance(account, sc);
     }
 
-    // All of a paid order undone: what was bought goes back to the stock and the money with the fee
-    // to the player, and the hydrogen of their ships, which can't go back, is sold for them.
-    // Returns what the player got, SC.
-    private static long Undo(IMarketWorld w, IBuildMarket market, BuildSettings s, BuildOrder order)
+    /// <summary>The player's waiting order at the station leaves the queue; nothing was paid for it.</summary>
+    public BuildResult Cancel(string station, long player)
     {
-        foreach (var i in order.Items)
-        {
-            long bought = i.Key == s.HydrogenItem ? i.Value - order.Provided : i.Value;
-            if (bought > 0)
-                market?.Return(order.Station, i.Key, bought);
-        }
-        PayBack(w, order.Payer, order.Paid + order.Fee);
-        long sold =
-            order.Provided > 0 && market != null
-                ? market.SellOff(
-                    order.Station,
-                    order.Payer,
-                    new Dictionary<string, long> { [s.HydrogenItem] = order.Provided }
-                )
-                : 0;
-        return order.Paid + order.Fee + sold;
-    }
-
-    /// <summary>The player's order at the station leaves the queue, if it hasn't started: they get what they paid back.</summary>
-    public BuildResult Cancel(
-        IMarketWorld w,
-        IBuildMarket market,
-        BuildSettings s,
-        string station,
-        long player
-    )
-    {
-        var order = orders.Values.FirstOrDefault(o => o.Station == station && o.Player == player);
+        var order = orders.Values.FirstOrDefault(o =>
+            o.Station == station && o.Player == player && (o.Active || o.Grid == 0)
+        );
         if (order == null)
             return BuildResult.No("You have no ship in this shipyard's queue.");
-        if (order.Started)
-            return BuildResult.No($"'{order.Ship}' is being built, it can't be canceled now.");
+        if (order.Active)
+            return BuildResult.No($"It is the turn of '{order.Ship}', it can't be canceled now.");
         orders.Remove(order.Id);
-        if (order.Free)
-            return new BuildResult(true, $"'{order.Ship}' left the queue.", order);
-        long back = Undo(w, market, s, order);
-        return new BuildResult(
-            true,
-            $"'{order.Ship}' left the queue, {MarketBook.Sc(back)} is paid back.",
-            order
-        );
+        return new BuildResult(true, $"'{order.Ship}' left the queue.", order);
     }
 
-    /// <summary>The build starts: its components go into the shipyard. The node loads <see cref="BuildOrder.Items"/> but the hydrogen.</summary>
+    /// <summary>A free build starts. Nothing is loaded for it from the book.</summary>
     public BuildResult Start(string id)
     {
         var order = Get(id);
         if (order == null)
             return BuildResult.No($"No order {id}.");
-        if (order.Started)
+        if (order.Phase == BuildPhase.Building)
             return BuildResult.No($"'{order.Ship}' is being built already.");
-        order.Started = true;
+        order.Phase = BuildPhase.Building;
         return new BuildResult(true, $"'{order.Ship}' is being built.", order);
     }
 
-    /// <summary>
-    /// The build ended: the order leaves the queue. A paid build sells the leftover components and
-    /// the ice of the hydrogen that didn't go into the ship back on Store terms, for the player.
-    /// With <paramref name="refund"/> (the build couldn't start, or its ship was removed) everything
-    /// is undone instead, whatever the leftovers. The result's message says what the player got,
-    /// which only the authority's order knows.
-    /// </summary>
-    public BuildResult Finish(
-        IMarketWorld w,
-        IBuildMarket market,
-        BuildSettings s,
-        string id,
-        IReadOnlyDictionary<string, long> leftovers,
-        long hydrogenUsed,
-        bool refund
-    )
+    /// <summary>An order that won't get a turn, or a free build that ended, leaves the queue.</summary>
+    public BuildResult Finish(string id)
     {
         var order = Get(id);
         if (order == null)
             return BuildResult.No($"No order {id}.");
         orders.Remove(id);
-        if (order.Free)
-            return new BuildResult(true, "", order);
-        if (refund)
-            return new BuildResult(
-                true,
-                $"{MarketBook.Sc(Undo(w, market, s, order))} is paid back.",
-                order
-            );
-        var sale = leftovers
-            .Where(l => l.Value > 0 && l.Key != s.HydrogenItem)
-            .ToDictionary(l => l.Key, l => l.Value);
-        order.Items.TryGetValue(s.HydrogenItem, out long ice);
-        long iceLeft = ice - Math.Min(Math.Max(0, hydrogenUsed), ice);
-        if (iceLeft > 0)
-            sale[s.HydrogenItem] = iceLeft;
-        long sold =
-            sale.Count > 0 && market != null ? market.SellOff(order.Station, order.Payer, sale) : 0;
+        return new BuildResult(true, "", order);
+    }
+
+    /// <summary>
+    /// The build or breakdown is over and the player has a while to take what is in the
+    /// containers. The ice of the hydrogen that didn't go into the ship is sold back for the
+    /// player; with <paramref name="refund"/> (it never got going, or its ship was removed) the fee
+    /// comes back. <paramref name="sold"/> is what a breakdown's containers had no room for.
+    /// </summary>
+    public BuildResult After(
+        IMarketWorld w,
+        IBuildMarket market,
+        BuildSettings s,
+        string id,
+        long hydrogenUsed,
+        bool refund,
+        IReadOnlyDictionary<string, long> sold
+    )
+    {
+        var order = Get(id);
+        if (order == null)
+            return BuildResult.No($"No order {id}.");
+        var sale = new Dictionary<string, long>();
+        foreach (var item in sold)
+            sale[item.Key] = item.Value;
+        if (order.Payer != 0)
+        {
+            order.Items.TryGetValue(s.HydrogenItem, out long ice);
+            long iceLeft = ice - Math.Min(Math.Max(0, hydrogenUsed), ice);
+            if (iceLeft > 0)
+                sale[s.HydrogenItem] = sale.GetValueOrDefault(s.HydrogenItem) + iceLeft;
+            if (refund)
+                PayBack(w, order.Payer, order.Fee);
+        }
+        long paid = SellOff(market, order, sale);
+        order.Phase = BuildPhase.After;
+        order.TurnEnds = w.Now + s.TurnMinutes * 60L;
+        var message = new List<string>();
+        if (refund && order.Payer != 0 && order.Fee > 0)
+            message.Add($"The labor fee of {MarketBook.Sc(order.Fee)} is paid back.");
+        if (sold.Count > 0)
+            message.Add($"What did not fit the containers was sold for {MarketBook.Sc(paid)}.");
+        else if (paid > 0)
+            message.Add($"The ice the ship didn't take was sold for {MarketBook.Sc(paid)}.");
+        return new BuildResult(true, string.Join(" ", message), order);
+    }
+
+    /// <summary>
+    /// The player's turn ends: <paramref name="left"/>, what they left in the shipyard, is sold
+    /// to the station for them, and the order leaves the queue.
+    /// </summary>
+    public BuildResult EndTurn(
+        IMarketWorld w,
+        IBuildMarket market,
+        string id,
+        IReadOnlyDictionary<string, long> left
+    )
+    {
+        var order = Get(id);
+        if (order == null)
+            return BuildResult.No($"No order {id}.");
+        long paid = SellOff(market, order, left);
+        orders.Remove(id);
         return new BuildResult(
             true,
-            sold > 0 ? $"What was left over is sold for {MarketBook.Sc(sold)}." : "",
+            left.Count > 0
+                ? $"What was left in the shipyard was sold for {MarketBook.Sc(paid)}."
+                : "",
             order
         );
+    }
+
+    private static long SellOff(
+        IBuildMarket market,
+        BuildOrder order,
+        IReadOnlyDictionary<string, long> items
+    ) =>
+        items.Count == 0 || market == null
+            ? 0
+            : market.SellOff(order.Station, order.Player, items);
+
+    /// <summary>
+    /// What a breakdown sells because the containers lack the room: the cheapest units first,
+    /// until the rest takes at most <paramref name="roomLiters"/>. Whole units of a whole item.
+    /// </summary>
+    public static Dictionary<string, long> Overflow(
+        IEnumerable<BreakdownItem> items,
+        double roomLiters
+    )
+    {
+        var list = items.Where(i => i.Raw > 0).ToList();
+        double over = list.Sum(i => i.Liters) - roomLiters;
+        var sold = new Dictionary<string, long>();
+        foreach (var item in list.OrderBy(i => i.Price).ThenBy(i => i.Item, StringComparer.Ordinal))
+        {
+            if (over <= 0)
+                break;
+            long raw = item.Raw;
+            if (item.Liters > over)
+            {
+                raw = (long)Math.Ceiling(over / item.Liters * item.Raw);
+                if (item.Integral && raw % Amounts.Unit != 0)
+                    raw += Amounts.Unit - raw % Amounts.Unit;
+                raw = Math.Min(raw, item.Raw);
+            }
+            sold[item.Item] = raw;
+            over -= item.Liters * raw / item.Raw;
+        }
+        return sold;
     }
 
     // --- persistence: a line per order, tab-separated ---
@@ -548,16 +703,15 @@ public sealed class BuildBook
                 BuildQuote.N(o.Player),
                 BuildQuote.N(o.Payer),
                 BuildQuote.N(o.Fee),
-                BuildQuote.N(o.Paid),
-                BuildQuote.N(o.Provided),
                 o.Pcu.ToString(CultureInfo.InvariantCulture),
                 Clean(o.Ship),
                 BuildQuote.N(o.Created),
-                // Flags: 1 started, 2 exempt, 4 repair
-                ((o.Started ? 1 : 0) | (o.Exempt ? 2 : 0) | (o.Repair ? 4 : 0)).ToString(
-                    CultureInfo.InvariantCulture
-                ),
-                blueprint ? o.Blueprint ?? "" : ""
+                // Flags: 2 exempt, 4 repair
+                ((o.Exempt ? 2 : 0) | (o.Repair ? 4 : 0)).ToString(CultureInfo.InvariantCulture),
+                blueprint ? o.Blueprint ?? "" : "",
+                ((int)o.Phase).ToString(CultureInfo.InvariantCulture),
+                BuildQuote.N(o.TurnEnds),
+                BuildQuote.N(o.Grid)
             )
         );
         foreach (var i in o.Items.OrderBy(i => i.Key, StringComparer.Ordinal))
@@ -568,7 +722,7 @@ public sealed class BuildBook
     public static BuildOrder DecodeOrder(string line)
     {
         var f = line.Split('\t');
-        if (f.Length < 13 || f[0] != "O" || (f.Length - 13) % 2 != 0)
+        if (f.Length < 14 || f[0] != "O" || (f.Length - 14) % 2 != 0)
             throw new FormatException("Malformed build order");
         var order = new BuildOrder
         {
@@ -577,18 +731,18 @@ public sealed class BuildBook
             Player = BuildQuote.L(f[3]),
             Payer = BuildQuote.L(f[4]),
             Fee = BuildQuote.L(f[5]),
-            Paid = BuildQuote.L(f[6]),
-            Provided = BuildQuote.L(f[7]),
-            Pcu = int.Parse(f[8], CultureInfo.InvariantCulture),
-            Ship = f[9],
-            Created = BuildQuote.L(f[10]),
-            Blueprint = f[12],
+            Pcu = int.Parse(f[6], CultureInfo.InvariantCulture),
+            Ship = f[7],
+            Created = BuildQuote.L(f[8]),
+            Blueprint = f[10],
+            Phase = (BuildPhase)int.Parse(f[11], CultureInfo.InvariantCulture),
+            TurnEnds = BuildQuote.L(f[12]),
+            Grid = BuildQuote.L(f[13]),
         };
-        var flags = int.Parse(f[11], CultureInfo.InvariantCulture);
-        order.Started = (flags & 1) != 0;
+        var flags = int.Parse(f[9], CultureInfo.InvariantCulture);
         order.Exempt = (flags & 2) != 0;
         order.Repair = (flags & 4) != 0;
-        for (int i = 13; i < f.Length; i += 2)
+        for (int i = 14; i < f.Length; i += 2)
             order.Items[f[i]] = BuildQuote.L(f[i + 1]);
         return order;
     }
@@ -681,6 +835,9 @@ public enum BuildVerb
     /// <summary>Read: the next order to build at the station, without its blueprint.</summary>
     Next,
 
+    /// <summary>Read: what the station pays for each item of Needed, milli-SC per unit, tax not taken yet.</summary>
+    Prices,
+
     /// <summary>Id: the order; Part: of its blueprint.</summary>
     Download,
 
@@ -689,11 +846,29 @@ public enum BuildVerb
 
     /// <summary>Part above 0: the blueprint is in that many parts of upload Id.</summary>
     Order,
+
+    /// <summary>A towed grid takes the free shipyard, or is told it is busy.</summary>
+    Tow,
+
+    /// <summary>Needed is sold to the station for the player, at once.</summary>
+    Sale,
     Cancel,
     Start,
 
-    /// <summary>Needed: the leftovers.</summary>
+    /// <summary>The order leaves the queue, with nothing to settle.</summary>
     Finish,
+
+    /// <summary>A paid order's turn starts.</summary>
+    Turn,
+
+    /// <summary>Needed: what the containers miss; Provided: the hydrogen from outside.</summary>
+    Begin,
+
+    /// <summary>Needed: what is sold because it doesn't fit.</summary>
+    After,
+
+    /// <summary>Needed: what is left in the shipyard, which is sold.</summary>
+    EndTurn,
 }
 
 /// <summary>
@@ -711,11 +886,11 @@ public sealed class BuildRequest
     public int Pcu;
     public string Ship = "";
     public string Blueprint = "";
-    public long MaxTotal;
     public long HydrogenUsed;
     public bool Refund;
     public bool Exempt;
     public bool Repair;
+    public long Grid;
     public int Part;
     public Dictionary<string, long> Needed = new();
     public Dictionary<string, long> Provided = new();
@@ -726,6 +901,7 @@ public sealed class BuildRequest
             is BuildVerb.Quote
                 or BuildVerb.Queue
                 or BuildVerb.Next
+                or BuildVerb.Prices
                 or BuildVerb.Download
                 or BuildVerb.Upload;
 
@@ -741,11 +917,11 @@ public sealed class BuildRequest
             Pcu.ToString(CultureInfo.InvariantCulture),
             (Ship ?? "").Replace('\t', ' ').Replace('\n', ' ').Replace('\r', ' '),
             Blueprint ?? "",
-            BuildQuote.N(MaxTotal),
             BuildQuote.N(HydrogenUsed),
             Refund ? "1" : "0",
             Exempt ? "1" : "0",
             Repair ? "1" : "0",
+            BuildQuote.N(Grid),
             Part.ToString(CultureInfo.InvariantCulture)
         )
         + "\n"
@@ -787,11 +963,11 @@ public sealed class BuildRequest
             Pcu = int.Parse(f[6], CultureInfo.InvariantCulture),
             Ship = f[7],
             Blueprint = f[8],
-            MaxTotal = BuildQuote.L(f[9]),
-            HydrogenUsed = BuildQuote.L(f[10]),
-            Refund = f[11] == "1",
-            Exempt = f[12] == "1",
-            Repair = f[13] == "1",
+            HydrogenUsed = BuildQuote.L(f[9]),
+            Refund = f[10] == "1",
+            Exempt = f[11] == "1",
+            Repair = f[12] == "1",
+            Grid = BuildQuote.L(f[13]),
             Part = int.Parse(f[14], CultureInfo.InvariantCulture),
             Needed = Items(lines[1]),
             Provided = Items(lines[2]),
@@ -816,6 +992,13 @@ public sealed class BuildRequest
             case BuildVerb.Next:
                 var next = book.Next(Station);
                 return next == null ? "" : BuildBook.EncodeOrder(next, blueprint: false);
+            case BuildVerb.Prices:
+                return string.Join(
+                    "\n",
+                    Needed.Keys.Select(i =>
+                        i + "\t" + BuildQuote.N(market?.SalePrice(Station, i) ?? 0)
+                    )
+                );
             case BuildVerb.Download:
                 var part = book.BlueprintPart(Id, Part);
                 return part == null ? "0" : "1\t" + part;
@@ -832,7 +1015,6 @@ public sealed class BuildRequest
         {
             BuildVerb.Order => book.Order(
                 w,
-                market,
                 s,
                 new BuildOrder
                 {
@@ -846,13 +1028,27 @@ public sealed class BuildRequest
                     Exempt = Exempt,
                     Repair = Repair,
                 },
-                Needed,
-                Provided,
-                MaxTotal
+                Needed
             ),
-            BuildVerb.Cancel => book.Cancel(w, market, s, Station, Player),
+            BuildVerb.Tow => book.Tow(
+                w,
+                new BuildOrder
+                {
+                    Station = Station,
+                    Player = Player,
+                    Pcu = Pcu,
+                    Ship = Ship,
+                    Grid = Grid,
+                }
+            ),
+            BuildVerb.Sale => BuildBook.Sale(market, Station, Player, Needed),
+            BuildVerb.Cancel => book.Cancel(Station, Player),
             BuildVerb.Start => book.Start(Id),
-            BuildVerb.Finish => book.Finish(w, market, s, Id, Needed, HydrogenUsed, Refund),
+            BuildVerb.Finish => book.Finish(Id),
+            BuildVerb.Turn => book.Turn(w, s, Id),
+            BuildVerb.Begin => book.Begin(w, market, s, Id, Player, Needed, Provided),
+            BuildVerb.After => book.After(w, market, s, Id, HydrogenUsed, Refund, Needed),
+            BuildVerb.EndTurn => book.EndTurn(w, market, Id, Needed),
             _ => BuildResult.No("Unknown request."),
         };
         return (r.Ok ? "1\t" : "0\t")

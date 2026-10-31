@@ -425,7 +425,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
             && back.Targets[5].HunterSeen == DateTime.MinValue,
         "an older world's targets"
     );
-    Check(ContractBook.ParseAnswer(";;;").Watched.Count == 0, "an empty answer");
+    Check(ContractBook.ParseAnswer(";;;;").Watched.Count == 0, "an empty answer");
 }
 
 // Towed in, the grid goes to the player, on whichever node holds it, until a report shows it done
@@ -473,6 +473,29 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     var back = new ContractBook(goneAfter);
     back.LoadGiven(book.SerializeGiven());
     Check(back.Given[1] == Hunter && back.Given[3] == 0, "the orders come back from the save");
+}
+
+// A tow over the limits: the order repeats until the grid is gone, and it survives a restart
+{
+    var book = Book(Row(1, Dead, 100, 1100));
+    book.BreakDown(1, Hunter, "Alpha, Station;1");
+    Check(book.Watched.Contains(1), "a grid to break down is watched");
+    Check(book.Given.ContainsKey(1), "no contract or other tow takes it now");
+    var order = ContractBook.ParseAnswer(book.Report("n1", [Row(1, Dead, 100, 1100)], t0));
+    Check(
+        order.BreakDown.SequenceEqual([(1L, Hunter, "Alpha, Station;1")]),
+        "the answer orders it, whatever the station's name"
+    );
+    Check(order.Give.Count == 0, "and doesn't give it");
+    var back = new ContractBook(goneAfter);
+    back.LoadBreakdowns(book.SerializeBreakdowns());
+    Check(back.Breakdowns[1] == (Hunter, "Alpha, Station;1"), "it comes back from the save");
+    order = ContractBook.ParseAnswer(book.Report("n1", [Row(1, Dead, 100, 1100)], t0 + goneAfter));
+    Check(order.BreakDown.Count == 1, "it repeats while the grid is there");
+    book.Report("n1", [], t0 + goneAfter * 3);
+    book.Forget(t0 + goneAfter * 3);
+    order = ContractBook.ParseAnswer(book.Report("n1", [], t0 + goneAfter * 3));
+    Check(order.BreakDown.Count == 0, "and ends when it is gone");
 }
 
 // Abuse: selling your own grid, someone else's claim, a grid in use, a grid already at the shipyard
@@ -627,7 +650,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     );
     Check(
         ContractMath.Tow(201, 900, 1000, 500) == ContractMath.TowResult.OverLimit,
-        "more than 10 % over: refused"
+        "more than 10 % over: broken down"
     );
     Check(
         ContractMath.Tow(501, 0, 1000, 500) == ContractMath.TowResult.TooBig,

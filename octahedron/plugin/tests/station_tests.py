@@ -54,7 +54,11 @@ def chat(remote, text: str, timeout: float = 15.0, quiet: float = 0.5) -> list[s
         ]
         if got != lines:
             lines, changed = got, time.monotonic()
-        elif lines and time.monotonic() - changed >= quiet:
+        elif (
+            lines != ["The shipyard answers in chat."]
+            and lines
+            and time.monotonic() - changed >= quiet
+        ):
             break
         time.sleep(0.2)
     return lines
@@ -71,7 +75,8 @@ def wait_until(what, timeout: float, every: float = 1.0):
 
 
 def probe(remote, args: str) -> str:
-    reply = " ".join(chat(remote, f"!sprobe {args}"))
+    # A busy test machine can take a while to answer
+    reply = " ".join(chat(remote, f"!sprobe {args}", 60))
     log(f"!sprobe {args} -> {reply}")
     return reply
 

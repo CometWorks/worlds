@@ -9,19 +9,20 @@ With FreeBuildPcuLimit 0 every build is paid, with a labor fee of OCT_LABOR_FEE
 uses !oct order, which presses the hologram table's button for an admin (the
 button itself is pressed once at the end).
 
-- Quote, then order: the first press shows the quote, the second orders it. The
-  player's account pays the quoted total, OCT's stock at Alpha goes down by the
-  components, the hydrogen comes from the H2 tank of the player's ship docked at
-  Alpha (half of it drained), and the build starts at once.
-- When the ship is ready its
-  H2 tank holds 500,000 L.
-- The finished ship stays in the shipyard, so the next order waits in the queue,
-  bought too. After a server restart the queue entry is still there, and pressing
-  again cancels it: all the player paid and OCT's stock are back. The hydrogen drained
-  from the docked ship can't go back, so the ice for it is sold for the player.
+- Quote, then order: the first press shows the quote, the second queues it, and nothing
+  is paid yet. At the player's turn the third press pays: the player's account pays what
+  is missing and any fee, OCT's stock at Alpha goes down by the components, and the
+  hydrogen comes from the H2 tank of the player's ship docked at Alpha (half of it
+  drained). When the ship is ready its H2 tank holds 500,000 L, and the empty containers
+  end the turn.
+- The finished ship stays in the shipyard, so the next order waits in the queue, with
+  nothing paid yet. After a server restart the queue entry is still there, and pressing
+  again cancels it.
 - A free build (FreeBuildPcuLimit back at 10,000) queues behind the ship too and is
   canceled by pressing again. The confirm button has the toolbar item the plugin
   gives it (checked through the probe).
+
+A player's turn itself is in tests/test_shipyard_turn.py.
 
     OCT_TASK=SE-685 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_paid_builds.py
@@ -83,8 +84,6 @@ STOCK = {
 # Enough to pay it, with a low balance otherwise
 FUNDS = 300_000
 HYDROGEN = 500_000
-ICE = "Ore/Ice"
-HYDROGEN_ICE = 25_000  # for those 500,000 L
 LABOR_FEE = int(os.environ.get("OCT_LABOR_FEE", "10"))
 check = st.check
 
@@ -148,18 +147,8 @@ def wait_chat(remote, text: str, timeout: float, after=(0, set())) -> str | None
 
 
 def total(reply: str) -> int:
-    match = re.search(r"([\d,]+) SC from your account", reply)
+    match = re.search(r"([\d,]+) SC if .* buy everything", reply)
     return int(match[1].replace(",", "")) if match else -1
-
-
-def paid(reply: str) -> tuple[int, int]:
-    """What an order paid: the components and the labor fee, which it leaves out at 0"""
-    match = re.search(
-        r"([\d,]+) SC for the components(?: and ([\d,]+) SC labor)? paid", reply
-    )
-    if not match:
-        return -1, -1
-    return int(match[1].replace(",", "")), int((match[2] or "0").replace(",", ""))
 
 
 def order(remote) -> tuple[str, str]:
@@ -198,16 +187,27 @@ def paid_build(remote) -> None:
     check(cost > 0, f"the quote's total: {cost}")
     mark = latest(remote)
     started = press(remote)
-    check("is in the queue" in started, f"the second press orders: {started}")
-    check(
-        (paid(started)[1] > 0) == (LABOR_FEE > 0)
-        and ("labor" in started) == (LABOR_FEE > 0),
-        f"the order's message and the labor fee: {started}",
-    )
-    builds = wait_chat(remote, f"builds '{SHIP}' for you now", 60, mark)
-    check(builds is not None, f"the build starts at once: {builds}")
+    check("is in the queue" in started, f"the second press queues it: {started}")
+    told = wait_chat(remote, "It is your turn", 40, mark)
+    check(told is not None, f"the player's turn comes at once: {told}")
     now = balance(remote)
-    check(now == mine - cost, f"the player paid the quote: {mine} -> {now}, {cost}")
+    check(now == mine, f"nothing is paid at the queue: {mine} -> {now}")
+    check(gas(remote, ship) == 1_000_000, "the docked ship's tank is still full")
+    check(plates(remote) == STOCK[PLATE], "nothing left OCT's stock yet")
+    at_table(remote)
+    mark = latest(remote)
+    begun = press(remote)
+    builds = wait_chat(remote, f"builds '{SHIP}' for you now", 60, mark)
+    check(builds is not None, f"the press in the turn starts it: {begun} {builds}")
+    check(
+        ("labor" in begun) == (LABOR_FEE > 0),
+        f"the press's message and the labor fee: {begun}",
+    )
+    now = balance(remote)
+    check(
+        mine - cost <= now < mine,
+        f"the player paid at most the quote, less the docked hydrogen's ice: {mine} -> {now}, {cost}",
+    )
     check(plates(remote) == STOCK[PLATE] - 1205, "the plates left OCT's stock")
     check(
         gas(remote, ship) == 500_000,
@@ -220,57 +220,42 @@ def paid_build(remote) -> None:
         f"the ship is ready, its H2 filled: {ready}",
     )
     check(gas(remote, SHIP) == HYDROGEN, f"the new ship's H2 tank holds {HYDROGEN:,} L")
+    told = wait_chat(remote, "its containers are empty", 30, mark)
+    check(told is not None, f"nothing left: the turn ends: {told}")
 
 
-def queued_build(remote) -> tuple[int, int]:
-    """Queues a paid order behind the finished ship; returns the balance before it and
-    what it paid"""
+def waiting_build(remote) -> int:
+    """Queues an order behind the finished ship; returns the player's balance"""
     for item, count in STOCK.items():
         st.admin(remote, f"!oct market set Alpha {item} {count}")
     st.probe(remote, f"pay me {FUNDS - balance(remote)}")
+    before = balance(remote)
     at_table(remote)
     load(remote)
     before = balance(remote)
     mark = latest(remote)
     quote, queued = order(remote)
     log(f"quote: {quote or 'on the screen already'}")
-    check("is in the queue" in queued, f"the second order: {queued}")
-    components, fee = paid(queued)
+    check("is in the queue" in queued, f"the order: {queued}")
     check(
-        wait_chat(remote, f"builds '{SHIP}' for you now", 12, mark) is None,
+        wait_chat(remote, "It is your turn", 25, mark) is None,
         "it waits: the finished ship is still in the shipyard",
     )
     after = balance(remote)
-    check(
-        components > 0 and after == before - components - fee,
-        f"the player paid at the order: {before} -> {after}, {components} + {fee}",
-    )
-    check(plates(remote) == STOCK[PLATE] - 1205, "bought from OCT's stock")
-    return before, before - after
+    check(after == before, f"nothing is paid yet: {before} -> {after}")
+    check(plates(remote) == STOCK[PLATE], "the plates stay in OCT's stock")
+    return before
 
 
-def cancel_after_restart(remote, before: int, paid_order: int) -> None:
-    ice = st.stock(remote, "Alpha", ICE)[0]
+def cancel_after_restart(remote, before: int) -> None:
     at_table(remote)
     canceled = press(remote)
     check(
         "left the queue" in canceled, f"after the restart the press cancels: {canceled}"
     )
-    check("is paid back" in canceled, f"the cancel pays back: {canceled}")
     after = balance(remote)
-    sold = after - before
-    back = re.search(r"([\d,]+) SC is paid back", canceled)
-    check(
-        sold > 0
-        and back is not None
-        and int(back[1].replace(",", "")) == paid_order + sold,
-        f"all of it is back, and the hydrogen is sold: {before} -> {after}: {canceled}",
-    )
-    check(
-        st.stock(remote, "Alpha", ICE)[0] == ice + HYDROGEN_ICE,
-        "the ice for the docked ship's hydrogen went into OCT's stock",
-    )
-    check(plates(remote) == STOCK[PLATE], "and OCT's plates are back")
+    check(after == before, f"no money moved: {before} -> {after}")
+    check(plates(remote) == STOCK[PLATE], "nor OCT's plates")
 
 
 def free_build(remote) -> None:
@@ -316,21 +301,21 @@ def main() -> int:
     rig.start_server()
     remote = rig.start_client()
     log("joined")
-    before = paid_order = None
+    before = None
     try:
         paid_build(remote)
-        before, paid_order = queued_build(remote)
+        before = waiting_build(remote)
     finally:
         rig.stop_client()
         rig.stop_server()
     sandbox = (rig.WORLD / "Sandbox.sbc").read_text(encoding="utf-8")
-    check("octahedron-builds 2" in sandbox, "the saved Sandbox.sbc holds the queues")
+    check("octahedron-builds 3" in sandbox, "the saved Sandbox.sbc holds the queues")
     saved_screens()
     rig.start_server()
     remote = rig.start_client()
     try:
         if before is not None:
-            cancel_after_restart(remote, before, paid_order)
+            cancel_after_restart(remote, before)
         free_build(remote)
     finally:
         rig.stop_client()

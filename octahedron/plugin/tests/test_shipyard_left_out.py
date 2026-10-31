@@ -4,9 +4,11 @@
   by those welders.
 - no-dlc: a player without them (!sprobe nodlc) gets the ship without its DLC blocks, told so, and it
   is finished: no component goes to a block it can't place.
+- paid-offline: a paid build's welders are the player's (SE-840). With the player gone, the game sees
+  no Steam id for them either: the DLC blocks still get built.
 - docked: a paid ship with a grid no welder can place, like one docked by a connector, is delivered
-  without it. The chat names the grid, and that grid's components go back to the station and the
-  player's account.
+  without it. The chat names the grid, and that grid's components stay in the containers for the
+  player to take, or to sell at the end of the turn.
 
     uv run --no-project --with httpx python tests/test_shipyard_left_out.py [case ...]
 """
@@ -130,35 +132,78 @@ def dlc(owned: bool) -> None:
     no_plugin_errors(stalled=False)
 
 
+def paid_order(remote, loaded: dict | None = None) -> None:
+    """A paid order up to the press at the player's turn, with what is loaded before it"""
+    tc.with_config(
+        remote,
+        FreeBuildPcuLimit=0,
+        ShipyardLaborFeePer100Pcu=0,
+        ShipyardTableMinutes=600,
+    )
+    for item, count in pb.STOCK.items():
+        st.admin(remote, f"!oct market set Alpha {item} {count}")
+    st.probe(remote, f"pay me {pb.FUNDS - pb.balance(remote)}")
+    pb.at_table(remote)
+    quote = pb.press(remote)
+    check("Your quote for" in quote, f"quote: {quote}")
+    reply = pb.press(remote)
+    check("is in the queue" in reply, f"ordered: {reply}")
+    check(so.wait_chat(remote, "It is your turn", 60), "the player's turn")
+    for item, count in (loaded or {}).items():
+        st.probe(remote, f"yardload Alpha {item} {count}")
+    reply = pb.press(remote)
+    check(f"builds '{NAME}' for you now" in reply, f"the press starts it: {reply}")
+
+
+def paid_offline() -> None:
+    so.prepare(WITH_DLC, 60)
+    rig.start_server()
+    remote = rig.start_client()
+    try:
+        # The DLC blocks' parts the station doesn't sell
+        paid_order(
+            remote,
+            {
+                "Component/PowerCell": 80,
+                "Component/Reactor": 100,
+                "Component/MetalGrid": 4,
+            },
+        )
+        rig.stop_client()
+        deadline = time.monotonic() + 600
+        pattern = rf"'{NAME}' of .* built or broken down"
+        while time.monotonic() < deadline and not re.search(
+            pattern, rig.server_game_log()
+        ):
+            time.sleep(5)
+        check(re.search(pattern, rig.server_game_log()), "built with the player gone")
+    finally:
+        rig.stop_client()
+        rig.stop_server()
+    so.check_ship(NAME, len(HULL) + len(DLC), complete=True)
+    subtypes = set(ship_subtypes())
+    wanted = {block[1] for block in DLC}
+    check(wanted <= subtypes, f"DLC blocks built: {sorted(subtypes)}")
+    no_plugin_errors(stalled=False)
+
+
 def docked() -> None:
     so.prepare(WITH_DOCKED, 60)
     rig.start_server()
     remote = rig.start_client()
     try:
-        tc.with_config(
-            remote,
-            FreeBuildPcuLimit=0,
-            ShipyardLaborFeePer100Pcu=0,
-            ShipyardTableMinutes=600,
-        )
-        for item, count in pb.STOCK.items():
-            st.admin(remote, f"!oct market set Alpha {item} {count}")
-        st.probe(remote, f"pay me {pb.FUNDS - pb.balance(remote)}")
-        pb.at_table(remote)
-        quote = pb.press(remote)
-        check("Your quote for" in quote, f"quote: {quote}")
-        reply = pb.press(remote)
-        check("is in the queue" in reply, f"ordered: {reply}")
-        paid_plates = pb.plates(remote)
-        paid_money = pb.balance(remote)
+        paid_order(remote)
         line = so.wait_chat(remote, "The ship is yours without", 600)
         check(DOCKED_NAME in line, f"the chat names the grid: {line}")
-        deadline = time.monotonic() + 60
-        while time.monotonic() < deadline and pb.plates(remote) == paid_plates:
-            time.sleep(5)
-        back = pb.plates(remote) - paid_plates
-        check(back == DOCKED_PLATES, f"its plates are back at the station: {back}")
-        check(pb.balance(remote) > paid_money, "and its price on the account")
+        left = st.probe(remote, "yardstock Alpha")
+        plates = re.search(r"Component/SteelPlate=(\d+)", left)
+        check(
+            plates is not None and int(plates[1]) == DOCKED_PLATES,
+            f"its plates stay in the containers: {left}",
+        )
+        money = pb.balance(remote)
+        st.admin(remote, "!oct shipyard done")
+        check(pb.balance(remote) > money, "and sell at the end of the turn")
     finally:
         rig.stop_client()
         rig.stop_server()
@@ -169,6 +214,7 @@ def docked() -> None:
 CASES = {
     "owned": lambda: dlc(owned=True),
     "no-dlc": lambda: dlc(owned=False),
+    "paid-offline": paid_offline,
     "docked": docked,
 }
 
