@@ -28,8 +28,50 @@ def check(ok: bool, what: str) -> None:
     log(f"{'PASS' if ok else 'FAIL'} {what}")
 
 
-def probe(remote, args: str, wait: float = 3.0) -> str:
-    reply = " ".join(rig.chat(remote, f"!sprobe {args}", wait))
+def chat(remote, text: str, timeout: float = 15.0, quiet: float = 0.5) -> list[str]:
+    """Sends a chat line and returns what came back, as rig.chat, as soon as the answer has
+    stopped growing for quiet seconds; only a line nothing answers takes the timeout"""
+    before = remote.get_chat_messages()
+    seen = {
+        (h.get("sender"), h.get("text"), h.get("timestamp"))
+        for h in before.get("hud", [])
+    }
+    remote.send_chat(text)
+    lines: list[str] = []
+    changed = time.monotonic()
+    deadline = changed + timeout
+    while time.monotonic() < deadline:
+        after = remote.get_chat_messages(after=before.get("latest", 0))
+        got = [
+            m.get("Text", "")
+            for m in after.get("messages", [])
+            if m.get("Text") != text
+        ] + [
+            h.get("text", "")
+            for h in after.get("hud", [])
+            if (h.get("sender"), h.get("text"), h.get("timestamp")) not in seen
+            and h.get("text") != text
+        ]
+        if got != lines:
+            lines, changed = got, time.monotonic()
+        elif lines and time.monotonic() - changed >= quiet:
+            break
+        time.sleep(0.2)
+    return lines
+
+
+def wait_until(what, timeout: float, every: float = 1.0):
+    """what()'s first true answer, or its last one at the timeout"""
+    deadline = time.monotonic() + timeout
+    while True:
+        result = what()
+        if result or time.monotonic() > deadline:
+            return result
+        time.sleep(every)
+
+
+def probe(remote, args: str) -> str:
+    reply = " ".join(chat(remote, f"!sprobe {args}"))
     log(f"!sprobe {args} -> {reply}")
     return reply
 
@@ -41,18 +83,23 @@ def stand(remote, station: str) -> None:
     check(match is not None, f"{station} Station has a Store block: {reply}")
     if match:
         remote.character_teleport(*(float(v) for v in match.groups()))
-        time.sleep(5)
+        # It has streamed in once the client finds it
+        wait_until(
+            lambda: remote.find_nearby_blocks(
+                subtype="StoreBlock", max_distance=20, limit=1
+            ),
+            30,
+        )
 
 
 def wait_docked(remote, ship: str) -> bool:
-    for _ in range(10):
-        if f"DOCKED {ship} yes" in probe(remote, f"docked {ship}", 2):
-            return True
-    return False
+    return wait_until(
+        lambda: f"DOCKED {ship} yes" in probe(remote, f"docked {ship}"), 30
+    )
 
 
-def admin(remote, text: str, wait: float = 3.0) -> str:
-    reply = " ".join(rig.chat(remote, text, wait))
+def admin(remote, text: str) -> str:
+    reply = " ".join(chat(remote, text))
     log(f"{text} -> {reply}")
     return reply
 

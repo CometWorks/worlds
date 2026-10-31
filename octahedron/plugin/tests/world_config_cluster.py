@@ -85,33 +85,31 @@ def store_trade(api, probe, check) -> None:
         )
 
     def account() -> int:
-        reply = " ".join(rig.chat(api, "!oct money", 10))
+        reply = " ".join(st.chat(api, "!oct money"))
         return int(re.search(r"You: ([\d,]+) SC", reply)[1].replace(",", ""))
 
     api.character_teleport(*stations()["Alpha Station"])
-    stores = []
-    for _ in range(12):
-        time.sleep(5)
-        stores = api.find_nearby_blocks(subtype="StoreBlock", max_distance=400, limit=5)
-        if stores:
-            break
+    stores = st.wait_until(
+        lambda: api.find_nearby_blocks(subtype="StoreBlock", max_distance=400, limit=5),
+        60,
+        every=2,
+    )
     check("store: a client sees Alpha's Store block", stores)
     tc.stand_by(api, min(stores, key=lambda b: b["distance"]))
     # The stores refresh every 15 s; this one has had that since the node started
     stock, ask, bid = book()
     money = account()
-    shown = " ".join(rig.chat(api, f"/store list {plate}", 8))
+    shown = " ".join(st.chat(api, f"/store list {plate}"))
     check(
         "store: the client sees OCT's offer",
         f"OFFER {plate} {int(stock)} {ask}" in shown,
         shown,
     )
-    reply = " ".join(rig.chat(api, f"/store buy {plate} 10", 8))
+    reply = " ".join(st.chat(api, f"/store buy {plate} 10"))
     check("store: the client buys on a node", "BUY Success" in reply, reply)
     check("store: its account paid", account() == money - 10 * ask)
     check("store: the WA's stock went down", book()[0] == stock - 10)
-    time.sleep(2)
-    reply = " ".join(rig.chat(api, f"/store sell {plate} 10", 8))
+    reply = " ".join(st.chat(api, f"/store sell {plate} 10"))
     check("store: the client sells on a node", "SELL Success" in reply, reply)
     check("store: its account got it", account() == money - 10 * ask + 10 * bid)
     check("store: the WA's stock is back", book()[0] == stock)

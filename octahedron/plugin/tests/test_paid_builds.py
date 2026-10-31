@@ -86,12 +86,8 @@ LABOR_FEE = int(os.environ.get("OCT_LABOR_FEE", "10"))
 check = st.check
 
 
-def admin(remote, text: str, wait: float = 3.0) -> str:
-    return st.admin(remote, text, wait)
-
-
-def press(remote, wait: float = 5.0) -> str:
-    return admin(remote, "!oct order", wait)
+def press(remote) -> str:
+    return st.admin(remote, "!oct order")
 
 
 def balance(remote) -> int:
@@ -118,7 +114,8 @@ def load(remote) -> None:
     table = min(tc.tables(remote), key=lambda b: b["distance"])
     block = remote.get_block(table["gridId"], tuple(table["min"]))
     log(str(remote.load_projection(block["entityId"], xml=blueprint_xml(BLUEPRINT))))
-    time.sleep(6)
+    # The table's screen names the blueprint once the server has it
+    st.wait_until(lambda: SHIP in st.admin(remote, "!oct table show"), 30)
 
 
 def latest(remote) -> tuple[int, set]:
@@ -166,10 +163,10 @@ def paid(reply: str) -> tuple[int, int]:
 def order(remote) -> tuple[str, str]:
     """Presses until the order is placed: the quote's reply (empty when the screen
     showed the player's quote already) and the order's"""
-    reply = press(remote, 8)
+    reply = press(remote)
     if "Your quote for" not in reply:
         return "", reply
-    return reply, press(remote, 8)
+    return reply, press(remote)
 
 
 def paid_build(remote) -> None:
@@ -180,7 +177,7 @@ def paid_build(remote) -> None:
         ShipyardTableMinutes=600,
     )
     for item, count in STOCK.items():
-        admin(remote, f"!oct market set Alpha {item} {count}")
+        st.admin(remote, f"!oct market set Alpha {item} {count}")
     st.probe(remote, f"pay me {FUNDS - balance(remote)}")
     docked = re.search(r"SHIP (\d+)", st.probe(remote, "dock Alpha mine H2=1"))
     check(docked is not None, "a ship with a full H2 tank docked at Alpha")
@@ -198,7 +195,7 @@ def paid_build(remote) -> None:
     )
     check(cost > 0, f"the quote's total: {cost}")
     mark = latest(remote)
-    started = press(remote, 8)
+    started = press(remote)
     check("is in the queue" in started, f"the second press orders: {started}")
     check(
         (paid(started)[1] > 0) == (LABOR_FEE > 0)
@@ -229,7 +226,7 @@ def queued_build(remote) -> tuple[int, float]:
     """Queues a paid order behind the finished ship; returns the balance and OCT's plates
     before it"""
     for item, count in STOCK.items():
-        admin(remote, f"!oct market set Alpha {item} {count}")
+        st.admin(remote, f"!oct market set Alpha {item} {count}")
     st.probe(remote, f"pay me {FUNDS - balance(remote)}")
     at_table(remote)
     load(remote)
@@ -240,7 +237,7 @@ def queued_build(remote) -> tuple[int, float]:
     check("is in the queue" in queued, f"the second order: {queued}")
     components, fee = paid(queued)
     check(
-        wait_chat(remote, f"builds '{SHIP}' for you now", 25, mark) is None,
+        wait_chat(remote, f"builds '{SHIP}' for you now", 12, mark) is None,
         "it waits: the finished ship is still in the shipyard",
     )
     after = balance(remote)

@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import os
 import sys
-import time
 
 os.environ.setdefault("OCT_TASK", "SE-833")
 import rig  # noqa: E402
@@ -35,11 +34,11 @@ PLATINUM = "Ingot/Platinum"
 GOLD = "Ingot/Gold"
 CHIP = "Component/ZoneChip"
 # The stores refresh this often and after each trade
-REFRESH = 16
+REFRESH = 20
 
 
-def store(remote, args: str, wait: float = 4.0) -> list[str]:
-    lines = rig.chat(remote, f"/store {args}", wait)
+def store(remote, args: str) -> list[str]:
+    lines = st.chat(remote, f"/store {args}")
     log(f"/store {args} -> {lines}")
     return lines
 
@@ -53,15 +52,26 @@ def row(remote, item: str, kind: str = "OFFER") -> tuple[int, int] | None:
     return None
 
 
+def shown(remote, item: str, kind: str, want) -> tuple[int, int] | None:
+    """The row once want(row) says the Store has refreshed, or the last one"""
+    last = [None]
+
+    def look():
+        last[0] = row(remote, item, kind)
+        return want(last[0])
+
+    st.wait_until(look, REFRESH)
+    return last[0]
+
+
 def have(remote, item: str) -> float:
-    for line in store(remote, f"have {item}", 2):
+    for line in store(remote, f"have {item}"):
         if line.startswith("HAVE "):
             return float(line.split(" ")[1])
     return -1.0
 
 
 def trade(remote, verb: str, item: str, amount: int) -> str:
-    time.sleep(2)
     lines = store(remote, f"{verb} {item} {amount}")
     return " ".join(lines)
 
@@ -143,10 +153,14 @@ def run(remote) -> None:
         ask_after > ask_before,
         f"100 kg bought raises the price: {ask_before} -> {ask_after}",
     )
-    time.sleep(REFRESH)
-    check(row(remote, PLATE)[1] == int(ask_after), "the Store shows the new price")
+    check(
+        shown(remote, PLATE, "OFFER", lambda r: r and r[1] == int(ask_after))[1]
+        == int(ask_after),
+        "the Store shows the new price",
+    )
     with_config(remote, MarketPriceDriftTonnes=0)
-    time.sleep(REFRESH)
+    _, _, bid_flat, _ = stock(remote, "Alpha", PLATE)
+    shown(remote, PLATE, "ORDER", lambda r: r and r[1] == int(bid_flat))
     trade(remote, "sell", PLATE, 5)
 
     # The specialty: its own price up to the quota, the normal one after
@@ -154,8 +168,8 @@ def run(remote) -> None:
     admin(remote, f"!oct market set Alpha {PLATINUM} 100")
     with_config(remote, MarketPriceDriftTonnes=0, MarketSpecialtyDailyTonnes=0.005)
     admin(remote, "!oct market tick force")
-    time.sleep(REFRESH)
     _, plat_ask, plat_bid, wanted = stock(remote, "Alpha", PLATINUM)
+    shown(remote, PLATINUM, "ORDER", lambda r: r and r[1] == int(plat_bid))
     check(wanted == 5, f"the specialty up to the day's 5 kg: {wanted}")
     check(
         plat_bid < plat_ask,
@@ -178,7 +192,7 @@ def run(remote) -> None:
     )
     _, _, normal, wanted = stock(remote, "Alpha", PLATINUM)
     check(normal == beta_bid, f"past the quota the normal price: {normal}")
-    time.sleep(REFRESH)
+    shown(remote, PLATINUM, "ORDER", lambda r: r and r[1] == int(normal))
     before = st.money(remote)["You"]
     check("SELL Success" in trade(remote, "sell", PLATINUM, 3), "the rest sold")
     check(st.money(remote)["You"] == before + 3 * int(normal), "at the normal price")
@@ -186,9 +200,8 @@ def run(remote) -> None:
 
     # OCT's limit
     admin(remote, f"!oct market set Alpha {GOLD} 1000000")
-    time.sleep(REFRESH)
     check(
-        row(remote, GOLD, "ORDER") is None,
+        shown(remote, GOLD, "ORDER", lambda r: r is None) is None,
         f"200 t of gold: OCT stops buying: {stock(remote, 'Alpha', GOLD)}",
     )
     check(row(remote, GOLD) is not None, "and still sells")
@@ -223,7 +236,7 @@ def run(remote) -> None:
     # A friend of OCT pays the same: reputation changes no prices
     probe(remote, "rep OCT 1500")
     _, ask2, *_ = stock(remote, "Alpha", PLATE)
-    time.sleep(REFRESH)
+    shown(remote, PLATE, "OFFER", lambda r: r and r[1] == int(ask2))
     lines = store(remote, f"list {PLATE}")
     head = next((l for l in lines if l.startswith("STORE ")), "")
     check("BONUS 1 1" in head, f"a friend: no bonus: {head}")
@@ -235,7 +248,6 @@ def run(remote) -> None:
 
     # The game's economy tick neither wipes nor generates
     counted = admin(remote, "!oct market stores tick")
-    time.sleep(REFRESH)
     check(row(remote, PLATE) is not None, f"after an economy tick: {counted}")
 
     # Zone chips: Moon only, a fixed price, topped up
@@ -259,8 +271,10 @@ def run(remote) -> None:
 def after_restart(remote) -> None:
     stand(remote, "Alpha")
     check(stock(remote, "Alpha", PLATE)[0] == 321, "the stock survives a restart")
-    time.sleep(REFRESH)
-    check(row(remote, PLATE)[0] == 321, "and the Store shows it")
+    check(
+        shown(remote, PLATE, "OFFER", lambda r: r and r[0] == 321)[0] == 321,
+        "and the Store shows it",
+    )
 
 
 def main() -> int:
