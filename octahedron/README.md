@@ -134,7 +134,9 @@ station and shipyard blueprints are in `blueprints/`.
 - Makes the stations the NPC faction's trade stations: the faction is a Trader
   with a bank account, and each station grid has a station entry, so the
   economy stocks its store and contract blocks. The game's own trade factions
-  and their procedural stations are off (`GenerateFactionsOnStart` false).
+  and their procedural stations are off (`GenerateFactionsOnStart` false,
+  `TradeFactionsCount` 0), and MES spawns no economy outposts or Trade Operators
+  Coalition stations (`NpcSpawnGroupBlacklist` in `config/storage`, `MES.md`).
   The entries name no safe zone (`SafeZoneEntityId` 0); with one, the economy
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
