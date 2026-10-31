@@ -236,7 +236,7 @@ STALLS = {
     "armor": ("Component/MetalGrid", "The ship was removed"),
 }
 # For the paid builds: OCT's stock of the components, and of the ice for 500,000 L of hydrogen
-BUILD_MONEY = 500_000
+BUILD_MONEY = 800_000
 STOCK = {
     "Component/SteelPlate": 1500,
     "Component/Construction": 300,
@@ -420,6 +420,7 @@ def order(remote, case: str) -> tuple:
         remote,
         FreeBuildPcuLimit=0 if paid or exempt else 10000,
         ShipyardLaborFeePer100Pcu=LABOR_FEE,
+        ShipyardTableMinutes=600,
         ShipyardRepasteShips=(
             "false" if os.environ.get("OCT_REPASTE") == "0" else "true"
         ),

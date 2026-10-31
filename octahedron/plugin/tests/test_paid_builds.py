@@ -44,6 +44,7 @@ import test_client as tc  # noqa: E402
 import station_tests as st  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 from test_client import log, with_config  # noqa: E402
+from test_table_rules import blueprint_xml  # noqa: E402
 
 PLATE = "Component/SteelPlate"
 SHIP = "PaidTest"
@@ -108,6 +109,14 @@ def at_table(remote) -> None:
     tc.stand_by(remote, table)
 
 
+def load(remote) -> None:
+    """Loads the blueprint on the table again, which the last order cleared"""
+    table = min(tc.tables(remote), key=lambda b: b["distance"])
+    block = remote.get_block(table["gridId"], tuple(table["min"]))
+    log(str(remote.load_projection(block["entityId"], xml=blueprint_xml(BLUEPRINT))))
+    time.sleep(6)
+
+
 def latest(remote) -> tuple[int, set]:
     """A point in the chat: the last message and the HUD lines shown so far"""
     got = remote.get_chat_messages()
@@ -160,7 +169,12 @@ def order(remote) -> tuple[str, str]:
 
 
 def paid_build(remote) -> None:
-    with_config(remote, FreeBuildPcuLimit=0, ShipyardLaborFeePer100Pcu=LABOR_FEE)
+    with_config(
+        remote,
+        FreeBuildPcuLimit=0,
+        ShipyardLaborFeePer100Pcu=LABOR_FEE,
+        ShipyardTableMinutes=600,
+    )
     for item, count in STOCK.items():
         admin(remote, f"!oct market set Alpha {item} {count}")
     st.probe(remote, f"pay me {FUNDS - balance(remote)}")
@@ -214,6 +228,7 @@ def queued_build(remote) -> tuple[int, float]:
         admin(remote, f"!oct market set Alpha {item} {count}")
     st.probe(remote, f"pay me {FUNDS - balance(remote)}")
     at_table(remote)
+    load(remote)
     before = balance(remote)
     mark = latest(remote)
     quote, queued = order(remote)
@@ -246,8 +261,9 @@ def cancel_after_restart(remote, before: int, stock: float) -> None:
 
 
 def free_build(remote) -> None:
-    with_config(remote, FreeBuildPcuLimit=10000)
+    with_config(remote, FreeBuildPcuLimit=10000, ShipyardTableMinutes=600)
     at_table(remote)
+    load(remote)
     quote, queued = order(remote)
     check(not quote or "a free build" in quote, f"a free build: {quote}")
     check("is in the queue, a free build" in queued, f"the free order queues: {queued}")

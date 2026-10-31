@@ -205,7 +205,9 @@ def state(remote) -> tuple[int, float]:
 
 def forced_limit(remote):
     """Returns the client, joined again after the restart"""
-    tc.with_config(remote, ShipyardArmPlanSeconds=0, FreeBuildPcuLimit=0)
+    tc.with_config(
+        remote, ShipyardArmPlanSeconds=0, FreeBuildPcuLimit=0, ShipyardTableMinutes=600
+    )
     sa.at_table(remote, "South")
     reply = sa.admin(remote, "!oct order", 8)
     sa.check(
@@ -215,7 +217,7 @@ def forced_limit(remote):
         "'PlaceLimit'" not in " ".join(sa.shipyard(remote, "South")),
         "limit: nothing is ordered",
     )
-    tc.with_config(remote, FreeBuildPcuLimit=0)
+    tc.with_config(remote, FreeBuildPcuLimit=0, ShipyardTableMinutes=600)
     for item, count in sa.STOCK.items():
         sa.admin(remote, f"!oct market set South {item} {count}", 3)
     sa.fund(remote)

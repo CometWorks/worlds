@@ -150,6 +150,7 @@ def run(remote) -> None:
     trade(remote, "sell", PLATE, 5)
 
     # The specialty: its own price up to the quota, the normal one after
+    probe(remote, "pay me 100000")
     admin(remote, f"!oct market set Alpha {PLATINUM} 100")
     with_config(remote, MarketPriceDriftTonnes=0, MarketSpecialtyDailyTonnes=0.005)
     admin(remote, "!oct market tick force")
