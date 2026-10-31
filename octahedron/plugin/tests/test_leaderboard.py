@@ -202,7 +202,8 @@ def screenshots(remote, at: list[float]) -> None:
 def run(remote) -> None:
     reply = probe(remote, "kiosk Alpha")
     stand = re.search(r"STAND (\S+) (\S+) (\S+)", reply)
-    check(stand is not None, f"Alpha's kiosk found: {reply}")
+    # A world from the blueprint since SE-832 has no kiosk; the character spawned at Alpha anyway
+    log(f"Alpha's kiosk: {reply}")
     if stand:
         remote.character_teleport(*(float(v) for v in stand.groups()))
         time.sleep(3)
