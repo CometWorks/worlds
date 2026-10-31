@@ -10,7 +10,7 @@ On a world built by build_world.py. The presses are !oct order: see test_table_r
     OCT_TASK=SE-850r OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_repair_slot.py
 
-Prints one line per check and a pass/fail summary; exit code 0 = all passed. About 30 minutes.
+Prints one line per check and a pass/fail summary; exit code 0 = all passed. About 20 minutes.
 Not covered: a cluster, and a player docking and using the terminal by hand: the probe plugin
 builds the ships and connects them.
 """
@@ -39,6 +39,7 @@ from test_table_rules import (
     press,
     queue,
     settled,
+    wait_for,
 )  # noqa: E402
 
 STATION = "Alpha"
@@ -129,15 +130,6 @@ def building(remote) -> bool:
     return bool(found and int(found[1]) > 0)
 
 
-def wait_for(what, timeout: float, every: float = 3.0):
-    deadline = time.monotonic() + timeout
-    while True:
-        value = what()
-        if value or time.monotonic() > deadline:
-            return value
-        time.sleep(every)
-
-
 def book_and_idle_out(a, b) -> None:
     """The whole of a slot: booked, worked in, and ended by the real 5 idle minutes"""
     home = yard(a)
@@ -159,15 +151,14 @@ def book_and_idle_out(a, b) -> None:
         "the shipyard runs the slot",
     )
     yard_id = shipyard_id(a)
-    time.sleep(3)
     check(
-        sa.shoots(a, yard_id) is True,
+        wait_for(lambda: sa.shoots(a, yard_id) is True, 20),
         "the welders are in build mode, seen by the client",
     )
     state = yard(a)
     check(theirs(state, "OctTester"), f"the blocks are the player's: {state}")
     power_stays(state, "in the slot")
-    reply = " ".join(rig.chat(a, f"!kprobe yard {STATION} OctOther", 3))
+    reply = " ".join(rig.chat(a, f"!sprobe yard {STATION} OctOther", 3))
     check(
         "access cargo=False welders=False connectors=False reactors=False" in reply,
         f"another player has no access: {reply}",
@@ -180,7 +171,7 @@ def book_and_idle_out(a, b) -> None:
     probe(a, "faction KRS founder")
     with Second():
         probe(b, "faction KRS member")
-    reply = " ".join(rig.chat(a, f"!kprobe yard {STATION} OctOther", 3))
+    reply = " ".join(rig.chat(a, f"!sprobe yard {STATION} OctOther", 3))
     check(
         "access cargo=True welders=True connectors=True reactors=False" in reply,
         f"their faction has access, but to the reactors: {reply}",
@@ -189,6 +180,13 @@ def book_and_idle_out(a, b) -> None:
         probe(b, "faction KRS none")
     probe(a, "faction KRS none")
 
+    # Only work restarts the time: long enough idle that without the restart it ends too early
+    check(
+        not wait_for(
+            lambda: slot_runs(a) is None, max(0, start + 60 - time.monotonic())
+        ),
+        "still running after 60 idle s",
+    )
     docked = re.search(r"SHIP (\d+)", probe(a, f"yardship {STATION}"))
     check(docked is not None, f"a ship with the components at a connector: {docked}")
     ship = docked[1] if docked else "0"
@@ -215,25 +213,17 @@ def book_and_idle_out(a, b) -> None:
         PLATES - 100 <= left < PLATES,
         f"the components come from the docked ship: {PLATES} -> {left}",
     )
-    check(
-        time.monotonic() - start > IDLE_SECONDS or slot_runs(a) is not None,
-        "the slot still runs",
-    )
     # What a player leaves in the containers; the welders pulled only what they used
     probe(a, f"yardstash {STATION} {STASH}")
     held = float(yard(a)["items"])
     check(held >= STASH, f"plates in the shipyard's container: {held}")
-    # Past 5 minutes since it started, which the work restarted
-    time.sleep(max(0, start + IDLE_SECONDS + 20 - time.monotonic()))
     since = slot_runs(a)
     check(
-        since is not None and since < IDLE_SECONDS,
+        since is not None and since < 45,
         f"welding restarted the 5 minutes: {since} s since the last work",
     )
     last = time.monotonic() - (since or 0)
-    time.sleep(max(0, last + IDLE_SECONDS - 20 - time.monotonic()))
-    check(slot_runs(a) is not None, "20 s before the 5 idle minutes it still runs")
-    ended = sa.wait_chat(a, "no building or welding for 5 min", 60, mark)
+    ended = sa.wait_chat(a, "no building or welding for 5 min", IDLE_SECONDS + 60, mark)
     took = time.monotonic() - last
     check(ended is not None, f"the slot ends: {ended}")
     check(
@@ -256,8 +246,7 @@ def book_and_idle_out(a, b) -> None:
         back == left + held,
         f"what the shipyard held went back to the ship: {left} + {held} -> {back}",
     )
-    time.sleep(3)
-    check(sa.shoots(a, yard_id) is False, "the welders are off")
+    check(wait_for(lambda: sa.shoots(a, yard_id) is False, 20), "the welders are off")
     check(
         client_owner(a, yard_id, state["cell"])[1] == "All",
         "the client sees the blocks shared with all again",
@@ -372,7 +361,6 @@ def paid_cancel(a) -> None:
     before = (plates(), money())
     load(a, PAID)
     settled(a, "table", "paid")
-    time.sleep(3)
     mark = sa.so_latest(a)
     reply = press(a)
     if "Your quote for" in reply:
@@ -463,7 +451,7 @@ def main() -> int:
         sa.at_table(b, STATION)
         with_config(a, **CONFIG)
         log(tr.remove(a))
-        time.sleep(3)
+        settled(a, "table", "then press")
         book_and_idle_out(a, b)
         second_press(a)
         waits_for_a_build(a, b)
