@@ -1014,8 +1014,10 @@ the first run, a new account's balance, no economy top-up of OCT while the rules
 on (and the game's with them off), the tax by `!oct taxday`, two payouts by
 `!oct payday`, OCT topped up to its floor, the day's totals and the state read back
 after a restart. `OCT_WORLD_SOURCE` points the rig at a world built by
-`build_world.py` instead of `octahedron/server`. `tests/money/MoneyTests` checks the
-arithmetic of the tax, the payout and Hangar's retrieval fee alone
+`build_world.py` instead of `octahedron/server`. `tests/test_money_restart.py` checks
+without a client that a restart pays no hour twice and that hours missed while down
+make one payout. `tests/money/MoneyTests` checks the arithmetic of the tax, the payout,
+a whole day of payouts and Hangar's retrieval fee alone
 (`dotnet run -c Release --project tests/money/MoneyTests`).
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
