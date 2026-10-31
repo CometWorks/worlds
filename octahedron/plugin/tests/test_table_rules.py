@@ -9,8 +9,8 @@ table's screen show. On a world built by build_world.py, for the billboard. The 
 
 With OCT_SHOTS=<folder> the first client renders and saves screenshots of the two screens.
 Prints one line per check and a pass/fail summary; exit code 0 = all passed.
-Not covered: a cluster, and the Remove button's own click when the terminal can't be opened
-headless: then !oct table remove does what its request does on the server.
+Not covered: a cluster, and the terminal's own Remove button: a headless client can't open
+the terminal, so !oct table remove asks the server what the button asks it.
 """
 
 from __future__ import annotations
@@ -26,10 +26,10 @@ import rig  # noqa: E402
 import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 import test_support_arm as sa  # noqa: E402
+from se_remote import CallOp  # noqa: E402
 from test_client import log, ship_reply, tables, with_config  # noqa: E402
 
 SHOTS = os.environ.get("OCT_SHOTS")
-BILLBOARD = "Billboard LCD Ship Build Details"
 FIRST_LINE = "Press the button to confirm build!"
 STATION = "Alpha"
 CONFIG = {"FreeBuildCooldownMinutes": 0, "ShipyardTableMinutes": 600}
@@ -105,21 +105,17 @@ def load(remote) -> None:
 
 
 def screens(remote) -> dict[str, str]:
-    """The server's text of the table's screen and the billboard's two, and the queue panel"""
+    """The server's text of the table's screen, the billboard's two and the queue panel"""
     reply = "\n".join(rig.chat(remote, "!oct table show", 2))
     found = re.search(
-        r"BLUEPRINT (.*?) HOLDER (.*?)\nTABLE\n(.*)\nDETAILS\n(.*)\nHOW\n(.*)",
+        r"BLUEPRINT (.*?) HOLDER (.*?)\nTABLE\n(.*)\nDETAILS\n(.*)\nHOW\n(.*)\nQUEUE\n(.*)",
         reply,
         re.S,
     )
     assert found, reply
-    return {
-        "blueprint": found[1],
-        "holder": found[2],
-        "table": found[3],
-        "details": found[4],
-        "how": found[5],
-    }
+    return dict(
+        zip(("blueprint", "holder", "table", "details", "how", "queue"), found.groups())
+    )
 
 
 def settled(remote, screen: str, want: str, timeout: float = 25.0) -> str:
@@ -133,7 +129,7 @@ def settled(remote, screen: str, want: str, timeout: float = 25.0) -> str:
 
 
 def queue(remote) -> str:
-    return " ".join(rig.chat(remote, "!oct shipyards", 3))
+    return screens(remote)["queue"]
 
 
 def remove(remote) -> str:
@@ -143,18 +139,6 @@ def remove(remote) -> str:
 
 def press(remote) -> str:
     return ship_reply(remote, "!oct order")
-
-
-def explore_terminal(remote) -> None:
-    """Whether a headless client can get to the terminal's Remove button; logged only"""
-    try:
-        t = table(remote)
-        log(f"remote terminal: {remote.open_remote_terminal(t['gridId'])}")
-        log(f"screens: {remote.list_screens()}")
-        log(f"focused: {str(remote.get_focused_screen())[:3000]}")
-        remote.close_remote_terminal()
-    except Exception as e:  # noqa: BLE001 -- only exploring
-        log(f"no terminal: {e}")
 
 
 def first_order(a, b) -> None:
@@ -259,7 +243,7 @@ def limit(a, b) -> None:
     settled(a, "table", "Press the button")
     check("is in the queue" in press(a), "the only place in the queue is taken")
     load(b)
-    main = settled(b, "table", "queue is full")
+    main = " ".join(settled(b, "table", "1 ships").split())
     check("queue is full, 1 ships" in main, f"the table says it is full: {main!r}")
     reply = press(b)
     check("queue is full" in reply, f"and a press doesn't queue: {reply}")
@@ -268,14 +252,13 @@ def limit(a, b) -> None:
 
 
 def owner_leaves(a, b, ship: int):
-    """a's order is waiting. It stays when they leave and is built when its turn comes."""
+    """a's order from limit() is waiting. It stays when they leave and is built when its
+    turn comes."""
     rig.stop_client()
     time.sleep(20)
     check("OctTester" in queue(b), "the order stays while its owner is away")
     b.close_grid(ship)
     log(f"closed the ship in the shipyard, {ship}")
-    finished = sa.wait_log(r"Hologram table|Shipyard order", 1)
-    log(f"log: {finished}")
     deadline = time.monotonic() + 420
     built = False
     while time.monotonic() < deadline and not built:
@@ -296,38 +279,53 @@ def owner_leaves(a, b, ship: int):
     return a
 
 
-def shots(a) -> None:
-    Path(SHOTS).mkdir(parents=True, exist_ok=True)
-    load(a)
-    settled(a, "table", "Press the button")
-    settled(a, "details", "Steel Plate")
-    t = table(a)
-    b = next(
-        b
-        for b in a.find_nearby_blocks(
-            subtype="LargeBlockBillboard", max_distance=20, limit=20
-        )
-        if b["customName"] == BILLBOARD
+def shoot(remote, name: str, grid: int, stand, look) -> None:
+    """A first person screenshot of the cell look from the cell stand"""
+    at = remote.call(
+        [CallOp.grid_to_world(grid, stand), CallOp.grid_to_world(grid, look)]
     )
-    for name, block in (("billboard", b), ("table", t)):
-        pos = block["worldPosition"]
-        for suffix, offset in (
-            ("x", (2.2, 0)),
-            ("-x", (-2.2, 0)),
-            ("z", (0, 2.2)),
-            ("-z", (0, -2.2)),
-        ):
-            a.character_teleport(pos[0] + offset[0], pos[1], pos[2] + offset[1])
-            time.sleep(4)
-            a.character_look_at(*pos)
-            time.sleep(4)
-            path = Path(SHOTS) / f"{name}{suffix}.png"
-            a.screenshot_save(str(path), 1280, 720)
-            log(f"screenshot {path}")
-    log(str(screens(a)))
+    world = [c.get("world") or c.get("position") for c in (at.call(0), at.call(1))]
+    remote.character_teleport(*world[0])
+    time.sleep(3)
+    remote.character_look_at(*world[1], tolerance=0.2)
+    time.sleep(4)
+    path = Path(SHOTS) / f"{name}.png"
+    remote.screenshot_save(str(path), 1280, 720)
+    log(f"screenshot {path}")
+
+
+def shots(a, name: str) -> None:
+    """The billboard from both sides, the table's screen and the queue panel"""
+    Path(SHOTS).mkdir(parents=True, exist_ok=True)
+    for _ in range(4):
+        if a.get_view().get("firstPerson"):
+            break
+        a.key("V")
+        time.sleep(1)
+    t = table(a)
+    x, y, z = t["min"]
+    grid = t["gridId"]
+    # The console is at (3, 7, 0), its button at x + 1, the billboard at x + 2, facing along x
+    shoot(a, f"{name}-billboard-1", grid, (x + 3, y, z), (x + 2, y, z))
+    shoot(a, f"{name}-billboard-2", grid, (x + 1, y, z + 1), (x + 2, y, z))
+    shoot(a, f"{name}-table", grid, (x, y, z + 1), (x, y, z))
+    shoot(a, f"{name}-queue", grid, (x + 1, y, z + 2), (x + 1, y + 1, z))
     sa.at_table(a, STATION)
+
+
+def take_shots(a) -> None:
+    load(a)
+    settled(a, "details", "Steel Plate")
+    shots(a, "free")
+    with_config(a, **CONFIG, FreeBuildPcuLimit=0)
+    settled(a, "table", "paid")
+    time.sleep(12)
+    shots(a, "paid")
+    with_config(a, **CONFIG)
     remove(a)
     time.sleep(3)
+    settled(a, "table", "then press")
+    shots(a, "idle")
 
 
 def main() -> int:
@@ -357,17 +355,13 @@ def main() -> int:
         with_config(a, **CONFIG)
         log(remove(a))
         time.sleep(3)
-        explore_terminal(b)
         if SHOTS:
-            shots(a)
+            take_shots(a)
         first_order(a, b)
         built = [g for g in a.list_grids() if g.get("name") == "Order Test"]
         log(f"the ship in the shipyard: {built}")
         rules(a, b)
         limit(a, b)
-        load(a)
-        settled(a, "table", "Press the button")
-        check("is in the queue" in press(a), "an order waiting for the shipyard")
         a = owner_leaves(a, b, built[0]["entityId"])
     finally:
         rig.stop_client()
