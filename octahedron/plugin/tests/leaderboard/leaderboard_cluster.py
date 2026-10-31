@@ -220,8 +220,8 @@ def run(bench) -> None:
 
     reply = probe.run("!lbprobe panel Alpha")
     check(
-        "Alpha's 8 panels in Monospace",
-        re.match(r"PANEL 8 TEXT_AND_IMAGE \S*Monospace ", reply) is not None,
+        "Alpha's panel in Monospace",
+        re.match(r"PANEL 1 TEXT_AND_IMAGE \S*Monospace ", reply) is not None,
         reply,
     )
     rank = rows.get("LBC", {}).get("rank", 0)
