@@ -1,6 +1,8 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using PluginSdk.Commands;
 using Sandbox.Game.World;
 using VRage.Game.ModAPI;
@@ -15,6 +17,7 @@ namespace LedgerProbe;
 /// LEDGERPROBE_OUT as "STEP\tTEXT", STEP counting the plan's command lines from 0; replies of a command
 /// that answers later (a ledger change on the World Authority) come when they come.
 ///   wait SECONDS     let the game run
+///   clock DAYS       moves the clock that ages offline partitions in the contracts, a test's week
 ///   anything else    a chat command line, for example "!oct ledger show Alpha"
 /// </summary>
 public class Probe : IPlugin, ICommandResponder
@@ -75,6 +78,11 @@ public class Probe : IPlugin, ICommandResponder
             resumeAt = DateTime.UtcNow.AddSeconds(double.Parse(next.Substring(5)));
             return;
         }
+        if (next.StartsWith("clock "))
+        {
+            ShiftContractClock(double.Parse(next.Substring(6), CultureInfo.InvariantCulture));
+            return;
+        }
         replying = step++;
         try
         {
@@ -85,6 +93,17 @@ public class Probe : IPlugin, ICommandResponder
         {
             Write(replying, "error " + e.Message);
         }
+    }
+
+    private static void ShiftContractClock(double days)
+    {
+        var contracts = AppDomain
+            .CurrentDomain.GetAssemblies()
+            .Select(a => a.GetType("ServerPlugin.Contracts"))
+            .First(t => t != null);
+        contracts
+            .GetField("OfflineClockShift", BindingFlags.NonPublic | BindingFlags.Static)
+            .SetValue(null, TimeSpan.FromDays(days));
     }
 
     // A reply that comes later belongs to the command whose step was current when it was sent; the

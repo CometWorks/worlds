@@ -640,16 +640,41 @@ Every minute the plugin fills each station up again:
   center; the plugin then finishes the contract and scraps the derelict.
   `ContractSalvageMinutes` (180) to tow it.
 
-The bounties' and salvage's targets are a world variable (`Octahedron-Contracts`); the
-contracts themselves are saved by the game. The plugin checks them every 10 seconds.
+- Wrecks, on a cluster: `ContractWreckContracts` (5) open salvage contracts on wrecks
+  left in offline partitions, wherever they are, each picked at random from the
+  `ContractWreckPool` (10) biggest by blocks and posted at the nearest station with a
+  shipyard. A wreck is a movable grid that belongs to nobody with no working terminal
+  block (armor and decor), at once, or any movable grid without power once its
+  partition has been offline for `ContractWreckOfflineDays` (7); a visit brings the
+  partition online and starts that time anew. No power means no battery with charge,
+  no reactor or engine with fuel, and no working solar panel or wind turbine. That
+  includes a player's ship. Static grids, stations and OCT's grids are never wrecks.
+  Done when towed to the shipyard as above, or ground down to a quarter of its blocks
+  with the player within 5 km (the plugin scraps the rest), or gone with them within
+  5 km. Someone powering it up fails the contract, or withdraws it if nobody took it.
+  It pays per tonne as above; the time limit is `ContractSalvageMinutes` plus a minute
+  for every 3 km.
+
+The targets and the grids last reported are world variables (`Octahedron-Contracts`,
+`Octahedron-Contract-Grids`); the contracts themselves are saved by the game. The plugin
+checks them every 10 seconds.
 
 The contract system is kept on the World Authority of a cluster, so the plugin posts
 there; the nodes carry the deliveries, and OCT's payment and an acquisition's ledger
 deposit happen where the contract finishes, through the World Authority. The World
-Authority has no grids, so a cluster gets no bounties or salvage.
+Authority has no grids. Every minute each node reports the candidates among the grids it
+simulates, and every 10 seconds the contracts' targets, on the topic `contracts/report`;
+the answer names the targets to watch and the grids to scrap. The World Authority
+decides from those rows, which outlast a grid's partition going offline. It reads the
+offline partitions and the time they went offline from the gateway's
+`GET /registry/partitions/offline`, once a minute, with the cluster's join token. A
+target counts as gone once its node has reported without it for 3 minutes, or stayed
+silent for 15: a handover or a node restart doesn't end a contract. A partition that
+went offline before it ran this plugin isn't known until it wakes once.
 
 `!oct contracts` (admin) lists OCT's contracts at every station and counts the
-others; `!oct contracts post` checks and posts at once. `!oct contract accept <id>`,
+others and the grids and wrecks it knows; `!oct contracts post` checks and posts at once
+(run on the World Authority of a cluster). `!oct contract accept <id> [identity]`,
 `deliver <id> [fill]` and `complete <id>` take, hand in (from the caller's
 inventory; `fill` adds an acquisition's items first) and complete (a bounty or
 salvage) a contract as the caller, for tests and support.
@@ -1063,7 +1088,10 @@ on an NPC grid and salvage of a derelict placed near Alpha Station, a hauling an
 acquisition handed in and paid by OCT with the items in OCT's ledger, the derelict
 finished at the shipyard by the plugin, the bounty completed, and after a restart the
 same open contracts. `tests/contracts/ContractTests` checks the rewards, time limits
-and amounts alone (`dotnet run -c Release --project tests/contracts/ContractTests`).
+and amounts alone (`dotnet run -c Release --project tests/contracts/ContractTests`), and
+the rules of bounties, salvage and wrecks against a clock the test sets, the offline week
+both ways among them. `tests/contracts_cluster.py` runs them on a local cluster; `clock`
+in the ledger probe's plan moves the clock that ages offline partitions.
 `tests/leaderboard/LeaderboardTests` checks the leaderboard's arithmetic, ranking,
 text and wire formats alone (`dotnet run -c Release --project tests/leaderboard/LeaderboardTests`).
 `tests/test_leaderboard.py` checks it in game with the client and the kiosk probe: two

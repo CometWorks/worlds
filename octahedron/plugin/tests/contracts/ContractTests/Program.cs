@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using ServerPlugin;
 
-// Checks the contract rewards and time limits (ServerPlugin/ContractMath.cs). Exit code 0 = all pass.
+// Checks the contract rewards and time limits (ServerPlugin/ContractMath.cs) and the rules of the
+// contracts that watch grids (ServerPlugin/ContractBook.cs). Exit code 0 = all pass.
 // Usage: dotnet run -c Release --project tests/contracts/ContractTests
 
 int checks = 0,
@@ -41,6 +44,335 @@ Check(ContractMath.AcquisitionReward(1, 1, 100) == 1, "a thousandth of a credit 
 
 Check(ContractMath.BountyReward(250.4, 20) == 5_008, "bounty by threat");
 Check(ContractMath.SalvageReward(12_500, 100) == 1_250, "salvage by tonne");
+
+// --- the book: every rule below runs on a clock the test sets, so no check waits ---
+
+var t0 = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+var week = TimeSpan.FromDays(7);
+var goneAfter = TimeSpan.FromMinutes(3);
+var alpha = new ContractPoint(0, 0, 0);
+const ContractGridFlags Wreck = ContractGridFlags.Wreck | ContractGridFlags.Unpowered;
+const ContractGridFlags Dead = ContractGridFlags.Unpowered;
+
+ContractGrid Row(long id, ContractGridFlags flags, int blocks = 100, double x = 100_000) =>
+    new()
+    {
+        Id = id,
+        Flags = flags,
+        Blocks = blocks,
+        MassKg = blocks * 1000,
+        Position = new ContractPoint(x, 0, 0),
+        Name = "grid " + id,
+    };
+
+ContractBook Book(params ContractGrid[] rows)
+{
+    var book = new ContractBook(goneAfter) { Offline = [] };
+    book.Report("n1", rows, t0);
+    return book;
+}
+
+ContractVerdict Judge(
+    ContractBook book,
+    ContractTarget target,
+    bool active,
+    bool near,
+    DateTime at
+) => book.Judge(target, active, alpha, near, 3000, 150, at);
+
+// The week, both ways: a dead grid isn't a wreck a second before it and is one right at it
+Check(!ContractBook.IsWreck(Dead, week - TimeSpan.FromSeconds(1), week), "dead: under a week, no");
+Check(ContractBook.IsWreck(Dead, week, week), "dead: a week, yes");
+Check(ContractBook.IsWreck(Dead, week * 4, week), "dead: a month, yes");
+Check(ContractBook.IsWreck(Wreck, TimeSpan.Zero, week), "armor only: at once");
+Check(!ContractBook.IsWreck(ContractGridFlags.None, week * 52, week), "powered: never");
+Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a derelict with power");
+
+// The same boundary through the book, with the partition's time from the offline table
+{
+    var book = Book(Row(1, Dead));
+    book.Offline[1] = t0;
+    var random = new Random(1);
+    Check(
+        book.Wrecks(t0 + week - TimeSpan.FromSeconds(1), week, 10, 5, random).Count == 0,
+        "book: a second before the week"
+    );
+    Check(book.Wrecks(t0 + week, week, 10, 5, random).Count == 1, "book: at the week");
+
+    // A visit brings the partition online: back offline, its week starts anew
+    book.Offline.Remove(1);
+    Check(book.Wrecks(t0 + week * 2, week, 10, 5, random).Count == 0, "book: online, none");
+    book.Report("n1", [Row(1, Dead)], t0 + week * 2);
+    book.Offline[1] = t0 + week * 2;
+    Check(book.Wrecks(t0 + week * 2, week, 10, 5, random).Count == 0, "book: the week starts anew");
+    Check(
+        book.Wrecks(t0 + week * 3, week, 10, 5, random).Count == 1,
+        "book: a week after the visit"
+    );
+}
+
+// Not in the offline table: no wreck contract, however dead. An unknown table: none at all.
+{
+    var book = Book(Row(1, Wreck));
+    Check(book.Wrecks(t0, week, 10, 5, new Random(1)).Count == 0, "an online wreck isn't posted");
+    book.Offline[1] = t0;
+    Check(book.Wrecks(t0, week, 10, 5, new Random(1)).Count == 1, "offline: posted");
+    book.Offline = null;
+    Check(book.Wrecks(t0, week, 10, 5, new Random(1)).Count == 0, "an unknown table: none");
+}
+
+// Always from the biggest: over many draws only the pool comes up, each of it, and nothing twice
+{
+    var rows = Enumerable.Range(1, 20).Select(i => Row(i, Wreck, i * 10)).ToArray();
+    var book = Book(rows);
+    foreach (var row in rows)
+        book.Offline[row.Id] = t0;
+    var random = new Random(42);
+    var drawn = new HashSet<long>();
+    var repeats = false;
+    var orders = new HashSet<string>();
+    for (var i = 0; i < 200; i++)
+    {
+        var picked = book.Wrecks(t0, week, 5, 3, random);
+        repeats |= picked.Select(p => p.Id).Distinct().Count() != picked.Count;
+        orders.Add(string.Join(",", picked.Select(p => p.Id)));
+        foreach (var p in picked)
+            drawn.Add(p.Id);
+    }
+    Check(
+        drawn.SetEquals([16, 17, 18, 19, 20]),
+        "the 5 biggest and only those: " + string.Join(",", drawn)
+    );
+    Check(!repeats, "no wreck twice in a draw");
+    Check(orders.Count > 1, "the draw is random");
+    Check(book.Wrecks(t0, week, 5, 9, random).Count == 5, "at most the pool");
+    book.Targets[99] = new ContractTarget('w', 20, 1, 200, alpha);
+    Check(
+        !Enumerable.Range(0, 50).Any(_ => book.Wrecks(t0, week, 5, 5, random).Any(p => p.Id == 20)),
+        "a wreck with a contract isn't drawn again"
+    );
+    Check(
+        book.Wrecks(t0, week, 5, 5, random).Select(p => p.Id).Contains(15),
+        "the next biggest takes its place"
+    );
+}
+
+// A wreck contract: the partition waking up isn't its end
+{
+    var book = Book(Row(1, Dead));
+    book.Offline[1] = t0;
+    var target = new ContractTarget('w', 1, 1, 100, new ContractPoint(100_000, 0, 0));
+    book.Targets[7] = target;
+    Check(Judge(book, target, false, false, t0 + week) == ContractVerdict.Keep, "offline: stays");
+    book.Offline.Remove(1);
+    var woke = t0 + week;
+    book.Report("n1", [Row(1, Dead)], woke);
+    Check(Judge(book, target, false, false, woke) == ContractVerdict.Keep, "awake and dead: stays");
+
+    // Someone powers it up
+    book.Report("n1", [Row(1, ContractGridFlags.None)], woke);
+    Check(
+        Judge(book, target, false, false, woke) == ContractVerdict.Withdraw,
+        "powered: withdrawn"
+    );
+    Check(Judge(book, target, true, true, woke) == ContractVerdict.Fail, "powered, taken: fails");
+
+    // Ground down to a quarter with the player there; not without them
+    book.Report("n1", [Row(1, Dead, 26)], woke);
+    Check(
+        Judge(book, target, true, true, woke) == ContractVerdict.Keep,
+        "26 of 100 blocks: not yet"
+    );
+    book.Report("n1", [Row(1, Dead, 25)], woke);
+    Check(Judge(book, target, true, false, woke) == ContractVerdict.Keep, "a quarter, nobody near");
+    Check(Judge(book, target, true, true, woke) == ContractVerdict.Scrap, "a quarter, player near");
+}
+
+// Towed to the shipyard, the contract's other way. A shipyard in an offline partition still counts.
+{
+    var yard = Row(2, ContractGridFlags.Shipyard, 500, 1000);
+    var book = Book(Row(1, Dead, 100, 100_000), yard);
+    book.Offline[2] = t0;
+    var target = new ContractTarget('w', 1, 1, 100, new ContractPoint(100_000, 0, 0));
+    book.Targets[7] = target;
+    Check(Judge(book, target, true, false, t0) == ContractVerdict.Keep, "far from the shipyard");
+    book.Report("n1", [Row(1, Dead, 100, 1100)], t0);
+    book.Offline[1] = t0;
+    Check(Judge(book, target, true, false, t0) == ContractVerdict.Keep, "there, but offline");
+    book.Offline.Remove(1);
+    Check(Judge(book, target, true, false, t0) == ContractVerdict.Scrap, "150 m from it: done");
+
+    // Scrapped: the node is told to close it, and its next report doesn't bring it back
+    book.Scrap(1, t0);
+    var answer = ContractBook.ParseAnswer(book.Report("n1", [Row(1, Dead, 100, 1100)], t0));
+    Check(answer.Close.Contains(1), "the answer closes it");
+    Check(!book.Grids.ContainsKey(1), "a late report doesn't bring it back");
+    answer = ContractBook.ParseAnswer(book.Report("n1", [], t0 + TimeSpan.FromMinutes(11)));
+    Check(answer.Close.Count == 0, "the close order ends");
+}
+
+// Gone: the node holding it reports on without it. Silence alone (a node restarting) isn't gone.
+{
+    var book = Book(Row(1, Dead));
+    var target = new ContractTarget('b', 1, 1, 100, alpha);
+    book.Targets[7] = target;
+    var soon = t0 + goneAfter - TimeSpan.FromSeconds(10);
+    book.Report("n1", [], soon);
+    Check(!book.IsGone(1, soon), "under 3 minutes: a handover may still report it");
+    var later = t0 + goneAfter;
+    book.Report("n1", [], later);
+    Check(book.IsGone(1, later), "3 minutes of reports without it: gone");
+
+    book = Book(Row(1, Dead));
+    var silence = t0 + TimeSpan.FromMinutes(14);
+    book.Report("n2", [], silence);
+    Check(!book.IsGone(1, silence), "its node silent, another reports: not gone yet");
+    Check(book.IsGone(1, t0 + ContractBook.SilentNodeAfter), "silent for 15 minutes: gone");
+
+    book = Book(Row(1, Dead));
+    book.Offline[1] = t0;
+    book.Report("n1", [], t0 + week);
+    Check(!book.IsGone(1, t0 + week), "offline isn't gone");
+    book.Offline = null;
+    Check(!book.IsGone(1, t0 + week), "an unknown table says nothing");
+
+    // A plain server reports everything every time, so it knows at once
+    book = new ContractBook(TimeSpan.Zero) { Offline = [] };
+    book.Report("local", [Row(1, Dead)], t0);
+    Check(!book.IsGone(1, t0), "plain: just seen");
+    book.Report("local", [], t0 + TimeSpan.FromSeconds(10));
+    Check(book.IsGone(1, t0 + TimeSpan.FromSeconds(10)), "plain: gone at the next report");
+}
+
+// A bounty: as on a plain server. Gone with the hunter near is done, without them it fails.
+{
+    var book = new ContractBook(TimeSpan.Zero) { Offline = [] };
+    book.Report("n", [Row(1, ContractGridFlags.Bounty)], t0);
+    book.Grids[1].Threat = 100;
+    var target = new ContractTarget('b', 1, 1, 100, alpha);
+    book.Targets[7] = target;
+    Check(Judge(book, target, false, false, t0) == ContractVerdict.Keep, "open bounty stays");
+    Check(Judge(book, target, true, false, t0) == ContractVerdict.Keep, "taken, threat high");
+    var row = Row(1, ContractGridFlags.Bounty);
+    row.Threat = 25;
+    book.Report("n", [row], t0);
+    Check(Judge(book, target, true, false, t0) == ContractVerdict.Finish, "threat at a quarter");
+    book.Report("n", [Row(1, ContractGridFlags.None)], t0);
+    Check(Judge(book, target, true, false, t0) == ContractVerdict.Finish, "no NPC grid any more");
+
+    var witness = t0 + TimeSpan.FromSeconds(30);
+    book.Report("n", [Row(1, ContractGridFlags.Bounty)], witness);
+    book.Grids[1].Threat = 100;
+    Judge(book, target, true, true, witness);
+    book.Report("n", [], witness + TimeSpan.FromSeconds(10));
+    Check(
+        Judge(book, target, true, false, witness + TimeSpan.FromSeconds(10))
+            == ContractVerdict.Finish,
+        "gone just after the hunter was near"
+    );
+
+    book = new ContractBook(TimeSpan.Zero) { Offline = [] };
+    book.Report("n", [Row(1, ContractGridFlags.Bounty)], t0);
+    target = new ContractTarget('b', 1, 1, 100, alpha);
+    book.Targets[7] = target;
+    book.Report("n", [], t0 + TimeSpan.FromMinutes(1));
+    Check(
+        Judge(book, target, true, false, t0 + TimeSpan.FromMinutes(1)) == ContractVerdict.Fail,
+        "gone with nobody near fails"
+    );
+    Check(
+        Judge(book, target, false, false, t0 + TimeSpan.FromMinutes(1)) == ContractVerdict.Withdraw,
+        "gone before anyone took it: withdrawn"
+    );
+}
+
+// Bounties and derelicts stay in range of their station, in their own order
+{
+    var near = Row(1, ContractGridFlags.Bounty, 10, 20_000);
+    near.Threat = 10;
+    var high = Row(2, ContractGridFlags.Bounty, 10, 25_000);
+    high.Threat = 90;
+    var far = Row(3, ContractGridFlags.Bounty, 10, 40_000);
+    far.Threat = 500;
+    var weak = Row(4, ContractGridFlags.Bounty, 10, 1000);
+    weak.Threat = 1;
+    var book = Book(near, high, far, weak);
+    var found = book.Bounties(alpha, 30_000, 5, 5);
+    Check(
+        found.Select(r => r.Id).SequenceEqual([2L, 1L]),
+        "bounties: highest first, range, threat"
+    );
+    Check(book.Bounties(alpha, 30_000, 5, 1).Single().Id == 2, "bounties: as many as wanted");
+
+    book = Book(
+        Row(1, ContractGridFlags.Derelict, 10, 20_000),
+        Row(2, ContractGridFlags.Derelict, 10, 5_000),
+        Row(3, ContractGridFlags.Derelict, 10, 40_000)
+    );
+    Check(
+        book.Derelicts(alpha, 30_000, 5).Select(r => r.Id).SequenceEqual([2L, 1L]),
+        "derelicts: nearest first, in range"
+    );
+}
+
+// Candidates fade when no report names them, unless their partition is offline or a contract has them
+{
+    var book = Book(Row(1, Dead), Row(2, Dead), Row(3, Dead));
+    book.Offline[2] = t0;
+    book.Targets[7] = new ContractTarget('w', 3, 1, 100, alpha);
+    book.Forget(t0 + ContractBook.StaleAfter);
+    Check(!book.Grids.ContainsKey(1), "a candidate nobody names goes");
+    Check(book.Grids.ContainsKey(2), "a grid in an offline partition stays");
+    Check(book.Grids.ContainsKey(3), "a target stays");
+    book.Offline = null;
+    book.Report("n1", [Row(1, Dead)], t0);
+    book.Forget(t0 + week);
+    Check(book.Grids.ContainsKey(1), "an unknown table forgets nothing");
+}
+
+// Saved with the world, and read back, an older world's targets too
+{
+    var book = Book(Row(1, Wreck), Row(2, ContractGridFlags.Shipyard, 5, 1000.5));
+    book.Grids[1].Name = "with\ttab";
+    book.Targets[7] = new ContractTarget('w', 1, 1, 100, new ContractPoint(1.5, -2, 3))
+    {
+        HunterSeen = t0,
+    };
+    var back = new ContractBook(goneAfter) { Offline = [] };
+    back.LoadTargets(book.SerializeTargets());
+    back.LoadGrids(book.SerializeGrids());
+    var target = back.Targets[7];
+    Check(
+        target.Kind == 'w'
+            && target.Grid == 1
+            && target.Size == 100
+            && target.Position.X == 1.5
+            && target.Position.Y == -2
+            && target.HunterSeen == t0,
+        "the target comes back"
+    );
+    var grid = back.Grids[1];
+    Check(
+        grid.Flags == Wreck
+            && grid.Blocks == 100
+            && grid.MassKg == 100_000
+            && grid.Node == "n1"
+            && grid.Seen == t0
+            && grid.Name == "with tab",
+        "the grid comes back"
+    );
+    Check(back.Grids[2].Position.X == 1000.5, "the shipyard comes back");
+
+    back = new ContractBook(goneAfter);
+    back.LoadTargets("5:b:11:22:3.5:1:2:3;6:s:12:22:0:4:5:6");
+    Check(
+        back.Targets.Count == 2
+            && back.Targets[5].Size == 3.5
+            && back.Targets[5].HunterSeen == DateTime.MinValue,
+        "an older world's targets"
+    );
+    Check(ContractBook.ParseAnswer(";").Watched.Count == 0, "an empty answer");
+}
 
 Console.WriteLine($"{checks - failures}/{checks} contract math checks passed");
 return failures == 0 ? 0 : 1;
