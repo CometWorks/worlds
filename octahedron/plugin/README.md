@@ -402,10 +402,11 @@ once, never the rotor head itself; the shipyard starts its next build after
 that. An idle shipyard takes down anything an NPC built that is left on its
 rotor heads. An unfinished ship that is delivered leaves the arm's projector
 behind, and it comes down with the arm. A ship built without an arm loses its
-scaffold projector the same way. What
-the arm didn't use of its components is removed with the ship's leftovers, and
-only the ship's go back to the ledger. The `!oct shipyards` admin command lists
-the shipyards, their arm rotors and the running builds with their arm.
+scaffold projector the same way. The shipyard loads what the arm's blocks still
+need, without the first component each frame already has. What the arm didn't
+use of them is removed with the ship's leftovers, and only the ship's go back to
+the ledger. The `!oct shipyards` admin command lists the shipyards, their arm
+rotors and the running builds with their arm.
 `!oct shipyard strip <station> <item>` takes an item out of a shipyard's
 containers and welders, so tests can stall a build.
 
