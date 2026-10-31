@@ -317,6 +317,9 @@ MODS = [
         "MultiplayerPredictionSwitcher (Interpolated serverside grid control)",
     ),
     (2360788836, "Welder Eyestrain Reduction"),
+    # The binoculars in the stations' Free Tools
+    (2754014019, "Scope Framework"),
+    (2777644246, "Binoculars"),
     # Visuals: meteor effects, and the Grass voxel material's textures (not EarthLike's definition)
     (3685862625, "Enhanced Meteor Visuals"),
     (756153867, "Grass replacement for Earthlike Environment"),

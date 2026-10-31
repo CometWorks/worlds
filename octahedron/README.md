@@ -305,7 +305,8 @@ game update that changes the planet or voxel material definitions or maps.
   shared with all players. On the server, the Octahedron plugin's
   `RefillContainers` rule in `config/octahedron.cfg` tops each up every minute
   to 3 each of welders, grinders and drills, each one Enhanced or Proficient at
-  random (the two tiers above the basic tool), 3 full oxygen and 3 full
+  random (the two tiers above the basic tool), 1 pair of binoculars (the
+  Binoculars mod, which has no tiers), 3 full oxygen and 3 full
   hydrogen bottles, and 3 suit battery packs (Powerkit). "Station Loot" is the blueprint's tools,
   bottles and ammo container.
 - The asteroid ore settings are vanilla's (DepositsCountCoefficient 2,

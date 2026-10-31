@@ -23,6 +23,7 @@ from wa_economy_cluster import (
     PLUGIN,
     bench_module,
     link_mods,
+    pl,
     rig,
     stations,
     tc,
@@ -30,6 +31,9 @@ from wa_economy_cluster import (
 
 SUPPLIES = {"OxygenBottle", "HydrogenBottle", "Powerkit"}
 TOOLS = ("Welder", "AngleGrinder", "HandDrill")
+BINOCULARS = "BinocularsItem"
+# The Free Tools rule names the binoculars, so the bench's world needs these on top of the rig's mods
+BINOCULARS_MODS = {2754014019: "Scope Framework", 2777644246: "Binoculars"}
 SOURCE = PLUGIN.parent / "config/octahedron.cfg"
 # Seconds from the nodes' start
 LOOT_LIMIT = 540
@@ -127,6 +131,29 @@ def run(bench) -> None:
             count and tiers["2"] and tiers["3"] and tiers["2"] + tiers["3"] == 3 * count and not tiers[""] + tiers["4"],
             f"{count} containers, {tiers}",
         )
+    check(
+        "refill: Free Tools has one pair of binoculars per container",
+        count and items.get(BINOCULARS) == count,
+        f"{count} containers, {items}",
+    )
+    # Topped up only when short: a pair taken from a container comes back, a spare one stays
+    source, target = [b for b in containers if "Free Tools" in (b.get("customName") or b.get("name") or "")][:2]
+
+    def binoculars(block) -> list[dict]:
+        items = api.get_inventory(block["gridId"], tuple(block["min"]))["items"]
+        return [item for item in items if item["subtypeId"] == BINOCULARS]
+
+    api.transfer_inventory(
+        source["gridId"],
+        tuple(source["min"]),
+        target["gridId"],
+        tuple(target["min"]),
+        binoculars(source)[0]["itemId"],
+        1_000_000,
+    )
+    time.sleep(90)
+    amounts = [sum(item["amountRaw"] for item in binoculars(b)) // 1_000_000 for b in (source, target)]
+    check("refill: taken binoculars come back, spare ones stay", amounts == [1, 2], amounts)
     # A node refills a station as it comes to the node, not at the first economy tick (600 s here)
     end = started + LOOT_LIMIT
     count, items = stock("Station Loot")
@@ -147,12 +174,19 @@ def run(bench) -> None:
         check(
             f"{process}: no Octahedron failure logged", not re.search(r"\[Octahedron\].*(failed|Failed)", log(process))
         )
+        compat = re.findall(
+            r"cluster_mod_compat mod=(\d+) ", (bench.run_root / f"{process}.log").read_text(errors="replace")
+        )
+        check(f"{process}: both binocular mods loaded", set(map(str, BINOCULARS_MODS)) <= set(compat), compat)
+        check(f"{process}: every refill item known", "unknown item" not in log(process))
 
 
 run.administrators = [CLIENT_ID]
 
 
 def main() -> int:
+    pl.MODS.update(BINOCULARS_MODS)
+    pl.MOD_ITEMS = pl.mod_items()
     run.world_template = wa.prepare()
     CONFIG.write_text(SOURCE.read_text(encoding="utf-8"), encoding="utf-8")
     results = bench_module.HOST.results / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-world-config")
