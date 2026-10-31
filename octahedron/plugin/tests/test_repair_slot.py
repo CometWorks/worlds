@@ -29,6 +29,7 @@ import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 import test_support_arm as sa  # noqa: E402
 import test_table_rules as tr  # noqa: E402
+from se_remote import CallOp  # noqa: E402
 from test_client import log, with_config  # noqa: E402
 from test_table_rules import (
     Second,
@@ -255,6 +256,17 @@ def book_and_idle_out(a, b) -> None:
     )
     text = settled(a, "queue", "No ships in the queue")
     check("Repair" not in text, f"the slot is off the queue panel: {text!r}")
+
+    # A load into a player's own projector is no table: it stays shared as it was
+    at = a.call([CallOp.grid_to_world(int(damaged), (2, 2, 0))])
+    a.character_teleport(*at.call(0)["world"])
+    time.sleep(3)
+    block = a.get_block(int(damaged), (0, 0, 0))
+    log(str(a.load_projection(block["entityId"], xml=tr.blueprint_xml(so.SMALL))))
+    time.sleep(8)
+    seen = client_owner(a, int(damaged), "0,0,0")
+    check(seen[1] == "Faction", f"a player's own projector stays as it was: {seen}")
+    sa.at_table(a, STATION)
     probe(a, "undock")
 
 

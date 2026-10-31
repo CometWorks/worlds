@@ -284,6 +284,7 @@ public sealed class ProbeCommands : CommandModule
             };
         var projector = Block<MyObjectBuilder_Projector>("LargeProjector", Vector3I.Zero, me);
         projector.KeepProjection = true;
+        projector.ShareMode = MyOwnershipShareModeEnum.Faction;
         var plan = new MyObjectBuilder_CubeGrid
         {
             GridSizeEnum = MyCubeSize.Large,

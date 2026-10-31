@@ -478,9 +478,12 @@ internal static class ShipyardOrders
     private static void Open(MyProjectorBase table)
     {
         loadedAt.Remove(table.EntityId);
+        var players = MySession.Static.Players;
         ShipyardTurn.SetOwner(
             table,
-            table.CubeGrid.BigOwners.First(MySession.Static.Players.IdentityIsNpc),
+            players.IdentityIsNpc(table.OwnerId)
+                ? table.OwnerId
+                : table.CubeGrid.BigOwners.FirstOrDefault(players.IdentityIsNpc),
             MyOwnershipShareModeEnum.All
         );
     }
@@ -955,7 +958,8 @@ internal static class ShipyardOrders
             var identity = MySession.Static.Players.TryGetIdentityId(
                 MyEventContext.Current.Sender.Value
             );
-            if (identity == 0)
+            // Any projector ends up here: only a station's table is held
+            if (identity == 0 || !IsTable(__instance) || StationOf(__instance.CubeGrid) == null)
                 return;
             loaded[__instance.EntityId] = identity;
             loadedAt[__instance.EntityId] = DateTime.UtcNow;
