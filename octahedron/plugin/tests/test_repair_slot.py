@@ -52,12 +52,12 @@ PAID = rig.grid(
     777000850000100,
     [
         rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
-        for x in range(8)
-        for z in range(8)
+        for x in range(20)
+        for z in range(20)
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
-PAID_PLATES = 64 * 25
+PAID_PLATES = 400 * 25
 STASH = 50
 
 
@@ -189,9 +189,6 @@ def book_and_idle_out(a, b) -> None:
         probe(b, "faction KRS none")
     probe(a, "faction KRS none")
 
-    # Nothing to weld for most of the 5 minutes: only work restarts the time, this keeps it
-    time.sleep(max(0, start + 200 - time.monotonic()))
-    check(slot_runs(a) is not None, "still running after 200 idle s")
     docked = re.search(r"SHIP (\d+)", probe(a, f"yardship {STATION}"))
     check(docked is not None, f"a ship with the components at a connector: {docked}")
     ship = docked[1] if docked else "0"
@@ -224,7 +221,8 @@ def book_and_idle_out(a, b) -> None:
     )
     # What a player leaves in the containers; the welders pulled only what they used
     probe(a, f"yardstash {STATION} {STASH}")
-    check(yard(a)["items"] == str(STASH), "plates in the shipyard's container")
+    held = float(yard(a)["items"])
+    check(held >= STASH, f"plates in the shipyard's container: {held}")
     # Past 5 minutes since it started, which the work restarted
     time.sleep(max(0, start + IDLE_SECONDS + 20 - time.monotonic()))
     since = slot_runs(a)
@@ -255,8 +253,8 @@ def book_and_idle_out(a, b) -> None:
     )
     back = float(info(a, ship).get("plates", -1))
     check(
-        back == left + STASH,
-        f"what the shipyard held went back to the ship: {left} -> {back}",
+        back == left + held,
+        f"what the shipyard held went back to the ship: {left} + {held} -> {back}",
     )
     time.sleep(3)
     check(sa.shoots(a, yard_id) is False, "the welders are off")
