@@ -119,8 +119,8 @@ PUBLIC_BLOCKS = {
 LOOT_CONTAINER = "Station Loot"
 LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 # The station's 4 toolboxes by its "Free tools!" signs, renamed, shared with everyone and shown in
-# inventory screens. The Octahedron plugin keeps 3 of each Elite tool in each, topped up every
-# minute (RefillContainers in config/octahedron.cfg).
+# inventory screens. The Octahedron plugin keeps 3 welders, grinders and drills in each, every one
+# Enhanced or Proficient at random, topped up every minute (RefillContainers in config/octahedron.cfg).
 FREE_TOOLS = "Free Tools"
 FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
@@ -317,6 +317,9 @@ MODS = [
         "MultiplayerPredictionSwitcher (Interpolated serverside grid control)",
     ),
     (2360788836, "Welder Eyestrain Reduction"),
+    # The binoculars in the stations' Free Tools
+    (2754014019, "Scope Framework"),
+    (2777644246, "Binoculars"),
     # Visuals: meteor effects, and the Grass voxel material's textures (not EarthLike's definition)
     (3685862625, "Enhanced Meteor Visuals"),
     (756153867, "Grass replacement for Earthlike Environment"),

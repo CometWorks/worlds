@@ -1,9 +1,8 @@
 """The features the world's octahedron.cfg turns on, together on a cluster (SE-783): money, market,
 contracts, starter ships and station refills, with the file as it is. Same bench and world as
-wa_economy_cluster.py, whose run covers ship orders under the projection limits. A node's loot can take one
-economy tick, 10 minutes, to show.
+wa_economy_cluster.py, whose run covers ship orders under the projection limits.
 
-Run on polaris on 2026-10-31: 12/12 checks in 21 minutes.
+Run on polaris on 2026-10-31: 23/23 checks in 7 minutes.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/world_config_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 """
@@ -24,13 +23,20 @@ from wa_economy_cluster import (
     PLUGIN,
     bench_module,
     link_mods,
+    pl,
     rig,
     stations,
     tc,
 )
 
-TOOLS = {"Welder4Item", "AngleGrinder4Item", "HandDrill4Item", "OxygenBottle", "HydrogenBottle", "Powerkit"}
+SUPPLIES = {"OxygenBottle", "HydrogenBottle", "Powerkit"}
+TOOLS = ("Welder", "AngleGrinder", "HandDrill")
+BINOCULARS = "BinocularsItem"
+# The Free Tools rule names the binoculars, so the bench's world needs these on top of the rig's mods
+BINOCULARS_MODS = {2754014019: "Scope Framework", 2777644246: "Binoculars"}
 SOURCE = PLUGIN.parent / "config/octahedron.cfg"
+# Seconds from the nodes' start
+LOOT_LIMIT = 540
 
 
 def run(bench) -> None:
@@ -52,6 +58,7 @@ def run(bench) -> None:
         link_mods(bench.run_root / f"{process}-data" / "Mods")
     processes = ["wa-1", *nodes]
     cluster.start(processes)
+    started = time.time()
     cluster.wait_ready(nodes=processes)
 
     start = wa.wait_until(lambda: re.search(r"Money rules start: .*", log("wa-1")), 180, "the WA's first money run")
@@ -112,28 +119,74 @@ def run(bench) -> None:
 
     count, items = stock("Free Tools")
     check(
-        "refill: Free Tools has the tools",
-        count and TOOLS <= set(items) and min(items[t] for t in TOOLS) >= 3 * count,
+        "refill: Free Tools has the supplies",
+        count and SUPPLIES <= set(items) and min(items[t] for t in SUPPLIES) >= 3 * count,
         f"{count} containers, {items}",
     )
-    # A node refills its stations at start, before it may have them, then every EconomyTickInSeconds: 600 s here
-    end = time.time() + 660
+    for tool in TOOLS:
+        tiers = {name: items.get(f"{tool}{name}Item", 0) for name in ("", "2", "3", "4")}
+        # 12 draws per tool at 3 per container: all on one tier is a 1 in 2048 chance
+        check(
+            f"refill: Free Tools has {tool} tiers 2 and 3 at random, 3 per container",
+            count and tiers["2"] and tiers["3"] and tiers["2"] + tiers["3"] == 3 * count and not tiers[""] + tiers["4"],
+            f"{count} containers, {tiers}",
+        )
+    check(
+        "refill: Free Tools has one pair of binoculars per container",
+        count and items.get(BINOCULARS) == count,
+        f"{count} containers, {items}",
+    )
+    # Topped up only when short: a pair taken from a container comes back, a spare one stays
+    source, target = [b for b in containers if "Free Tools" in (b.get("customName") or b.get("name") or "")][:2]
+
+    def binoculars(block) -> list[dict]:
+        items = api.get_inventory(block["gridId"], tuple(block["min"]))["items"]
+        return [item for item in items if item["subtypeId"] == BINOCULARS]
+
+    api.transfer_inventory(
+        source["gridId"],
+        tuple(source["min"]),
+        target["gridId"],
+        tuple(target["min"]),
+        binoculars(source)[0]["itemId"],
+        1_000_000,
+    )
+    time.sleep(90)
+    amounts = [sum(item["amountRaw"] for item in binoculars(b)) // 1_000_000 for b in (source, target)]
+    check("refill: taken binoculars come back, spare ones stay", amounts == [1, 2], amounts)
+    # A node refills a station as it comes to the node, not at the first economy tick (600 s here)
+    end = started + LOOT_LIMIT
     count, items = stock("Station Loot")
     while count and not items and time.time() < end:
-        time.sleep(30)
+        time.sleep(15)
         count, items = stock("Station Loot")
-    check("refill: Station Loot has loot", count and items, f"{count} containers, {items}")
+    elapsed = time.time() - started
+    check(
+        "refill: Station Loot has loot well before the first economy tick",
+        count and items,
+        f"{count} containers after {elapsed:.0f} s, {items}",
+    )
+    for node in nodes:
+        arrivals = re.findall(r"Refilling station .* as it came to this node", log(node))
+        print(f"{node}: {len(arrivals)} stations refilled on arrival", flush=True)
     check("graceful stop", cluster.stop(grace=240))
     for process in ("wa-1", *nodes):
         check(
             f"{process}: no Octahedron failure logged", not re.search(r"\[Octahedron\].*(failed|Failed)", log(process))
         )
+        compat = re.findall(
+            r"cluster_mod_compat mod=(\d+) ", (bench.run_root / f"{process}.log").read_text(errors="replace")
+        )
+        check(f"{process}: both binocular mods loaded", set(map(str, BINOCULARS_MODS)) <= set(compat), compat)
+        check(f"{process}: every refill item known", "unknown item" not in log(process))
 
 
 run.administrators = [CLIENT_ID]
 
 
 def main() -> int:
+    pl.MODS.update(BINOCULARS_MODS)
+    pl.MOD_ITEMS = pl.mod_items()
     run.world_template = wa.prepare()
     CONFIG.write_text(SOURCE.read_text(encoding="utf-8"), encoding="utf-8")
     results = bench_module.HOST.results / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-world-config")

@@ -67,7 +67,7 @@ import test_client as tc  # noqa: E402
 import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 
-ROOT = Path.home() / "cluster-runs/wa-economy"
+ROOT = Path.home() / "cluster-runs" / f"wa-economy-{os.environ['OCT_TASK']}"
 lc.PLUGINS = ROOT / "plugins"
 lc.PLAN = ROOT / "probe-plan.txt"
 lc.OUT = ROOT / "probe-out.txt"

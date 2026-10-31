@@ -141,7 +141,7 @@ rsync -a server/ cluster@ai:Octahedron/
 
 In Quasar, import `~/Octahedron` as a world template (World Templates page, or
 the Create From Template dialog), then create a config profile from that
-template. The profile takes the session settings and the 45 mods from the
+template. The profile takes the session settings and the 43 mods from the
 world's `Sandbox_config.sbc`. In the profile:
 
 - Online mode Public, server name and world name `Octahedron`, a description,
