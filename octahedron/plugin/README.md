@@ -312,7 +312,12 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   which don't have the shipyard exception above, would turn the tools off and
   show no beams (SE-441): while a build runs, the plugin tells the clients every
   10 s that the zones don't hold the shipyard grid, and puts it back at the end.
-  The server's own zones are left alone.
+  The server's own zones are left alone. A client that gets the shipyard streamed
+  in during a build (it comes back in range, joins or crosses to this node) still
+  turns the tools off before that message comes, and ToolCore tells it only when
+  the server's switch changes, so the plugin also sends the clients the switch
+  every 10 s (SE-782). ToolCore is the mod's own code: this reaches its session
+  and packet by reflection and does nothing if they are gone.
 - A build whose ship gains no integrity for 60 s stops. Plain blocks, armor and
   decorations, are those of the plain `CubeBlock` type; every block of its own
   type, lights, panels and conveyors included, is functional. When the ship

@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using HarmonyLib;
 using Sandbox.Definitions;
 using Sandbox.Engine.Multiplayer;
@@ -33,6 +35,12 @@ namespace ServerPlugin;
 // is switched off there, and players see no beams (SE-441). While a build runs, ShowBeams
 // tells the clients that the zones don't hold the shipyard grid, so their ToolCore draws the
 // beams. The server keeps its own list; it welds as before.
+//
+// That can't cover a client that gets the shipyard streamed in during a build: it comes back
+// in range, joins or crosses to this node (SE-782). The zone it gets holds the grid until the
+// next ShowBeams, its ToolCore switches the tools off for good, and only a change of the
+// server's switch would tell it otherwise. So ShowShooting sends the clients the switch again,
+// as ToolCore does when it changes; a client whose tool is on takes no notice.
 internal static class ShipyardZoneWelding
 {
     private const string Owner = "Octahedron Authority";
@@ -92,6 +100,40 @@ internal static class ShipyardZoneWelding
                 MyMultiplayer.RaiseEvent(zone, removeEvent, shipyard.EntityId, true);
             else
                 MyMultiplayer.RaiseEvent(zone, insertEvent, shipyard.EntityId);
+        }
+    }
+
+    /// <summary>
+    /// Sends the clients that know each tool that its switch is on. Everything of ToolCore is
+    /// internal to the mod, so this goes by name, and does nothing without it.
+    /// </summary>
+    internal static void ShowShooting(IEnumerable<MyFunctionalBlock> tools)
+    {
+        var session = AccessTools
+            .Field(AccessTools.TypeByName("ToolCore.Session.ToolSession"), "Instance")
+            ?.GetValue(null);
+        if (session == null)
+            return;
+        var map = (IDictionary)AccessTools.Field(session.GetType(), "ToolMap").GetValue(session);
+        var networking = AccessTools.Field(session.GetType(), "Networking").GetValue(session);
+        var send = AccessTools.Method(networking.GetType(), "SendPacketToClients");
+        var packet = AccessTools.TypeByName("ToolCore.Session.BoolUpdatePacket");
+        var activated = Enum.Parse(
+            AccessTools.TypeByName("ToolCore.Session.FieldType"),
+            "Activated"
+        );
+        foreach (var tool in tools)
+        {
+            if (map[tool.EntityId] is not { } comp)
+                continue;
+            send.Invoke(
+                networking,
+                [
+                    Activator.CreateInstance(packet, tool.EntityId, activated, true),
+                    AccessTools.Field(comp.GetType(), "ReplicatedClients").GetValue(comp),
+                    0UL,
+                ]
+            );
         }
     }
 
