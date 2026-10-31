@@ -177,7 +177,9 @@ Dashboard, **Create Cluster**, **Create and deploy**:
 4. In the cluster's plugin configuration editor, set the plugin configs: Hangar
    with `AdminSafeZonesOnly` on (ships are stored and retrieved only at the stations),
    Multigrid Projector as its defaults suit, Essentials as the cluster
-   needs, and the Octahedron plugin to the values in `config/octahedron.cfg`.
+   needs. The Octahedron plugin takes the values in `config/octahedron.cfg`:
+   Deploy Octahedron stages them before the first start (`--wipe`), by hand
+   the same editor does.
 5. **Start.** Watch the nodes come up on the cluster page.
 
 Then, once every node runs cluster 0.1.8 or later, raise the Gateway's
