@@ -171,18 +171,20 @@ counted twice.
 
 ### Target Neutrals
 
-With `ClearTargetNeutralsEnabled` on, a new turret, custom turret controller or
-searchlight, modded ones too, starts with Target Neutrals off however it is built:
-placed by hand, as the first block of a new grid, welded from a projection by any
-tool, pasted, as a starter ship or by a shipyard. Ships and stations then shoot only
-at those whose reputation makes them enemies, and players can turn their weapons off
-around stations.
+With `ClearTargetNeutralsEnabled` on, a new turret or custom turret controller, modded
+ones too, starts with Target Neutrals off however it is built: placed by hand, as the
+first block of a new grid, welded from a projection by any tool, pasted, as a starter
+ship or by a shipyard. Ships and stations then shoot only at those whose reputation
+makes them enemies, and players can turn their weapons off around stations.
+Searchlights keep their setting, they don't shoot.
 
-It happens once, when the block is created. A player who turns the setting back on
-keeps it: a grid loaded from a save or moved to another cluster node isn't built, so
-it isn't cleared again. Grids already in a world keep what they have. So do prefabs,
-like encounter ships, wrecks and respawn ships, which nobody builds and which have
-their own design.
+A prefab ship gets the same when it is made for a player: one bought from a store
+block and a respawn ship. Ships NPCs own keep their design, like encounter ships and
+wrecks.
+
+It happens once. A player who turns the setting back on keeps it: a grid loaded from a
+save or moved to another cluster node isn't built, so it isn't cleared again. Grids
+already in a world keep what they have.
 
 ### PCU per ship or station
 
@@ -986,8 +988,10 @@ blocks to their functional level, two grids merging and a rotor attaching a
 head, each stopped by the cap, next to a copy built by nobody that isn't.
 `tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
 with the client, welding them through shipyard orders, with the rule off too, and a
-test mod's turret whose definition has it on, and reads the setting on the client
-and in the saved world, across a restart.
+test mod's turret whose definition has it on. It buys ships at a store block and
+respawns in one, through the tests/neutrals-probe plugin, and spawns one for an NPC,
+which keeps it. It reads the setting on the client and in the saved world, across a
+restart.
 `tests/target_neutrals_cluster.py` does it on a cluster with a shipyard order, a paste
 and blocks placed by hand, and keeps a player's later choice through handovers and
 a cluster restart.

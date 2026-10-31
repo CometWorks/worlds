@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>neutrals-probe</Id>
+    <GroupId>neutrals-probe</GroupId>
+    <RepoId>local/neutrals-probe</RepoId>
+
+    <FriendlyName>Neutrals Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: buys a ship, respawns in a ship, spawns one for an NPC</Tooltip>
+    <Description>Test only. Does what neutrals-probe.plan in the game's user data folder
+        says: a purchase from a store block, a respawn in a ship, a ship for an NPC, a death.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>

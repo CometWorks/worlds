@@ -1,9 +1,14 @@
-"""Checks on the test server, with the headless client, that a new block gets Target Neutrals off
-however it is built (SE-830): placed by hand, as the first block of a new grid, pasted, pasted onto
-a grid, as a starter ship and welded from a projection by a shipyard's tools. The blueprint has the
-setting on in every turret type and a custom turret controller, a paste also in a searchlight (it
-needs a DLC to weld, which the client lacks); a test mod adds a turret whose definition has it on
-by default. With the rule off, the same builds keep it on, which shows the test can fail.
+"""Checks on the test server, with the headless client, that a new weapon block gets Target Neutrals
+off however it is built (SE-830): placed by hand, as the first block of a new grid, pasted, pasted
+onto a grid, as a starter ship and welded from a projection by a shipyard's tools. The blueprint has
+the setting on in every turret type and a custom turret controller; a test mod adds a turret whose
+definition has it on by default. A searchlight, in the blueprints that a paste or a purchase
+makes (it needs a DLC to weld, which the client lacks), keeps it on. With the rule off, the same
+builds keep it on, which shows the test can fail.
+
+A prefab ship made for a player gets it off too: the client buys one at a store block and respawns
+in one, through the game's own requests sent by tests/neutrals-probe. A ship spawned for an NPC keeps
+it on.
 
 A block that was already on in the world and blocks the client turns on afterwards stay on: the
 client reads them, and the saved world holds them, before and after a server restart. A handover
@@ -12,7 +17,7 @@ is in tests/target_neutrals_cluster.py.
 The client doesn't weld a projection itself here: with Multigrid Projector on the server, its
 requests from this rig build nothing. Its weld passes through the same seam as the shipyard's.
 
-Run on polaris on 2026-10-31: 23/23 checks in 17 minutes.
+Run on polaris on 2026-10-31: 34/34 checks.
 
     uv run --no-project --with httpx python tests/test_target_neutrals.py
 
@@ -26,11 +31,13 @@ import re
 import sys
 import time
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 os.environ.setdefault("OCT_TASK", "SE-830")
 import rig  # noqa: E402
 from se_remote import CallOp  # noqa: E402
 import test_client as tc  # noqa: E402
+import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
 import test_support_arm as sa  # noqa: E402
 
@@ -39,6 +46,19 @@ MOD_TURRET = "OctNeutralsTurret"
 RIG_AT = (250_000, 0, 0)
 BUILD_RIG = 777000830000100
 SHIP = "Neutrals Test"
+STORE_RIG = 777000830000200
+STORE_BLOCK = 777000830000300
+STORE_ITEM = 777000830000400
+STORE_AT = (RIG_AT[0], 0, -300)
+STORE_SHIP = "Neutrals Store"
+NPC_SHIP = "Neutrals Npc"
+RESPAWN_SHIP = "Neutrals Respawn"
+PROBE = (
+    "neutrals-probe",
+    Path(__file__).resolve().parent / "neutrals-probe",
+    "NeutralsProbe.xml",
+    "neutrals-probe",
+)
 # The tables keep the world's blueprint, and a blueprint of this size may be a starter ship
 CONFIG = {
     "ShipyardOrderMinutes": 60,
@@ -146,14 +166,74 @@ def write_mod() -> None:
         "<EnabledTargetingOptions>Players SmallShips LargeShips Stations Asteroids Enemies Neutrals"
         "</EnabledTargetingOptions></Definition>",
     )
+    prefabs = "".join(
+        '<Prefab xsi:type="MyObjectBuilder_PrefabDefinition">'
+        f'<Id Type="MyObjectBuilder_PrefabDefinition" Subtype="{subtype}" /><CubeGrids>'
+        + rig.grid(
+            name,
+            None,
+            armor(range(1, 19)) + weapons(2, True, welded),
+            tag="CubeGrid",
+        )
+        + "</CubeGrids></Prefab>"
+        for subtype, name, welded in (
+            ("NeutralsStore", STORE_SHIP, False),
+            ("NeutralsNpc", NPC_SHIP, True),
+            ("NeutralsRespawn", RESPAWN_SHIP, True),
+        )
+    )
+    respawn = (
+        "<Ship><Id><TypeId>RespawnShipDefinition</TypeId><SubtypeId>NeutralsRespawn</SubtypeId></Id>"
+        "<DisplayName>Neutrals Respawn</DisplayName><Icon>Textures\\GUI\\Icons\\RespawnShips\\RespawnRover.png</Icon>"
+        "<CooldownSeconds>0</CooldownSeconds><Prefab>NeutralsRespawn</Prefab>"
+        "<UseForSpace>true</UseForSpace></Ship>"
+    )
+    head = '<?xml version="1.0"?>\n<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
     for mods in (rig.SERVER_DATA / "Mods", rig.APPDATA / "Mods"):
         data = mods / f"{MOD_ID}.sbm/Data"
         data.mkdir(parents=True, exist_ok=True)
         (data / "OctNeutralsTurret.sbc").write_text(
-            '<?xml version="1.0"?>\n<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-            f"<CubeBlocks>{definition}</CubeBlocks></Definitions>\n",
+            f"{head}<CubeBlocks>{definition}</CubeBlocks></Definitions>\n",
             encoding="utf-8",
         )
+        (data / "OctNeutralsPrefabs.sbc").write_text(
+            f"{head}<Prefabs>{prefabs}</Prefabs></Definitions>\n", encoding="utf-8"
+        )
+        (data / "OctNeutralsRespawn.sbc").write_text(
+            f"{head}<RespawnShips>{respawn}</RespawnShips></Definitions>\n",
+            encoding="utf-8",
+        )
+
+
+def npc_identity() -> int:
+    """The founder of the world's NPC faction, which runs the stations"""
+    text = (rig.WORLD / "Sandbox.sbc").read_text(encoding="utf-8")
+    return int(re.search(r"<Tag>OCT</Tag>.*?<PlayerId>(\d+)", text, re.S)[1])
+
+
+def store_rig(owner: int) -> str:
+    """A store block of the NPC faction, with a ship on offer as a mod's store would have it"""
+    item = (
+        f"<MyObjectBuilder_StoreItem><Id>{STORE_ITEM}</Id><ItemType>Grid</ItemType><Amount>9</Amount>"
+        "<PricePerUnit>0</PricePerUnit><StoreItemType>Offer</StoreItemType>"
+        "<PrefabName>NeutralsStore</PrefabName><PrefabTotalPcu>1</PrefabTotalPcu>"
+        "<IsCustomStoreItem>true</IsCustomStoreItem></MyObjectBuilder_StoreItem>"
+    )
+    return rig.grid(
+        "Neutrals Store Rig",
+        STORE_RIG,
+        armor(range(0, 3))
+        + [
+            rig.block(
+                "MyObjectBuilder_StoreBlock",
+                "StoreBlock",
+                (0, 1, 0),
+                f"<EntityId>{STORE_BLOCK}</EntityId><Owner>{owner}</Owner><ShareMode>All</ShareMode>"
+                f"<AnyoneCanUse>true</AnyoneCanUse><PlayerItems>{item}</PlayerItems>",
+            )
+        ],
+        position=STORE_AT,
+    )
 
 
 def prepare() -> None:
@@ -188,12 +268,13 @@ def prepare() -> None:
     sector.write_text(
         sector.read_text(encoding="utf-8").replace(
             "</SectorObjects>",
-            build_rig + "</SectorObjects>",
+            build_rig + store_rig(npc_identity()) + "</SectorObjects>",
             1,
         ),
         encoding="utf-8",
     )
     rig.write_plugin_config(config_text())
+    rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP, PROBE])
 
 
 def config_text(**values) -> str:
@@ -213,7 +294,7 @@ def set_rule(remote, on: bool) -> None:
     log(f"rule {'on' if on else 'off'}: {rig.chat(remote, '!oct reload', 3)}")
 
 
-def targeting_cubes(remote, grid_id: int) -> list[dict]:
+def cubes_of(remote, grid_id: int, kinds: set[str]) -> list[dict]:
     cubes, offset = [], 0
     while True:
         page = remote.list_cubes(grid_id, offset=offset)
@@ -221,24 +302,33 @@ def targeting_cubes(remote, grid_id: int) -> list[dict]:
         offset += len(page["cubes"])
         if offset >= page["total"] or not page["cubes"]:
             break
-    found = [
-        c
-        for c in cubes
-        if c["typeId"].rsplit("_", 1)[-1]
-        in {
+    return [c for c in cubes if c["typeId"].rsplit("_", 1)[-1] in kinds]
+
+
+def targeting_cubes(remote, grid_id: int) -> list[dict]:
+    """The weapon blocks with the setting, those the rule is about"""
+    return cubes_of(
+        remote,
+        grid_id,
+        {
             "InteriorTurret",
             "LargeGatlingTurret",
             "LargeMissileTurret",
             "TurretControlBlock",
-            "Searchlight",
-        }
+        },
+    )
+
+
+def searchlights(remote, grid_id: int) -> list[bool]:
+    return [
+        remote.get_property(grid_id, tuple(c["min"]), "TargetNeutrals")["value"]
+        for c in cubes_of(remote, grid_id, {"Searchlight"})
     ]
-    return found
 
 
 def on_cells(remote, grid_id: int) -> tuple[int, list[tuple]]:
-    """The number of blocks with the setting on the grid, and the cells of those with it on, as the
-    client reads them"""
+    """The number of weapon blocks on the grid, and the cells of those with it on, as the client
+    reads them"""
     cubes = targeting_cubes(remote, grid_id)
     on = [
         tuple(c["min"])
@@ -311,7 +401,7 @@ def rule_off_controls(remote, build_rig: int) -> None:
     log(f"pasted with the rule off: {pasted}")
     time.sleep(5)
     count, on = on_cells(remote, pasted[0]["entityId"])
-    check("rule off: a paste keeps it on", count == 6 == len(on), (count, on))
+    check("rule off: a paste keeps it on", count == 5 == len(on), (count, on))
     count, on = on_cells(remote, build_rig)
     check(
         "rule off: a turret placed by hand takes it from its definition",
@@ -363,7 +453,9 @@ def hand_and_paste(remote, build_rig: int) -> tuple[tuple, int, tuple]:
     )
     log(f"pasted: {pasted}")
     paste_id = pasted[0]["entityId"]
-    built(remote, "pasted", paste_id, 6)
+    built(remote, "pasted", paste_id, 5)
+    lights = searchlights(remote, paste_id)
+    check("pasted: the searchlight keeps it", lights == [True], lights)
 
     onto = rig.grid(
         "Neutrals Onto",
@@ -449,8 +541,8 @@ def starter_and_orders(remote) -> None:
         turn_on(remote, ship, tuple(targeting_cubes(remote, ship)[0]["min"]))
 
 
-def turn_on(remote, grid_id: int, cell: tuple) -> None:
-    """The server takes a client's change only from near the grid, within 15 m, and keeps quiet
+def stand_near(remote, grid_id: int, cell: tuple) -> None:
+    """The server takes a client's request only from near the grid, within 15 m, and keeps quiet
     about one from farther away"""
     world = remote.call([CallOp.grid_to_world(grid_id, cell)]).call(0)
     world = (
@@ -460,10 +552,85 @@ def turn_on(remote, grid_id: int, cell: tuple) -> None:
     )
     remote.character_teleport(world[0], world[1] + 10, world[2])
     time.sleep(5)
+
+
+def turn_on(remote, grid_id: int, cell: tuple) -> None:
+    stand_near(remote, grid_id, cell)
     remote.set_property(grid_id, cell, "TargetNeutrals", True)
     time.sleep(5)
     value = remote.get_property(grid_id, cell, "TargetNeutrals")["value"]
     check(f"the client turns it on at {cell}", value is True, value)
+
+
+def tell_probe(folder: Path, line: str) -> None:
+    (folder / "neutrals-probe.tmp").write_text(line, encoding="utf-8")
+    (folder / "neutrals-probe.tmp").rename(folder / "neutrals-probe.plan")
+
+
+def new_grid(remote, name: str, known: set[int], timeout: float = 90) -> int | None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for grid in remote.list_grids():
+            if grid["name"] == name and grid["entityId"] not in known:
+                return grid["entityId"]
+        time.sleep(3)
+    return None
+
+
+def known_grids(remote) -> set[int]:
+    return {g["entityId"] for g in remote.list_grids()}
+
+
+def buy(remote) -> int | None:
+    """The ship the client buys at the store block"""
+    known = known_grids(remote)
+    tell_probe(rig.APPDATA, f"buy {STORE_BLOCK} {STORE_ITEM}")
+    return new_grid(remote, STORE_SHIP, known)
+
+
+def store_and_npc(remote) -> None:
+    remote.character_teleport(STORE_AT[0], 30, STORE_AT[2])
+    wait_grid(remote, "Neutrals Store Rig")
+    stand_near(remote, STORE_RIG, (0, 1, 0))
+    set_rule(remote, False)
+    ship = buy(remote)
+    check("rule off: the ship is bought", ship, ship)
+    if ship:
+        time.sleep(5)
+        count, on = on_cells(remote, ship)
+        check("rule off: a bought ship keeps it on", count == 5 == len(on), (count, on))
+    set_rule(remote, True)
+    ship = buy(remote)
+    check("the ship is bought", ship, ship)
+    if ship:
+        built(remote, "bought ship", ship, 5)
+        lights = searchlights(remote, ship)
+        check("bought ship: the searchlight keeps it", lights == [True], lights)
+        turn_on(remote, ship, tuple(targeting_cubes(remote, ship)[0]["min"]))
+
+    known = known_grids(remote)
+    remote.character_teleport(RIG_AT[0], 30, 0)
+    tell_probe(
+        rig.SERVER_DATA,
+        f"npc NeutralsNpc {RIG_AT[0]} 0 500 {npc_identity()}",
+    )
+    ship = new_grid(remote, NPC_SHIP, known)
+    check("the ship for an NPC is there", ship, ship)
+    if ship:
+        time.sleep(5)
+        count, on = on_cells(remote, ship)
+        check("a ship for an NPC keeps it on", count == 5 == len(on), (count, on))
+
+
+def respawn(remote) -> None:
+    known = known_grids(remote)
+    tell_probe(rig.SERVER_DATA, "die")
+    time.sleep(15)
+    tell_probe(rig.APPDATA, "respawn NeutralsRespawn")
+    ship = new_grid(remote, RESPAWN_SHIP, known)
+    check("the respawn ship is there", ship, ship)
+    if ship:
+        built(remote, "respawn ship", ship, 5)
 
 
 def run() -> None:
@@ -472,7 +639,7 @@ def run() -> None:
     prepare()
     rig.start_server()
     log("server ready")
-    remote = rig.start_client()
+    remote = rig.start_client(extra_dev_folders=[PROBE])
     remote.set_admin_flag("creativeTools", True)
     time.sleep(3)
     remote.character_teleport(RIG_AT[0], 30, 0)
@@ -488,15 +655,21 @@ def run() -> None:
     controller, paste_id, turret = hand_and_paste(remote, build_rig)
     turn_on(remote, build_rig, controller)
     turn_on(remote, paste_id, turret)
+    store_and_npc(remote)
     starter_and_orders(remote)
+    respawn(remote)
 
     expected = {
         # In the world, the rule off's hand placed one and the one turned on
         "Neutrals Build Rig": 3,
+        # The searchlights stay on, and the paste's one turned on
         "Neutrals Rule Off": 6,
-        "Neutrals Paste": 1,
+        "Neutrals Paste": 2,
         # The ordered ship with the rule off, and the one turned on on the other
         SHIP: 6,
+        # The one bought with the rule off, and on the other its searchlight and the one turned on
+        STORE_SHIP: 8,
+        NPC_SHIP: 5,
     }
     rig.stop_client()
     rig.stop_server()

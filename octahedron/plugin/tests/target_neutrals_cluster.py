@@ -2,7 +2,7 @@
 a paste and blocks placed by hand, the blueprint having the setting on. A block the client turns on keeps it
 through a handover in both directions and a graceful cluster restart, and its neighbors stay off.
 
-Run on polaris on 2026-10-31: 13/13 checks.
+Run on polaris on 2026-10-31: 14/14 checks.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/target_neutrals_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 
@@ -42,9 +42,8 @@ wa.lc.PLAN = wa.ROOT / "probe-plan.txt"
 wa.lc.OUT = wa.ROOT / "probe-out.txt"
 NODES = ("node-1", "node-2")
 PROCESSES = ("wa-1", *NODES)
-# A blueprint the client can have welded, without the searchlight, and a pasted one with it
-WELDED = 4
-BLOCKS = 5
+# The blueprint's weapons, a pasted one also has a searchlight
+WEAPONS = 4
 
 
 def run(bench) -> None:
@@ -149,8 +148,8 @@ def run(bench) -> None:
     )
     count, on = read(api, ship)
     check(
-        f"ordered ship: its {WELDED} blocks have it off",
-        count == WELDED and not on,
+        f"ordered ship: its {WEAPONS} blocks have it off",
+        count == WEAPONS and not on,
         (count, on),
     )
 
@@ -167,10 +166,12 @@ def run(bench) -> None:
     grid = pasted[0]["entityId"]
     count, on = read(api, grid)
     check(
-        f"pasted: its {BLOCKS} blocks have it off",
-        count == BLOCKS and not on,
+        f"pasted: its {WEAPONS} blocks have it off",
+        count == WEAPONS and not on,
         (count, on),
     )
+    lights = tn.searchlights(api, grid)
+    check("pasted: the searchlight keeps it", lights == [True], lights)
     for cell, subtype in (
         ((16, 1, 0), "LargeTurretControlBlock"),
         ((18, 1, 0), "LargeInteriorTurret"),
@@ -181,7 +182,7 @@ def run(bench) -> None:
         )
     time.sleep(10)
     count, on = read(api, grid)
-    check("placed by hand: off", count == BLOCKS + 2 and not on, (count, on))
+    check("placed by hand: off", count == WEAPONS + 2 and not on, (count, on))
 
     # The player's later choice
     turned = next(
@@ -190,7 +191,7 @@ def run(bench) -> None:
         if "Interior" in c["subtypeId"]
     )
     tn.turn_on(api, grid, turned)
-    expected = (BLOCKS + 2, [turned])
+    expected = (WEAPONS + 2, [turned])
     check("the client turns one on", read(api, grid) == expected, read(api, grid))
 
     first = wait_until(where, 120, "the client's partition")
@@ -217,7 +218,7 @@ def run(bench) -> None:
     count, on = read(api, ship)
     check(
         "a restart leaves the ordered ship's blocks off",
-        count == WELDED and not on,
+        count == WEAPONS and not on,
         (count, on),
     )
 
