@@ -524,6 +524,9 @@ def run(bench) -> None:
         reply,
     )
     time.sleep(max(0, ended + minutes * 60 + 5 - time.time()))
+    # The character waits in the open and can die by now; the cool-down doesn't care
+    rig.ensure_character(api)
+    to_station_on(api, node_a)
     reply = press(api)
     check(
         "free once the time has passed",
