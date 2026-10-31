@@ -39,7 +39,7 @@ public sealed class Commands : CommandModule
         "order",
         "Presses the shipyard button of the nearest station hologram table for you",
         "!oct order [table name]: stand by a station's hologram table with a blueprint loaded. "
-            + "Shows your quote, orders the blueprint or cancels your queue entry, as the button next to the table does."
+            + "Orders the blueprint you loaded, cancels your build or repair slot, or books a repair slot, as the button next to the table does."
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Order(params string[] table) =>
@@ -75,7 +75,7 @@ public sealed class Commands : CommandModule
     [Command(
         "table remove",
         "Removes the blueprint of the nearest hologram table, as the Remove button of its terminal does",
-        "!oct table remove [table name]: anyone can do this in the table's terminal to get the table."
+        "!oct table remove [table name]: only the player who holds the table can do this in its terminal."
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string TableRemove(params string[] table) =>

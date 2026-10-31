@@ -276,8 +276,25 @@ internal static class ShipyardZoneWelding
     [HarmonyPatch(typeof(MySlimBlock), nameof(MySlimBlock.IncreaseMountLevel))]
     private static class Welding
     {
-        private static void Prefix(MyInventoryBase outputInventory) =>
+        private static void Prefix(
+            MySlimBlock __instance,
+            MyInventoryBase outputInventory,
+            out float __state
+        )
+        {
             weldingFrom = outputInventory;
+            __state = __instance.Integrity;
+        }
+
+        private static void Postfix(
+            MySlimBlock __instance,
+            MyInventoryBase outputInventory,
+            float __state
+        )
+        {
+            if (__instance.Integrity > __state)
+                ShipyardOrders.Worked(outputInventory?.Entity as MyEntity);
+        }
 
         private static void Finalizer() => weldingFrom = null;
     }
@@ -320,6 +337,8 @@ internal static class ShipyardZoneWelding
             int __state
         )
         {
+            if (__runOriginal && isProjection && __instance.BlocksCount > __state)
+                ShipyardOrders.Worked(MyEntities.GetEntityById(builderEntityId));
             if (
                 __runOriginal
                 && isProjection

@@ -255,31 +255,56 @@ of materials under it; a station from before the billboard shows the list on the
 table's screen until the world is wiped. The billboard's second screen, how to
 order, is the blueprint's own text, as are the station's other signs.
 
-One press of the first button of the button panel next to the table
-(`ShipyardConfirmButtonName`, `Button Panel - Station ShipyardConfirm`) orders the
-ship from the station's shipyard. That clears the blueprint and the list, and the
-screen tells the player a second press cancels; it does so while the build hasn't
-started. A press also shows the quote first and asks for another when the screen
-doesn't show the presser's quote of this blueprint at these terms, so a build that
-turned from free to paid is never ordered unseen.
+A player who loads a blueprint holds the table: it is their block, shared with
+nobody, so nobody else can load over it or remove the blueprint. Loading another
+restarts `ShipyardTableMinutes` (3). The blueprint is cleared, the table goes back
+to OCT and is open to everyone once the ship is in the queue, after those minutes,
+or when the player leaves the sphere around the station's grids or this server (a
+log-off, or a handover to another node on a cluster). A blueprint found on an open
+table after a restart or a move of the station to this node has no known loader:
+the first player to press gets it.
 
-While a blueprint is on the table only the player who loaded it can order it or
-cancel an order; anyone else's press is refused, their own queued order included.
-Anyone can remove the blueprint with the Remove button of the table's terminal or
-load another one over it, which frees the table. An empty table's button cancels
-the presser's own order. A blueprint found on the table after a restart or a move
-of the station to this node has no known loader: the first player to press gets it.
+The first button of the button panel next to the table
+(`ShipyardConfirmButtonName`, `Button Panel - Station ShipyardConfirm`) acts by who
+presses it, whoever holds the table:
+
+- With a build or repair slot of theirs in the shipyard's queue or running, the press
+  cancels it. It does nothing to the table. A running build's ship is handed over
+  unfinished, as when its time runs out, and a free build starts the cool-down.
+- Else, holding a blueprint the shipyard accepts, the press orders the ship. That
+  clears the blueprint and the list, and the screen tells the player a second press
+  cancels. It first shows the quote and asks for another press when the screen doesn't
+  show the presser's quote of this blueprint at these terms, so a build that turned
+  from free to paid is never ordered unseen. A blueprint it doesn't accept gets the
+  reason.
+- Else the press books a repair slot.
+
+A queued order stays when its owner leaves: it is built and handed over as usual, its
+payment is already in its build ledger, and the owner can cancel it when back.
+`ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
+
+A repair slot is an entry "Repair" in the shipyard's queue, without a blueprint or a
+payment. It takes a place in the queue, and a player has one entry at a time at any
+shipyard, a build or a slot. When its turn comes the shipyard's welders go on, and its containers, welders
+and connectors become the player's and are shared with their faction (`ShipyardTurn`).
+The reactors and everything else stay OCT's, and the connectors are not in trading
+mode. The player docks a ship with the components to one of the connectors, which are
+on the outside of the frame, and the welders take them through the conveyors to weld
+what is in the frame, projected blocks of the player's own repair projector too. Prepare
+the ship, components and projector before booking.
+
+The slot ends when no building or welding happened for `ShipyardRepairIdleMinutes` (5;
+0 turns slots off), or at the player's next press. The welders go off, what is left in
+the shipyard's containers and welders goes to the player's docked ship and what it has
+no room for is gone, all connectors unlock so a docked ship floats free, and the blocks
+are OCT's again, shared with all as the world has them between turns. The running slot
+is known from the queue, so a restart or a move of the station to another node picks it
+up, with the idle time starting over.
 
 The plugin gives the button a toolbar item (its own On switch) so that clients
 offer it; the item never runs. `!oct order [table name]` (admin) presses the button
-of the nearest table, `!oct table remove [table name]` (admin) removes its
-blueprint and `!oct table show [table name]` (admin) prints its screens. The table's blueprint is cleared once the ship is in the queue, when the
-player who loaded it leaves the sphere around the station's grids or this server (a
-log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
-(15) after it was loaded. A queued order stays when its owner leaves: it is built
-and handed over as usual, its payment is already in its build ledger, and the owner
-can cancel it when back if it hasn't started.
-`ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
+of the nearest table, `!oct table remove [table name]` (admin) removes the blueprint
+of a table nobody else holds and `!oct table show [table name]` (admin) prints its screens.
 
 - A ship is a free build for a player with less than `FreeBuildPcuLimit`
   (10,000) PCU, counted as for the starter ship, once `FreeBuildCooldownMinutes`

@@ -4,7 +4,7 @@ headless client.
 
 - "complete": the client orders a 10 block ship ("Order Test") at its station's
   hologram table with !oct order (the table's button for an admin): the quote, then
-  the order. Pressing again while it builds doesn't cancel it. The client reads a shipyard welder's ToolCore_Shoot switch. The order ends
+  the order. The client reads a shipyard welder's ToolCore_Shoot switch. The order ends
   when the ship is complete; the saved world must hold it as a dynamic grid owned and
   built by the player, without the scaffold, and the shipyard without the loaded
   components and with its welders off.
@@ -80,7 +80,8 @@ def log(text: str) -> None:
 table_blueprint = ""
 
 
-def prepare(blueprint: str, minutes: int) -> None:
+def prepare(blueprint: str, minutes: int, plugins=()) -> None:
+    """plugins: more dev folders for the server, as prepare_server takes them"""
     global table_blueprint
     table_blueprint = blueprint
     rig.prepare_world(
@@ -118,7 +119,7 @@ def prepare(blueprint: str, minutes: int) -> None:
             "<ShipyardTableMinutes>600</ShipyardTableMinutes></OctahedronConfig>",
         )
     )
-    rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP])
+    rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, pl.MGP, *plugins])
 
 
 def chat_lines(remote, after: int) -> tuple[list[str], int]:
@@ -156,8 +157,6 @@ def order(remote) -> int:
     tc.stand_by(remote, table)
     name = re.search(r"<DisplayName>([^<]*)</DisplayName>", table_blueprint)[1]
     line = place(remote, name)
-    busy = tc.ship_reply(remote, "!oct order")
-    assert "can't be canceled now" in busy, busy
     shipyard = re.search(r"(\w+ Station Shipyard) builds", line)[1]
     return next(g["entityId"] for g in remote.list_grids() if g["name"] == shipyard)
 

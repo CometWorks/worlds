@@ -334,15 +334,27 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         1,
-        description: "Minutes a blueprint stays loaded in a station's hologram table at most. It is cleared sooner once its ship "
-            + "is in the queue, or when the player who loaded it leaves the station.",
+        description: "Minutes a player holds a station's hologram table with the blueprint they loaded, at most; loading another "
+            + "restarts them. It is cleared and open to everyone again sooner once its ship is in the queue, or when the player leaves the station.",
         Parent = "shipyard"
     )]
     public int ShipyardTableMinutes
     {
         get;
         set => SetField(ref field, value);
-    } = 15;
+    } = 3;
+
+    [IntOption(
+        0,
+        description: "A press of a station's shipyard button without a blueprint books a repair slot: the shipyard's welders, containers and "
+            + "connectors are the player's until they press it again or no building or welding happened for this many minutes. 0: no repair slots.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardRepairIdleMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
 
     [IntOption(
         0,
