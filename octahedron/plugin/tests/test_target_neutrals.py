@@ -432,7 +432,9 @@ def weld(remote) -> int:
     )
     # Each pass builds what touches the grid by then, the next armor block
     for attempt in range(40):
-        report = remote.weld_projection(projector, instant=False)
+        # Finished at once: a block under construction has no terminal to change it in. The shipyard
+        # orders weld the way a tool does
+        report = remote.weld_projection(projector, instant=True)
         log(f"welding pass {attempt}: {report}")
         time.sleep(3)
         if not report.get("requested"):
