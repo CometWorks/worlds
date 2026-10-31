@@ -219,6 +219,7 @@ def _try_read(api, grid: int):
 def main() -> int:
     so.SMALL = tn.blueprint(False, welded=True)
     run.world_template = wa.prepare()
+    run.administrators = [CLIENT_ID]
     label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-target-neutrals")
     results = bench_module.HOST.results / label
     results.mkdir(parents=True, exist_ok=True)
