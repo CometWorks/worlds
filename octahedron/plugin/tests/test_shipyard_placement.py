@@ -3,7 +3,7 @@ with the mods of tests/test_support_arm.py, on a world built by build_world.py. 
 the delivered ship from the saved world.
 
 A ship shorter than 1/4 of the shipyard (282.5 m: 70.6 m) goes 1/6 of the length from the middle,
-to the 1/3 point at the end nearer the station's hologram table:
+to the 1/3 point nearer the station:
 
 - "north", "south", "alpha": a 25 m large grid ship at a pole station and an equatorial one
 - "under" at Gamma Station: 70 m long, just short enough
@@ -140,10 +140,21 @@ def check_place(root: ET.Element, case: str) -> None:
     )
     away = sub(center, mid)
     along, across, above = dot(away, back), dot(away, right), dot(away, up)
-    table = sub(sa.station_tables()[station], mid)
+    pos, right, up, back = frame(grids[f"{station} Station"])
+    all_cells = cells(grids[f"{station} Station"])
+    bounds = [(min(c[i] for c in all_cells) + max(c[i] for c in all_cells)) / 2 for i in range(3)]  # fmt: skip
+    near = sub(
+        tuple(
+            pos[i]
+            + 2.5 * (bounds[0] * right[i] + bounds[1] * up[i] + bounds[2] * back[i])
+            for i in range(3)
+        ),
+        mid,
+    )
+    pos, right, up, back = frame(yard)
     log(
         f"{case}: {along:.1f} m along the shipyard from its middle, {across:.1f} across, "
-        f"{above:.1f} up; the table is on the {dot(table, back):+.0f} side"
+        f"{above:.1f} up; the station is on the {dot(near, back):+.0f} side"
     )
     sa.check(
         abs(across) <= 2.5 and abs(above) <= 2.5,
@@ -157,7 +168,7 @@ def check_place(root: ET.Element, case: str) -> None:
             f"{case}: at the 1/3 point, {LENGTH / 6:.1f} m from the middle: {along:.1f}",
         )
         sa.check(
-            along * dot(table, back) > 0, f"{case}: at the table's end: {along:.1f}"
+            along * dot(near, back) > 0, f"{case}: nearer the station: {along:.1f}"
         )
 
 
@@ -183,9 +194,9 @@ def main() -> int:
     rig.CONFIG_SOURCE = patched
     so.prepare(tables, 60)
     rig.start_server()
-    remote = rig.start_client()
-    log("joined")
     try:
+        remote = rig.start_client()
+        log("joined")
         for case in cases:
             rig.ensure_character(remote)
             mark = sa.order(remote, case)

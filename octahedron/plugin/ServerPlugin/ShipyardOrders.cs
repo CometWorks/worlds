@@ -2528,7 +2528,7 @@ internal static class ShipyardOrders
     }
 
     // Where the center of a ship of this length goes: on the free space's center line, a short
-    // ship toward the end nearer the station's hologram table, which stands in the lobby
+    // ship toward the end nearer the station
     private static Vector3D ShipCenter(
         MyCubeGrid shipyard,
         MyOrientedBoundingBoxD space,
@@ -2536,16 +2536,16 @@ internal static class ShipyardOrders
     )
     {
         var offset = ShipyardPlacement.Offset(length, space.HalfExtent.Z * 2);
-        var table = offset > 0 ? NearestTable(shipyard) : null;
-        if (table == null)
+        var station = offset > 0 ? NearestStation(shipyard) : null;
+        if (station == null)
             return space.Center;
         var along = shipyard.WorldMatrix.Forward;
-        var toTable = table.PositionComp.GetPosition() - space.Center;
-        return space.Center + along * (Vector3D.Dot(toTable, along) > 0 ? offset : -offset);
+        var toStation = station.PositionComp.WorldAABB.Center - space.Center;
+        return space.Center + along * (Vector3D.Dot(toStation, along) > 0 ? offset : -offset);
     }
 
-    // The nearest station hologram table within 1 km of the shipyard
-    private static MyProjectorBase NearestTable(MyCubeGrid shipyard)
+    // The grid of the nearest station hologram table within 1 km of the shipyard
+    private static MyCubeGrid NearestStation(MyCubeGrid shipyard)
     {
         var position = shipyard.PositionComp.GetPosition();
         var sphere = new BoundingSphereD(position, 1000);
@@ -2557,7 +2557,7 @@ internal static class ShipyardOrders
             .OrderBy(t => Vector3D.DistanceSquared(t.PositionComp.GetPosition(), position))
             .FirstOrDefault();
         entities.Clear();
-        return table;
+        return table?.CubeGrid;
     }
 
     private static bool Free(MyCubeGrid grid, BoundingBoxI box)

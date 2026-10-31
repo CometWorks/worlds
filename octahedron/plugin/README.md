@@ -291,7 +291,10 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back.
 - The next order starts when the shipyard's free space is empty: a ship left
-  there has to fly out first. The ship is built centered in the free space, from
+  there has to fly out first. The ship is built on the free space's center line:
+  a ship shorter than 1/4 of the shipyard's length around the 1/3 point nearer the
+  station, where it shows better from the lobby; a longer one, or one no support
+  arm can reach there, in the middle. It is built from
   a support arm (below) on a shipyard with arm rotors. A shipyard without them
   starts the ship as a static grid of one of its blocks, built complete and the
   player's, with an NPC-owned projector and battery named `Shipyard Order` next
@@ -975,6 +978,10 @@ same zone a player's hand welder and grinder, ship welder and grinder, and an
 OmniArc welder on a player's grid named like a shipyard do nothing, and that the
 player's tools work outside the zone. It runs with the plugin's rules on, on
 with the zones holding every test grid from the start, and off.
+`tests/test_shipyard_placement.py` checks in the saved world where ships end up
+along the shipyard: short ones at the 1/3 point nearer the station, at pole and
+equatorial stations, and a ship of 1/4 of the length or one whose arm outgrows
+the planner's search box in the middle.
 `tests/test_shipyard_order.py` orders a ship at a station table with the client
 (the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes
