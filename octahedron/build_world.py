@@ -81,6 +81,21 @@ LANE_SPEED = 10_000
 LANE_RING_INTERVAL = 10_000
 # Asteroid surfaces stay this far from a lane's straight line
 LANE_CLEARANCE = 1_000.0
+# The Trade_Lane.mwm model: its bounding sphere (radius 211.5 m) lies 13.4 m along the lane
+# from the gate's origin
+GATE_RADIUS = 225.0
+# TradeLaneComputerBlockLogic.RingOffset: a gate stands this far to its computer's right
+GATE_OFFSET = 220.0
+# Light strobes when the Sun passes behind a gate, the ring or a shipyard (SE-809, SE-720). The
+# Sun circles in a plane, so all day its rays to a place stay in a flat slab through that place:
+# whatever keeps out of the slab never shades it. check_sun_clearance.py sweeps a built world.
+# Gates and asteroids stay out of the slab of a station's whole safe zone by this much.
+SUN_CLEARANCE = 25.0
+# A shipyard's blocks stay out of the slab of its station's bounding sphere by this much
+SHIPYARD_SUN_CLEARANCE = 15.0
+# The bounding sphere of a block cell. Blocks are counted by their Min cell, so this also covers
+# the 2-cell blocks' other half.
+BLOCK_RADIUS = 6.25
 
 NPC_NAME = "Octahedron Authority"
 # The game tops it back up every economy tick; with the Octahedron plugin's money rules
@@ -149,6 +164,24 @@ SHIPYARD_YAW_DEGREES = 17.5
 SHIPYARD_SHARED = {
     "ConveyorSorter", "ShipConnector", "CargoContainer", "MedicalRoom", "ReflectorLight",
 }  # fmt: skip
+# How far the line between a station and its shipyard is turned about the zone's center, off the
+# plane of the Sun's path, so the Sun never goes behind the shipyard (SE-720). Both keep their
+# orientation. Picked for the view from the lobby among the turns that clear the Sun: the
+# shipyard's center is in sight of 17 to 21 of 26 lobby spots (check_sun_clearance.py), against
+# 9 to 16 with the smallest clearing turns, where the near wall's beams get in the way.
+SHIPYARD_SUN_TURN = {
+    "North Station": 12.0,
+    "South Station": 12.0,
+    "Alpha Station": 33.0,
+    "Gamma Station": 30.0,
+}
+# Moon Station has no deck to keep level, and turning only the line would take its shipyard out of
+# the lobby's view, so the station and its shipyard turn this far as one unit instead.
+MOON_SUN_TURN_DEGREES = 22.0
+# Delta Station and its shipyard, turned about the zone's center so the station's up leans this
+# far toward EarthLike from the ring's axis, which leans 25 degrees away from it there: the lobby
+# sees the planet and the deck is as tilted against the Sun as Beta Station's (SE-720)
+DELTA_TILT_DEGREES = 50.0
 # Each station's color: its shipyard's red frame gets the skin and the color, the station's
 # purple walls and furniture only the color. Skin None is the default, painted metal. Colors
 # are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1); the game adds
@@ -814,6 +847,57 @@ def raise_shipyard(yard, station_center, zone, height, up):
     return add(center, mul(toward, pull)), forward, yard_up
 
 
+def block_offsets(grid, forward, up):
+    """Where the grid's blocks are from the center of its block bounds, as oriented."""
+    right = cross(forward, up)
+    local = grid_center(grid)
+    return [
+        add(
+            add(mul(right, x * 2.5 - local[0]), mul(up, y * 2.5 - local[1])),
+            mul(forward, local[2] - z * 2.5),
+        )
+        for x, y, z in (
+            tuple(int(m.get(k)) for k in "xyz")
+            for m in (b.find("Min") for b in grid.find("CubeBlocks"))
+            if m is not None
+        )
+    ]
+
+
+def turn_pair(yard, station_grid, station_center, forward, up, zone, sun, degrees):
+    """(station center, (shipyard center, forward, up)) with the line between the two turned
+    about the zone's center by degrees, up or down along the Sun's axis the way the shipyard
+    already lies. Both keep their orientation; raise_shipyard pulls the shipyard back inside
+    the zone when the turn takes a corner out."""
+    line = sub(yard[0], station_center)
+    axis = norm(cross(line, mul(sun, 1 if dot(line, sun) >= 0 else -1)))
+    angle = math.radians(degrees)
+    turned = add(zone, rotate(sub(station_center, zone), axis, angle))
+    assert (
+        max(dist(c, zone) for c in box_corners(station_grid, turned, forward, up))
+        <= STATION_SAFE_ZONE_RADIUS - SAFE_ZONE_MARGIN
+    ), "the turned station doesn't fit the safe zone"
+    yard_center = add(zone, rotate(sub(yard[0], zone), axis, angle))
+    return turned, raise_shipyard((yard_center, *yard[1:]), turned, zone, 0, up)
+
+
+def assert_shipyard_off_sun(yard, station_grid, station_center, forward, up, sun):
+    """The shipyard's blocks stay out of the slab of the Sun's rays through the station's
+    bounding sphere, so from no place on the station the Sun goes behind the shipyard.
+    """
+    radius = max(math.sqrt(dot(o, o)) for o in block_offsets(station_grid, forward, up))
+    heights = [
+        dot(add(sub(yard[0], station_center), o), sun)
+        for o in block_offsets(shipyard_template(), yard[1], yard[2])
+    ]
+    # The bounding sphere of a block, counted by its Min, as in check_sun_clearance.py
+    slab = radius + 2 * BLOCK_RADIUS + SHIPYARD_SUN_CLEARANCE
+    assert min(heights) >= slab or max(heights) <= -slab, (
+        f"the Sun goes behind a shipyard: its blocks are {min(heights):.0f} to "
+        f"{max(heights):.0f} m from its station's level, must be {slab:.0f} m off"
+    )
+
+
 def shipyard_template():
     """The shipyard blueprint's main grid."""
     return shipyard_grids()[0]
@@ -1106,6 +1190,60 @@ def lanes(places, edges):
     return result
 
 
+def gate_points(start, end, interval=LANE_RING_INTERVAL):
+    """Gate places along a lane without the sideways offset: every interval, both ends included
+    (TradeLaneComputerBlockLogic.UpdateRings, AddPointsBetweenGates)."""
+    count = max(1, round(dist(start, end) / interval))
+    return [
+        (i / count, add(start, mul(sub(end, start), i / count)))
+        for i in range(count + 1)
+    ]
+
+
+def lanes_off_sun(lane_list, places, sun, north, polar_normal):
+    """The lanes with their ends moved along the Sun's axis, by as little as keeps every gate
+    out of the slab of the Sun's rays through every station's safe zone, to the south when a
+    gate lies right in it: the equatorial square's lanes all stay level together."""
+    clearance = STATION_SAFE_ZONE_RADIUS + GATE_RADIUS + SUN_CLEARANCE
+    zones = [center for center, _, _ in places.values()]
+    lane_list = [list(lane) for lane in lane_list]
+
+    def push(lane):
+        _, home, target, start, end = lane
+        direction = norm(sub(end, start))
+        right = cross(direction, lane_up(direction, home, target, north, polar_normal))
+        # The end gates first: moving both ends can leave the lane level
+        for t, point in sorted(
+            gate_points(start, end), key=lambda g: min(g[0], 1 - g[0])
+        ):
+            for side in (1, -1):
+                gate = add(point, mul(right, side * GATE_OFFSET))
+                for zone in zones:
+                    height = dot(sub(gate, zone), sun)
+                    if abs(height) < clearance - 0.5:
+                        move = clearance - abs(height)
+                        move = -move if height < 1 else move
+                        # The nearer end, as much as moves this gate out
+                        if t < 0.5:
+                            lane[3] = add(start, mul(sun, move / (1 - t)))
+                        else:
+                            lane[4] = add(end, mul(sun, move / t))
+                        return True
+        return False
+
+    for _ in range(1000):
+        if not any([push(lane) for lane in lane_list]):
+            return [tuple(lane) for lane in lane_list]
+    raise AssertionError("the lanes don't leave the Sun's slabs")
+
+
+def sun_axis(sector):
+    """The axis the Sun circles the world about (MySunProperties.SunRotationAxis)."""
+    sun = sun_direction(sector)
+    reference = (0.0, 1.0, 0.0) if abs(sun[1]) <= 0.95 else (-1.0, 0.0, 0.0)
+    return norm(cross(cross(sun, reference), sun))
+
+
 def sun_direction(sector):
     """Direction to the sun at the world's start (MySector, Vector3.CreateFromAzimuthAndElevation)."""
     environment = sector.find("Environment")
@@ -1127,10 +1265,19 @@ def magnetic_axis(planet, sun):
     return norm(sub(mul(planet.up, math.cos(tilt)), mul(norm(away), math.sin(tilt))))
 
 
-def asteroid_ring(seed, earth, axis, places, lane_list):
+def asteroid_ring(seed, earth, axis, places, lane_list, sun):
     """(storage name, center, size, forward, up, vx2 bytes) for the ring around axis and its 4
     ice asteroids. Each asteroid draws from its own random generator, so a station or lane
-    added later moves only the asteroids in its way."""
+    added later moves only the asteroids in its way. None lies in the slab of the Sun's rays
+    through a station's safe zone: a narrow gap where the slab crosses the band."""
+
+    def off_sun(center, size):
+        # The sphere around the storage's cube holds the asteroid at any rotation
+        clearance = STATION_SAFE_ZONE_RADIUS + size * math.sqrt(3) / 2 + SUN_CLEARANCE
+        return all(
+            abs(dot(sub(center, zone), sun)) >= clearance
+            for zone, _, _ in places.values()
+        )
 
     def own_rng(name):
         return random.Random(f"{seed}:{name}")
@@ -1150,6 +1297,9 @@ def asteroid_ring(seed, earth, axis, places, lane_list):
         in_plane = sub(halfway, mul(axis, dot(halfway, axis)))
         center = add(earth.center, mul(norm(in_plane), RING_RADIUS))
         size = storage_size(SCENARIO.parents[1] / f"VoxelMaps/{ICE_SHAPE}.vx2")
+        assert off_sun(
+            center, size
+        ), "an ice asteroid lies in the Sun's way to a station"
         storage = f"Octahedron-Ice-{i + 1}"
         asteroids.append(
             (
@@ -1197,9 +1347,13 @@ def asteroid_ring(seed, earth, axis, places, lane_list):
             height = rng.uniform(-RING_THICKNESS / 2, RING_THICKNESS / 2)
             radial = add(mul(u, math.cos(angle)), mul(v, math.sin(angle)))
             center = add(earth.center, add(mul(radial, radius), mul(axis, height)))
-            if free(center, size) and not any(
-                segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
-                for _, _, _, s, e in lane_list
+            if (
+                free(center, size)
+                and off_sun(center, size)
+                and not any(
+                    segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
+                    for _, _, _, s, e in lane_list
+                )
             ):
                 break
         voxel_seed = rng.getrandbits(31)
@@ -1396,7 +1550,9 @@ def main():
     # Entity and identity ids come from one generator, in the order they are drawn below
     ids = Ids(random.Random(args.seed))
     places, edges = layout(earth, moon)
-    lane_list = lanes(places, edges)
+    sun = sun_axis(sector)
+    polar_normal = norm(sub(places["Alpha Station"][0], earth.center))
+    lane_list = lanes_off_sun(lanes(places, edges), places, sun, earth.up, polar_normal)
     # The ring's axis turns with the octahedron, so the ring still passes Beta and Delta
     # Station on the same sides
     axis = rotate(
@@ -1405,7 +1561,7 @@ def main():
     # The asteroids take the first ids, so stations and grids added later leave their ids as
     # they are; their places come from their own generators (asteroid_ring)
     for storage, center, size, forward, up, data in asteroid_ring(
-        args.seed, earth, axis, places, lane_list
+        args.seed, earth, axis, places, lane_list, sun
     ):
         (out / f"{storage}.vx2").write_bytes(data)
         objects.append(voxel_map(ids, storage, center, size, forward, up))
@@ -1453,6 +1609,19 @@ def main():
                 turn(yard_up),
             )
             forward, up = level, axis
+        if name == "Delta Station":
+            # Up toward EarthLike; the shipyard goes along as one unit
+            tilt = lambda v: rotate(
+                v, mul(cross(forward, up), -1), math.radians(DELTA_TILT_DEGREES)
+            )
+            station_center = add(center, tilt(sub(station_center, center)))
+            yard_center, yard_forward, yard_up = yard
+            yard = (
+                add(center, tilt(sub(yard_center, center))),
+                tilt(yard_forward),
+                tilt(yard_up),
+            )
+            forward, up = tilt(forward), tilt(up)
         if name == "Moon Station":
             # Turned about its up, its front toward the Moon and the lobby toward EarthLike
             forward = mul(forward, -1)
@@ -1464,13 +1633,36 @@ def main():
                 SHIPYARD_RAISE[name],
                 up if name == "Moon Station" else yard[2],
             )
+        if name in SHIPYARD_SUN_TURN:
+            station_center, yard = turn_pair(
+                yard,
+                template,
+                station_center,
+                forward,
+                up,
+                center,
+                sun,
+                SHIPYARD_SUN_TURN[name],
+            )
+        if name == "Moon Station":
+            # Turned with its shipyard as one unit: the lobby keeps its view
+            line = sub(yard[0], station_center)
+            axis = norm(cross(line, sun))
+            turn = lambda v: rotate(v, axis, math.radians(MOON_SUN_TURN_DEGREES))
+            station_center = add(center, turn(sub(station_center, center)))
+            yard = (
+                add(center, turn(sub(yard[0], center))),
+                turn(yard[1]),
+                turn(yard[2]),
+            )
+            forward, up = turn(forward), turn(up)
+        assert_shipyard_off_sun(yard, template, station_center, forward, up, sun)
         shipyards[name] = yard
         grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
         objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
 
-    polar_normal = norm(sub(places["Alpha Station"][0], earth.center))
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
         up = lane_up(direction, home, target, earth.up, polar_normal)

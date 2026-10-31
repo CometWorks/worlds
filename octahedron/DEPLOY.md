@@ -127,6 +127,7 @@ downloaded (see `README.md`), with the OctahedronOres Workshop id:
 ```bash
 uv run make_ore_mod.py --seed 42
 python3 build_world.py server --seed 42 --ore-mod <OctahedronOres Workshop id>
+uv run check_sun_clearance.py server
 ```
 
 Commit `server/`, then copy it to the host. **The folder must be named
