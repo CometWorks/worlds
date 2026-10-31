@@ -175,8 +175,7 @@ def run(bench) -> None:
         for c in tn.targeting_cubes(api, grid)
         if "Interior" in c["subtypeId"]
     )
-    api.set_property(grid, turned, "TargetNeutrals", True)
-    time.sleep(10)
+    tn.turn_on(api, grid, turned)
     expected = (BLOCKS + 2, [turned])
     check("the client turns one on", read(api, grid) == expected, read(api, grid))
 

@@ -24,6 +24,7 @@ import xml.etree.ElementTree as ET
 
 os.environ.setdefault("OCT_TASK", "SE-830")
 import rig  # noqa: E402
+from se_remote import CallOp  # noqa: E402
 import test_client as tc  # noqa: E402
 import test_projection_limits as pl  # noqa: E402
 import test_shipyard_order as so  # noqa: E402
@@ -296,6 +297,24 @@ def saved_on() -> dict[str, int]:
     return found
 
 
+def saved_weapons(name: str) -> list[int]:
+    """The blocks with the setting on each saved grid of this name, projections left out"""
+    text = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    text = re.sub(r"<ProjectedGrids>.*?</ProjectedGrids>", "", text, flags=re.S)
+    kinds = (
+        "InteriorTurret",
+        "LargeGatlingTurret",
+        "LargeMissileTurret",
+        "TurretControlBlock",
+    )
+    xsi = "{http://www.w3.org/2001/XMLSchema-instance}type"
+    return [
+        sum(b.get(xsi, "").endswith(kinds) for b in entity.find("CubeBlocks"))
+        for entity in ET.fromstring(text).find("SectorObjects")
+        if entity.findtext("DisplayName") == name
+    ]
+
+
 def built(remote, label: str, grid_id: int, blocks: int) -> None:
     time.sleep(5)
     count, on = on_cells(remote, grid_id)
@@ -411,10 +430,11 @@ def weld(remote) -> int:
         for c in remote.list_cubes(grid_id)["cubes"]
         if c["typeId"].endswith("Projector")
     )
-    for attempt in range(8):
+    # Each pass builds what touches the grid by then, the next armor block
+    for attempt in range(40):
         report = remote.weld_projection(projector, instant=False)
         log(f"welding pass {attempt}: {report}")
-        time.sleep(5)
+        time.sleep(3)
         if not report.get("requested"):
             break
     built(remote, "welded from a projection", grid_id, 5)
@@ -436,6 +456,16 @@ def order_and_starter(remote) -> None:
 
 
 def turn_on(remote, grid_id: int, cell: tuple) -> None:
+    """The server takes a client's change only from near the grid, within 15 m, and keeps quiet
+    about one from farther away"""
+    world = remote.call([CallOp.grid_to_world(grid_id, cell)]).call(0)
+    world = (
+        world.get("world") or world.get("position")
+        if isinstance(world, dict)
+        else world
+    )
+    remote.character_teleport(world[0], world[1] + 10, world[2])
+    time.sleep(5)
     remote.set_property(grid_id, cell, "TargetNeutrals", True)
     time.sleep(5)
     value = remote.get_property(grid_id, cell, "TargetNeutrals")["value"]
@@ -490,6 +520,8 @@ def run() -> None:
         len(ships) == 2,
         len(ships),
     )
+    built_ships = saved_weapons(SHIP)
+    check("both ships have their 5 blocks", built_ships == [5, 5], built_ships)
 
     rig.start_server()
     remote = rig.start_client()
