@@ -357,7 +357,7 @@ def free_build(remote) -> None:
 def saved_screens() -> None:
     sector = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
     check(
-        "Shipyard quote for" in sector or "is in the queue for" in sector,
+        "for OctTester" in sector or "is in the queue for" in sector,
         "the hologram table's screen shows quotes and orders (saved world)",
     )
     check(
