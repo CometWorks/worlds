@@ -66,7 +66,10 @@ def run(remote) -> None:
     check(offer == (5, 1_020_000), f"before: the Store sells the chip: {offer}")
     check(order and order[1] == 980_000, f"before: and buys it: {order}")
     answer = trade(remote, "sell", CHIP, 1)
-    check("NotEnoughAmount" in answer, f"before: a sale gets as far as the items: {answer}")
+    check(
+        "NotEnoughAmount" in answer,
+        f"before: a sale gets as far as the items: {answer}",
+    )
 
     # The world's config. The chip's 5 in stock stay in the book, like a saved world's
     with_config(remote)
@@ -78,7 +81,9 @@ def run(remote) -> None:
     check("NOITEM" in trade(remote, "buy", CHIP, 1), "a purchase is refused")
     check("NOITEM" in trade(remote, "sell", CHIP, 1), "a sale is refused")
     check(stock(remote, "Alpha", CHIP)[1] == -1, "the market has no row for it")
-    check(row(remote, "Component/SteelPlate") is not None, "the Store still sells plates")
+    check(
+        row(remote, "Component/SteelPlate") is not None, "the Store still sells plates"
+    )
 
     # The hourly restock brings back what is out, of what it lists
     admin(remote, f"!oct market set Alpha {CHIP} 0")
