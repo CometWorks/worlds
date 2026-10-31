@@ -971,8 +971,8 @@ screenshots of the welding from among the welders.
 `tests/builds/BuildTests` checks the queues and build ledgers without the game
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
 from the ledger, listings and OCT, paid orders all or none, cancel, start and finish
-with leftovers and hydrogen, free orders, the queue, the formats, and that no money
-is made or lost. `tests/test_paid_builds.py` checks paid builds in game at Alpha
+with leftovers and hydrogen, free orders, the queue, the formats, blueprints in parts,
+and that no money is made or lost. `tests/test_paid_builds.py` checks paid builds in game at Alpha
 Station with the shipyard's mods and the kiosk mods: the quote and the order, the
 hydrogen from a docked ship's tank into the new ship's, the payment, a press while
 it builds, a faction-paid order queued behind the finished ship and canceled after
@@ -1012,6 +1012,10 @@ after a restart. `OCT_WORLD_SOURCE` points the rig at a world built by
 `build_world.py` instead of `octahedron/server`. `tests/money/MoneyTests` checks the
 arithmetic of the tax, the payout and Hangar's retrieval fee alone
 (`dotnet run -c Release --project tests/money/MoneyTests`).
+`tests/shipyard_cluster.py` orders a ship on a cluster from a client with Multigrid
+Projector. A cluster's plugin messages carry 64 KiB at most, so a blueprint goes to and
+from the World Authority in parts; `tests/mech_blueprint.py bp.sbc big` writes a ship
+that needs them and still builds fast.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
 `tests/test_hangar_fee.py` checks the Hangar fee with the client and a Hangar working
