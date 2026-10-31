@@ -46,7 +46,7 @@ BLOCKED = rig.grid(
     tag="MyObjectBuilder_CubeGrid",
 )
 COOLDOWN = "next free ship is in"
-NO_BLUEPRINT = "load a blueprint into it first"
+NO_BLUEPRINT = "Repair slot"
 started = time.monotonic()
 
 
@@ -55,11 +55,13 @@ def log(text: str) -> None:
 
 
 def order(remote) -> str:
-    """Presses the button of the nearest table. An order clears its table (SE-773), so
-    with no blueprint there this goes on to the other stations' tables"""
+    """Presses the button of the nearest table. An order clears its table (SE-773), and a
+    press there books a repair slot, so that is canceled and this goes on to the other
+    stations' tables"""
     reply = tc.ship_reply(remote, "!oct order")
     stations = iter(sorted(sa.station_tables()))
     while NO_BLUEPRINT in reply:
+        tc.ship_reply(remote, "!oct order")
         sa.at_table(remote, next(stations))
         reply = tc.ship_reply(remote, "!oct order")
     return reply
@@ -164,14 +166,14 @@ def blocked_blocks() -> None:
 
 
 def one_at_a_time() -> None:
-    """A second order while the first one builds is refused"""
+    """A press while the player's build runs cancels it, it can't queue a second one"""
     # The finished ship would be in the way
     set_tables(so.BIG, remove="Order Test")
     remote = start()
     tc.with_config(remote, FreeBuildCooldownMinutes=0)
     so.place(remote, "Order Big")
     reply = order(remote)
-    assert "can't be canceled now" in reply, reply
+    assert "is canceled and removed" in reply, reply
     stop()
 
 

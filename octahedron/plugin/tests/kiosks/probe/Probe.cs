@@ -132,7 +132,12 @@ public sealed class ProbeCommands : CommandModule
             );
         if (free == null)
             return "NOCONNECTOR";
+        return Hauler(free, ownerId, owner == "mine" ? "Kiosk Hauler" : "Stranger Hauler", items);
+    }
 
+    // A ship with a connector and a cargo container at the free connector, connecting
+    private string Hauler(MyShipConnector free, long ownerId, string name, string items)
+    {
         // The connector's open face: the side whose next two cells of the station grid are empty
         var stationGrid = free.CubeGrid;
         Vector3I? open = null;
@@ -163,7 +168,7 @@ public sealed class ProbeCommands : CommandModule
             GridSizeEnum = MyCubeSize.Large,
             IsStatic = false,
             PersistentFlags = MyPersistentEntityFlags2.InScene,
-            DisplayName = owner == "mine" ? "Kiosk Hauler" : "Stranger Hauler",
+            DisplayName = name,
             PositionAndOrientation = new MyPositionAndOrientation(
                 position,
                 (Vector3)forward,
@@ -212,6 +217,200 @@ public sealed class ProbeCommands : CommandModule
         }
         connecting.Add((entity.GetFatBlocks<MyShipConnector>().First(), free, 0));
         return $"SHIP {entity.EntityId}";
+    }
+
+    private static MyCubeGrid Yard(string station) =>
+        MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .First(g =>
+                g.DisplayName.StartsWith(station + " ", StringComparison.OrdinalIgnoreCase)
+                && g.DisplayName.EndsWith(" Shipyard")
+            );
+
+    private static IEnumerable<MyCubeBlock> Beams(MyCubeGrid yard) =>
+        yard.GetFatBlocks<MyCubeBlock>()
+            .Where(b => b.BlockDefinition.Id.SubtypeName == "OmniArcBeam");
+
+    [Command(
+        "yardship",
+        "Builds a ship with a cargo container at a free connector of the station's shipyard and connects it: SHIP grid-id",
+        "!kprobe yardship <station> [Type/Subtype=amount ...]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardShip(string station, string items = "Component/SteelPlate=2000")
+    {
+        var free = Yard(station)
+            .GetFatBlocks<MyShipConnector>()
+            .FirstOrDefault(c => !c.Connected && connecting.All(x => x.Station != c));
+        return free == null
+            ? "NOCONNECTOR"
+            : Hauler(free, Context.Caller.IdentityId, "Kiosk Hauler", items);
+    }
+
+    [Command(
+        "yardtarget",
+        "Builds a ship to repair in the middle of the station's shipyard: a projector, a battery, an armor block at 30% and two more only in the projection: TARGET grid-id",
+        "!kprobe yardtarget <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardTarget(string station)
+    {
+        var yard = Yard(station);
+        var beams = Beams(yard).ToList();
+        var center = Vector3D.Zero;
+        foreach (var beam in beams)
+            center += beam.PositionComp.GetPosition();
+        center /= beams.Count;
+        long me = Context.Caller.IdentityId;
+        var battery = Block<MyObjectBuilder_BatteryBlock>(
+            "LargeBlockBatteryBlock",
+            new Vector3I(0, 0, 1),
+            me
+        );
+        battery.CurrentStoredPower = 3;
+        MyObjectBuilder_CubeBlock Armor(int z, float percent) =>
+            new()
+            {
+                SubtypeName = "LargeBlockArmorBlock",
+                Min = new Vector3I(0, 0, z),
+                BlockOrientation = new SerializableBlockOrientation(
+                    Base6Directions.Direction.Forward,
+                    Base6Directions.Direction.Up
+                ),
+                BuiltBy = me,
+                IntegrityPercent = percent,
+                BuildPercent = percent,
+            };
+        var projector = Block<MyObjectBuilder_Projector>("LargeProjector", Vector3I.Zero, me);
+        projector.KeepProjection = true;
+        var plan = new MyObjectBuilder_CubeGrid
+        {
+            GridSizeEnum = MyCubeSize.Large,
+            DisplayName = "Repair Target",
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            PositionAndOrientation = new MyPositionAndOrientation(
+                Vector3D.Zero,
+                Vector3.Forward,
+                Vector3.Up
+            ),
+            CubeBlocks =
+            [
+                (MyObjectBuilder_CubeBlock)projector.Clone(),
+                (MyObjectBuilder_CubeBlock)battery.Clone(),
+                Armor(2, 1),
+                Armor(3, 1),
+                Armor(4, 1),
+            ],
+        };
+        foreach (var block in plan.CubeBlocks)
+            block.EntityId = MyEntityIdentifier.AllocateId();
+        projector.ProjectedGrids = [plan];
+        var grid = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = true,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = "Repair Target",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                center,
+                (Vector3)yard.WorldMatrix.Forward,
+                (Vector3)yard.WorldMatrix.Up
+            ),
+            CubeBlocks = [projector, battery, Armor(2, 0.3f)],
+        };
+        var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
+        return $"TARGET {entity.EntityId}";
+    }
+
+    private static string Who(MyCubeBlock block) =>
+        (MySession.Static.Players.TryGetIdentity(block.OwnerId)?.DisplayName ?? "nobody").Replace(
+            ' ',
+            '_'
+        )
+        + "/"
+        + block.IDModule?.ShareMode;
+
+    private static string Summary(IEnumerable<MyCubeBlock> blocks) =>
+        string.Join(";", blocks.Select(Who).Distinct());
+
+    private static double Count(IEnumerable<MyCubeBlock> blocks, Func<MyInventory, double> value) =>
+        blocks.Sum(b => value(b.GetInventory()));
+
+    [Command(
+        "yard",
+        "Who has the shipyard's blocks, a player's access, what its inventories hold",
+        "!kprobe yard <station> [player name]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardState(string station, string player = null)
+    {
+        var yard = Yard(station);
+        var cargo = yard.GetFatBlocks<MyCargoContainer>().Cast<MyCubeBlock>().ToList();
+        var connectors = yard.GetFatBlocks<MyShipConnector>().ToList();
+        var beams = Beams(yard).ToList();
+        var reactors = yard.GetFatBlocks<MyReactor>().Cast<MyCubeBlock>().ToList();
+        var batteries = yard.GetFatBlocks<MyBatteryBlock>().Cast<MyCubeBlock>().ToList();
+        var uranium = new MyDefinitionId(typeof(MyObjectBuilder_Ingot), "Uranium");
+        var text =
+            $"YARD {yard.EntityId} cargo={Summary(cargo)} welders={Summary(beams)} connectors={Summary(connectors)} "
+            + $"reactors={Summary(reactors)} batteries={Summary(batteries)} "
+            + $"bigowner={string.Join(";", yard.BigOwners.Select(o => MySession.Static.Players.TryGetIdentity(o)?.DisplayName?.Replace(' ', '_')))} "
+            + $"uranium={Count(reactors, i => (double)i.GetItemAmount(uranium))} "
+            + $"elsewhere={Count(cargo.Concat(beams), i => (double)i.GetItemAmount(uranium))} "
+            + $"items={Count(cargo.Concat(beams), i => (double)i.GetItems().Sum(x => (double)x.Amount))} "
+            + $"connected={connectors.Count(c => c.Connected)} trading={connectors.Count(c => c.TradingEnabled)} "
+            + $"cell={cargo[0].Position.X},{cargo[0].Position.Y},{cargo[0].Position.Z} "
+            + $"reactorcell={reactors[0].Position.X},{reactors[0].Position.Y},{reactors[0].Position.Z}";
+        if (player != null)
+        {
+            var who = MySession
+                .Static.Players.GetAllIdentities()
+                .First(i => i.DisplayName == player)
+                .IdentityId;
+            bool All(IEnumerable<MyCubeBlock> blocks) =>
+                blocks.All(b => ((MyTerminalBlock)b).HasPlayerAccess(who));
+            text +=
+                $" access cargo={All(cargo)} welders={All(beams)} connectors={All(connectors)} reactors={All(reactors)}";
+        }
+        return text;
+    }
+
+    [Command(
+        "info",
+        "A grid's blocks, complete blocks and the steel plates in its cargo: INFO id blocks full plates",
+        "!kprobe info <grid id|grid name>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Info(string grid)
+    {
+        var found = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .FirstOrDefault(g => g.EntityId.ToString() == grid || g.DisplayName == grid);
+        if (found == null)
+            return $"INFO {grid} gone";
+        var plate = new MyDefinitionId(typeof(MyObjectBuilder_Component), "SteelPlate");
+        var plates = found
+            .GetFatBlocks<MyCargoContainer>()
+            .Sum(c => (double)c.GetInventory().GetItemAmount(plate));
+        return $"INFO {found.EntityId} blocks={found.BlocksCount} "
+            + $"full={found.GetBlocks().Count(b => b.IsFullIntegrity)} plates={plates}";
+    }
+
+    [Command(
+        "balance",
+        "Adds to the caller's account and shows it: BALANCE sc",
+        "!kprobe balance [SC to add]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Balance(long add = 0)
+    {
+        if (add != 0)
+            MyBankingSystem.ChangeBalance(Context.Caller.IdentityId, add);
+        MyBankingSystem.Static.TryGetAccountInfo(Context.Caller.IdentityId, out var account);
+        return $"BALANCE {account.Balance}";
     }
 
     [Command(
@@ -304,7 +503,7 @@ public sealed class ProbeCommands : CommandModule
             var grid in MyEntities
                 .GetEntities()
                 .OfType<MyCubeGrid>()
-                .Where(g => g.DisplayName is "Kiosk Hauler" or "Stranger Hauler")
+                .Where(g => g.DisplayName is "Kiosk Hauler" or "Stranger Hauler" or "Repair Target")
                 .ToList()
         )
         {

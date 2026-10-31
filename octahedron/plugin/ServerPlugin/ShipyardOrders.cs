@@ -35,13 +35,20 @@ using IMyTextSurfaceProvider = Sandbox.ModAPI.Ingame.IMyTextSurfaceProvider;
 
 namespace ServerPlugin;
 
-// A player loads a blueprint into a station's hologram table, reads the quote on the table's
-// large screen, the parts on the billboard next to it (ShipyardDetailsPanelName), and presses the
-// button next to it (ShipyardConfirmButtonName) to queue the ship at the station's shipyard;
-// pressing it again cancels their entry before its build starts. While a table holds a blueprint
-// only the player who loaded it can do either; anyone can remove the blueprint to get the table.
-// The queue and the build ledgers are kept by Builds, on the authority; the station's queue
-// panels show it.
+// A player loads a blueprint into a station's hologram table, which makes the table theirs until
+// the blueprint is gone: at most ShipyardTableMinutes, and nobody else can clear it. They read the
+// quote on the table's large screen, the parts on the billboard next to it
+// (ShipyardDetailsPanelName), and press the button next to it (ShipyardConfirmButtonName) to queue
+// the ship at the station's shipyard. Who presses decides what the press means, whoever holds the
+// table: it queues the ship of the presser's blueprint, or else cancels their queue entry or
+// running build, or else books them a repair slot. The queue and the build ledgers are kept by
+// Builds, on the authority; the station's queue panels show it.
+//
+// A repair slot is a queue entry too. When its turn comes the shipyard's welders go on and
+// ShipyardTurn gives its blocks to the player, who docks a ship with a repair projector and the
+// components. It ends when no building or welding happened for ShipyardRepairIdleMinutes, or at
+// the player's next press. The running slot's state is the queue's: a restart or a move of the
+// station to another node picks it up from there.
 //
 // A ship is a free build for a player under FreeBuildPcuLimit, once FreeBuildCooldownMinutes
 // passed since their last free build ended (FreePrints), without the blocks in
@@ -72,6 +79,7 @@ internal static class ShipyardOrders
     private const string ShootProperty = "ToolCore_Shoot";
     private const string TrackProperty = "ToolCore_TrackTargets";
     private const string Hydrogen = "Ore/Ice";
+    private const string RepairName = "Repair";
     private const int UpdateTicks = 600;
     private const int QuoteTicks = 60;
 
@@ -132,7 +140,24 @@ internal static class ShipyardOrders
 
         // The blueprint's name
         public string Name = "";
+
+        // The player canceled the running build
+        public bool Canceled;
     }
+
+    // A running repair slot, by shipyard entity id
+    private sealed class RepairSlot
+    {
+        public string Id;
+        public string Station;
+        public long Player;
+        public DateTime LastWork;
+    }
+
+    private static readonly Dictionary<long, RepairSlot> repairs = new();
+
+    // Repair slots that ended and aren't out of the queue yet
+    private static readonly HashSet<string> ending = new();
 
     // A finished ship docking to its arm's connector, by shipyard entity id
     private sealed class Dock
@@ -165,9 +190,9 @@ internal static class ShipyardOrders
     // Tables whose blueprint a player just loaded: the quote is for them
     private static readonly Dictionary<long, long> loaded = new();
 
-    // Who loaded each table's blueprint, and when; player 0 for one found loaded after a
-    // restart or a move of the station to this node
-    private static readonly Dictionary<long, (long Player, DateTime At)> holders = new();
+    // When each table's blueprint was loaded, or found loaded after a restart or a move of the
+    // station to this node. Who holds the table is the table's owner (Holder).
+    private static readonly Dictionary<long, DateTime> loadedAt = new();
 
     // The player who last queued a ship at each table: its empty screen offers them the cancel
     private static readonly Dictionary<long, long> placed = new();
@@ -433,9 +458,32 @@ internal static class ShipyardOrders
             .FirstOrDefault();
     }
 
-    private static bool IsTable(MyProjectorBase table) =>
+    // A held table is the player's block on the station's grid
+    internal static bool IsTable(MyProjectorBase table) =>
         table.BlockDefinition.Id.SubtypeName == Config.StarterShipTableSubtype
-        && MySession.Static.Players.IdentityIsNpc(table.OwnerId);
+        && (
+            MySession.Static.Players.IdentityIsNpc(table.OwnerId)
+            || table.CubeGrid.BigOwners.Any(MySession.Static.Players.IdentityIsNpc)
+        );
+
+    /// <summary>The player who holds the table, 0 when it is open to everyone.</summary>
+    internal static long Holder(MyProjectorBase table) =>
+        MySession.Static.Players.IdentityIsNpc(table.OwnerId) ? 0 : table.OwnerId;
+
+    // Only the player has the table's terminal now
+    private static void Hold(MyProjectorBase table, long player) =>
+        ShipyardTurn.SetOwner(table, player, MyOwnershipShareModeEnum.None);
+
+    // Back to OCT and open to everyone
+    private static void Open(MyProjectorBase table)
+    {
+        loadedAt.Remove(table.EntityId);
+        ShipyardTurn.SetOwner(
+            table,
+            table.CubeGrid.BigOwners.First(MySession.Static.Players.IdentityIsNpc),
+            MyOwnershipShareModeEnum.All
+        );
+    }
 
     // The button gets a toolbar item, its own On switch, so that clients let players press it
     private static void ArmButton(MyButtonPanel button)
@@ -483,7 +531,8 @@ internal static class ShipyardOrders
         var table = StarterShip.FindTable(character, tableName, Config);
         if (table == null || TableHologram.Blueprint(table) == null)
             return "Stand by a station's hologram table with a blueprint loaded.";
-        holders[table.EntityId] = (identityId, DateTime.UtcNow);
+        Hold(table, identityId);
+        loadedAt[table.EntityId] = DateTime.UtcNow;
         return $"You hold the blueprint of hologram table {table.EntityId}.";
     }
 
@@ -496,7 +545,9 @@ internal static class ShipyardOrders
         var table = StarterShip.FindTable(character, tableName, Config);
         if (table == null || TableHologram.Blueprint(table) == null)
             return "Stand by a station's hologram table with a blueprint loaded.";
-        ((Sandbox.ModAPI.IMyProjector)table).SetProjectedGrid(null);
+        if (Holder(table) is var holder && holder != 0 && holder != identityId)
+            return $"{Name(holder)} holds this hologram table.";
+        ClearTable(table);
         return $"The blueprint of hologram table {table.EntityId} is removed.";
     }
 
@@ -511,7 +562,7 @@ internal static class ShipyardOrders
             ((MyTextPanelComponent)provider.GetSurface(index)).Text;
         var panel = DetailsPanel(table);
         var how = panel == null ? null : (IMyTextSurfaceProvider)panel;
-        var holder = holders.TryGetValue(table.EntityId, out var h) ? Name(h.Player) : "none";
+        var holder = Holder(table) is var player && player != 0 ? Name(player) : "none";
         var queue = Grids(table.CubeGrid)
             .SelectMany(g => g.GetFatBlocks<MyTextPanel>())
             .FirstOrDefault(p =>
@@ -530,7 +581,7 @@ internal static class ShipyardOrders
             + (queue == null ? "none" : Screen(queue, 0));
     }
 
-    /// <summary>A press of the table's button: cancels the player's queue entry, shows their quote or orders. With a blueprint on the table, only for the player who loaded it.</summary>
+    /// <summary>A press of the table's button. Who presses decides what it means: the presser's own queue entry or running build is canceled, else the blueprint they hold is ordered, else they get a repair slot. Nobody else's blueprint or queue entry is touched.</summary>
     public static void Press(long identityId, MyProjectorBase table, Action<string> tell)
     {
         if (Config.ShipyardOrderMinutes <= 0)
@@ -544,34 +595,20 @@ internal static class ShipyardOrders
             tell("Spawn first, then order at a hologram table.");
             return;
         }
-        if (TableHologram.Blueprint(table) != null)
+        var station = StationOf(table.CubeGrid);
+        var shipyard = FindShipyard(table);
+        if (station == null || shipyard == null)
         {
-            if (!holders.TryGetValue(table.EntityId, out var holder))
-                holder = (0, DateTime.UtcNow);
-            if (holder.Player != 0 && holder.Player != identityId)
-            {
-                tell(
-                    $"{Name(holder.Player)} loaded this blueprint, only they can order it or cancel "
-                        + "for now. Anyone can remove it in the hologram table's terminal."
-                );
-                return;
-            }
-            // Loaded before a restart or a move of the station to this node: the presser's now
-            holders[table.EntityId] = (identityId, holder.At);
-        }
-        var plan = MakePlan(identityId, table);
-        if (plan.Station == null || plan.Shipyard == null)
-        {
-            tell(plan.Error);
+            tell("This station has no shipyard.");
             return;
         }
-        if (!Plugin.Simulated(table.CubeGrid) || !Plugin.Simulated(plan.Shipyard))
+        if (!Plugin.Simulated(table.CubeGrid) || !Plugin.Simulated(shipyard))
         {
             tell("The station is busy, try again in a few seconds.");
             return;
         }
         Builds.Read(
-            new BuildRequest { Verb = BuildVerb.Queue, Station = plan.Station },
+            new BuildRequest { Verb = BuildVerb.Queue, Station = station },
             (text, error) =>
             {
                 if (text == null)
@@ -580,29 +617,236 @@ internal static class ShipyardOrders
                     return;
                 }
                 var mine = DecodeQueue(text).FirstOrDefault(o => o.Player == identityId);
-                if (mine == null && plan.Blueprint == null)
-                    tell(plan.Error);
-                else if (mine == null)
-                    Place(plan, tell);
-                else if (mine.Started)
-                    tell($"'{mine.Ship}' is being built for you, it can't be canceled now.");
+                var holder = Holder(table);
+                if (mine != null)
+                    Cancel(mine, station, shipyard, tell);
+                else if (
+                    TableHologram.Blueprint(table) != null
+                    && (holder == 0 || holder == identityId)
+                )
+                {
+                    // Loaded before a restart or a move of the station to this node: the presser's now
+                    Hold(table, identityId);
+                    Place(MakePlan(identityId, table), tell);
+                }
                 else
-                    Builds.Execute(
-                        Guid.NewGuid(),
-                        new BuildRequest
-                        {
-                            Verb = BuildVerb.Cancel,
-                            Station = plan.Station,
-                            Player = identityId,
-                        },
-                        (_, message) =>
-                        {
-                            tell(message);
-                            Refresh(plan.Station);
-                        }
-                    );
+                    BookRepair(identityId, station, table, tell);
             }
         );
+    }
+
+    private static void Cancel(
+        BuildOrder entry,
+        string station,
+        MyCubeGrid shipyard,
+        Action<string> tell
+    )
+    {
+        if (!entry.Started)
+            Builds.Execute(
+                Guid.NewGuid(),
+                new BuildRequest
+                {
+                    Verb = BuildVerb.Cancel,
+                    Station = station,
+                    Player = entry.Player,
+                },
+                (_, message) =>
+                {
+                    tell(message);
+                    Refresh(station);
+                }
+            );
+        else if (repairs.TryGetValue(shipyard.EntityId, out var slot) && slot.Id == entry.Id)
+            EndRepair(shipyard, slot, "you canceled it");
+        else if (orders.TryGetValue(shipyard.EntityId, out var order) && order.Id == entry.Id)
+        {
+            order.Canceled = order.Refund = true;
+            Scrap(shipyard, order);
+            End(shipyard, order, "canceled");
+        }
+        else if (docks.ContainsKey(shipyard.EntityId))
+            tell($"'{entry.Ship}' is finished, it can't be canceled now.");
+        else
+            tell("The shipyard is busy, try again in a few seconds.");
+    }
+
+    // --- repair slots ---
+
+    private static void BookRepair(
+        long player,
+        string station,
+        MyProjectorBase table,
+        Action<string> tell
+    )
+    {
+        if (Config.ShipyardRepairIdleMinutes <= 0)
+        {
+            tell("Load a blueprint into the hologram table first.");
+            return;
+        }
+        Builds.Execute(
+            Guid.NewGuid(),
+            new BuildRequest
+            {
+                Verb = BuildVerb.Order,
+                Station = station,
+                Player = player,
+                Ship = RepairName,
+                Repair = true,
+            },
+            (ok, message) =>
+            {
+                if (!ok)
+                {
+                    tell(message);
+                    return;
+                }
+                tell(
+                    "You have booked a Repair slot in this station's shipyard queue, as you have no "
+                        + "blueprint on the hologram table. Press the button again to cancel it."
+                );
+                placed[table.EntityId] = player;
+                Refresh(station);
+            }
+        );
+    }
+
+    private static void BeginRepair(string station, MyCubeGrid shipyard, BuildOrder next)
+    {
+        if (
+            orders.ContainsKey(shipyard.EntityId)
+            || docks.ContainsKey(shipyard.EntityId)
+            || !starting.Add(shipyard.EntityId)
+        )
+            return;
+        Builds.Execute(
+            Guid.NewGuid(),
+            new BuildRequest
+            {
+                Verb = BuildVerb.Start,
+                Id = next.Id,
+                Station = station,
+            },
+            (ok, message) =>
+            {
+                starting.Remove(shipyard.EntityId);
+                if (!ok)
+                {
+                    Plugin.Log.Warning($"Repair slot {next.Id} did not start: {message}");
+                    return;
+                }
+                RunRepair(station, shipyard, next);
+                Tell(
+                    next.Player,
+                    $"{shipyard.DisplayName} is yours and your faction's now: dock your ship with its "
+                        + "repair projector and components to one of its connectors. The slot ends after "
+                        + $"{Config.ShipyardRepairIdleMinutes} min without building or welding, or when you "
+                        + "press the button again. Whatever you leave in its containers then goes to your docked ship."
+                );
+            }
+        );
+    }
+
+    // Also picks a running slot up after a restart or a move of the station to this node
+    private static void RunRepair(string station, MyCubeGrid shipyard, BuildOrder entry)
+    {
+        ShipyardTurn.Give(shipyard, entry.Player);
+        repairs[shipyard.EntityId] = new RepairSlot
+        {
+            Id = entry.Id,
+            Station = station,
+            Player = entry.Player,
+            LastWork = DateTime.UtcNow,
+        };
+        lost.Remove(shipyard.EntityId);
+        Welders(shipyard, true);
+        Plugin.Log.Info(
+            $"Repair slot {entry.Id} of {Name(entry.Player)} runs at {shipyard.DisplayName}"
+        );
+    }
+
+    // The welders of a shipyard in a repair slot built or welded something
+    internal static void Worked(MyEntity tool)
+    {
+        if (
+            repairs.Count > 0
+            && (tool as MyCubeBlock)?.CubeGrid is { } grid
+            && repairs.TryGetValue(grid.EntityId, out var slot)
+        )
+            slot.LastWork = DateTime.UtcNow;
+    }
+
+    private static void EndRepair(MyCubeGrid shipyard, RepairSlot slot, string why)
+    {
+        repairs.Remove(shipyard.EntityId);
+        Welders(shipyard, false);
+        var lostItems = Clear(shipyard, slot.Player);
+        ShipyardTurn.Take(shipyard);
+        ending.Add(slot.Id);
+        Plugin.Log.Info(
+            $"Repair slot {slot.Id} of {Name(slot.Player)} at {shipyard.DisplayName} ended: {why}"
+        );
+        Builds.Execute(
+            Guid.NewGuid(),
+            new BuildRequest
+            {
+                Verb = BuildVerb.Finish,
+                Id = slot.Id,
+                Station = slot.Station,
+            },
+            (ok, answer) =>
+            {
+                ending.Remove(slot.Id);
+                if (!ok)
+                    Plugin.Log.Error($"Repair slot {slot.Id} could not finish: {answer}");
+                Tell(
+                    slot.Player,
+                    $"Your repair slot at {shipyard.DisplayName} ended: {why}. A ship docked to it floats free."
+                        + (
+                            lostItems
+                                ? " What your docked ship had no room for was left in the shipyard and is gone."
+                                : ""
+                        )
+                );
+                Refresh(slot.Station);
+            }
+        );
+    }
+
+    // Empties the shipyard's containers and welders for the next order: what is in them goes to
+    // the player's docked ships. Returns whether some of it had no room there.
+    private static bool Clear(MyCubeGrid shipyard, long player)
+    {
+        var cargo = shipyard
+            .GetFatBlocks<MyShipConnector>()
+            .Where(c => c.Connected && c.Other != null)
+            .SelectMany(c => Grids(c.Other.CubeGrid))
+            .Distinct()
+            .SelectMany(g => g.GetFatBlocks<MyCargoContainer>())
+            .Where(c => c.OwnerId == player)
+            .Select(c => c.GetInventory())
+            .ToList();
+        var lostSome = false;
+        foreach (
+            var from in Containers(shipyard).Concat(Beams(shipyard).Select(b => b.GetInventory()))
+        )
+        foreach (var item in from.GetItems().ToList())
+        {
+            var id = item.Content.GetObjectId();
+            var left = item.Amount;
+            foreach (var to in cargo)
+            {
+                var amount = MyFixedPoint.Min(left, to.ComputeAmountThatFits(id));
+                if (amount <= 0)
+                    continue;
+                to.AddItems(amount, item.Content);
+                left -= amount;
+            }
+            lostSome |= left > 0;
+            from.RemoveItems(item.ItemId);
+        }
+        return lostSome;
     }
 
     private static void Place(Plan plan, Action<string> tell)
@@ -714,7 +958,8 @@ internal static class ShipyardOrders
             if (identity == 0)
                 return;
             loaded[__instance.EntityId] = identity;
-            holders[__instance.EntityId] = (identity, DateTime.UtcNow);
+            loadedAt[__instance.EntityId] = DateTime.UtcNow;
+            Hold(__instance, identity);
         }
     }
 
@@ -735,7 +980,7 @@ internal static class ShipyardOrders
                 plan.Blocker =
                     mine != null
                         ? mine.Started
-                            ? $"'{mine.Ship}' is being built for you, one ship at a time."
+                            ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
                             : $"'{mine.Ship}' is in the queue for you. Press the button to cancel it first."
                         : queue.Count >= Config.ShipyardQueueMax
                             ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
@@ -973,7 +1218,7 @@ internal static class ShipyardOrders
                 )
                 {
                     Plugin.Log.Info($"Hologram table {tableId}: blueprint removed");
-                    holders.Remove(tableId);
+                    Open(table);
                     quotes.Remove(tableId);
                     if (StationOf(table.CubeGrid) is { } station)
                         Refresh(station);
@@ -996,8 +1241,8 @@ internal static class ShipyardOrders
         }
     }
 
-    // A table's blueprint is cleared when the player who loaded it leaves the station, or
-    // ShipyardTableMinutes after it was loaded
+    // A table's blueprint is cleared and the table opened when the player who holds it leaves the
+    // station, or ShipyardTableMinutes after it was loaded
     private static void Expire(List<MyProjectorBase> tables)
     {
         BoundingSphereD? sphere = null;
@@ -1007,19 +1252,20 @@ internal static class ShipyardOrders
                 continue;
             if (TableHologram.Blueprint(table) == null)
             {
-                holders.Remove(table.EntityId);
+                Open(table);
                 continue;
             }
-            if (!holders.TryGetValue(table.EntityId, out var holder))
-                holders[table.EntityId] = holder = (0, DateTime.UtcNow);
+            if (!loadedAt.TryGetValue(table.EntityId, out var at))
+                loadedAt[table.EntityId] = at = DateTime.UtcNow;
+            var holder = Holder(table);
             string why = null;
-            if (DateTime.UtcNow - holder.At >= TimeSpan.FromMinutes(Config.ShipyardTableMinutes))
+            if (DateTime.UtcNow - at >= TimeSpan.FromMinutes(Config.ShipyardTableMinutes))
                 why = $"loaded {Config.ShipyardTableMinutes} min ago";
-            else if (holder.Player != 0)
+            else if (holder != 0)
             {
                 sphere ??= StationSphere(table.CubeGrid);
-                if (Left(holder.Player, sphere.Value))
-                    why = $"{Name(holder.Player)} left the station";
+                if (Left(holder, sphere.Value))
+                    why = $"{Name(holder)} left the station";
             }
             if (why == null)
                 continue;
@@ -1050,9 +1296,9 @@ internal static class ShipyardOrders
 
     private static void ClearTable(MyProjectorBase table)
     {
-        holders.Remove(table.EntityId);
         quotes.Remove(table.EntityId);
         ((Sandbox.ModAPI.IMyProjector)table).SetProjectedGrid(null);
+        Open(table);
         ShowDetails(table, DetailsIdle);
         WriteTable(table, TableIdle);
     }
@@ -1083,10 +1329,26 @@ internal static class ShipyardOrders
         if (!Plugin.Simulated(shipyard))
         {
             orders.Remove(shipyard.EntityId);
+            repairs.Remove(shipyard.EntityId);
             return;
         }
         if (docks.ContainsKey(shipyard.EntityId))
             return;
+        if (repairs.TryGetValue(shipyard.EntityId, out var slot))
+        {
+            if (
+                DateTime.UtcNow - slot.LastWork
+                >= TimeSpan.FromMinutes(Config.ShipyardRepairIdleMinutes)
+            )
+                EndRepair(
+                    shipyard,
+                    slot,
+                    $"no building or welding for {Config.ShipyardRepairIdleMinutes} min"
+                );
+            else
+                Welders(shipyard, true);
+            return;
+        }
         orders.TryGetValue(shipyard.EntityId, out var order);
         var projector = ShipyardArm
             .Rotors(shipyard)
@@ -1219,10 +1481,26 @@ internal static class ShipyardOrders
                 ShowQueue(grids, shipyard, queue);
                 foreach (var table in tables)
                     ShowEmpty(table, queue);
+                // A turn the queue doesn't know of, as after a crash between the two saves
+                if (
+                    !queue.Any(o => o.Repair && o.Started)
+                    && !repairs.ContainsKey(shipyard.EntityId)
+                    && !starting.Contains(shipyard.EntityId)
+                    && ShipyardTurn.Given(shipyard)
+                )
+                    ShipyardTurn.Take(shipyard);
                 if (queue.Count == 0)
                     return;
-                if (queue[0].Started)
-                    Lost(shipyard, queue[0]);
+                var next = queue[0];
+                if (next.Repair && next.Started)
+                {
+                    if (!repairs.ContainsKey(shipyard.EntityId) && !ending.Contains(next.Id))
+                        RunRepair(station, shipyard, next);
+                }
+                else if (next.Repair)
+                    BeginRepair(station, shipyard, next);
+                else if (next.Started)
+                    Lost(shipyard, next);
                 else
                     Start(station, shipyard);
             }
@@ -1247,6 +1525,13 @@ internal static class ShipyardOrders
         int place = 1;
         foreach (var o in queue)
         {
+            if (o.Repair)
+            {
+                text.AppendLine(
+                    $"{place++}. {RepairName} for {Name(o.Player)}: {(o.Started ? "repairing" : "waiting")}"
+                );
+                continue;
+            }
             var state = o.Started
                 ? running != null
                     ? $"building, done by {running.Ends:HH:mm} UTC at the latest"
@@ -1258,7 +1543,8 @@ internal static class ShipyardOrders
                 $"{place++}. '{o.Ship}' ({o.Pcu:N0} PCU) for {Name(o.Player)}: {state}"
             );
         }
-        var obstacle = running == null ? Obstacle(shipyard) : null;
+        var obstacle =
+            running == null && queue.FirstOrDefault()?.Repair != true ? Obstacle(shipyard) : null;
         if (obstacle != null && queue.Count > 0)
             text.AppendLine()
                 .AppendLine($"Waiting for '{obstacle.DisplayName}' to leave the shipyard.");
@@ -1601,7 +1887,14 @@ internal static class ShipyardOrders
         var stalled =
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
         var message =
-            order.Refund
+            order.Canceled
+                ? $"'{name}' is canceled and removed from {shipyard.DisplayName}"
+                    + (
+                        order.Free
+                            ? ", and the free build doesn't count."
+                            : ", its components are back in the ledger and the labor fee is paid back."
+                    )
+            : order.Refund
                 ? $"{stalled}, with {order.Missing} missing. The ship was removed"
                     + (
                         order.Free
@@ -1620,7 +1913,7 @@ internal static class ShipyardOrders
                 + "The unfinished ship is yours.";
         if (!order.Free)
         {
-            if (left.Count > 0 && order.Missing == null)
+            if (left.Count > 0 && order.Missing == null && !order.Refund)
                 message += " The leftover components are back in the ledger.";
             if (order.Hydrogen > 0 && !gone)
                 message +=
@@ -1709,6 +2002,9 @@ internal static class ShipyardOrders
                 );
             if (docks.TryGetValue(shipyard.EntityId, out var dock))
                 yield return $"  '{dock.Order.Name}' docking, {dock.Ticks} ticks left";
+            if (repairs.TryGetValue(shipyard.EntityId, out var slot))
+                yield return $"  repair slot of {Name(slot.Player)}, "
+                    + $"{(DateTime.UtcNow - slot.LastWork).TotalSeconds:0} s since the last work";
             if (!orders.TryGetValue(shipyard.EntityId, out var order))
                 continue;
             var text = $"  '{order.Name}' for {Name(order.Player)} until {order.Ends:HH:mm:ss}";
@@ -2992,7 +3288,7 @@ internal static class ShipyardOrders
         shipyard.GetFatBlocks<MyCargoContainer>().Select(c => c.GetInventory());
 
     // The shipyard's ToolCore tools, its OmniArc welders
-    private static IEnumerable<MyFunctionalBlock> Beams(MyCubeGrid shipyard) =>
+    internal static IEnumerable<MyFunctionalBlock> Beams(MyCubeGrid shipyard) =>
         shipyard
             .GetFatBlocks<MyFunctionalBlock>()
             .Where(b => ((IMyTerminalBlock)b).GetProperty(ShootProperty) != null);

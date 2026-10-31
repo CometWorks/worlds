@@ -229,8 +229,6 @@ def paid_build(remote) -> None:
     check("is in the queue" in started, f"the second press orders: {started}")
     builds = wait_chat(remote, f"builds '{SHIP}' for you now", 60, mark)
     check(builds is not None, f"the build starts at once: {builds}")
-    busy = press(remote)
-    check("can't be canceled now" in busy, f"a press while it builds: {busy}")
     now, _ = balances(remote)
     check(now == mine - cost, f"the player paid the quote: {mine} -> {now}, {cost}")
     check(

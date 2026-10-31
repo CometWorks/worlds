@@ -139,15 +139,15 @@ SHIP_BUILD_DETAILS = "Billboard LCD Ship Build Details"
 HOW_TO_ORDER = """Load a blueprint into
 the holo table in its
 terminal, then check
-the parts list. Press
-the button to order,
-again to cancel.
-Only you can press it
-until the blueprint is
-removed. Anyone can
-remove it in terminal.
-The queue holds at
-most 6 ships."""
+the parts list. You
+have 3 minutes to
+press the button to
+order, again to cancel.
+Press it without a
+blueprint to book a
+Repair slot, again to
+cancel. It ends after 5
+idle minutes."""
 # Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
 # pressurized back half: behind the station and away from the planet, which keeps it off the
 # lanes. The pair is centered on the safe zone, and spread apart as far as their block bounds

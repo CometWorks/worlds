@@ -610,6 +610,82 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         )
     );
     Check(started.Started && started.Exempt, "wire format: started and exempt");
+    var repairSlot = BuildBook.DecodeOrder(
+        BuildBook.EncodeOrder(
+            new BuildOrder
+            {
+                Id = "b1",
+                Station = A,
+                Player = 1,
+                Ship = "Repair",
+                Started = true,
+                Repair = true,
+            },
+            blueprint: false
+        )
+    );
+    Check(repairSlot.Repair && repairSlot.Started, "wire format: a started repair slot");
+    Check(
+        BuildRequest
+            .Decode(new BuildRequest { Verb = BuildVerb.Order, Repair = true }.Encode())
+            .Repair,
+        "request: repair on the wire"
+    );
+    var slots = new BuildBook();
+    var slotWorld = new FakeWorld();
+    BuildResult Slot(long player, string station = A) =>
+        slots.Order(
+            slotWorld,
+            null,
+            s,
+            new BuildOrder
+            {
+                Station = station,
+                Player = player,
+                Ship = "Repair",
+                Repair = true,
+            },
+            new Dictionary<string, long>(),
+            new Dictionary<string, long>(),
+            0
+        );
+    Check(Slot(1).Ok, "repair: a slot is booked");
+    Check(!Slot(1).Ok, "repair: one entry a player at a station");
+    Check(Slot(1, B).Ok, "repair: another station's slot, as a slot isn't a free ship");
+    Check(
+        slots
+            .Order(
+                slotWorld,
+                null,
+                s,
+                new BuildOrder
+                {
+                    Station = "Gamma Station",
+                    Player = 1,
+                    Ship = "Free",
+                },
+                new Dictionary<string, long>(),
+                new Dictionary<string, long>(),
+                0
+            )
+            .Ok,
+        "repair: a free ship next to the player's slots"
+    );
+    Check(Slot(2).Ok && Slot(3).Ok && !Slot(4).Ok, "repair: slots count in the queue's limit");
+    var booked = slots.Queue(A)[0];
+    Check(slots.Start(slotWorld, s, booked.Id).Ok, "repair: it starts");
+    Check(slots.Next(A) == null, "repair: nothing next while it runs");
+    Check(!slots.Cancel(slotWorld, A, 1).Ok, "repair: the book doesn't cancel a running one");
+    Check(
+        slots.Finish(slotWorld, s, booked.Id, new Dictionary<string, long>(), 0, false).Ok
+            && slots.Queue(A).Count == 2,
+        "repair: it finishes"
+    );
+    Check(slots.Cancel(slotWorld, A, 2).Ok, "repair: a waiting one is canceled");
+    Check(
+        BuildBook.Deserialize(slots.Serialize()).Queue(A).Single().Repair,
+        "repair: saved with the book"
+    );
     Check(
         !BuildBook
             .DecodeOrder(BuildBook.EncodeOrder(new BuildOrder { Started = true }, false))
