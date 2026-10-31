@@ -2388,6 +2388,15 @@ internal static class ShipyardOrders
             Plugin.Log.Info(
                 $"{prefix} {beams.Count} welders, {beams.Count(b => b.Enabled)} on, {beams.Count(b => b.IsWorking)} working"
             );
+            var held = new Dictionary<string, double>();
+            foreach (var item in beams.SelectMany(b => b.GetInventory().GetItems()))
+                held[item.Content.SubtypeName] =
+                    (held.TryGetValue(item.Content.SubtypeName, out var had) ? had : 0)
+                    + (double)item.Amount;
+            Plugin.Log.Info(
+                $"{prefix} welders hold {string.Join(", ", held.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value:0}"))}, "
+                    + $"{beams.Sum(b => (double)b.GetInventory().CurrentVolume):0.##} of {beams.Sum(b => (double)b.GetInventory().MaxVolume):0.##} m³"
+            );
             foreach (var block in blocks.Where(b => !b.IsFullIntegrity).Take(20))
             {
                 var needs = new Dictionary<string, int>();

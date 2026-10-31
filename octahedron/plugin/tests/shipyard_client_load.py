@@ -103,6 +103,8 @@ def main() -> int:
         for stalled in re.findall(r".*Shipyard order \S+ stalled:.*", log):
             print(stalled, flush=True)
         check(line, f"re-pasted: {line and line[0]} {ended and ended[0]}")
+        if not line:
+            return 1
         ship = int(line[1])
         time.sleep(20)
         cockpit = ap.find_cockpit(remote, ship)
