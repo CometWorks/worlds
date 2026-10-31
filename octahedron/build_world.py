@@ -124,11 +124,10 @@ LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
 FREE_TOOLS = "Free Tools"
 FREE_TOOLS_BLUEPRINT_NAME = "* Toolbox - Station - Hidden Special (shared)"
 FREE_TOOLS_COUNT = 4
-# What the Octahedron plugin looks up by name on every station (its kiosk, the shipyard's
-# hologram table, button, queue panel and bill of materials billboard). A new blueprint that
-# lost one fails here instead of silently losing the feature.
+# What the Octahedron plugin looks up by name on every station for the shipyard: its hologram
+# table, button, queue panel and bill of materials billboard. A new blueprint that lost one
+# fails here instead of silently losing the feature.
 PLUGIN_BLOCKS = (
-    "LCD Panel - Station Lounge StationStorefront",
     "Console Block - Station ShipyardProjection",
     "Button Panel - Station ShipyardConfirm",
     "Text Panel - Station ShipyardQueue",

@@ -537,10 +537,12 @@ the start of it, and amounts are in units:
 
 Players use the station services on the station's kiosk, a touch screen; the
 chat commands are for admins. A kiosk is a text panel on a station's grids named
-`KioskBlockName` (`LCD Panel - Station Lounge StationStorefront`, one per
-station in the current blueprint). The station blueprints must keep the kiosks
-clear of the landing pads, so landing ships hit neither the screen nor the
-player in front of it.
+`KioskBlockName` (`LCD Panel - Station Lounge StationStorefront`). The current
+station blueprint has none: a Store block took its place, which the services move
+to next (SE-833). Until then a world built from it has no kiosks, and
+`tests/test_kiosks.py` and `tests/test_kiosk_screen.py` need a world from the
+blueprint before SE-832. The station blueprints must keep the kiosks clear of the
+landing pads, so landing ships hit neither the screen nor the player in front of it.
 
 The screens come from the Octahedron Kiosk client mod (`../kiosk-mod`), built on
 TouchScreenAPI (Workshop 2668820525); both are in the world's mods, the kiosk
