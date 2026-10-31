@@ -336,7 +336,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   get less. A station with too little of a component refuses the order.
 - On order the plugin takes the money and the stock (a higher price refuses the
   order and shows the new quote) and queues the order. Canceling gives all of it
-  back, at what was paid, and OCT its stock.
+  back, at what was paid, and OCT its stock. Hydrogen drained from a docked ship
+  can't go back, so the ice for it is sold for the player.
 - The queue of each shipyard holds at most `ShipyardQueueMax` (6) orders, the one
   being built included, one per player: more don't fit the queue panel above the
   table. A full queue shows on the table's screen and refuses the press. The
