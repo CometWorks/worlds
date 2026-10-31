@@ -79,6 +79,9 @@ def main() -> int:
     remote = rig.start_client()
     try:
         rig.ensure_character(remote)
+        # An admin ignoring PCU limits orders any ship as a free build
+        remote.set_admin_flag("ignorePcu", True)
+        time.sleep(3)  # the server gets the flag with the admin menu's event
         tc.with_config(remote, FreeBuildPcuLimit=100000, ShipyardRepasteShips="true")
         arm.at_table(remote, "Gamma")
         load(remote)

@@ -1804,6 +1804,16 @@ internal static class ShipyardOrders
             $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
                 + $"missing {order.Missing}: {(order.Refund ? "removed and refunded" : "delivered")}"
         );
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id}: built so far "
+                + string.Join(
+                    ", ",
+                    Grids(order.Projector.CubeGrid)
+                        .Select(g =>
+                            $"{g.DisplayName} {g.GetBlocks().Count(b => b.IsFullIntegrity)}/{g.BlocksCount}"
+                        )
+                )
+        );
         if (order.Refund)
             Scrap(shipyard, order);
         End(shipyard, order, "stalled");
