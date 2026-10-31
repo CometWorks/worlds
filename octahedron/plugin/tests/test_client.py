@@ -322,7 +322,6 @@ def main() -> None:
     (rig.SERVER_DATA / "Hangar.cfg").write_text(HANGAR_CONFIG, encoding="utf-8")
     rig.prepare_server(extra_dev_folders=[HANGAR])
     rig.start_server()
-    server_ready = time.monotonic()
     log("server ready")
     remote = rig.start_client()
     home = remote.get_character()["position"]
@@ -333,11 +332,13 @@ def main() -> None:
     test_group_cap(remote, home)
     test_character_edge(remote, home)
 
-    # Edge 440 out reaches the braking zone about 10 minutes after the start
-    while time.monotonic() - server_ready < 720:
-        check_edge(edge_report(remote))
-        time.sleep(30)
-    check_edge(edge_report(remote))
+    def edge_done() -> bool:
+        report = edge_report(remote)
+        check_edge(report)
+        km, out, _ = report.get("Edge 480 out", (0.0, 0.0, 0.0))
+        return "Edge 445 out" in report and km > 499.9 and out < 1
+
+    rig.wait_until(edge_done, 600, "a grid entering and one braked at the edge", 15)
 
     rig.stop_client()
     rig.stop_server()
