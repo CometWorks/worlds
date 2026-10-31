@@ -16,6 +16,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 import time
 import urllib.parse
@@ -45,6 +46,7 @@ NODES = ("node-1", "node-2")
 PROCESSES = ("wa-1", *NODES)
 RTS, TRADE_LANES = 1359618037, 3816175430
 RTS_CONFIG = rig.PLUGIN.parent / "config/relative-top-speed.xml"
+RTS_STORAGE = f"Storage/{RTS}.sbm_RelativeTopSpeed"
 BLUEPRINTS = Path(os.environ["TOP_SPEED_BLUEPRINTS"])
 # In empty space, far enough from the 450 km braking sphere for 60 km of flight
 SHIPS = (
@@ -155,12 +157,17 @@ def run(bench) -> None:
     cluster.prepare(wipe=True)
     for process in PROCESSES:
         link_mods(bench.run_root / f"{process}-data" / "Mods")
+        # The bench's world copy leaves Storage behind. A file in the mod's local storage counts
+        # when the world has none, and the mod then writes it to the world
+        storage = bench.run_root / f"{process}-data" / RTS_STORAGE
+        storage.mkdir(parents=True, exist_ok=True)
+        shutil.copy(RTS_CONFIG, storage / "RelativeTopSpeed.cfg")
     cluster.start(list(PROCESSES))
     cluster.wait_ready(nodes=list(PROCESSES))
     for process in PROCESSES:
         configs = list(
             (bench.run_root / f"{process}-data" / "Saves").glob(
-                f"*/Storage/{RTS}.sbm_RelativeTopSpeed/RelativeTopSpeed.cfg"
+                f"*/{RTS_STORAGE}/RelativeTopSpeed.cfg"
             )
         )
         check(
@@ -195,15 +202,16 @@ def run(bench) -> None:
 
         def on_client():
             try:
-                return api.get_flight_state(grid)
-            except Exception:  # noqa: BLE001 -- not streamed to the client yet
+                return api.get_grid(grid)
+            except Exception as error:  # noqa: BLE001 -- not streamed to the client yet
+                print(f"{label} not on the client yet: {error}", flush=True)
                 return None
 
         wait_until(on_client, 120, f"the {label} on the client")
         seat = enter_cockpit(api, grid)
         check(f"the client sits in the {label}", seat.get("state") == "sitting", seat)
         bench.ensure_gameplay_focus(CLIENT_ID)
-        state = api.get_flight_state(grid)
+        state = api.get_grid(grid)
         bench.record(f"state-{section}", state)
 
         api.set_input_state(keys=["W"])
@@ -214,7 +222,7 @@ def run(bench) -> None:
                 seen = server_speed(bench)
                 if seen is not None:
                     fastest_on_server[0] = max(fastest_on_server[0], seen)
-            return api.get_flight_state(grid)["speed"]
+            return api.get_grid(grid)["speed"]
 
         samples = fly(read, 180)
         api.clear_input_state()
