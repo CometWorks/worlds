@@ -498,7 +498,30 @@ def turn_on(remote, grid_id: int, cell: tuple) -> None:
     check(f"the client turns it on at {cell}", value is True, value)
 
 
+prepare_client = rig.prepare_client
+
+
+def client_with_mgp() -> None:
+    """Players of this world have Multigrid Projector: the server's copy builds a projected block
+    only for a client that has it too"""
+    prepare_client()
+    legacy = rig.PULSAR / "Legacy"
+    (legacy / "Profiles" / "Current.xml").write_text(
+        rig.profile_xml(
+            ["remote", "direct-transport", "viktor-ferenczi/se-multigrid-projector"]
+        ),
+        encoding="utf-8",
+    )
+    rig.register_source(
+        legacy / "Sources" / "sources.xml",
+        pl.MGP[0],
+        pl.MGP[1],
+        "MultigridProjectorClient.xml",
+    )
+
+
 def run() -> None:
+    rig.prepare_client = client_with_mgp
     rig.stop_client()
     rig.stop_server()
     prepare()
@@ -520,10 +543,11 @@ def run() -> None:
     controller, paste_id, turret = hand_and_paste(remote, build_rig)
     welded = weld(remote, PROJECTION_RIG)
     built(remote, "welded from a projection", welded, 5)
-    welded_cell = tuple(targeting_cubes(remote, welded)[0]["min"])
+    welded_cubes = targeting_cubes(remote, welded)
     turn_on(remote, build_rig, controller)
     turn_on(remote, paste_id, turret)
-    turn_on(remote, welded, welded_cell)
+    if welded_cubes:
+        turn_on(remote, welded, tuple(welded_cubes[0]["min"]))
     order_and_starter(remote)
 
     expected = {
