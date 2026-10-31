@@ -232,7 +232,8 @@ def add_grids() -> None:
         )
         grids.append(
             xml.replace("<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>")
-            if name == "Static Hull"
+            # A movable grid in a zone stays awake and its partition never sleeps
+            if name in ("Static Hull", "Zone Wreck")
             else xml
         )
     grids.append(zone_around(far_point(where, FAR.index("Zone Wreck"))))
