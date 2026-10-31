@@ -2,6 +2,8 @@
 a paste and blocks placed by hand, the blueprint having the setting on. A block the client turns on keeps it
 through a handover in both directions and a graceful cluster restart, and its neighbors stay off.
 
+Run on polaris on 2026-10-31: 13/13 checks.
+
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/target_neutrals_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 
 The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one headless client.

@@ -12,6 +12,8 @@ is in tests/target_neutrals_cluster.py.
 The client doesn't weld a projection itself here: with Multigrid Projector on the server, its
 requests from this rig build nothing. Its weld passes through the same seam as the shipyard's.
 
+Run on polaris on 2026-10-31: 23/23 checks in 17 minutes.
+
     uv run --no-project --with httpx python tests/test_target_neutrals.py
 
 Needs what tests/test_shipyard_order.py needs.

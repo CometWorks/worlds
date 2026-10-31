@@ -985,8 +985,9 @@ Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 blocks to their functional level, two grids merging and a rotor attaching a
 head, each stopped by the cap, next to a copy built by nobody that isn't.
 `tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
-with the client, with the rule off too, and a test mod's turret whose definition has
-it on, and reads the setting on the client and in the saved world, across a restart.
+with the client, welding them through shipyard orders, with the rule off too, and a
+test mod's turret whose definition has it on, and reads the setting on the client
+and in the saved world, across a restart.
 `tests/target_neutrals_cluster.py` does it on a cluster with a shipyard order, a paste
 and blocks placed by hand, and keeps a player's later choice through handovers and
 a cluster restart.
