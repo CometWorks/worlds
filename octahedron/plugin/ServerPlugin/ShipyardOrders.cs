@@ -78,7 +78,8 @@ internal static class ShipyardOrders
     // LCD text is neither wrapped nor shrunk to fit. The console's screen is 256x176 at half the
     // text scale, the billboard's 307x512.
     private const int TableColumns = 26;
-    private const int DetailsColumns = 42;
+    private const int PaidColumns = 38;
+    private const int FreeColumns = 25;
     private const string TableIdle = "Project,\nthen press\nButton!";
     private const string DetailsIdle = "Ordered ship details...";
 
@@ -817,7 +818,9 @@ internal static class ShipyardOrders
                 text.AppendLine("Press the button to confirm the build.");
         }
         var parts = plan.Blueprint == null ? null : Parts(plan, quote);
-        if (ShowDetails(plan.Table, parts ?? DetailsIdle))
+        if (
+            ShowDetails(plan.Table, parts ?? DetailsIdle, quote != null ? PaidColumns : FreeColumns)
+        )
             WriteTable(plan.Table, text.ToString());
         else
             // A station from before the billboard, until the world is wiped
@@ -856,7 +859,7 @@ internal static class ShipyardOrders
                         )
                 )
             );
-        return Wrap(text.ToString(), DetailsColumns);
+        return text.ToString();
     }
 
     private static MyLCDPanelsBlock DetailsPanel(MyProjectorBase table)
@@ -878,7 +881,7 @@ internal static class ShipyardOrders
     }
 
     // The billboard's first line stays what the blueprint has; false when the station has no billboard
-    private static bool ShowDetails(MyProjectorBase table, string text)
+    private static bool ShowDetails(MyProjectorBase table, string text, int columns = FreeColumns)
     {
         var panel = DetailsPanel(table);
         if (panel == null)
@@ -887,7 +890,7 @@ internal static class ShipyardOrders
         // GetText only has what a script wrote since the world's load
         var shown = ((MyTextPanelComponent)provider.GetSurface(0)).Text;
         var first = (shown ?? "").Split('\n')[0].TrimEnd();
-        Write(provider, 0, $"{first}\n\n{text}", 0.7f);
+        Write(provider, 0, Wrap($"{first}\n\n{text}", columns), 0.7f);
         return true;
     }
 
@@ -913,8 +916,8 @@ internal static class ShipyardOrders
         return string.Join("\n", lines);
     }
 
-    // The largest font up to maxSize that fits the text, in the Monospace font's 24 x 37 pixels per
-    // character at size 1 on a 512 pixel texture
+    // The largest font up to maxSize that fits the text. At size 1 on a 512 pixel texture a Monospace
+    // character takes 24 x 37 pixels in its font file, times the game's text scale of 0.778.
     private static void Write(
         IMyTextSurfaceProvider provider,
         int index,
@@ -929,8 +932,8 @@ internal static class ShipyardOrders
         var padded = surface.SurfaceSize * 0.96f;
         var scale = Math.Min(surface.TextureSize.X, surface.TextureSize.Y) / 512f;
         var size = Math.Min(
-            padded.X / (Math.Max(1, lines.Max(l => l.Length)) * 24 * scale),
-            padded.Y / (lines.Length * 37 * scale)
+            padded.X / (Math.Max(1, lines.Max(l => l.Length)) * 18.7f * scale),
+            padded.Y / (lines.Length * 28.8f * scale)
         );
         surface.ContentType = ContentType.TEXT_AND_IMAGE;
         surface.Font = "Monospace";

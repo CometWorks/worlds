@@ -673,9 +673,9 @@ public sealed class BuildBook
     public static string PartsText(IDictionary<string, long> parts)
     {
         var text = new StringBuilder();
-        text.AppendLine($"{"Item", -24}{"Need", 8}");
+        text.AppendLine($"{"Item", -18}{"Need", 7}");
         foreach (var part in parts.OrderBy(p => p.Key, StringComparer.Ordinal))
-            text.AppendLine($"{Cut(part.Key, 24), -24}{part.Value, 8:N0}");
+            text.AppendLine($"{Cut(part.Key, 18), -18}{part.Value, 7:N0}");
         return text.ToString();
     }
 
