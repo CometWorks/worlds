@@ -11,7 +11,8 @@ would have done it.
 - Attach: a programmable block asks a rotor base on its grid (215 PCU) to attach the
   free rotor head in front of it, on a grid of 101 PCU. Joined they would have 316.
 
-The server runs a while, stops (it saves) and the saved world is read.
+The server runs until the cap has refused all three, stops (it saves) and the saved world
+is read.
 
     uv run --no-project --with httpx python tests/test_group_pcu.py
 """
@@ -27,7 +28,10 @@ import rig  # noqa: E402
 
 PLAYER = 144115188075999150
 LIMIT = 300
-RUN_SECONDS = 180
+# What each capped rig would have when the cap refuses it: weld, merge, attach
+REFUSED_AT = (315, 430, 316)
+# The free rigs do what the capped ones were refused at the same moment
+SETTLE = 5
 # The gyro is functional above 84.147 % integrity (its first computer); left just below,
 # so a motor and a computer finish it
 GYRO_BELOW_FUNCTIONAL = 0.841
@@ -250,10 +254,17 @@ def main() -> None:
     prepare()
     started = time.monotonic()
     rig.start_server()
-    print(
-        f"server ready in {time.monotonic() - started:.0f} s, running {RUN_SECONDS} s"
+    print(f"server ready in {time.monotonic() - started:.0f} s")
+    rig.wait_until(
+        lambda: all(
+            f"may have at most {LIMIT} PCU, this one would have {pcu}."
+            in rig.server_game_log()
+            for pcu in REFUSED_AT
+        ),
+        180,
+        "the cap's refusal of each capped rig",
     )
-    time.sleep(RUN_SECONDS)
+    time.sleep(SETTLE)
     rig.stop_server()
 
     grids = saved_grids()
