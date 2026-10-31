@@ -1,13 +1,16 @@
 """Checks on the test server, with the headless client, that a new block gets Target Neutrals off
 however it is built (SE-830): placed by hand, as the first block of a new grid, pasted, pasted onto
-a grid, welded from a projection, as a starter ship and as a shipyard order. The blueprint has the
-setting on in every turret type, a custom turret controller and a searchlight; a test mod adds a
-turret whose definition has it on by default. With the rule off, the same builds keep it on, which
-shows the test can fail.
+a grid, as a starter ship and welded from a projection by a shipyard's tools. The blueprint has the
+setting on in every turret type and a custom turret controller, a paste also in a searchlight (it
+needs a DLC to weld, which the client lacks); a test mod adds a turret whose definition has it on
+by default. With the rule off, the same builds keep it on, which shows the test can fail.
 
 A block that was already on in the world and blocks the client turns on afterwards stay on: the
 client reads them, and the saved world holds them, before and after a server restart. A handover
 is in tests/target_neutrals_cluster.py.
+
+The client doesn't weld a projection itself here: with Multigrid Projector on the server, its
+requests from this rig build nothing. Its weld passes through the same seam as the shipyard's.
 
     uv run --no-project --with httpx python tests/test_target_neutrals.py
 
@@ -34,14 +37,13 @@ MOD_ID = 999000830
 MOD_TURRET = "OctNeutralsTurret"
 RIG_AT = (250_000, 0, 0)
 BUILD_RIG = 777000830000100
-PROJECTION_RIG = 777000830000200
-PROJECTION_OFF = 777000830000300
 SHIP = "Neutrals Test"
 # The tables keep the world's blueprint, and a blueprint of this size may be a starter ship
 CONFIG = {
     "ShipyardOrderMinutes": 60,
     "ShipyardTableMinutes": 600,
     "StarterShipMaxShipPcu": 100_000,
+    "FreeBuildCooldownMinutes": 0,
 }
 FLAG_ON = "<Flags><TargetNeutrals>true</TargetNeutrals></Flags>"
 started = time.monotonic()
@@ -153,33 +155,6 @@ def write_mod() -> None:
         )
 
 
-def projection_rig(entity_id: int, y: int) -> str:
-    """A powered projector with an armor block, for the blueprint to weld onto"""
-    return rig.grid(
-        f"Neutrals Projection {entity_id}",
-        entity_id,
-        [
-            rig.block(
-                "MyObjectBuilder_Projector",
-                "LargeProjector",
-                (0, 0, 0),
-                "<Enabled>true</Enabled><KeepProjection>true</KeepProjection>",
-            )
-        ]
-        + armor([1])
-        + [
-            rig.block(
-                "MyObjectBuilder_BatteryBlock",
-                "LargeBlockBatteryBlock",
-                (-x, 0, 0),
-                "<Enabled>true</Enabled><CurrentStoredPower>3</CurrentStoredPower>",
-            )
-            for x in range(1, 4)
-        ],
-        position=(RIG_AT[0], y, 0),
-    )
-
-
 def prepare() -> None:
     so.prepare(blueprint(modded=True, welded=True), 60)
     write_mod()
@@ -212,10 +187,7 @@ def prepare() -> None:
     sector.write_text(
         sector.read_text(encoding="utf-8").replace(
             "</SectorObjects>",
-            build_rig
-            + projection_rig(PROJECTION_RIG, 100)
-            + projection_rig(PROJECTION_OFF, 200)
-            + "</SectorObjects>",
+            build_rig + "</SectorObjects>",
             1,
         ),
         encoding="utf-8",
@@ -331,10 +303,6 @@ def rule_off_controls(remote, build_rig: int) -> None:
     set_rule(remote, False)
     report = remote.character_build_block(build_rig, (4, 1, 0), MOD_TURRET)
     log(f"hand placed with the rule off: {report}")
-    welded = weld(remote, PROJECTION_OFF)
-    time.sleep(5)
-    count, on = on_cells(remote, welded)
-    check("rule off: welding keeps it on", count == 5 == len(on), (count, on))
     pasted = remote.paste_blueprint(
         xml=bp_document(blueprint(True, "CubeGrid")),
         position=(RIG_AT[0], 0, 300),
@@ -429,47 +397,34 @@ def hand_and_paste(remote, build_rig: int) -> tuple[tuple, int, tuple]:
     return controller, paste_id, turret
 
 
-def weld(remote, entity_id: int) -> int:
-    """Loads the blueprint as the blueprint screen does, and welds it finished: a block under
-    construction has no terminal to change it in. The shipyard orders weld the way a tool does
-    """
-    grid_id = wait_grid(remote, f"Neutrals Projection {entity_id}")
-    projector = next(
-        c["fatEntityId"]
-        for c in remote.list_cubes(grid_id)["cubes"]
-        if c["typeId"].endswith("Projector")
-    )
-    # The coordinates are the grid's: the blueprint's first block lands on the projector
-    projected = rig.grid(
-        SHIP,
-        None,
-        [
-            rig.block(
-                "MyObjectBuilder_Projector",
-                "LargeProjector",
-                (0, 0, 0),
-                "<EntityId>777000830000999</EntityId>",
-            )
-        ]
-        + armor(range(1, 19))
-        + weapons(2, modded=True, welded=True),
-        tag="CubeGrid",
-    )
-    log(f"loading: {remote.load_projection(projector, xml=bp_document(projected))}")
-    time.sleep(10)
-    # Each pass builds what touches the grid by then, the next armor block
-    for attempt in range(40):
-        report = remote.weld_projection(projector, instant=True)
-        log(f"welding pass {attempt}: {report}")
-        time.sleep(3)
-        if not report.get("requested"):
-            break
-    return grid_id
-
-
-def order_and_starter(remote) -> None:
-    station = sorted(sa.station_tables())[0]
+def order(remote, station: str) -> int:
+    """Orders the blueprint at a station's table, returns the ship welded from it by the shipyard's
+    tools, as on the live cluster"""
     sa.at_table(remote, station)
+    before = {g["entityId"] for g in remote.list_grids()}
+    ready = so_ready_lines(remote)
+    so.order(remote)
+    deadline = time.monotonic() + 1500
+    while so_ready_lines(remote) <= ready and time.monotonic() < deadline:
+        time.sleep(10)
+    time.sleep(10)
+    ships = [
+        g["entityId"]
+        for g in remote.list_grids()
+        if g["name"] == SHIP and g["entityId"] not in before
+    ]
+    check(f"the ship ordered at {station} is delivered", len(ships) == 1, ships)
+    return ships[0] if ships else 0
+
+
+def so_ready_lines(remote) -> int:
+    lines, _ = so.chat_lines(remote, 0)
+    return sum("is ready" in line for line in lines)
+
+
+def starter_and_orders(remote) -> None:
+    stations = sorted(sa.station_tables())
+    sa.at_table(remote, stations[0])
     before = {g["entityId"] for g in remote.list_grids()}
     reply = tc.ship_reply(remote)
     check("the starter ship waits", "waits outside" in reply, reply)
@@ -477,8 +432,21 @@ def order_and_starter(remote) -> None:
     new = [g for g in remote.list_grids() if g["entityId"] not in before]
     if new:
         built(remote, "starter ship", new[0]["entityId"], 5)
-    so.order(remote)
-    log(so.wait_chat(remote, "is ready", 1500))
+
+    # Each at its own station: a shipyard waits until the ship before is flown out
+    set_rule(remote, False)
+    ship = order(remote, stations[1])
+    if ship:
+        count, on = on_cells(remote, ship)
+        check(
+            "rule off: an ordered ship keeps it on", count == 5 == len(on), (count, on)
+        )
+    set_rule(remote, True)
+    ship = order(remote, stations[2])
+    if ship:
+        built(remote, "ordered ship", ship, 5)
+        # Fresh from the shipyard, the player's change to a welded block
+        turn_on(remote, ship, tuple(targeting_cubes(remote, ship)[0]["min"]))
 
 
 def turn_on(remote, grid_id: int, cell: tuple) -> None:
@@ -498,30 +466,7 @@ def turn_on(remote, grid_id: int, cell: tuple) -> None:
     check(f"the client turns it on at {cell}", value is True, value)
 
 
-prepare_client = rig.prepare_client
-
-
-def client_with_mgp() -> None:
-    """Players of this world have Multigrid Projector: the server's copy builds a projected block
-    only for a client that has it too"""
-    prepare_client()
-    legacy = rig.PULSAR / "Legacy"
-    (legacy / "Profiles" / "Current.xml").write_text(
-        rig.profile_xml(
-            ["remote", "direct-transport", "viktor-ferenczi/se-multigrid-projector"]
-        ),
-        encoding="utf-8",
-    )
-    rig.register_source(
-        legacy / "Sources" / "sources.xml",
-        pl.MGP[0],
-        pl.MGP[1],
-        "MultigridProjectorClient.xml",
-    )
-
-
 def run() -> None:
-    rig.prepare_client = client_with_mgp
     rig.stop_client()
     rig.stop_server()
     prepare()
@@ -541,22 +486,17 @@ def run() -> None:
 
     rule_off_controls(remote, build_rig)
     controller, paste_id, turret = hand_and_paste(remote, build_rig)
-    welded = weld(remote, PROJECTION_RIG)
-    built(remote, "welded from a projection", welded, 5)
-    welded_cubes = targeting_cubes(remote, welded)
     turn_on(remote, build_rig, controller)
     turn_on(remote, paste_id, turret)
-    if welded_cubes:
-        turn_on(remote, welded, tuple(welded_cubes[0]["min"]))
-    order_and_starter(remote)
+    starter_and_orders(remote)
 
     expected = {
         # In the world, the rule off's hand placed one and the one turned on
         "Neutrals Build Rig": 3,
         "Neutrals Rule Off": 6,
         "Neutrals Paste": 1,
-        f"Neutrals Projection {PROJECTION_RIG}": 1,
-        f"Neutrals Projection {PROJECTION_OFF}": 5,
+        # The ordered ship with the rule off, and the one turned on on the other
+        SHIP: 6,
     }
     rig.stop_client()
     rig.stop_server()
@@ -568,12 +508,12 @@ def run() -> None:
         re.sub(r"<ProjectedGrids>.*?</ProjectedGrids>", "", text, flags=re.S),
     )
     check(
-        "the starter ship and the ordered ship are saved, with it off",
-        len(ships) == 2,
+        "the starter ship and the two ordered ships are saved",
+        len(ships) == 3,
         len(ships),
     )
     built_ships = saved_weapons(SHIP)
-    check("both ships have their 5 blocks", built_ships == [5, 5], built_ships)
+    check("the ships have their 5 blocks", built_ships == [5, 5, 5], built_ships)
 
     rig.start_server()
     remote = rig.start_client()
