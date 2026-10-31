@@ -252,8 +252,8 @@ The first button of the button panel next to the table
 presses it, whoever holds the table:
 
 - With a build or repair slot of theirs in the shipyard's queue or running, the press
-  cancels it. It does nothing to the table. A running build's ship is removed and all
-  of it paid back, as for one that stalled, and a free build doesn't count.
+  cancels it. It does nothing to the table. A running build's ship is handed over
+  unfinished, as when its time runs out, and a free build starts the cool-down.
 - Else, holding a blueprint the shipyard accepts, the press orders the ship. That
   clears the blueprint and the list, and the screen tells the player a second press
   cancels. It first shows the quote and asks for another press when the screen doesn't
@@ -267,7 +267,8 @@ payment is already in its build ledger, and the owner can cancel it when back.
 `ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
 
 A repair slot is an entry "Repair" in the shipyard's queue, without a blueprint or a
-payment. When its turn comes the shipyard's welders go on, and its containers, welders
+payment. It takes a place in the queue, and a player has one entry at a time at any
+shipyard, a build or a slot. When its turn comes the shipyard's welders go on, and its containers, welders
 and connectors become the player's and are shared with their faction (`ShipyardTurn`).
 The reactors and everything else stay OCT's, and the connectors are not in trading
 mode. The player docks a ship with the components to one of the connectors, which are

@@ -234,23 +234,6 @@ def first_order(a, b, oct_owner: str) -> None:
     seen = settled_owner(b, lambda s: s == (oct_owner, "All"))
     check(seen == (oct_owner, "All"), f"OCT's and shared with all again: {seen}")
 
-    so.wait_chat(a, "builds 'Order Test' for you now", 60)
-    time.sleep(12)
-    reply = press(a)
-    check(
-        "is canceled and removed" in reply,
-        f"a press cancels the running build: {reply}",
-    )
-    text = settled(a, "queue", "No ships in the queue")
-    check("Order Test" not in text, f"it left the queue: {text!r}")
-    check(
-        not [g for g in a.list_grids() if g.get("name") == "Order Test"],
-        "its ship is gone",
-    )
-
-    load(a)
-    settled(a, "table", "Press the button")
-    check("is in the queue" in press(a), "ordered again")
     ready = so.wait_chat(a, "is ready", 400)
     log(ready)
     main = settled(a, "table", "then press")

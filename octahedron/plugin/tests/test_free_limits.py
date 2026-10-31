@@ -173,7 +173,7 @@ def one_at_a_time() -> None:
     tc.with_config(remote, FreeBuildCooldownMinutes=0)
     so.place(remote, "Order Big")
     reply = order(remote)
-    assert "is canceled and removed" in reply, reply
+    assert "The unfinished ship is yours" in reply, reply
     stop()
 
 

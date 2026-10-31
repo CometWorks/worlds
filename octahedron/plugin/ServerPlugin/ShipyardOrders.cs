@@ -679,8 +679,8 @@ internal static class ShipyardOrders
             EndRepair(shipyard, slot, "you canceled it");
         else if (orders.TryGetValue(shipyard.EntityId, out var order) && order.Id == entry.Id)
         {
-            order.Canceled = order.Refund = true;
-            Scrap(shipyard, order);
+            // Handed over unfinished, as when its time runs out
+            order.Canceled = true;
             End(shipyard, order, "canceled");
         }
         else if (docks.ContainsKey(shipyard.EntityId))
@@ -1918,12 +1918,8 @@ internal static class ShipyardOrders
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
         var message =
             order.Canceled
-                ? $"'{name}' is canceled and removed from {shipyard.DisplayName}"
-                    + (
-                        order.Free
-                            ? ", and the free build doesn't count."
-                            : ", its components are back in the ledger and the labor fee is paid back."
-                    )
+                ? $"You canceled '{name}' at {shipyard.DisplayName}. "
+                    + (gone ? "No ship was built yet." : "The unfinished ship is yours.")
             : order.Refund
                 ? $"{stalled}, with {order.Missing} missing. The ship was removed"
                     + (
@@ -1943,7 +1939,7 @@ internal static class ShipyardOrders
                 + "The unfinished ship is yours.";
         if (!order.Free)
         {
-            if (left.Count > 0 && order.Missing == null && !order.Refund)
+            if (left.Count > 0 && order.Missing == null)
                 message += " The leftover components are back in the ledger.";
             if (order.Hydrogen > 0 && !gone)
                 message +=
@@ -1954,6 +1950,9 @@ internal static class ShipyardOrders
                     : $" Its H2 tanks have {filled:N0} L of hydrogen.";
         }
         message += extra;
+        // With a ship, its hand over started it
+        if (order.Canceled && gone)
+            NoteFreeEnd(order, name);
         if (order.Id.Length > 0)
             Finish(
                 new BuildOrder

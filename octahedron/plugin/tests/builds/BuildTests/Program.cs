@@ -211,7 +211,7 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         m,
         "a second order at the same shipyard",
         () => b.Order(w, market, s, Paid(p1), needed, none, long.MaxValue),
-        "one ship at a time"
+        "one entry at a time"
     );
 
     // Cancel: the build ledger and the fee come back
@@ -512,7 +512,7 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         m,
         "a second free order at another shipyard",
         () => b.Order(w, market, s, new BuildOrder { Station = B, Player = 1 }, none, none, 0),
-        "one free ship"
+        "one entry at a time"
     );
     w.Now += 10;
     Ok(
@@ -675,16 +675,16 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         );
     Check(Slot(1).Ok, "repair: a slot is booked");
     Check(!Slot(1).Ok, "repair: one entry a player at a station");
-    Check(Slot(1, B).Ok, "repair: another station's slot, as a slot isn't a free ship");
+    Check(!Slot(1, B).Ok, "repair: nor at another station");
     Check(
-        slots
+        !slots
             .Order(
                 slotWorld,
                 null,
                 s,
                 new BuildOrder
                 {
-                    Station = "Gamma Station",
+                    Station = B,
                     Player = 1,
                     Ship = "Free",
                 },
@@ -693,7 +693,7 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
                 0
             )
             .Ok,
-        "repair: a free ship next to the player's slots"
+        "repair: nor a ship next to the slot"
     );
     Check(Slot(2).Ok && Slot(3).Ok && !Slot(4).Ok, "repair: slots count in the queue's limit");
     var booked = slots.Queue(A)[0];

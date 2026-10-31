@@ -4,7 +4,7 @@ player's and shared with their faction, its reactors stay OCT's; a ship docked t
 gives the welders the components to weld a ship in the shipyard from its repair projector; the
 slot ends after the real 5 minutes without building or welding, or at the player's next press,
 and everything is back as before. Also: a slot waits for a running build, which its owner's press
-cancels, with the paid part of that; a restart in the middle of a slot; and a build after a slot.
+cancels, which hands the ship over as when its time runs out, a paid one too; a restart in the middle of a slot; and a build after a slot.
 On a world built by build_world.py. The presses are !oct order: see test_table_rules.py.
 
     OCT_TASK=SE-850r OCT_WORLD_SOURCE=<world from build_world.py> \\
@@ -52,12 +52,12 @@ PAID = rig.grid(
     777000850000100,
     [
         rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
-        for x in range(4)
+        for x in range(8)
         for z in range(8)
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
-PAID_PLATES = 32 * 25
+PAID_PLATES = 64 * 25
 
 
 def probe(remote, args: str) -> str:
@@ -119,6 +119,13 @@ def slot_runs(remote, name: str = "OctTester") -> float | None:
     reply = " ".join(rig.chat(remote, "!oct shipyards", 3))
     found = re.search(rf"repair slot of {name}, (\d+) s", reply)
     return float(found[1]) if found else None
+
+
+def building(remote) -> bool:
+    """The running build's ship has a complete block"""
+    reply = " ".join(rig.chat(remote, "!oct shipyards", 3))
+    found = re.search(r"ship (\d+)/\d+", reply)
+    return bool(found and int(found[1]) > 0)
 
 
 def wait_for(what, timeout: float, every: float = 3.0):
@@ -295,7 +302,7 @@ def waits_for_a_build(a, b) -> None:
     mark = sa.so_latest(a)
     check("is in the queue" in press(a), "a big ship is ordered")
     check(sa.wait_chat(a, "builds 'Order Big' for you now", 60, mark), "its build runs")
-    time.sleep(15)
+    check(wait_for(lambda: building(a), 120), "it has blocks")
     check(octs(yard(a)), "a build leaves the blocks OCT's")
     reply = press(b)
     check("Repair slot" in reply, f"the other player books a slot: {reply}")
@@ -310,10 +317,11 @@ def waits_for_a_build(a, b) -> None:
     check("Order Big" in queue(a), "the build isn't touched")
     check("Repair slot" in press(b), "booked again")
     settled(a, "queue", "Repair for OctOther: waiting")
+    with_config(a, **{**CONFIG, "FreeBuildCooldownMinutes": 60})
     reply = press(a)
     check(
-        "is canceled and removed" in reply,
-        f"the owner's press cancels the build: {reply}",
+        "The unfinished ship is yours" in reply,
+        f"the owner's press cancels the build, they get the ship: {reply}",
     )
     check(
         wait_for(lambda: slot_runs(a, "OctOther") is not None, 30),
@@ -321,18 +329,26 @@ def waits_for_a_build(a, b) -> None:
     )
     state = yard(a)
     check(theirs(state, "OctOther"), f"the shipyard is the other player's now: {state}")
-    check(state["items"] == "0", f"the build's components are gone: {state['items']}")
     check(
-        not [g for g in a.list_grids() if g.get("name") == "Order Big"],
-        "the unfinished ship is gone",
+        state["items"] == "0", f"a free build's components are gone: {state['items']}"
     )
+    big = [g for g in a.list_grids() if g.get("name") == "Order Big"]
+    check(bool(big), f"the unfinished ship is there: {big}")
     reply = press(b)
     check("you canceled it" in reply, f"their press ends it: {reply}")
     check(octs(yard(a)), "OCT's again")
+    load(a)
+    main = " ".join(settled(a, "table", "next free").split())
+    check("next free ship" in main, f"the cool-down runs: {main!r}")
+    tr.remove(a)
+    with_config(a, **CONFIG)
+    for grid in big:
+        a.close_grid(grid["entityId"])
 
 
 def paid_cancel(a) -> None:
-    """A paid build canceled while it runs: all of it is paid back"""
+    """A paid build canceled while it runs ends as when its time runs out: the ship as it
+    is, what wasn't used back in the ledger, the labor fee stays paid"""
     with_config(a, **CONFIG, FreeBuildPcuLimit=0)
     log(
         sa.admin(
@@ -363,21 +379,29 @@ def paid_cancel(a) -> None:
     check(
         sa.wait_chat(a, "builds 'Paid Cancel' for you now", 60, mark), "its build runs"
     )
-    time.sleep(10)
+    check(wait_for(lambda: building(a), 120), "it has blocks")
     check(plates() == before[0] - PAID_PLATES, f"the ledger paid: {plates()}")
-    check(money() < before[1], f"the labor fee is paid: {before[1]} -> {money()}")
+    paid = money()
+    check(paid < before[1], f"the labor fee is paid: {before[1]} -> {paid}")
     reply = press(a)
     check(
-        "is canceled and removed" in reply and "paid back" in reply,
-        f"a press cancels the running build: {reply}",
+        "The unfinished ship is yours" in reply,
+        f"a press cancels the running build, they get the ship: {reply}",
     )
     time.sleep(3)
-    check(plates() == before[0], f"its components are back in the ledger: {plates()}")
-    check(money() == before[1], f"the labor fee is back: {money()}")
+    back = plates()
+    check(
+        before[0] - PAID_PLATES < back < before[0],
+        f"what wasn't used is back in the ledger: {back} of {before[0]}",
+    )
+    check(money() == paid, f"the labor fee stays paid: {money()}")
     check(yard(a)["items"] == "0", "nothing stays in the shipyard")
     text = settled(a, "queue", "No ships in the queue")
     check("Paid Cancel" not in text, f"it left the queue: {text!r}")
     with_config(a, **CONFIG)
+    for grid in a.list_grids():
+        if grid.get("name") == "Paid Cancel":
+            a.close_grid(grid["entityId"])
 
 
 def restart(a):

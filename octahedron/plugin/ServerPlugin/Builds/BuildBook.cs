@@ -279,19 +279,11 @@ public sealed class BuildBook
     {
         if (!LedgerBook.ValidName(order.Station))
             return BuildResult.No("Unknown station.");
-        var mine = orders.Values.FirstOrDefault(o =>
-            o.Station == order.Station && o.Player == order.Player
-        );
+        var mine = orders.Values.FirstOrDefault(o => o.Player == order.Player);
         if (mine != null)
             return BuildResult.No(
-                $"'{mine.Ship}' is in this shipyard's queue for you already, one ship at a time."
+                $"'{mine.Ship}' is in a shipyard's queue for you already, one entry at a time."
             );
-        if (
-            order.Free
-            && !order.Repair
-            && orders.Values.Any(o => o.Free && !o.Repair && o.Player == order.Player)
-        )
-            return BuildResult.No("The shipyards build one free ship at a time for you.");
         if (orders.Values.Count(o => o.Station == order.Station) >= s.QueueMax)
             return BuildResult.No($"The shipyard's queue is full, {s.QueueMax} ships.");
 
