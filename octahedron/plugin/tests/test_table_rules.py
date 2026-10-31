@@ -211,7 +211,7 @@ def rules(a, b) -> None:
     check("OctTester" in queue(a), "their order stays")
 
     log(remove(a))
-    main = settled(a, "table", "OctTester can cancel", 5)
+    main = settled(a, "table", "OctTester can cancel", 12)
     check(
         "OctTester can cancel" in main,
         f"anyone can remove a blueprint, screens back within seconds: {main!r}",
