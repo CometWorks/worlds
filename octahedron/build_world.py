@@ -269,6 +269,7 @@ SETTINGS = {
     # Our stations trade; the game's own trade factions and their stations stay out
     # (GenerateFactionsOnStart false in the economy component, see add_trade_stations)
     "EnableEconomy": "true",
+    "TradeFactionsCount": 0,
     "EnableRadiation": "true",
     "FoodConsumptionRate": 0,
     "EnableSurvivalBuffs": "false",

@@ -80,7 +80,8 @@ The defaults, for reference: `CleanupUnpoweredOverride` is on for every type but
 ### Vanilla encounters
 
 - The two Suppress Vanilla mods (888457124, 888457381) stop MES from spawning the base game's cargo ships and random encounters (`Spawning/SpawnGroupManager.cs`, `ApplySuppression`). The world settings also turn the game's own cargo ships, encounters and drones off.
-- The base game's planetary encounters are not suppressed. MES turns every base-game group with `IsPlanetaryEncounter` into a small planetary installation (`GetOldSpawnGroupDetails`), and `EnablePlanetaryEncounters` = false does not stop MES. 28 of them fit EarthLike and 13 the Moon (Appendix B). Their suppressor mod, 3796756949, is not in our list.
+- The base game's planetary encounters are not suppressed. MES turns every base-game group with `IsPlanetaryEncounter` into a small planetary installation (`GetOldSpawnGroupDetails`), and `EnablePlanetaryEncounters` = false does not stop MES. 28 of them fit EarthLike and 13 the Moon (Appendix B). Their suppressor mod, 3796756949, is not in our list: it would also take the pirate bases and wrecks.
+- The economy is only on the world's stations (SE-829). `NpcSpawnGroupBlacklist` in `Config-General.xml` takes out the 24 outposts of the base game's economy factions (P1–P12 and their `_Moon` versions) and, by its Workshop id, everything of Trade Operators Coalition. The list reaches a cluster only with a `--wipe` deploy, since a kept world keeps the config files it started with; a grid that spawned before stays until MES's cleanup. The figures and tables below that name them show what MES would spawn without the list. `plugin/tests/mes/ds/stations.py` checks it on a server.
 - MES does not spawn the base game's global encounters. `GlobalEncounterCap` = 0 keeps the game from spawning them.
 
 ## 2. What spawns where
@@ -126,7 +127,7 @@ The cargo ship timers keep running in the wrong place: a space cargo attempt whi
 | Space Pirates Enhanced | space cargo S | 4 | 720–1500 | 0 → 10 % | hostile |
 | Weyland-Yutani | random encounter S | 24 | none | 41 → 36 % | hostile remote stations |
 | Terran Heavy Industries | random encounter S | 3 | Space Station 250+ | 15 → 13 % | |
-| Trade Operators Coalition | random encounter S | 5 | none; ≥100 km from another TOC station | 15 → 12 % | trade stations |
+| Trade Operators Coalition | random encounter S | 5 | none; ≥100 km from another TOC station | 15 → 12 % | trade stations; blacklisted |
 | Wreckage | random encounter S | 3 | none | 14 → 13 % | derelict wrecks, 67 prefabs |
 | Imber | random encounter S | 1 (Drone Patrol) | none | 14 → 11 % | hostile drones |
 | Space Pirates Enhanced | random encounter S | 4 | 195–325 | 0 → 13 % | raiding outposts and stations |
@@ -140,7 +141,7 @@ The cargo ship timers keep running in the wrong place: a space cargo attempt whi
 | Space Pirates Enhanced | atmospheric cargo EL | 2 | 730 / 1400 | 0 → 13 % | |
 | Wreckage | atmospheric cargo EL/M | 2 | none, 10 % chance | 2 % | |
 | Parallax, Imber, Incon, THI Baldrin, Wreckage | atmospheric cargo M | 15 | none (SPRT Stinging Adversary 1400+) | ~24 % each, Wreckage 3 % | the skip-air groups |
-| Vanilla planetary encounters | small installation EL/M | 28 / 13 | none | 28 → 20 % | economy outposts, pirate bases, wrecks |
+| Vanilla planetary encounters | small installation EL/M | 28 / 13 | none | 28 → 20 % | economy outposts (blacklisted), pirate bases, wrecks |
 | Abandoned Settlements v2 | small installation EL/M | 18 | four bands 0–5 … 60+ | 15 → 10 % | QARC settlements |
 | Wreckage, Imber, Parallax, Incon | small installation EL/M | 4, 4, 5, 2 | none | 14–15 → 10 % each | |
 | Terran Heavy Industries | small installation EL | 2 | 250+ | 0 → 10 % | Buffalo needs ice or snow |
@@ -148,7 +149,7 @@ The cargo ship timers keep running in the wrong place: a space cargo attempt whi
 | Space Pirates Enhanced | small / medium / large installation EL | 2 / 1 / 1 | 358–455 | 0 → 10–20 % | |
 | Wasteland Encounters V2 | medium installation EL/M | 82 | none | 60 → 42 % of mediums | derelict wrecks and outposts |
 | Parallax, Imber | medium installation EL/M | 1, 3 | none | 20 → 14 % each | |
-| Independent Contractors, Imber, TOC | large installation EL/M | 1, 1, 5 | none; TOC ≥25 km from another TOC station | ~33 → 20 % each | Atom Heart Station, Fortress Tower |
+| Independent Contractors, Imber, TOC | large installation EL/M | 1, 1, 5 | none; TOC ≥25 km from another TOC station | ~33 → 20 % each | Atom Heart Station, Fortress Tower; TOC blacklisted |
 | Xenvakian Empire | installations EL/M, orbital platform S | 2 + 1 per aggressive tier | 200 / 400 | only after reputation drops | |
 
 Assumptions behind the shares: the player stands on grass or soil (vanilla encounters and the Buffalo check the terrain type), no Trade Operators Coalition station is near (TOC cargo ships need one within 25 km, TOC stations need none within 25 or 100 km), player reputation with the Xenvakian Empire is the default −1000, and the threat score is the same for every check range. Weights within each mod are in Appendix A.
@@ -215,7 +216,7 @@ What this means for the theme:
 
 ## 4. Things that look wrong or risky
 
-1. **Vanilla planetary encounters are on.** Without mod 3796756949 (Suppress Vanilla Planetary Installations) MES spawns 28 base-game outposts on EarthLike and 13 on the Moon, including military watchtowers and pirate strongholds owned by the economy and pirate factions. They are 20–28 % of all small installations. Add the mod, or blacklist them in `Config-PlanetaryInstallations.xml`, if we don't want them.
+1. **Vanilla pirate bases and wrecks are on.** The base game's economy outposts are blacklisted (SE-829). The pirate strongholds, relay posts, salvage yards and wrecks of Appendix B still spawn. Mod 3796756949 (Suppress Vanilla Planetary Installations) would take them out too.
 2. **Hubs fill up with NPCs.** The space cargo timer runs for every player parked at a station. A busy station can get 4 cargo ships per 15 min within 10 km, up to 15 alive within 15 km, on paths 2–4 km from the players there. MES keeps spawn starts ≥1 km (cargo), ≥2 km (boss signal), ≥2.5 km (installation) or ≥3 km (encounter) from any grid, so nothing spawns inside the 250 m station safe zones, but paths and AI-driven ships can fly through them, and MES's placement code never looks at safe zones. Hostile ships right outside a station's zone meet new players there.
 3. **Trade Lanes trigger random encounters.** A lane trip covers far more than 15 km, so the next 60 s check after arriving is eligible: a static encounter 8–12 km from the arrival station. With MES's default cleanup (an hour with nobody within 50 km, which never happens around a used station) they would pile up to the cap of 10 grids within 25 km around each busy station. Our cleanup (15 km, 900 s) removes them a quarter of an hour after the players leave.
 4. **Global NPC limit.** Was off; now `UseMaxNpcGrids` with 100 grids, which on the cluster is per node (section 5).
@@ -315,6 +316,8 @@ All installations need air (EarthLike only).
 | SPRT-Light-Raider / SPRT-Heavy-Raider | SC S | 1440 / 1500 | 5 |
 
 ### Trade Operators Coalition (TRADE, neutral)
+
+All blacklisted by its Workshop id in `Config-General.xml` (SE-829).
 
 | Group | Spawns as | Weight | Notes |
 |---|---|---|---|

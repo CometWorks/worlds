@@ -4,4 +4,34 @@
        on a node that holds 100 or more NPC-owned grids (about 600 on 6 serving nodes). -->
   <UseMaxNpcGrids>true</UseMaxNpcGrids>
   <MaxGlobalNpcGrids>100</MaxGlobalNpcGrids>
+  <!-- The economy is only on the world's stations. MES would spawn the base game's outposts of its
+       economy factions (the Trader ones for OCT, the only Trader here, with P9's store) and the
+       Trade Operators Coalition's stations and merchants, by its Workshop id, with stocked stores. -->
+  <NpcSpawnGroupBlacklist>
+    <string>2966429095</string>
+    <string>P1_SupplyPost</string>
+    <string>P1_SupplyPost_Moon</string>
+    <string>P2_StorageDepot</string>
+    <string>P2_StorageDepot_Moon</string>
+    <string>P3_ManufacturingFacility</string>
+    <string>P3_ManufacturingFacility_Moon</string>
+    <string>P4_ProcessingPlant</string>
+    <string>P4_ProcessingPlant_Moon</string>
+    <string>P5_ProspectingStation</string>
+    <string>P5_ProspectingStation_Moon</string>
+    <string>P6_OreProcessingFacility</string>
+    <string>P6_OreProcessingFacility_Moon</string>
+    <string>P7_FieldResearchOutpost</string>
+    <string>P7_FieldResearchOutpost_Moon</string>
+    <string>P8_ShippingPlatform</string>
+    <string>P8_ShippingPlatform_Moon</string>
+    <string>P9_RegionalHeadquarters</string>
+    <string>P9_RegionalHeadquarters_Moon</string>
+    <string>P10_MilitaryBarracks</string>
+    <string>P10_MilitaryBarracks_Moon</string>
+    <string>P11_VanguardOutpost</string>
+    <string>P11_VanguardOutpost_Moon</string>
+    <string>P12_MilitaryWatchtower</string>
+    <string>P12_MilitaryWatchtower_Moon</string>
+  </NpcSpawnGroupBlacklist>
 </ConfigGeneral>
