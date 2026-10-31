@@ -58,6 +58,7 @@ PAID = rig.grid(
     tag="MyObjectBuilder_CubeGrid",
 )
 PAID_PLATES = 64 * 25
+STASH = 50
 
 
 def probe(remote, args: str) -> str:
@@ -163,7 +164,7 @@ def book_and_idle_out(a, b) -> None:
         sa.shoots(a, yard_id) is True,
         "the welders are in build mode, seen by the client",
     )
-    state = yard(a, "OctOther")
+    state = yard(a)
     check(theirs(state, "OctTester"), f"the blocks are the player's: {state}")
     power_stays(state, "in the slot")
     reply = " ".join(rig.chat(a, f"!kprobe yard {STATION} OctOther", 3))
@@ -221,6 +222,9 @@ def book_and_idle_out(a, b) -> None:
         time.monotonic() - start > IDLE_SECONDS or slot_runs(a) is not None,
         "the slot still runs",
     )
+    # What a player leaves in the containers; the welders pulled only what they used
+    probe(a, f"yardstash {STATION} {STASH}")
+    check(yard(a)["items"] == str(STASH), "plates in the shipyard's container")
     # Past 5 minutes since it started, which the work restarted
     time.sleep(max(0, start + IDLE_SECONDS + 20 - time.monotonic()))
     since = slot_runs(a)
@@ -250,10 +254,9 @@ def book_and_idle_out(a, b) -> None:
         state["items"] == "0", f"the shipyard's inventories are empty: {state['items']}"
     )
     back = float(info(a, ship).get("plates", -1))
-    check(back > left, f"what the welders held went back to the ship: {left} -> {back}")
     check(
-        PLATES - back <= 100,
-        f"no components were lost: {PLATES} -> {back}, the repair took about 68",
+        back == left + STASH,
+        f"what the shipyard held went back to the ship: {left} -> {back}",
     )
     time.sleep(3)
     check(sa.shoots(a, yard_id) is False, "the welders are off")

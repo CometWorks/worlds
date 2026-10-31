@@ -13,7 +13,7 @@ once at the end).
   player pays the quoted total, the hydrogen comes from the H2 tank of the
   player's ship docked at Alpha (half of it drained), and the build starts at
   once with the components loaded from the build ledger.
-- Pressing again while it builds doesn't cancel it. When the ship is ready its
+- When the ship is ready its
   H2 tank holds 500,000 L and the build ledger is gone.
 - The finished ship stays in the shipyard, so the next order waits in the queue:
   the Faction switch on at the kiosk (the player a leader of faction KME) makes the

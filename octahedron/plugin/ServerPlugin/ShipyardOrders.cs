@@ -754,6 +754,8 @@ internal static class ShipyardOrders
                     Plugin.Log.Warning($"Repair slot {next.Id} did not start: {message}");
                     return;
                 }
+                // An arm build that ended early can leave components behind, not theirs to have
+                Clear(shipyard, next.Player);
                 RunRepair(station, shipyard, next);
                 Tell(
                     next.Player,

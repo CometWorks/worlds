@@ -380,6 +380,23 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "yardstash",
+        "Puts steel plates into the shipyard's first container",
+        "!kprobe yardstash <station> <amount>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardStash(string station, int amount)
+    {
+        var plate = new MyDefinitionId(typeof(MyObjectBuilder_Component), "SteelPlate");
+        Yard(station)
+            .GetFatBlocks<MyCargoContainer>()
+            .First()
+            .GetInventory()
+            .AddItems(amount, MyObjectBuilderSerializer.CreateNewObject(plate));
+        return $"STASHED {amount}";
+    }
+
+    [Command(
         "info",
         "A grid's blocks, complete blocks and the steel plates in its cargo: INFO id blocks full plates",
         "!kprobe info <grid id|grid name>"

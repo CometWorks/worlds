@@ -84,8 +84,10 @@ def prepare(blueprint: str, minutes: int, plugins=()) -> None:
     """plugins: more dev folders for the server, as prepare_server takes them"""
     global table_blueprint
     table_blueprint = blueprint
+    # A long run outlasts the suit's oxygen in an unpressurized station
     rig.prepare_world(
-        settings={"TrashRemovalEnabled": "false"}, table_blueprint=blueprint
+        settings={"TrashRemovalEnabled": "false", "EnableOxygen": "false"},
+        table_blueprint=blueprint,
     )
     sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
     text, count = re.subn(
