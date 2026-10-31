@@ -32,6 +32,7 @@ SHOTS = os.environ.get("OCT_SHOTS")
 BILLBOARD = "Billboard LCD Ship Build Details"
 FIRST_LINE = "Press the button to confirm build!"
 STATION = "Alpha"
+CONFIG = {"FreeBuildCooldownMinutes": 0, "ShipyardTableMinutes": 600}
 SWAPPED = (
     "PULSAR", "LAUNCHER", "APPDATA", "CLIENT_PORT", "CLIENT_ID",
     "CLIENT_NAME", "CLIENT_PID", "CLIENT_LOG",
@@ -103,34 +104,36 @@ def load(remote) -> None:
     time.sleep(6)
 
 
-def console(remote) -> str:
-    t = table(remote)
-    return remote.get_surface(t["gridId"], tuple(t["min"]), 1).get("text", "")
-
-
-def billboard(remote, surface: int = 0) -> dict:
-    t = table(remote)
-    found = remote.find_nearby_blocks(
-        subtype="LargeBlockBillboard", max_distance=20, limit=20
+def screens(remote) -> dict[str, str]:
+    """The server's text of the table's screen and the billboard's two, and the queue panel"""
+    reply = "\n".join(rig.chat(remote, "!oct table show", 2))
+    found = re.search(
+        r"BLUEPRINT (.*?) HOLDER (.*?)\nTABLE\n(.*)\nDETAILS\n(.*)\nHOW\n(.*)",
+        reply,
+        re.S,
     )
-    b = next(b for b in found if b["customName"] == BILLBOARD)
-    assert b["gridId"] == t["gridId"]
-    return remote.get_surface(b["gridId"], tuple(b["min"]), surface)
+    assert found, reply
+    return {
+        "blueprint": found[1],
+        "holder": found[2],
+        "table": found[3],
+        "details": found[4],
+        "how": found[5],
+    }
 
 
-def queue_panel(remote) -> str:
-    found = remote.find_nearby_blocks(
-        subtype="LargeTextPanel", max_distance=20, limit=20
-    )
-    b = next(b for b in found if "ShipyardQueue" in b["customName"])
-    return remote.get_surface(b["gridId"], tuple(b["min"]), 0).get("text", "")
+def settled(remote, screen: str, want: str, timeout: float = 25.0) -> str:
+    """The screen's text once want is in it, or at the timeout"""
+    deadline = time.monotonic() + timeout
+    while True:
+        text = screens(remote)[screen]
+        if want in text or time.monotonic() > deadline:
+            return text
+        time.sleep(2)
 
 
-def has_blueprint(remote) -> bool:
-    t = table(remote)
-    return bool(
-        remote.get_block(t["gridId"], tuple(t["min"]))["projector"].get("isProjecting")
-    )
+def queue(remote) -> str:
+    return " ".join(rig.chat(remote, "!oct shipyards", 3))
 
 
 def remove(remote) -> str:
@@ -142,130 +145,162 @@ def press(remote) -> str:
     return ship_reply(remote, "!oct order")
 
 
-def settled(read, want: str, timeout: float = 25.0) -> str:
-    """What read() returns once want is in it, or at the timeout"""
-    deadline = time.monotonic() + timeout
-    while True:
-        text = read()
-        if want in text or time.monotonic() > deadline:
-            return text
-        time.sleep(2)
+def explore_terminal(remote) -> None:
+    """Whether a headless client can get to the terminal's Remove button; logged only"""
+    try:
+        t = table(remote)
+        log(f"remote terminal: {remote.open_remote_terminal(t['gridId'])}")
+        log(f"screens: {remote.list_screens()}")
+        log(f"focused: {str(remote.get_focused_screen())[:3000]}")
+        remote.close_remote_terminal()
+    except Exception as e:  # noqa: BLE001 -- only exploring
+        log(f"no terminal: {e}")
 
 
-def rules(a, b) -> None:
+def first_order(a, b) -> None:
+    """The screens and the presses of a build that starts at once; its ship stays in the
+    shipyard, so the later orders wait"""
     load(a)
-    main = settled(lambda: console(a), "Press the button")
+    main = settled(a, "table", "Press the button")
     check("OctTester" in main and "free build" in main, f"quote on the table: {main!r}")
     check("Press the button" in main, "the table says to press the button")
     check("Steel Plate" not in main, "no parts list on the table")
-    parts = billboard(a).get("text", "")
+    shown = screens(a)
+    check(shown["holder"] == "OctTester", f"the loader holds it: {shown['holder']}")
+    parts = settled(a, "details", "Steel Plate")
     check(
         parts.startswith(FIRST_LINE + "\n"),
         f"billboard keeps its first line: {parts!r}",
     )
     check("Need" in parts and "Steel Plate" in parts, "billboard lists the parts")
+    check("Order Test" in parts, "billboard names the ship")
 
     reply = press(b)
     check(
         "only they can" in reply and "OctTester" in reply,
         f"another player can't order: {reply}",
     )
-    check(
-        "No ships" in settled(lambda: queue_panel(a), "No ships"),
-        "nothing queued by that",
-    )
+    check(screens(a)["blueprint"] == "True", "the blueprint stays on the table")
 
     reply = press(a)
     check("is in the queue" in reply, f"one press queues the ship: {reply}")
-    main = settled(lambda: console(a), "can cancel")
+    parts = settled(a, "details", "Ordered ship details")
     check(
-        "OctTester can cancel" in main,
-        f"the table offers the loader the cancel: {main!r}",
-    )
-    parts = settled(lambda: billboard(a).get("text", ""), "Ordered ship details")
-    check(
-        "Plate" not in parts and parts.startswith(FIRST_LINE),
+        "Steel Plate" not in parts and parts.startswith(FIRST_LINE),
         f"the parts list is gone: {parts!r}",
     )
-    check(not has_blueprint(a), "the blueprint is off the table")
+    check(screens(a)["blueprint"] == "False", "the blueprint is off the table")
+    reply = press(a)
+    check("can't be canceled now" in reply, f"not once it is being built: {reply}")
+    ready = so.wait_chat(a, "is ready", 400)
+    log(ready)
+    main = settled(a, "table", "then press")
+    check("then press" in main, f"the table is idle again: {main!r}")
+
+
+def rules(a, b) -> None:
+    load(a)
+    settled(a, "table", "Press the button")
+    reply = press(a)
+    check("is in the queue" in reply, f"one press queues behind the ship: {reply}")
+    main = settled(a, "table", "can cancel")
+    check("OctTester can cancel" in main, f"the table offers the cancel: {main!r}")
 
     reply = press(b)
     check(
-        "load a blueprint" in reply,
-        f"the other player has nothing to press for: {reply}",
+        "load a blueprint" in reply, f"the other player has nothing to press: {reply}"
     )
-    check("OctTester" in queue_panel(a), "their press canceled nothing")
+    check("Order Test" in queue(a), "their press canceled nothing")
 
     load(b)
-    main = settled(lambda: console(b), "OctOther")
+    main = settled(b, "table", "OctOther")
+    check("OctOther" in main, f"the other player's blueprint on the table: {main!r}")
     check(
-        "OctOther" in main, f"the other player's blueprint on the free table: {main!r}"
+        "Press the button" in main,
+        f"their build is on offer: {main!r}",
     )
     reply = press(a)
     check(
         "only they can" in reply and "OctOther" in reply,
         f"can't cancel while another's blueprint is on it: {reply}",
     )
-    check("OctTester" in queue_panel(a), "their order stays")
+    check("OctTester" in queue(a), "their order stays")
 
     log(remove(a))
-    main = settled(lambda: console(a), "OctTester can cancel", 5)
+    main = settled(a, "table", "OctTester can cancel", 5)
     check(
         "OctTester can cancel" in main,
         f"anyone can remove a blueprint, screens back within seconds: {main!r}",
     )
     check(
-        "OctOther" not in billboard(a).get("text", ""),
-        "the billboard is cleared with it",
+        "Steel Plate" not in screens(a)["details"], "the billboard is cleared with it"
     )
+
     reply = press(a)
-    check(
-        "OctOther" not in reply and "canceled" in reply.lower(),
-        f"then the same press cancels: {reply}",
-    )
-    check(
-        "No ships" in settled(lambda: queue_panel(a), "No ships"), "the queue is empty"
-    )
-    main = settled(lambda: console(a), "then press")
+    check("left the queue" in reply, f"then the same press cancels: {reply}")
+    main = settled(a, "table", "then press")
     check("then press" in main, f"the table is idle: {main!r}")
+
+    load(a)
+    settled(a, "table", "Press the button")
+    check("is in the queue" in press(a), "a queued order")
+    load(a)
+    main = settled(a, "table", "cancel it first")
+    check("cancel it first" in main, f"a new blueprint warns of it: {main!r}")
+    check("left the queue" in press(a), "the press cancels the old order first")
+    main = settled(a, "table", "Press the button to confirm")
+    check("confirm" in main, f"then the new blueprint's on offer: {main!r}")
+    remove(a)
 
 
 def limit(a, b) -> None:
-    with_config(a, ShipyardQueueMax=1, ShipyardTableMinutes=600)
+    with_config(a, **CONFIG, ShipyardQueueMax=1)
     load(a)
-    settled(lambda: console(a), "Press the button")
+    settled(a, "table", "Press the button")
     check("is in the queue" in press(a), "the only place in the queue is taken")
     load(b)
-    main = settled(lambda: console(b), "queue is full")
-    check(
-        "queue is full, 1 ships" in main, f"the table says the queue is full: {main!r}"
-    )
+    main = settled(b, "table", "queue is full")
+    check("queue is full, 1 ships" in main, f"the table says it is full: {main!r}")
     reply = press(b)
     check("queue is full" in reply, f"and a press doesn't queue: {reply}")
     remove(b)
+    with_config(a, **CONFIG)
 
 
-def owner_leaves(a, b):
-    """The queued build stays when its owner leaves, and they can cancel it when back"""
-    with_config(a, ShipyardQueueMax=6, ShipyardTableMinutes=600)
-    time.sleep(3)
-    load(b)
-    settled(lambda: console(b), "Press the button")
-    check("is in the queue" in press(b), "a second place in the queue")
+def owner_leaves(a, b, ship: int):
+    """a's order is waiting. It stays when they leave and is built when its turn comes."""
     rig.stop_client()
     time.sleep(20)
-    panel = queue_panel(b)
-    check("OctTester" in panel, f"the order stays while its owner is away: {panel!r}")
+    check("OctTester" in queue(b), "the order stays while its owner is away")
+    b.close_grid(ship)
+    log(f"closed the ship in the shipyard, {ship}")
+    finished = sa.wait_log(r"Hologram table|Shipyard order", 1)
+    log(f"log: {finished}")
+    deadline = time.monotonic() + 420
+    built = False
+    while time.monotonic() < deadline and not built:
+        time.sleep(15)
+        text = queue(b)
+        built = "OctTester" not in text
+    check(built, f"the build ran and ended with its owner away: {text}")
     a = rig.start_client()
     rig.ensure_character(a)
     sa.at_table(a, STATION)
+    mine = [
+        g
+        for g in a.list_grids()
+        if g.get("name") == "Order Test" and g["entityId"] != ship
+    ]
+    log(str(mine))
+    check(bool(mine), "the ship is there when they are back")
     return a
 
 
 def shots(a) -> None:
     Path(SHOTS).mkdir(parents=True, exist_ok=True)
     load(a)
-    settled(lambda: console(a), "Press the button")
+    settled(a, "table", "Press the button")
+    settled(a, "details", "Steel Plate")
     t = table(a)
     b = next(
         b
@@ -276,15 +311,23 @@ def shots(a) -> None:
     )
     for name, block in (("billboard", b), ("table", t)):
         pos = block["worldPosition"]
-        for suffix, offset in (("a", 3.0), ("b", -3.0)):
-            a.character_teleport(pos[0] + offset, pos[1], pos[2] + offset)
+        for suffix, offset in (
+            ("x", (2.2, 0)),
+            ("-x", (-2.2, 0)),
+            ("z", (0, 2.2)),
+            ("-z", (0, -2.2)),
+        ):
+            a.character_teleport(pos[0] + offset[0], pos[1], pos[2] + offset[1])
             time.sleep(4)
             a.character_look_at(*pos)
             time.sleep(4)
-            path = Path(SHOTS) / f"{name}-{suffix}.png"
+            path = Path(SHOTS) / f"{name}{suffix}.png"
             a.screenshot_save(str(path), 1280, 720)
             log(f"screenshot {path}")
+    log(str(screens(a)))
     sa.at_table(a, STATION)
+    remove(a)
+    time.sleep(3)
 
 
 def main() -> int:
@@ -311,15 +354,21 @@ def main() -> int:
             rig.ensure_character(b)
         sa.at_table(a, STATION)
         sa.at_table(b, STATION)
+        with_config(a, **CONFIG)
         log(remove(a))
         time.sleep(3)
+        explore_terminal(b)
         if SHOTS:
             shots(a)
-            remove(a)
-            time.sleep(3)
+        first_order(a, b)
+        built = [g for g in a.list_grids() if g.get("name") == "Order Test"]
+        log(f"the ship in the shipyard: {built}")
         rules(a, b)
         limit(a, b)
-        a = owner_leaves(a, b)
+        load(a)
+        settled(a, "table", "Press the button")
+        check("is in the queue" in press(a), "an order waiting for the shipyard")
+        a = owner_leaves(a, b, built[0]["entityId"])
     finally:
         rig.stop_client()
         with Second():
