@@ -2,7 +2,7 @@
 contracts, starter ships and station refills, with the file as it is. Same bench and world as
 wa_economy_cluster.py, whose run covers ship orders under the projection limits.
 
-Run on polaris on 2026-10-31: 12/12 checks in 21 minutes.
+Run on polaris on 2026-10-31: 15/15 checks in 6 minutes.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/world_config_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 """
