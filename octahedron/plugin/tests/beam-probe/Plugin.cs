@@ -6,6 +6,7 @@ using System.Reflection;
 using HarmonyLib;
 using Sandbox.Game.Entities;
 using Sandbox.Game.World;
+using Sandbox.ModAPI;
 using VRage.FileSystem;
 using VRage.Game.ModAPI;
 using VRage.Game.ObjectBuilders.Components;
@@ -43,6 +44,10 @@ public class Plugin : IPlugin
                 AccessTools.Method(typeof(MySafeZone), name),
                 prefix: new HarmonyMethod(typeof(Plugin), nameof(ZoneEvent))
             );
+        harmony.Patch(
+            AccessTools.Method(typeof(MyModAPIHelper.MyMultiplayer), "SendMessageTo"),
+            prefix: new HarmonyMethod(typeof(Plugin), nameof(ToolCoreSent))
+        );
     }
 
     public void Update()
@@ -81,6 +86,16 @@ public class Plugin : IPlugin
             Write($"ZONE {__originalMethod.Name} {grid.DisplayName}");
     }
 
+    // ToolCore's channel to the clients
+    private const ushort ToolCoreClients = 65352;
+    private static long sent;
+
+    private static void ToolCoreSent(ushort id)
+    {
+        if (id == ToolCoreClients)
+            sent++;
+    }
+
     private static object Get(object o, string name)
     {
         var type = o.GetType();
@@ -107,6 +122,7 @@ public class Plugin : IPlugin
         int hitting = 0,
             target = 0,
             stocked = 0;
+        var replicated = 0;
         MyCubeGrid yard = null;
         foreach (var comp in (IEnumerable)Get(Get(instance, "ToolMap"), "Values"))
         {
@@ -122,6 +138,7 @@ public class Plugin : IPlugin
             functional += (bool)Get(comp, "Functional") ? 1 : 0;
             hitting += (bool)Get(comp, "WasHitting") ? 1 : 0;
             stocked += Get(comp, "Inventory") is IMyInventory i && i.ItemCount > 0 ? 1 : 0;
+            replicated += ((ICollection)Get(comp, "ReplicatedClients")).Count;
             foreach (var mode in (IEnumerable)Get(Get(comp, "ModeMap"), "Values"))
                 if (Get(mode, "Turret") is { } turret && (bool)Get(turret, "HasTarget"))
                 {
@@ -135,7 +152,7 @@ public class Plugin : IPlugin
         Write(
             $"TOOLS tools={tools} activated={activated} track={track} powered={powered} "
                 + $"enabled={enabled} functional={functional} target={target} hitting={hitting} "
-                + $"stocked={stocked} zone_allows={allowed} {Ships(yard)}"
+                + $"stocked={stocked} replicated={replicated} sent={sent} zone_allows={allowed} {Ships(yard)}"
         );
     }
 

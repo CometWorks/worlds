@@ -6,7 +6,7 @@ build_world.py with the final shipyard.
 
 The steps, with a long build running: OCT_BEAM_STEPS=stream goes beyond sync distance and
 comes back, =rejoin leaves the game and joins again; the shipyard is streamed in again each
-time. All of its welders must shoot on the client after that, and some must hit, also once
+time; =none stays in range, to count the packets. All of its welders must shoot on the client after that, and some must hit, also once
 all blocks are placed and only their integrity is left.
 
     OCT_TASK=SE-782 OCT_WORLD_SOURCE=<world from build_world.py> \\
@@ -132,6 +132,13 @@ def report() -> None:
     if not client:
         log("no client samples")
         return
+    on = [s for s in server if int(s["activated"]) > 0]
+    if on:
+        log(
+            f"ToolCore packets to the clients during the build: "
+            f"{int(on[-1]['sent']) - int(on[0]['sent'])} in {on[-1]['t'] - on[0]['t']:.0f} s, "
+            f"entries in the tools' client lists at the end: {on[-1]['replicated']}"
+        )
     start = client[0]["t"]
     for at, text in marks:
         log(f"mark {at - start:.0f}: {text}")
@@ -220,6 +227,9 @@ def check_beams() -> None:
     for s in client:
         for name in ("tools", "activated", "hitting", "ship", "unfinished"):
             s[name] = int(s[name])
+    sa.check(len(client) > 0, "the client's probe logs")
+    if not client:
+        return
     full = max(s["ship"] for s in client)
     building = [s for s in client if s["unfinished"] > 0]
     ends = building[-1]["t"] if building else 0
@@ -246,7 +256,11 @@ def check_beams() -> None:
             )
     shooting(
         "only integrity left",
-        [s for s in building if s["ship"] == full and s["t"] > first + settle],
+        [
+            s
+            for s in building
+            if s["ship"] == full and (not marks or s["t"] > first + settle)
+        ],
     )
 
 

@@ -2778,8 +2778,7 @@ internal static class ShipyardOrders
             if (block.GetValueBool(ShootProperty) != on)
                 block.SetValueBool(ShootProperty, on);
         }
-        if (on)
-            ShipyardZoneWelding.ShowShooting(Beams(shipyard));
+        ShipyardZoneWelding.ShowShooting(Beams(shipyard), on);
     }
 
     // The welders stop without power: the shipyard's reactors are topped up to ReactorUranium

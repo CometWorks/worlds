@@ -315,8 +315,9 @@ log-off, or a handover to another node on a cluster), and `ShipyardTableMinutes`
   The server's own zones are left alone. A client that gets the shipyard streamed
   in during a build (it comes back in range, joins or crosses to this node) still
   turns the tools off before that message comes, and ToolCore tells it only when
-  the server's switch changes, so the plugin also sends the clients the switch
-  every 10 s (SE-782). ToolCore is the mod's own code: this reaches its session
+  the server's switch changes. So the plugin sends each such client the switch itself
+  at the next 10 s check and once more at the one after (SE-782), and nothing to the
+  clients it already told. ToolCore is the mod's own code: this reaches its session
   and packet by reflection and does nothing if they are gone.
 - A build whose ship gains no integrity for 60 s stops. Plain blocks, armor and
   decorations, are those of the plain `CubeBlock` type; every block of its own
