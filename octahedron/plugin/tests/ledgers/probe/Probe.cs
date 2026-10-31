@@ -6,6 +6,7 @@ using System.Reflection;
 using PluginSdk.Commands;
 using Sandbox.Game.Entities;
 using Sandbox.Game.World;
+using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.Plugins;
 
@@ -20,8 +21,11 @@ namespace LedgerProbe;
 ///   wait SECONDS     let the game run
 ///   clock DAYS       moves the clock that ages offline partitions in the contracts, a test's week
 ///   anything else    a chat command line, for example "!oct ledger show Alpha"
+///   pculimit N       sets the player's PCU limit in the contracts, so a test needn't own a million PCU
 /// Grid ids in the file LEDGERPROBE_PLAN.convert become ships on the process holding them, as the game's
 /// Convert to Ship does, and are written to LEDGERPROBE_PLAN.converted; on every process it is loaded on.
+/// Lines "tug grid player" in LEDGERPROBE_PLAN.tow give the tug to the player and join it to the grid as a
+/// connector would, on the process holding the tug, and are written to LEDGERPROBE_PLAN.towed.
 /// </summary>
 public class Probe : IPlugin, ICommandResponder
 {
@@ -34,6 +38,7 @@ public class Probe : IPlugin, ICommandResponder
     private StreamWriter output;
     private int replying;
     private string convertPath;
+    private string planPathAll;
     private DateTime nextConvert;
 
     private static readonly CommandCaller Console = new(
@@ -51,6 +56,7 @@ public class Probe : IPlugin, ICommandResponder
         var node = Environment.GetEnvironmentVariable("CLUSTER_NODE_ID");
         var only = Environment.GetEnvironmentVariable("LEDGERPROBE_NODE");
         convertPath = path == null ? null : path + ".convert";
+        planPathAll = path;
         if (path == null || outPath == null || (only != null && node != only))
             return;
         planPath = path;
@@ -60,6 +66,7 @@ public class Probe : IPlugin, ICommandResponder
     public void Update()
     {
         Convert();
+        Tow();
         if (planPath == null || MySession.Static is not { Ready: true })
             return;
         if (line >= plan.Length)
@@ -83,6 +90,12 @@ public class Probe : IPlugin, ICommandResponder
         if (next.StartsWith("wait "))
         {
             resumeAt = DateTime.UtcNow.AddSeconds(double.Parse(next.Substring(5)));
+            return;
+        }
+        if (next.StartsWith("pculimit "))
+        {
+            ContractsField("PcuLimitForTests")
+                .SetValue(null, int.Parse(next.Substring(9), CultureInfo.InvariantCulture));
             return;
         }
         if (next.StartsWith("clock "))
@@ -122,16 +135,41 @@ public class Probe : IPlugin, ICommandResponder
             }
     }
 
-    private static void ShiftContractClock(double days)
+    private readonly System.Collections.Generic.HashSet<string> towed = [];
+
+    private void Tow()
     {
-        var contracts = AppDomain
+        var path = planPathAll + ".tow";
+        if (planPathAll == null || !File.Exists(path) || MySession.Static is not { Ready: true })
+            return;
+        foreach (var text in File.ReadAllLines(path))
+        {
+            var p = text.Split(' ');
+            if (
+                p.Length != 3
+                || towed.Contains(text)
+                || !MyEntities.TryGetEntityById(long.Parse(p[0]), out var a)
+                || a is not MyCubeGrid tug
+                || !MyEntities.TryGetEntityById(long.Parse(p[1]), out var b)
+                || b is not MyCubeGrid grid
+            )
+                continue;
+            towed.Add(text);
+            tug.ChangeGridOwnership(long.Parse(p[2]), MyOwnershipShareModeEnum.Faction);
+            MyCubeGrid.CreateGridGroupLink(GridLinkTypeEnum.Physical, tug.EntityId, tug, grid);
+            File.AppendAllText(planPathAll + ".towed", text + "\n");
+        }
+    }
+
+    private static void ShiftContractClock(double days) =>
+        ContractsField("OfflineClockShift").SetValue(null, TimeSpan.FromDays(days));
+
+    private static FieldInfo ContractsField(string name) =>
+        AppDomain
             .CurrentDomain.GetAssemblies()
             .Select(a => a.GetType("ServerPlugin.Contracts"))
-            .First(t => t != null);
-        contracts
-            .GetField("OfflineClockShift", BindingFlags.NonPublic | BindingFlags.Static)
-            .SetValue(null, TimeSpan.FromDays(days));
-    }
+            .First(t => t != null)
+            .GetField(name, BindingFlags.NonPublic | BindingFlags.Static);
 
     // A reply that comes later belongs to the command whose step was current when it was sent; the
     // ledger commands answer once, so the test waits for each answer before the next command

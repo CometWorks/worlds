@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using HarmonyLib;
 using PluginSdk.Clustering;
+using Sandbox.Game;
 using Sandbox.Game.Contracts;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
@@ -31,6 +32,7 @@ namespace ServerPlugin;
 //   gone while the hunter is near;
 // - salvage: an unowned or wrecked grid near the station, done when the player who took it has
 //   towed it to the station's shipyard; it is then theirs, and the reward is paid too;
+//   (any NPC grid towed to a shipyard becomes the player's too, without a contract and unpaid)
 // - wreck: on a cluster, a wreck left in an offline partition anywhere, static or not, picked at
 //   random from the biggest ones, posted at the nearest station with a shipyard; done when towed
 //   there too and then theirs as well, or when it is ground down or gone with them near.
@@ -84,6 +86,8 @@ internal static class Contracts
     private static DateTime nextScout;
     private static DateTime nextScan;
     private static int reportsInFlight;
+    private static readonly TimeSpan RefusalEvery = TimeSpan.FromMinutes(5);
+    private static readonly Dictionary<long, DateTime> refused = new();
     private static HashSet<long> watched = [];
     private static IDisposable reportRegistration;
     private static ContractBook book;
@@ -92,6 +96,9 @@ internal static class Contracts
     // Tests only, set by reflection (tests/ledgers/probe): moves the clock that ages offline
     // partitions, so a test doesn't wait a week
     internal static TimeSpan OfflineClockShift = TimeSpan.Zero;
+
+    // Tests only, set by reflection: the player's PCU limit, so a test needn't own a million PCU
+    internal static int? PcuLimitForTests;
 
     private static OctahedronConfig Config => Plugin.Config;
     public static bool On => Config.Enabled && Config.ContractsEnabled;
@@ -254,11 +261,13 @@ internal static class Contracts
 
     private static void Apply(string answer)
     {
-        (watched, var close, var give) = ContractBook.ParseAnswer(answer);
+        (watched, var close, var give, var tell) = ContractBook.ParseAnswer(answer);
         foreach (var id in close)
             ContractGrids.Close(id);
         foreach (var (grid, player) in give)
             ContractGrids.Give(grid, player);
+        foreach (var (player, text) in tell)
+            MyVisualScriptLogicProvider.SendChatMessage(text, "Shipyard", player);
     }
 
     private static void Serve()
@@ -610,6 +619,7 @@ internal static class Contracts
         var state = Book;
         var now = DateTime.UtcNow;
         state.Forget(now);
+        var taken = new Dictionary<ContractTarget, long>();
         foreach (var (id, target) in state.Targets.ToList())
         {
             var contractState = system.GetContractState(id);
@@ -625,6 +635,7 @@ internal static class Contracts
             var hunter = active
                 ? (system.GetContractById(id) as MyContract)?.Owners.FirstOrDefault() ?? 0
                 : 0;
+            taken[target] = hunter;
             var station = oct.Stations.FirstOrDefault(s => s.Id == target.Station);
             var verdict = state.Judge(
                 target,
@@ -652,18 +663,106 @@ internal static class Contracts
                         state.Scrap(target.Grid, now);
                     break;
                 case ContractVerdict.Give:
-                    if (system.TryFinishCustomContract(id))
-                    {
-                        state.Give(target.Grid, hunter);
-                        Plugin.Log.Info($"Contract {id}: grid {target.Grid} goes to {hunter}");
-                    }
+                    // Refused, the contract stays open and the grid where it is
+                    if (Allows(state, state.Grids[target.Grid], hunter, now))
+                        if (system.TryFinishCustomContract(id))
+                        {
+                            state.Give(target.Grid, hunter);
+                            Plugin.Log.Info($"Contract {id}: grid {target.Grid} goes to {hunter}");
+                        }
                     break;
                 case ContractVerdict.Fail:
                     system.TryFailCustomContract(id);
                     break;
             }
         }
+        Takeovers(oct, state, taken, now);
         SaveBook();
+    }
+
+    // NPC grids towed to a shipyard: the player's, with no contract and no pay
+    private static void Takeovers(
+        MyFaction oct,
+        ContractBook state,
+        Dictionary<ContractTarget, long> taken,
+        DateTime now
+    )
+    {
+        var towed = state.TowedIn(
+            oct.Stations.Select(s => At(s.Position)),
+            ShipyardSearchMeters,
+            Config.ContractSalvageRadius,
+            t => taken.GetValueOrDefault(t)
+        );
+        foreach (var grid in towed)
+        {
+            if (
+                !Near(grid.Tower, grid.Position, WitnessMeters)
+                || !Allows(state, grid, grid.Tower, now)
+            )
+                continue;
+            state.Give(grid.Id, grid.Tower);
+            Plugin.Log.Info($"Towed in: grid {grid.Id} goes to {grid.Tower}");
+        }
+    }
+
+    // Whether the player may have the grid, against their PCU limit, counted over the whole cluster,
+    // and a ship's. Tells them either way.
+    private static bool Allows(ContractBook state, ContractGrid grid, long player, DateTime now)
+    {
+        var identity = MySession.Static.Players.TryGetIdentity(player);
+        if (identity == null)
+            return false;
+        var used = StarterShip.BuiltPcu(identity);
+        var limit = PcuLimitForTests ?? MyBlockLimits.GetMaxPCU(identity);
+        var after = used + grid.Pcu;
+        switch (ContractMath.Tow(grid.Pcu, used, limit, Config.GroupPcuLimit))
+        {
+            case ContractMath.TowResult.TooBig:
+                RefuseTow(
+                    state,
+                    grid,
+                    player,
+                    $"\"{grid.Name}\" stays as it is: it has {grid.Pcu:N0} PCU, and a ship may have at most {Config.GroupPcuLimit:N0}.",
+                    now
+                );
+                return false;
+            case ContractMath.TowResult.OverLimit:
+                RefuseTow(
+                    state,
+                    grid,
+                    player,
+                    $"\"{grid.Name}\" stays as it is: with its {grid.Pcu:N0} PCU you would have {after:N0}, more than 10% over your limit of {limit:N0}.",
+                    now
+                );
+                return false;
+            case ContractMath.TowResult.TakeOverLimit:
+                state.Tell(
+                    player,
+                    $"\"{grid.Name}\" is yours. You now have {after:N0} PCU, over your limit of {limit:N0}: you can't build blocks until you are back under it.",
+                    now
+                );
+                return true;
+            default:
+                state.Tell(player, $"\"{grid.Name}\" is yours.", now);
+                return true;
+        }
+    }
+
+    // For now a tow over the limits ends here: SE-840 breaks the grid down at the shipyard instead
+    private static void RefuseTow(
+        ContractBook state,
+        ContractGrid grid,
+        long player,
+        string text,
+        DateTime now
+    )
+    {
+        if (refused.TryGetValue(grid.Id, out var until) && now < until)
+            return;
+        refused[grid.Id] = now + RefusalEvery;
+        state.Tell(player, text, now);
+        Plugin.Log.Info($"Tow refused: grid {grid.Id} for {player}: {text}");
     }
 
     // The player or their faction owned or built the target when it was posted

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace ServerPlugin;
 
@@ -43,6 +44,9 @@ internal enum ContractGridFlags
 
     // Nothing on it can have an owner, armor mostly: giving it away changes nothing
     Unownable = 64,
+
+    // An NPC's movable grid, not OCT's, joined by a connector or landing gear to a player's ship
+    Towed = 128,
 }
 
 // A grid as the node simulating it last reported it. Sent as a line to the World Authority.
@@ -62,6 +66,12 @@ internal sealed class ContractGrid
     public long Owner;
     public long Builder;
 
+    // The PCU of the grid and its rotor and piston parts
+    public int Pcu;
+
+    // Towed: the player whose ship holds it
+    public long Tower;
+
     private static string N(double v) => v.ToString("R", CultureInfo.InvariantCulture);
 
     public string Encode() =>
@@ -79,7 +89,9 @@ internal sealed class ContractGrid
             Seen.Ticks.ToString(CultureInfo.InvariantCulture),
             (Name ?? "").Replace('\t', ' ').Replace('\n', ' '),
             Owner.ToString(CultureInfo.InvariantCulture),
-            Builder.ToString(CultureInfo.InvariantCulture)
+            Builder.ToString(CultureInfo.InvariantCulture),
+            Pcu.ToString(CultureInfo.InvariantCulture),
+            Tower.ToString(CultureInfo.InvariantCulture)
         );
 
     public static ContractGrid Decode(string line)
@@ -99,6 +111,8 @@ internal sealed class ContractGrid
             Name = p[10],
             Owner = long.Parse(p[11], CultureInfo.InvariantCulture),
             Builder = long.Parse(p[12], CultureInfo.InvariantCulture),
+            Pcu = int.Parse(p[13], CultureInfo.InvariantCulture),
+            Tower = long.Parse(p[14], CultureInfo.InvariantCulture),
         };
     }
 }
@@ -178,6 +192,12 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     private readonly Dictionary<string, DateTime> reports = new();
     private readonly Dictionary<long, DateTime> closing = new();
 
+    // Chat for a player: the World Authority has no clients, so each node gets it once and the one
+    // with the player delivers it
+    private sealed record Message(long Player, string Text, DateTime Until, HashSet<string> Told);
+
+    private readonly List<Message> messages = [];
+
     // What the nodes must report every time: the targets, and the grids still to be given away
     public IEnumerable<long> Watched =>
         Targets
@@ -186,7 +206,8 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             .Distinct();
 
     /// <summary>
-    /// A node's rows. The answer, comma separated: "watched ids;ids to close;grid:player to give".
+    /// A node's rows. The answer, comma separated: "watched ids;ids to close;grid:player to give;
+    /// player:base64 text to tell".
     /// The orders go to every node; the one that holds the grid carries them out, after a handover
     /// the new one, and they repeat until a report shows it done.
     /// </summary>
@@ -214,13 +235,28 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             + ";"
             + string.Join(",", closing.Keys)
             + ";"
-            + string.Join(",", Given.Where(g => g.Value != 0).Select(g => $"{g.Key}:{g.Value}"));
+            + string.Join(",", Given.Where(g => g.Value != 0).Select(g => $"{g.Key}:{g.Value}"))
+            + ";"
+            + string.Join(",", Tells(node, now));
     }
+
+    private IEnumerable<string> Tells(string node, DateTime now)
+    {
+        messages.RemoveAll(m => now >= m.Until);
+        return messages
+            .Where(m => m.Told.Add(node))
+            .Select(m => $"{m.Player}:{Convert.ToBase64String(Encoding.UTF8.GetBytes(m.Text))}")
+            .ToList();
+    }
+
+    public void Tell(long player, string text, DateTime now) =>
+        messages.Add(new Message(player, text, now + StaleAfter, []));
 
     public static (
         HashSet<long> Watched,
         List<long> Close,
-        List<(long Grid, long Player)> Give
+        List<(long Grid, long Player)> Give,
+        List<(long Player, string Text)> Tell
     ) ParseAnswer(string answer)
     {
         static IEnumerable<long> Ids(string text) =>
@@ -237,7 +273,17 @@ internal sealed class ContractBook(TimeSpan goneAfter)
                 )
             )
             .ToList();
-        return (Ids(parts[0]).ToHashSet(), Ids(parts[1]).ToList(), give);
+        var tell = parts[3]
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(m => m.Split(':'))
+            .Select(m =>
+                (
+                    long.Parse(m[0], CultureInfo.InvariantCulture),
+                    Encoding.UTF8.GetString(Convert.FromBase64String(m[1]))
+                )
+            )
+            .ToList();
+        return (Ids(parts[0]).ToHashSet(), Ids(parts[1]).ToList(), give, tell);
     }
 
     /// <summary>
@@ -335,6 +381,30 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             .ToList();
 
     /// <summary>
+    /// NPC grids towed to a shipyard of one of the stations, for whoever holds them. A grid a contract
+    /// someone took is about goes that contract's way, unless it is a bounty of the same player, which
+    /// taking over the target completes.
+    /// </summary>
+    public List<ContractGrid> TowedIn(
+        IEnumerable<ContractPoint> stations,
+        double shipyardSearchMeters,
+        double salvageRadius,
+        Func<ContractTarget, long> takenBy
+    ) =>
+        Grids
+            .Values.Where(r =>
+                r.Flags.HasFlag(ContractGridFlags.Towed)
+                && !r.Flags.HasFlag(ContractGridFlags.Seated)
+                && r.Tower != 0
+                && !Given.ContainsKey(r.Id)
+                && Targets.Values.All(t =>
+                    t.Grid != r.Id || takenBy(t) == 0 || (t.Kind == 'b' && takenBy(t) == r.Tower)
+                )
+                && stations.Any(s => AtShipyard(r, s, shipyardSearchMeters, salvageRadius))
+            )
+            .ToList();
+
+    /// <summary>
     /// A wreck in an offline partition: nothing on it works and nobody owns it, at once; any other
     /// grid without power once its partition has been offline for offlineFor. A visit brings the
     /// partition online and starts that time anew. A grid someone sits in is no wreck.
@@ -400,7 +470,11 @@ internal sealed class ContractBook(TimeSpan goneAfter)
         if (row != null)
             target.Position = row.Position;
         if (!active)
-            return !gone && stationAt != null && Wanted(target.Kind, row.Flags)
+            return
+                !gone
+                && stationAt != null
+                && !Given.ContainsKey(target.Grid)
+                && Wanted(target.Kind, row.Flags)
                 ? ContractVerdict.Keep
                 : ContractVerdict.Withdraw;
         if (hunterOwns && target.Kind != 'b')

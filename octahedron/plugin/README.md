@@ -667,6 +667,18 @@ Every minute the plugin fills each station up again:
   or withdraws it if nobody took it; the player who took it may repair it themselves.
   It pays per tonne as above; the time limit is `ContractSalvageMinutes` plus a minute
   for every 3 km.
+- Any movable NPC grid, of any faction but OCT and no station, joined by a connector or
+  landing gear to a player's ship and brought within `ContractSalvageRadius` of a
+  shipyard becomes that player's, with its rotor and piston parts, if they are within
+  5 km. No contract is needed and nothing is paid. A contract nobody took on it is
+  withdrawn; a grid under a contract someone took goes that contract's way.
+- The PCU limits apply to every grid a tow would give, with or without a contract: the
+  player's PCU limit (`TotalPCU` per player, 1,000,000 on Octahedron, against what they
+  have built on all the cluster's nodes) and `GroupPcuLimit` (60,000). Up to 10% over
+  their limit the grid is theirs, and chat tells them they can't build blocks until they
+  are back under it. More than 10% over, or over `GroupPcuLimit`, chat tells them it
+  stays as it is: the grid keeps its owner and a contract stays open. It is told
+  again every 5 minutes while they try.
 - Against abuse, for salvage and wrecks: a contract on a grid its taker or their faction
   owned or mostly built when it was posted fails at once, unpaid, so nobody sells their
   own ship to OCT by disowning it. It also fails when a third player comes to own the
@@ -683,7 +695,8 @@ deposit happen where the contract finishes, through the World Authority. The Wor
 Authority has no grids. Every minute each node reports the candidates among the grids it
 simulates and, every 30 seconds while there are any, the contracts' targets, on the topic
 `contracts/report`; the answer names the targets to watch, the grids to scrap and the
-grids to give to a player. That order goes to all nodes and the one holding the grid
+grids to give to a player, and chat for players, which every node gets once and the
+one with the player delivers. The give order goes to all nodes and the one holding the grid
 carries it out; it repeats until a report shows the new owner, also after a handover or
 a World Authority restart. The World Authority
 decides from those rows, which outlast a grid's partition going offline. It reads the

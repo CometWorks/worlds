@@ -25,10 +25,15 @@ so the world's Trade Lane Computers would count.
 - A node restart keeps the contracts, and so does a graceful cluster stop and warm start, with the player's
   ownership and the memory of the given grid.
 
+- An NPC ship held by a player's tug at the shipyard, with no contract: refused over a ship's PCU limit
+  and more than 10% over the player's, with a chat message and the owner unchanged; then 5% over, the
+  player's with a warning, unpaid. The test's probe gives the tug and joins the grids as a connector would,
+  and sets the player's limit.
+
 Grinding down, repairing a wreck and the seated and claimed rules are checked in
 tests/contracts/ContractTests.
 
-Takes about 50 minutes, most of it waiting out the 5 minute import grace on grid deletes.
+Takes about an hour, most of it waiting out the 5 minute import grace on grid deletes.
 
 """
 
@@ -76,8 +81,17 @@ GRIDS = {
     "Static Hull": LARGE_ID + 8,
     "Yard Derelict": LARGE_ID + 10,
     "Derelict Arm": LARGE_ID + 11,
+    "Player Tug": LARGE_ID + 14,
+    "Towed Pirate": LARGE_ID + 15,
 }
-NEAR = ("Bounty Target", "Test Derelict", "Yard Derelict", "Derelict Arm")
+NEAR = (
+    "Bounty Target",
+    "Test Derelict",
+    "Yard Derelict",
+    "Derelict Arm",
+    "Player Tug",
+    "Towed Pirate",
+)
 FAR = [name for name in GRIDS if name not in NEAR]
 STATOR, ROTOR = LARGE_ID + 12, LARGE_ID + 13
 # Ten stations' worth of room between them: a partition each, none near another
@@ -176,6 +190,18 @@ def add_grids() -> None:
             position=(sx + 5, sy - 1000 + 5, sz + 5),
         ),
         rig.grid(
+            "Player Tug",
+            GRIDS["Player Tug"],
+            rig.small_ship_blocks(SPRT_MEMBER),
+            position=(sx + 100, sy - 400, sz),
+        ),
+        rig.grid(
+            "Towed Pirate",
+            GRIDS["Towed Pirate"],
+            rig.small_ship_blocks(SPRT_MEMBER),
+            position=(sx + 200, sy - 400, sz),
+        ),
+        rig.grid(
             "Yard Derelict",
             GRIDS["Yard Derelict"],
             [
@@ -272,6 +298,18 @@ def run(bench) -> None:
                     if entity["entityId"] == GRIDS[name]:
                         return entity["ownerIdentityId"]
         return None
+
+    def chat(text: str, timeout: float) -> str:
+        try:
+            return wa.so.wait_chat(api, text, timeout)
+        except TimeoutError:
+            return ""
+
+    def set_pcu_limit(limit: int) -> None:
+        # The probe's own line, with no reply to wait for; the next command runs after it
+        with wa.lc.PLAN.open("a") as plan:
+            plan.write(f"pculimit {limit}\n")
+        time.sleep(12)
 
     def offline() -> dict[int, list[int]]:
         return {
@@ -559,6 +597,59 @@ def run(bench) -> None:
     check("complete the bounty", "finished" in reply, reply)
     still_paid("bounty", before, paid(api, before, bounty[0][3]), bounty[0][3])
 
+    # --- an NPC ship towed in, no contract, against the PCU limits ---
+    # The limits come first: the first report with the tug in place decides
+    reconfigure(GroupPcuLimit=1)
+    bench.wait_spawned(CLIENT_ID)
+    api.character_teleport(shipyard[0] + 100, shipyard[1] - 470, shipyard[2])
+    wait_until(lambda: owner("Towed Pirate"), 180, "the pirate awake")
+    pirate = grid_owner("Towed Pirate")
+    before = balances(api)
+    Path(f"{wa.lc.PLAN}.tow").write_text(
+        f"{GRIDS['Player Tug']} {GRIDS['Towed Pirate']} {identity}\n"
+    )
+    check(
+        "the tug is the player's and holds the pirate",
+        wait_until(lambda: grid_owner("Player Tug") == identity, 60, "the tug"),
+        grid_owner("Player Tug"),
+    )
+    too_big = chat("a ship may have at most", 150)
+    check(
+        "over a ship's limit: refused, in chat",
+        too_big and grid_owner("Towed Pirate") == pirate,
+        too_big,
+    )
+    set_pcu_limit(1)
+    reconfigure(GroupPcuLimit=60000)
+    # A refusal is repeated only every 5 minutes
+    over = chat("more than 10% over your limit", 400)
+    check(
+        "more than 10% over the player's limit: refused, in chat",
+        over and grid_owner("Towed Pirate") == pirate,
+        over,
+    )
+    # What they would have comes from that refusal: all the ledger and the game count
+    would_have = number(re.search(r"you would have ([\d,]+)", over)[1]) if over else 0
+    set_pcu_limit(int(would_have / 1.05))
+    warned = chat("you can't build blocks until", 150)
+    check(
+        "5% over: the player's, with a warning",
+        wait_until(lambda: grid_owner("Towed Pirate") == identity, 90, "the pirate")
+        and warned,
+        warned,
+    )
+    check(
+        "towed in without a contract: not paid", balances(api) == before, balances(api)
+    )
+    set_pcu_limit(1_000_000)
+    time.sleep(70)
+    found = post()
+    check(
+        "the taken ship has no contract any more, its posted bounty is gone",
+        not named(found, "Towed Pirate"),
+        named(found, "Towed Pirate"),
+    )
+
     # Wreck Big, with the player there: waking isn't its end, its end with them near is done
     big_contract = named(found, "Wreck Big", "wreck")[0]
     before = balances(api)
@@ -730,6 +821,8 @@ def main() -> int:
     )
     Path(f"{wa.lc.PLAN}.convert").unlink(missing_ok=True)
     Path(f"{wa.lc.PLAN}.converted").unlink(missing_ok=True)
+    Path(f"{wa.lc.PLAN}.tow").unlink(missing_ok=True)
+    Path(f"{wa.lc.PLAN}.towed").unlink(missing_ok=True)
     add_grids()
     set_config(
         ContractsEnabled="true",

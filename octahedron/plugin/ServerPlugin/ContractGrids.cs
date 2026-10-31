@@ -87,6 +87,25 @@ internal static class ContractGrids
         MyCubeGridGroups.Static?.Mechanical.GetGroup(grid)?.Nodes.Select(n => n.NodeData).ToList()
         ?? [grid];
 
+    // The player whose ship holds this NPC grid by a connector or landing gear, or 0. A movable NPC
+    // grid only, not OCT's and no station's.
+    private static long Tower(MyCubeGrid grid, long octId)
+    {
+        if (
+            grid.IsStatic
+            || grid.BigOwners.Count == 0
+            || !MySession.Static.Players.IdentityIsNpc(grid.BigOwners[0])
+            || IsStation(grid)
+            || OwnedBy(grid, octId)
+        )
+            return 0;
+        var attached = Attached(grid);
+        return Docked(grid)
+            .Except(attached)
+            .SelectMany(g => g.BigOwners)
+            .FirstOrDefault(o => !MySession.Static.Players.IdentityIsNpc(o));
+    }
+
     // Every root grid this process simulates that is a candidate for something, each physical group
     // once, the watched ones always. Not full: only the watched ones.
     public static List<ContractGrid> Scan(bool full, HashSet<long> watched, long octId)
@@ -98,6 +117,8 @@ internal static class ContractGrids
             .ToList();
         var seen = new HashSet<long>();
         var rows = new List<ContractGrid>();
+        var towed = new List<ContractGrid>();
+        var towedSeen = new HashSet<long>();
         foreach (var entity in MyEntities.GetEntities())
         {
             if (entity is not MyCubeGrid grid || grid.Physics == null || grid.MarkedForClose)
@@ -119,12 +140,29 @@ internal static class ContractGrids
             var near =
                 isWatched
                 || stations?.Any(s => VRageMath.Vector3D.Distance(s, position) <= range) == true;
+            // After the row its group would give it, which it replaces: a towed grid isn't a root
+            foreach (var member in Docked(grid))
+                if (
+                    Tower(member, octId) is var tower and not 0
+                    && Plugin.Simulated(member)
+                    && towedSeen.Add(Attached(member).Min(g => g.EntityId))
+                )
+                {
+                    var towedRow = Describe(member, Attached(member), true, true, octId);
+                    towedRow.Flags |= ContractGridFlags.Towed;
+                    towedRow.Tower = tower;
+                    var at = member.PositionComp.GetPosition();
+                    towedRow.Position = new ContractPoint(at.X, at.Y, at.Z);
+                    towed.Add(towedRow);
+                }
+
             var row = Describe(grid, group, near, isWatched, octId);
             if (row.Flags == ContractGridFlags.None && !isWatched)
                 continue;
             row.Position = new ContractPoint(position.X, position.Y, position.Z);
             rows.Add(row);
         }
+        rows.AddRange(towed);
         return rows;
     }
 
@@ -174,6 +212,7 @@ internal static class ContractGrids
         )
             row.Flags |= ContractGridFlags.Seated;
         row.MassKg = group.Sum(Mass);
+        row.Pcu = GroupPcuLimit.GroupPcu(grid);
         row.Owner =
             (
                 grid.BigOwners.Count > 0 ? grid : group.FirstOrDefault(g => g.BigOwners.Count > 0)

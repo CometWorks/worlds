@@ -425,7 +425,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
             && back.Targets[5].HunterSeen == DateTime.MinValue,
         "an older world's targets"
     );
-    Check(ContractBook.ParseAnswer(";;").Watched.Count == 0, "an empty answer");
+    Check(ContractBook.ParseAnswer(";;;").Watched.Count == 0, "an empty answer");
 }
 
 // Towed in, the grid goes to the player, on whichever node holds it, until a report shows it done
@@ -566,13 +566,113 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     Check(Judge(book, target, true, true, t0) == ContractVerdict.Scrap, "or ground down in place");
 }
 
+// Towing a grid in against the limits: the player's limit, 10 % over it, and a ship's
+{
+    Check(ContractMath.Tow(100, 0, 1000, 500) == ContractMath.TowResult.Take, "well within");
+    Check(
+        ContractMath.Tow(100, 900, 1000, 500) == ContractMath.TowResult.Take,
+        "right at the limit"
+    );
+    Check(
+        ContractMath.Tow(101, 900, 1000, 500) == ContractMath.TowResult.TakeOverLimit,
+        "a PCU over: taken, with a warning"
+    );
+    Check(
+        ContractMath.Tow(200, 900, 1000, 500) == ContractMath.TowResult.TakeOverLimit,
+        "exactly 10 % over: taken"
+    );
+    Check(
+        ContractMath.Tow(201, 900, 1000, 500) == ContractMath.TowResult.OverLimit,
+        "more than 10 % over: refused"
+    );
+    Check(
+        ContractMath.Tow(501, 0, 1000, 500) == ContractMath.TowResult.TooBig,
+        "over a ship's limit"
+    );
+    Check(
+        ContractMath.Tow(501, 900, 1000, 500) == ContractMath.TowResult.TooBig,
+        "a ship's limit comes first"
+    );
+    Check(ContractMath.Tow(501, 0, 1000, 0) == ContractMath.TowResult.Take, "no ship limit");
+    Check(
+        ContractMath.Tow(5000, 0, int.MaxValue, 0) == ContractMath.TowResult.Take,
+        "block limits off"
+    );
+    Check(
+        ContractMath.Tow(1_000_000, 1_000_000, 1_000_000, 0) == ContractMath.TowResult.OverLimit,
+        "the real limit: no overflow"
+    );
+}
+
+// An NPC grid towed in, no contract needed
+{
+    ContractGrid Towed(long id, ContractGridFlags more = ContractGridFlags.None, double x = 1100)
+    {
+        var row = Row(id, ContractGridFlags.Towed | more, 100, x);
+        row.Tower = Hunter;
+        return row;
+    }
+    var yard = Row(2, ContractGridFlags.Shipyard, 500, 1000);
+    long None(ContractTarget t) => 0;
+    List<long> In(ContractBook b, Func<ContractTarget, long> takenBy) =>
+        b.TowedIn([alpha], 3000, 150, takenBy).Select(r => r.Id).ToList();
+
+    var book = Book(Towed(1), Towed(3, ContractGridFlags.None, 100_000), yard);
+    Check(In(book, None).SequenceEqual([1L]), "at the shipyard, not elsewhere");
+
+    book = Book(Towed(1, ContractGridFlags.Seated), yard);
+    Check(In(book, None).Count == 0, "someone in it: left alone");
+
+    book = Book(Towed(1), yard);
+    book.Offline[1] = t0;
+    Check(In(book, None).Count == 0, "asleep: it hasn't just been brought there");
+
+    book = Book(Towed(1), yard);
+    book.Give(1, Hunter);
+    Check(In(book, None).Count == 0, "given once");
+
+    // Contracts on it: one nobody took doesn't matter and is withdrawn once it is given away
+    book = Book(Towed(1), yard);
+    var bounty = new ContractTarget('b', 1, 1, 10, new ContractPoint(1100, 0, 0));
+    book.Targets[7] = bounty;
+    Check(In(book, None).Count == 1, "a bounty nobody took: taken over");
+    Check(In(book, t => Hunter).Count == 1, "the player's own bounty: taken over");
+    Check(In(book, t => 5).Count == 0, "someone else's bounty: left to them");
+    book.Grids[1].Flags |= ContractGridFlags.Bounty;
+    Check(Judge(book, bounty, false, false, t0) == ContractVerdict.Keep, "the posted bounty stays");
+    book.Give(1, Hunter);
+    Check(Judge(book, bounty, false, false, t0) == ContractVerdict.Withdraw, "until it's given");
+
+    book = Book(Towed(1), yard);
+    book.Targets[7] = new ContractTarget('s', 1, 1, 0, new ContractPoint(1100, 0, 0));
+    Check(In(book, t => Hunter).Count == 0, "a salvage contract taken: its own way, and paid");
+}
+
+// Chat goes to each node once, the one with the player delivers it
+{
+    var book = Book();
+    book.Tell(Hunter, "It's yours; 100%: a, b", t0);
+    var answer = ContractBook.ParseAnswer(book.Report("n1", [], t0));
+    Check(answer.Tell.SequenceEqual([(Hunter, "It's yours; 100%: a, b")]), "the text survives");
+    Check(ContractBook.ParseAnswer(book.Report("n1", [], t0)).Tell.Count == 0, "told once");
+    Check(ContractBook.ParseAnswer(book.Report("n2", [], t0)).Tell.Count == 1, "another node too");
+    Check(
+        ContractBook.ParseAnswer(book.Report("n3", [], t0 + TimeSpan.FromMinutes(3))).Tell.Count
+            == 0,
+        "too late for a node that was away"
+    );
+}
+
 // A row and a target keep whose they were through the wire and the save
 {
     var row = Row(1, Dead, 100, 1100);
     row.Owner = 5;
     row.Builder = 6;
+    row.Pcu = 7;
+    row.Tower = 8;
     var back = ContractGrid.Decode(row.Encode());
     Check(back.Owner == 5 && back.Builder == 6, "a row's owner and builder");
+    Check(back.Pcu == 7 && back.Tower == 8, "its PCU and who tows it");
     var book = new ContractBook(goneAfter);
     book.Targets[7] = new ContractTarget('w', 1, 1, 100, alpha) { Owner = 5, Builder = 6 };
     var loaded = new ContractBook(goneAfter);
