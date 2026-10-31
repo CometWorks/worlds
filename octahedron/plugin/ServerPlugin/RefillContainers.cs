@@ -10,11 +10,13 @@ using Sandbox.Game.World;
 using VRage;
 using VRage.Game;
 using VRage.ObjectBuilders;
+using VRage.Utils;
 
 namespace ServerPlugin;
 
 // Tops up NPC-owned blocks of a configured name on a timer: a block with an inventory (cargo
-// container, reactor, ...) to a minimum stock, a battery to a full charge.
+// container, reactor, ...) to a minimum stock, a battery to a full charge. An item with several
+// ids counts them together, and each one missing is one of them at random.
 // Player-owned containers are skipped, so players can't name their own after a rule and farm it.
 internal sealed class RefillContainers
 {
@@ -88,18 +90,34 @@ internal sealed class RefillContainers
         var inventory = block.GetInventory();
         foreach (var item in rule.Items)
         {
-            if (item.MinimumAmount <= 0 || !TryGetItem(item.Item, out var id))
+            if (item.MinimumAmount <= 0)
                 continue;
-            RemoveUsedBottles(inventory, id);
-            var missing = (MyFixedPoint)item.MinimumAmount - inventory.GetItemAmount(id);
+            var ids = ParseItems(item.Item);
+            if (ids.Count == 0)
+                continue;
+            MyFixedPoint missing = item.MinimumAmount;
+            foreach (var id in ids)
+            {
+                RemoveUsedBottles(inventory, id);
+                missing -= inventory.GetItemAmount(id);
+            }
             if (missing <= 0)
                 continue;
-            var content = MyObjectBuilderSerializer.CreateNewObject(id);
-            // New gas bottles would be empty
-            if (content is MyObjectBuilder_GasContainerObject bottle)
-                bottle.GasLevel = 1f;
-            inventory.AddItems(missing, content);
+            if (ids.Count == 1)
+                AddItems(inventory, ids[0], missing);
+            else
+                for (var i = 0; i < (int)MyFixedPoint.Ceiling(missing); i++)
+                    AddItems(inventory, ids[MyUtils.GetRandomInt(ids.Count)], 1);
         }
+    }
+
+    private static void AddItems(MyInventory inventory, MyDefinitionId id, MyFixedPoint amount)
+    {
+        var content = MyObjectBuilderSerializer.CreateNewObject(id);
+        // New gas bottles would be empty
+        if (content is MyObjectBuilder_GasContainerObject bottle)
+            bottle.GasLevel = 1f;
+        inventory.AddItems(amount, content);
     }
 
     // Empty or partly used bottles of a rule's item are taken out, so they neither pile up
@@ -116,6 +134,17 @@ internal sealed class RefillContainers
             )
                 inventory.RemoveItemsAt(i);
         }
+    }
+
+    private List<MyDefinitionId> ParseItems(string text)
+    {
+        var ids = new List<MyDefinitionId>();
+        foreach (var part in (text ?? "").Split(','))
+        {
+            if (TryGetItem(part, out var id))
+                ids.Add(id);
+        }
+        return ids;
     }
 
     private bool TryGetItem(string text, out MyDefinitionId id)

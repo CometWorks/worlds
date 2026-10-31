@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using PluginSdk.Clustering;
@@ -23,6 +24,7 @@ namespace ServerPlugin;
 internal static class StationRefillPatch
 {
     private const int IceAmount = 10000;
+    private const int NodeCheckSeconds = 5;
     private static readonly MyObjectBuilder_Ore Ice =
         MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_Ore>("Ice");
 
@@ -43,29 +45,46 @@ internal static class StationRefillPatch
         AccessTools.MethodDelegate<Action<MyFactionStation, MyFaction>>(
             AccessTools.Method(typeof(MyFactionStation), "Update")
         );
+    private static readonly HashSet<long> nodeStations = new();
+    private static DateTime nextNodeCheck;
     private static DateTime nextNodeRefill;
 
-    // Runs the game's refill of every station on a timer of the economy tick's length, on a
-    // cluster only. The prefix below skips the stations another node simulates. A starting node
-    // refills at once, so frequent restarts can't hold the refill back.
+    // Runs the game's refill of the stations this node simulates on a timer of the economy tick's
+    // length, on a cluster only. A station that comes to this node is refilled at once, whether
+    // it was there at the start or its partition came later, so frequent restarts can't hold the
+    // refill back and a new node doesn't wait a whole tick for its first loot.
     public static void UpdateNode()
     {
         var session = MySession.Static;
+        var now = DateTime.UtcNow;
         if (
             !PluginCluster.IsClusterProcess
+            || now < nextNodeCheck
             || session?.Ready != true
             || !session.Settings.EnableEconomy
-            || DateTime.UtcNow < nextNodeRefill
         )
             return;
-        nextNodeRefill = DateTime.UtcNow.AddSeconds(
-            Math.Max(1, session.Settings.EconomyTickInSeconds)
-        );
+        nextNodeCheck = now.AddSeconds(NodeCheckSeconds);
+
+        var tick = now >= nextNodeRefill;
+        if (tick)
+            nextNodeRefill = now.AddSeconds(Math.Max(1, session.Settings.EconomyTickInSeconds));
 
         foreach (var faction in session.Factions)
         foreach (var station in faction.Value.Stations)
         {
-            if (station is MyFactionStation factionStation)
+            if (station is not MyFactionStation factionStation)
+                continue;
+            var id = factionStation.StationEntityId;
+            if (!MyEntities.TryGetEntityById(id, out MyCubeGrid grid) || !Plugin.Simulated(grid))
+            {
+                nodeStations.Remove(id);
+                continue;
+            }
+            var arrived = nodeStations.Add(id);
+            if (arrived)
+                Plugin.Log.Info($"Refilling station {factionStation.Name} as it came to this node");
+            if (arrived || tick)
                 UpdateFactionStation(factionStation, faction.Value);
         }
     }

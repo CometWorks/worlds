@@ -29,7 +29,8 @@ loot or is hidden. Off, the game's own refill runs unchanged.
 
 On a cluster the economy tick runs only on the World Authority, which has no
 grids, so the game never refills a station there. Each node runs the refill
-itself for the stations it simulates: once when it starts, then every
+itself for the stations it simulates: at once when a station comes to the node,
+whether at its start or with a partition it gets later, then every
 `EconomyTickInSeconds`. With `StationRefillEnabled` off, that is the game's own
 refill.
 
@@ -51,6 +52,10 @@ and `GasContainerObject/HydrogenBottle`, or the suit battery pack
 `ConsumableItem/Powerkit`. An unknown item is logged once and skipped. Bottles
 are added full, and bottles of a rule's item that aren't full are removed from
 the container at each refill.
+
+An item can name several ids separated by commas, like
+`PhysicalGunObject/Welder2Item,PhysicalGunObject/Welder3Item`. Their amounts count
+together toward the minimum, and each one missing is one of them at random.
 
 ### World edge
 
