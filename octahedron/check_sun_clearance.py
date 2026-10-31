@@ -7,13 +7,13 @@
 
     uv run check_sun_clearance.py <world folder> [--steps 7200]
 
-Light strobes when the Sun passes behind something with gaps: a Trade Lanes gate, the
-asteroid ring or the station's own shipyard (SE-809, SE-720). For each station and Sun
-position this takes the ray from the Sun through every such object and measures how far it
-passes from the station's bounding sphere, with the object as its bounding sphere too:
-gates, asteroids and, for the shipyard, each of its blocks. A clearance above 0 m means no
-ray that touches the object can reach any point of the station. The angle is how far the
-Sun stays from the object's edge seen from the station's lobby and from its hangar deck.
+Light strobes when the Sun passes behind something with gaps: a Trade Lanes gate or the
+station's own shipyard (SE-809, SE-720). For each station and Sun position this takes the ray
+from the Sun through every such object and measures how far it passes from the station's
+bounding sphere, with the object as its bounding sphere too: gates and, for the shipyard, each
+of its blocks. A clearance above 0 m means no ray that touches the object can reach any point
+of the station. The angle is how far the Sun stays from the object's edge seen from the
+station's lobby and from its hangar deck.
 
 Prints a line per station and exits with 1 if any clearance is 0 or less.
 """
@@ -121,21 +121,6 @@ def lane_gates(grids):
     return np.array(gates)
 
 
-def asteroids(world_folder, objects):
-    """(centers, radii): any asteroid stays inside the sphere around its storage's cube."""
-    centers, radii = [], []
-    for entity in objects:
-        if entity.get(world.XSI_TYPE) != "MyObjectBuilder_VoxelMap":
-            continue
-        size = world.storage_size(
-            world_folder / f"{entity.findtext('StorageName')}.vx2"
-        )
-        position, right, up, backward = grid_frame(entity)
-        centers.append(position + (right + up + backward) * size / 2)
-        radii.append(size * 3**0.5 / 2)
-    return np.array(centers), np.array(radii)
-
-
 def sweep(sun, center, radius, viewpoints, points, radii):
     """(meters, degrees): the smallest clearance over the day."""
     meters, degrees = np.inf, np.inf
@@ -230,10 +215,9 @@ def main():
     by_name = {g.findtext("DisplayName"): g for g in grids}
     sun, axis = sun_path(args.world, args.steps)
     gates = lane_gates(grids)
-    rocks, rock_radii = asteroids(args.world, objects)
     print(
-        f"Sun axis {np.round(axis, 3)}, {args.steps} positions a day, {len(gates)} gates,"
-        f" {len(rocks)} asteroids (clearance m / degrees from lobby and hangar)"
+        f"Sun axis {np.round(axis, 3)}, {args.steps} positions a day, {len(gates)} gates"
+        " (clearance m / degrees from lobby and hangar)"
     )
     failed = False
     for name, grid in by_name.items():
@@ -246,7 +230,6 @@ def main():
         cells = []
         for label, points, radii in (
             ("gates", gates, np.full(len(gates), world.GATE_RADIUS)),
-            ("ring", rocks, rock_radii),
             ("shipyard", yard_blocks, np.full(len(yard_blocks), world.BLOCK_RADIUS)),
         ):
             meters, degrees = sweep(sun, center, radius, views, points, radii)

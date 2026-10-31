@@ -79,18 +79,23 @@ LANE_ENDPOINT_DISTANCE = 1_000.0
 MOON_LANE_ENDPOINT_DISTANCE = 1_500.0
 LANE_SPEED = 10_000
 LANE_RING_INTERVAL = 10_000
-# Asteroid surfaces stay this far from a lane's straight line
+# Asteroid surfaces stay this far from a lane's straight line, before lanes_off_sun moves it
 LANE_CLEARANCE = 1_000.0
 # The Trade_Lane.mwm model: its bounding sphere (radius 211.5 m) lies 13.4 m along the lane
 # from the gate's origin
 GATE_RADIUS = 225.0
 # TradeLaneComputerBlockLogic.RingOffset: a gate stands this far to its computer's right
 GATE_OFFSET = 220.0
-# Light strobes when the Sun passes behind a gate, the ring or a shipyard (SE-809, SE-720). The
-# Sun circles in a plane, so all day its rays to a place stay in a flat slab through that place:
-# whatever keeps out of the slab never shades it. check_sun_clearance.py sweeps a built world.
-# Gates and asteroids stay out of the slab of a station's whole safe zone by this much.
-SUN_CLEARANCE = 25.0
+# Light strobes when the Sun passes behind a gate or a shipyard (SE-809, SE-720). The Sun circles
+# in a plane, so all day its rays to a place stay in a flat slab through that place: whatever
+# keeps out of the slab never shades it. check_sun_clearance.py sweeps a built world.
+# The equatorial square's lanes run this far north of the stations' plane, all level: the least
+# that keeps every gate out of the slab of each station's bounding sphere, 9 m to spare at Beta
+# and Delta Station. North is the lobbies' side, and clearing to the south would take 370 m.
+EQUATOR_LANE_NORTH = 200.0
+# How far north the ends of North Station's Moon lane move, North Station's end and the Moon's,
+# for the same reason: 10 m to spare. The other lanes clear without moving.
+NORTH_MOON_LANE_NORTH = (-150.0, 160.0)
 # A shipyard's blocks stay out of the slab of its station's bounding sphere by this much
 SHIPYARD_SUN_CLEARANCE = 15.0
 # The bounding sphere of a block cell. Blocks are counted by their Min cell, so this also covers
@@ -1200,41 +1205,27 @@ def gate_points(start, end, interval=LANE_RING_INTERVAL):
     ]
 
 
-def lanes_off_sun(lane_list, places, sun, north, polar_normal):
-    """The lanes with their ends moved along the Sun's axis, by as little as keeps every gate
-    out of the slab of the Sun's rays through every station's safe zone, to the south when a
-    gate lies right in it: the equatorial square's lanes all stay level together."""
-    clearance = STATION_SAFE_ZONE_RADIUS + GATE_RADIUS + SUN_CLEARANCE
-    zones = [center for center, _, _ in places.values()]
-    lane_list = [list(lane) for lane in lane_list]
+def lanes_off_sun(lane_list, sun):
+    """The lanes with their ends moved along the Sun's axis, so every gate stays out of the slab
+    of the Sun's rays through every station."""
 
-    def push(lane):
-        _, home, target, start, end = lane
-        direction = norm(sub(end, start))
-        right = cross(direction, lane_up(direction, home, target, north, polar_normal))
-        # The end gates first: moving both ends can leave the lane level
-        for t, point in sorted(
-            gate_points(start, end), key=lambda g: min(g[0], 1 - g[0])
-        ):
-            for side in (1, -1):
-                gate = add(point, mul(right, side * GATE_OFFSET))
-                for zone in zones:
-                    height = dot(sub(gate, zone), sun)
-                    if abs(height) < clearance - 0.5:
-                        move = clearance - abs(height)
-                        move = -move if height < 1 else move
-                        # The nearer end, as much as moves this gate out
-                        if t < 0.5:
-                            lane[3] = add(start, mul(sun, move / (1 - t)))
-                        else:
-                            lane[4] = add(end, mul(sun, move / t))
-                        return True
-        return False
+    def shift(home, target):
+        if {home, target} <= EQUATOR_STATIONS:
+            return EQUATOR_LANE_NORTH, EQUATOR_LANE_NORTH
+        if (home, target) == ("North Station", "Moon Station"):
+            return NORTH_MOON_LANE_NORTH
+        return 0.0, 0.0
 
-    for _ in range(1000):
-        if not any([push(lane) for lane in lane_list]):
-            return [tuple(lane) for lane in lane_list]
-    raise AssertionError("the lanes don't leave the Sun's slabs")
+    return [
+        (
+            lane_id,
+            home,
+            target,
+            add(start, mul(sun, shift(home, target)[0])),
+            add(end, mul(sun, shift(home, target)[1])),
+        )
+        for lane_id, home, target, start, end in lane_list
+    ]
 
 
 def sun_axis(sector):
@@ -1265,19 +1256,10 @@ def magnetic_axis(planet, sun):
     return norm(sub(mul(planet.up, math.cos(tilt)), mul(norm(away), math.sin(tilt))))
 
 
-def asteroid_ring(seed, earth, axis, places, lane_list, sun):
+def asteroid_ring(seed, earth, axis, places, lane_list):
     """(storage name, center, size, forward, up, vx2 bytes) for the ring around axis and its 4
     ice asteroids. Each asteroid draws from its own random generator, so a station or lane
-    added later moves only the asteroids in its way. None lies in the slab of the Sun's rays
-    through a station's safe zone: a narrow gap where the slab crosses the band."""
-
-    def off_sun(center, size):
-        # The sphere around the storage's cube holds the asteroid at any rotation
-        clearance = STATION_SAFE_ZONE_RADIUS + size * math.sqrt(3) / 2 + SUN_CLEARANCE
-        return all(
-            abs(dot(sub(center, zone), sun)) >= clearance
-            for zone, _, _ in places.values()
-        )
+    added later moves only the asteroids in its way."""
 
     def own_rng(name):
         return random.Random(f"{seed}:{name}")
@@ -1297,9 +1279,6 @@ def asteroid_ring(seed, earth, axis, places, lane_list, sun):
         in_plane = sub(halfway, mul(axis, dot(halfway, axis)))
         center = add(earth.center, mul(norm(in_plane), RING_RADIUS))
         size = storage_size(SCENARIO.parents[1] / f"VoxelMaps/{ICE_SHAPE}.vx2")
-        assert off_sun(
-            center, size
-        ), "an ice asteroid lies in the Sun's way to a station"
         storage = f"Octahedron-Ice-{i + 1}"
         asteroids.append(
             (
@@ -1347,13 +1326,9 @@ def asteroid_ring(seed, earth, axis, places, lane_list, sun):
             height = rng.uniform(-RING_THICKNESS / 2, RING_THICKNESS / 2)
             radial = add(mul(u, math.cos(angle)), mul(v, math.sin(angle)))
             center = add(earth.center, add(mul(radial, radius), mul(axis, height)))
-            if (
-                free(center, size)
-                and off_sun(center, size)
-                and not any(
-                    segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
-                    for _, _, _, s, e in lane_list
-                )
+            if free(center, size) and not any(
+                segment_distance(center, s, e) < size / 2 + LANE_CLEARANCE
+                for _, _, _, s, e in lane_list
             ):
                 break
         voxel_seed = rng.getrandbits(31)
@@ -1552,16 +1527,18 @@ def main():
     places, edges = layout(earth, moon)
     sun = sun_axis(sector)
     polar_normal = norm(sub(places["Alpha Station"][0], earth.center))
-    lane_list = lanes_off_sun(lanes(places, edges), places, sun, earth.up, polar_normal)
+    straight_lanes = lanes(places, edges)
+    lane_list = lanes_off_sun(straight_lanes, sun)
     # The ring's axis turns with the octahedron, so the ring still passes Beta and Delta
     # Station on the same sides
     axis = rotate(
         magnetic_axis(earth, sun_direction(sector)), earth.up, moon_turn(earth, moon)
     )
     # The asteroids take the first ids, so stations and grids added later leave their ids as
-    # they are; their places come from their own generators (asteroid_ring)
+    # they are; their places come from their own generators (asteroid_ring). They keep clear of
+    # the lanes before lanes_off_sun moves them, so moving a lane moves no asteroid.
     for storage, center, size, forward, up, data in asteroid_ring(
-        args.seed, earth, axis, places, lane_list, sun
+        args.seed, earth, axis, places, straight_lanes
     ):
         (out / f"{storage}.vx2").write_bytes(data)
         objects.append(voxel_map(ids, storage, center, size, forward, up))
