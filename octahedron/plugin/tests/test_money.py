@@ -35,6 +35,7 @@ TOPPED = "Money: OCT topped up by 5,000,000 SC to its floor"
 SUBSIDY = 5_000 // 24
 # Money options of every step, on top of the world's config
 BASE = {"MoneyPlayerTaxThreshold": 10_000}
+ECONOMY_TICK = 15
 
 
 def number(text: str) -> int:
@@ -129,7 +130,7 @@ def main() -> None:
     rig.stop_client()
     rig.stop_server()
     # A short economy tick, so the game's top-up toward 1e9 would show within the run
-    rig.prepare_world(settings={"EconomyTickInSeconds": 60})
+    rig.prepare_world(settings={"EconomyTickInSeconds": ECONOMY_TICK})
     rig.write_plugin_config()
     rig.prepare_server()
     rig.start_server()
@@ -142,8 +143,8 @@ def main() -> None:
     ledger = Ledger(25_000)
     assert money(remote) == {"OCT": 20_000_000, "You": 25_000}, "starting balances"
 
-    # Two economy ticks: with the rules on, OCT stays where it is
-    time.sleep(130)
+    # Four economy ticks and a run of the rules: with the rules on, OCT stays where it is
+    time.sleep(4 * ECONOMY_TICK + 5)
     ledger.payouts()
     assert money(remote) == {"OCT": 20_000_000, "You": ledger.balance}, "OCT moved"
 
@@ -167,12 +168,13 @@ def main() -> None:
     ledger.payouts()
     assert money(remote)["OCT"] == 25_000_000, "OCT topped up to its floor"
 
-    # OCT's 3,000,000 above the lowered cap goes to the player
-    with_config(remote, **BASE, MoneyOctCap=22_000_000)
+    # OCT's 300,000 above the lowered cap goes to the player. A million would unlock the
+    # game's achievement, which disconnects a client without Steam
+    with_config(remote, **BASE, MoneyOctCap=24_700_000)
     paid = command(remote, "!oct payday", HOUR)
-    check_payout(paid, 3_000_000)
+    check_payout(paid, 300_000)
     ledger.payouts()
-    assert money(remote) == {"OCT": 22_000_000, "You": ledger.balance}, "OCT's excess"
+    assert money(remote) == {"OCT": 24_700_000, "You": ledger.balance}, "OCT's excess"
 
     # Closing the day logs its totals: the payouts since the first tax day, OCT's top-up.
     # It taxes the client again.
@@ -195,9 +197,11 @@ def main() -> None:
 
     # The known positive: with the rules off the economy tops OCT up again
     with_config(remote, MoneyEnabled="false")
-    time.sleep(130)
-    oct = money(remote)["OCT"]
-    assert oct > 22_000_000, "the economy's top-up with the rules off"
+    rig.wait_until(
+        lambda: money(remote)["OCT"] > 24_700_000,
+        8 * ECONOMY_TICK,
+        "the economy's top-up with the rules off",
+    )
     with_config(remote, **BASE)
 
     rig.stop_client()
