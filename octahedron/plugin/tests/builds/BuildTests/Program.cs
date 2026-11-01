@@ -375,6 +375,85 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(r.Message == "The labor fee of 100 SC is paid back.", r.Message);
 }
 
+// A ship left in the build space: what it cost comes back once, unless it left
+{
+    var (w, m, market, b) = Setup();
+    var order = Ok(w, "order", () => b.Order(w, s, Paid(P1), none)).Order;
+    Ok(w, "turn", () => b.Turn(w, s, order.Id));
+    var plates = Needs((Plate, 10 * U));
+    Ok(w, "start", () => b.Begin(w, market, s, order.Id, P1, plates, none));
+    Check(order.Paid == 510 + 100, "the order knows what it took: " + order.Paid);
+    Ok(w, "after", () => b.After(w, market, s, order.Id, 0, false, none, ship: 7));
+    var ship = b.Ships.Single();
+    Check(ship.Refund == 610 && ship.Player == P1 && ship.Station == A, "the ship is known");
+    var again = BuildBook.Deserialize(b.Serialize());
+    Check(again.Ships.Single().Refund == 610, "it is saved");
+    Check(!again.ShipOut(w, 8, true).Ok, "no other ship is paid for");
+    var paid = Ok(w, "refund", () => again.ShipOut(w, 7, true));
+    Check(paid.Message == "The 610 SC you paid is paid back.", paid.Message);
+    Check(w.Balances[P1] == 25_000, "all of it is back");
+    Check(!again.ShipOut(w, 7, true).Ok && w.Balances[P1] == 25_000, "only once");
+    Check(!again.Ships.Any(), "and it is forgotten");
+
+    Ok(w, "left", () => b.ShipOut(w, 7, false));
+    Check(!b.Ships.Any() && w.Balances[P1] == 25_000, "a ship that left costs nothing");
+    Check(!b.ShipOut(w, 7, true).Ok, "and nothing comes back for it later");
+
+    var queue = new BuildRequest { Verb = BuildVerb.Queue, Station = A };
+    b.Finish(order.Id, 9);
+    var lines = queue.Run(b, w, market, s).Split('\n');
+    Check(BuiltShip.Decode(lines.Single()).Refund == 0, "a free one has nothing to refund");
+    Ok(w, "removed", () => b.ShipOut(w, 9, true));
+    Check(w.Balances[P1] == 25_000, "and gets nothing");
+}
+
+// An unfinished ship is worth its share; the ice sold back and a removed ship don't count
+{
+    var (w, m, market, b) = Setup();
+    var order = Ok(w, "order", () => b.Order(w, s, Paid(P1, fee: 0), none)).Order;
+    Ok(w, "turn", () => b.Turn(w, s, order.Id));
+    var needed = Needs((Plate, 10 * U));
+    Ok(w, "start", () => b.Begin(w, market, s, order.Id, P1, needed, none));
+    Ok(w, "after", () => b.After(w, market, s, order.Id, 0, false, none, ship: 7, percent: 40));
+    Check(b.Ships.Single().Refund == 510 * 40 / 100, "a share: " + b.Ships.Single().Refund);
+
+    var (w2, m2, market2, b2) = Setup();
+    var iced = Ok(w2, "order", () => b2.Order(w2, s, Paid(P1, fee: 0), none)).Order;
+    Ok(w2, "turn", () => b2.Turn(w2, s, iced.Id));
+    Ok(w2, "start", () => b2.Begin(w2, market2, s, iced.Id, P1, Needs((Ice, 100 * U)), none));
+    var before = w2.Balances[P1];
+    Ok(w2, "after", () => b2.After(w2, market2, s, iced.Id, 0, false, none, ship: 7));
+    var sold = w2.Balances[P1] - before;
+    Check(sold > 0 && b2.Ships.Single().Refund == iced.Paid - sold, "less the ice sold back");
+
+    var (w3, m3, market3, b3) = Setup();
+    var gone = Ok(w3, "order", () => b3.Order(w3, s, Paid(P1), none)).Order;
+    Ok(w3, "turn", () => b3.Turn(w3, s, gone.Id));
+    Ok(w3, "start", () => b3.Begin(w3, market3, s, gone.Id, P1, none, none));
+    Ok(w3, "after", () => b3.After(w3, market3, s, gone.Id, 0, true, none));
+    Check(!b3.Ships.Any(), "no ship, no entry");
+}
+
+// A saved book of before Paid and built ships still loads
+{
+    var old =
+        "octahedron-builds 3\nN\t5\n"
+        + "O\tb5\tAlpha Station\t1\t1\t10\t100\tOld\t1000\t0\t\t1\t2000\t0\tComponent/SteelPlate\t5\n";
+    var order = BuildBook.Deserialize(old).Get("b5");
+    Check(order.Paid == 0 && order.Items["Component/SteelPlate"] == 5, "an old line");
+    var round = BuildBook.DecodeOrder(BuildBook.EncodeOrder(order, false));
+    Check(round.Items["Component/SteelPlate"] == 5, "with Paid and an item");
+    var request = BuildRequest.Decode(
+        new BuildRequest
+        {
+            Verb = BuildVerb.After,
+            Grid = 7,
+            Percent = 40,
+        }.Encode()
+    );
+    Check(request.Grid == 7 && request.Percent == 40, "the wire format has the ship");
+}
+
 // Hydrogen from outside: not bought; what the ship doesn't take is sold for the player
 {
     var (w, m, market, b) = Setup();

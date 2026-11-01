@@ -491,8 +491,15 @@ chat messages find the player on any node. One who is logged off misses them.
   less tax if it has none, into OCT's stock. The money goes to the player, with a chat
   message.
 - A ship in the build space holds up the next order. Its owner is told, and after
-  `ShipyardClearMinutes` (5) it is moved out over the shipyard. A restart starts
-  that wait over.
+  `ShipyardClearMinutes` (5) a ship an order built, until it first leaves the build
+  space, goes into the Hangar of the player who ordered it (Hangar 1.2.0 or later). The
+  entry counts as stored at this station, so it comes back free here. With no free slot
+  it is removed with all that is in it, and the player gets back the SC the build took:
+  the Store's price and the labor fee, less what the ice the ship didn't take sold for,
+  and for an unfinished ship the share of its blocks that were built. A free ship is
+  just removed. Components the player brought aren't paid for. A ship Hangar can't take
+  (over its entry limits, or no Hangar) and any other grid are moved out over the
+  shipyard. A restart starts that wait over.
 - A towed grid over the player's limits is broken down at once on arrival: each block
   yields the components it really has, and its cargo comes along. With the shipyard
   free that is into the containers, with a turn for the player and the last window;
@@ -1306,6 +1313,13 @@ from the World Authority in parts; `tests/mech_blueprint.py bp.sbc big` writes a
 that needs them and still builds fast.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
+`tests/test_shipyard_deadline.py` checks a ship left in the build space past
+`ShipyardClearMinutes`, with a Hangar working copy (`OCT_HANGAR_REPO`) on the server: stored
+for its orderer and counted once in their PCU, free to load at the station, removed and refunded
+with the slot taken, a free ship just removed, a ship that left and came back moved out as any
+grid, the same with Hangar off, and restarts in the wait and after a refund.
+`tests/shipyard_deadline_cluster.py` does it on a cluster: the node stores, another node loads,
+the World Authority refunds, over node restarts in the wait and a graceful stop.
 `tests/test_hangar_fee.py` checks the Hangar fee with the client and a Hangar working
 copy (`OCT_HANGAR_REPO`) on the server holding ships stored at the stations: a load
 outside the safe zones refused, the same station free, another station 100 SC for

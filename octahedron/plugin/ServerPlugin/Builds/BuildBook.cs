@@ -34,6 +34,9 @@ public sealed class BuildOrder
     // The labor fee paid to OCT when the build starts, SC
     public long Fee;
 
+    // What the build's start took from the payer, labor fee included, SC
+    public long Paid;
+
     public int Pcu;
     public string Ship = "";
 
@@ -67,6 +70,44 @@ public sealed class BuildOrder
 
     /// <summary>The player's turn at the shipyard is on: the order is at the front of the queue.</summary>
     public bool Active => Phase != BuildPhase.Waiting;
+}
+
+/// <summary>A ship an order built, as long as it stays in the shipyard's build space.</summary>
+public sealed class BuiltShip
+{
+    public long Grid;
+    public string Station = "";
+    public long Player;
+    public string Name = "";
+
+    // What comes back if it has to be removed, SC
+    public long Refund;
+
+    public string Encode() =>
+        string.Join(
+            "\t",
+            "S",
+            BuildQuote.N(Grid),
+            Station,
+            BuildQuote.N(Player),
+            BuildQuote.N(Refund),
+            Name
+        );
+
+    public static BuiltShip Decode(string line)
+    {
+        var f = line.Split('\t');
+        if (f.Length != 6 || f[0] != "S")
+            throw new FormatException("Malformed built ship");
+        return new BuiltShip
+        {
+            Grid = BuildQuote.L(f[1]),
+            Station = f[2],
+            Player = BuildQuote.L(f[3]),
+            Refund = BuildQuote.L(f[4]),
+            Name = f[5],
+        };
+    }
 }
 
 /// <summary>What one item of a paid build costs at the station's Store, raw amounts, costs in SC.</summary>
@@ -228,11 +269,16 @@ public sealed class BuildBook
 
     private readonly Dictionary<string, BuildOrder> orders = new();
 
+    // The ships that ended a build and haven't left the build space, by grid
+    private readonly Dictionary<long, BuiltShip> ships = new();
+
     // The blueprints arriving for orders, not saved: an order after a restart asks for a new press
     private readonly Dictionary<string, (long At, List<string> Parts)> uploads = new();
     private long nextId;
 
     public IEnumerable<BuildOrder> Orders => orders.Values;
+
+    public IEnumerable<BuiltShip> Ships => ships.Values;
 
     public BuildOrder Get(string id) => id != null && orders.TryGetValue(id, out var o) ? o : null;
 
@@ -363,6 +409,7 @@ public sealed class BuildBook
             mine.Repair = false;
             mine.Payer = order.Payer;
             mine.Fee = order.Fee;
+            mine.Paid = 0;
             mine.Pcu = order.Pcu;
             mine.Ship = Clean(order.Ship);
             mine.Exempt = order.Exempt;
@@ -522,6 +569,7 @@ public sealed class BuildBook
                 came[n.Key] = got;
         }
         order.Items = came;
+        order.Paid = quote.Total;
         order.Phase = BuildPhase.Building;
         return new BuildResult(
             true,
@@ -567,14 +615,44 @@ public sealed class BuildBook
         return new BuildResult(true, $"'{order.Ship}' is being built.", order);
     }
 
-    /// <summary>An order that won't get a turn, or a free build that ended, leaves the queue.</summary>
-    public BuildResult Finish(string id)
+    /// <summary>An order that won't get a turn, or a free build that ended, leaves the queue. <paramref name="ship"/>: the grid it left in the build space.</summary>
+    public BuildResult Finish(string id, long ship = 0)
     {
         var order = Get(id);
         if (order == null)
             return BuildResult.No($"No order {id}.");
         orders.Remove(id);
+        Built(order, ship, 0);
         return new BuildResult(true, "", order);
+    }
+
+    private void Built(BuildOrder order, long grid, long refund)
+    {
+        if (grid != 0)
+            ships[grid] = new BuiltShip
+            {
+                Grid = grid,
+                Station = order.Station,
+                Player = order.Player,
+                Name = order.Ship,
+                Refund = refund,
+            };
+    }
+
+    /// <summary>
+    /// The ship is out of the build space, and nothing is known of it any more. With
+    /// <paramref name="refund"/> it was removed: what was paid for it comes back, once, as the
+    /// entry goes with the payment.
+    /// </summary>
+    public BuildResult ShipOut(IMarketWorld w, long grid, bool refund)
+    {
+        if (!ships.TryGetValue(grid, out var ship))
+            return BuildResult.No($"No ship {grid} from an order.");
+        ships.Remove(grid);
+        if (!refund || ship.Refund <= 0)
+            return new BuildResult(true, "");
+        PayBack(w, ship.Player, ship.Refund);
+        return new BuildResult(true, $"The {MarketBook.Sc(ship.Refund)} you paid is paid back.");
     }
 
     /// <summary>
@@ -582,6 +660,9 @@ public sealed class BuildBook
     /// containers. The ice of the hydrogen that didn't go into the ship is sold back for the
     /// player; with <paramref name="refund"/> (it never got going, or its ship was removed) the fee
     /// comes back. <paramref name="sold"/> is what a breakdown's containers had no room for.
+    /// <paramref name="ship"/> is the grid the build left in the build space and
+    /// <paramref name="percent"/> how much of the blueprint it has: an unfinished one is worth that
+    /// much of what the player paid, the rest of what they paid for being in their hands or sold.
     /// </summary>
     public BuildResult After(
         IMarketWorld w,
@@ -590,7 +671,9 @@ public sealed class BuildBook
         string id,
         long hydrogenUsed,
         bool refund,
-        IReadOnlyDictionary<string, long> sold
+        IReadOnlyDictionary<string, long> sold,
+        long ship = 0,
+        int percent = 100
     )
     {
         var order = Get(id);
@@ -609,6 +692,7 @@ public sealed class BuildBook
                 PayBack(w, order.Payer, order.Fee);
         }
         long paid = SellOff(market, order, sale);
+        Built(order, ship, Math.Max(0, order.Paid - paid) * percent / 100);
         order.Phase = BuildPhase.After;
         order.TurnEnds = w.Now + s.TurnMinutes * 60L;
         var message = new List<string>();
@@ -711,7 +795,8 @@ public sealed class BuildBook
                 blueprint ? o.Blueprint ?? "" : "",
                 ((int)o.Phase).ToString(CultureInfo.InvariantCulture),
                 BuildQuote.N(o.TurnEnds),
-                BuildQuote.N(o.Grid)
+                BuildQuote.N(o.Grid),
+                BuildQuote.N(o.Paid)
             )
         );
         foreach (var i in o.Items.OrderBy(i => i.Key, StringComparer.Ordinal))
@@ -722,8 +807,10 @@ public sealed class BuildBook
     public static BuildOrder DecodeOrder(string line)
     {
         var f = line.Split('\t');
-        if (f.Length < 14 || f[0] != "O" || (f.Length - 14) % 2 != 0)
+        if (f.Length < 14 || f[0] != "O")
             throw new FormatException("Malformed build order");
+        // A world saved before Paid has an even number of fields
+        var items = f.Length % 2 == 0 ? 14 : 15;
         var order = new BuildOrder
         {
             Id = f[1],
@@ -738,11 +825,12 @@ public sealed class BuildBook
             Phase = (BuildPhase)int.Parse(f[11], CultureInfo.InvariantCulture),
             TurnEnds = BuildQuote.L(f[12]),
             Grid = BuildQuote.L(f[13]),
+            Paid = items == 15 ? BuildQuote.L(f[14]) : 0,
         };
         var flags = int.Parse(f[9], CultureInfo.InvariantCulture);
         order.Exempt = (flags & 2) != 0;
         order.Repair = (flags & 4) != 0;
-        for (int i = 14; i < f.Length; i += 2)
+        for (int i = items; i < f.Length; i += 2)
             order.Items[f[i]] = BuildQuote.L(f[i + 1]);
         return order;
     }
@@ -753,6 +841,8 @@ public sealed class BuildBook
         text.Append("N\t").Append(BuildQuote.N(nextId)).Append('\n');
         foreach (var o in orders.Values.OrderBy(o => o.Created).ThenBy(o => o.Id))
             text.Append(EncodeOrder(o, blueprint: true)).Append('\n');
+        foreach (var ship in ships.Values.OrderBy(ship => ship.Grid))
+            text.Append(ship.Encode()).Append('\n');
         return text.ToString();
     }
 
@@ -766,6 +856,11 @@ public sealed class BuildBook
         {
             if (line.StartsWith("N\t"))
                 book.nextId = BuildQuote.L(line.Substring(2));
+            else if (line.StartsWith("S\t"))
+            {
+                var ship = BuiltShip.Decode(line);
+                book.ships[ship.Grid] = ship;
+            }
             else
             {
                 var order = DecodeOrder(line);
@@ -829,7 +924,7 @@ public enum BuildVerb
     /// <summary>Read: the quote of Needed for the payer at the station.</summary>
     Quote,
 
-    /// <summary>Read: the station's queue, without blueprints.</summary>
+    /// <summary>Read: the station's queue, without blueprints, then its built ships.</summary>
     Queue,
 
     /// <summary>Read: the next order to build at the station, without its blueprint.</summary>
@@ -869,6 +964,9 @@ public enum BuildVerb
 
     /// <summary>Needed: what is left in the shipyard, which is sold.</summary>
     EndTurn,
+
+    /// <summary>Grid: a built ship left the build space. Refund: it was removed.</summary>
+    ShipOut,
 }
 
 /// <summary>
@@ -892,6 +990,7 @@ public sealed class BuildRequest
     public bool Repair;
     public long Grid;
     public int Part;
+    public int Percent = 100;
     public Dictionary<string, long> Needed = new();
     public Dictionary<string, long> Provided = new();
 
@@ -922,7 +1021,8 @@ public sealed class BuildRequest
             Exempt ? "1" : "0",
             Repair ? "1" : "0",
             BuildQuote.N(Grid),
-            Part.ToString(CultureInfo.InvariantCulture)
+            Part.ToString(CultureInfo.InvariantCulture),
+            Percent.ToString(CultureInfo.InvariantCulture)
         )
         + "\n"
         + Items(Needed)
@@ -950,7 +1050,7 @@ public sealed class BuildRequest
     {
         var lines = text.Split('\n');
         var f = lines[0].Split('\t');
-        if (lines.Length != 3 || f.Length != 15)
+        if (lines.Length != 3 || f.Length != 16)
             throw new FormatException("Malformed build request");
         return new BuildRequest
         {
@@ -969,6 +1069,7 @@ public sealed class BuildRequest
             Repair = f[12] == "1",
             Grid = BuildQuote.L(f[13]),
             Part = int.Parse(f[14], CultureInfo.InvariantCulture),
+            Percent = int.Parse(f[15], CultureInfo.InvariantCulture),
             Needed = Items(lines[1]),
             Provided = Items(lines[2]),
         };
@@ -987,7 +1088,9 @@ public sealed class BuildRequest
             case BuildVerb.Queue:
                 return string.Join(
                     "\n",
-                    book.Queue(Station).Select(o => BuildBook.EncodeOrder(o, blueprint: false))
+                    book.Queue(Station)
+                        .Select(o => BuildBook.EncodeOrder(o, blueprint: false))
+                        .Concat(book.Ships.Where(b => b.Station == Station).Select(b => b.Encode()))
                 );
             case BuildVerb.Next:
                 var next = book.Next(Station);
@@ -1044,11 +1147,22 @@ public sealed class BuildRequest
             BuildVerb.Sale => BuildBook.Sale(market, Station, Player, Needed),
             BuildVerb.Cancel => book.Cancel(Station, Player),
             BuildVerb.Start => book.Start(Id),
-            BuildVerb.Finish => book.Finish(Id),
+            BuildVerb.Finish => book.Finish(Id, Grid),
             BuildVerb.Turn => book.Turn(w, s, Id),
             BuildVerb.Begin => book.Begin(w, market, s, Id, Player, Needed, Provided),
-            BuildVerb.After => book.After(w, market, s, Id, HydrogenUsed, Refund, Needed),
+            BuildVerb.After => book.After(
+                w,
+                market,
+                s,
+                Id,
+                HydrogenUsed,
+                Refund,
+                Needed,
+                Grid,
+                Percent
+            ),
             BuildVerb.EndTurn => book.EndTurn(w, market, Id, Needed),
+            BuildVerb.ShipOut => book.ShipOut(w, Grid, Refund),
             _ => BuildResult.No("Unknown request."),
         };
         return (r.Ok ? "1\t" : "0\t")

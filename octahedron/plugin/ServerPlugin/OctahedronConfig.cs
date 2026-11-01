@@ -379,7 +379,8 @@ public class OctahedronConfig : PluginConfig
     [IntOption(
         1,
         description: "Minutes a ship left in a shipyard's build space may block the next order once its owner was told. "
-            + "It is then moved out of the way.",
+            + "A ship an order built then goes into its orderer's Hangar, or is removed and refunded with no free slot; "
+            + "any other grid is moved out of the way.",
         Parent = "shipyard"
     )]
     public int ShipyardClearMinutes

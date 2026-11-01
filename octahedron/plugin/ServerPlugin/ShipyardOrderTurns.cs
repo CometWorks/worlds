@@ -287,7 +287,9 @@ internal static partial class ShipyardOrders
         bool refund,
         Dictionary<string, long> sold,
         string message,
-        Action done = null
+        Action done = null,
+        long ship = 0,
+        int percent = 100
     )
     {
         Builds.Execute(
@@ -300,6 +302,8 @@ internal static partial class ShipyardOrders
                 Needed = sold,
                 HydrogenUsed = hydrogenUsed,
                 Refund = refund,
+                Grid = ship,
+                Percent = percent,
             },
             (ok, answer) =>
             {
@@ -730,28 +734,176 @@ internal static partial class ShipyardOrders
     // --- a ship in the way ---
 
     // The next order waits for the grid in the shipyard's build space. Its owner is told; after
-    // ShipyardClearMinutes it is moved out of the way. A restart starts the wait over.
-    private static void ClearWay(MyCubeGrid shipyard, MyCubeGrid obstacle)
+    // ShipyardClearMinutes a ship an order built leaves for its orderer's Hangar, or is removed and
+    // refunded without a free slot there, and any other grid is moved out of the way. A restart
+    // starts the wait over.
+    private static void ClearWay(string station, MyCubeGrid shipyard, MyCubeGrid obstacle)
     {
         var id = shipyard.EntityId;
+        var ship = BuiltShipOf(shipyard, obstacle);
         if (!blockers.TryGetValue(id, out var blocker) || blocker.Grid != obstacle.EntityId)
         {
             blockers[id] = (obstacle.EntityId, DateTime.UtcNow);
-            if (obstacle.BigOwners.FirstOrDefault() is var owner and not 0)
+            void Warn(long player, string hangar) =>
                 Tell(
-                    owner,
+                    player,
                     $"'{obstacle.DisplayName}' blocks the next order at {shipyard.DisplayName}. "
-                        + $"Fly it out within {Config.ShipyardClearMinutes} min, or it is moved out."
+                        + $"Fly it out within {Config.ShipyardClearMinutes} min, or "
+                        + (
+                            ship == null
+                                ? "it is moved out."
+                                : $"it goes into {hangar} Hangar. With no free slot there it is removed with all that is in it"
+                                    + (
+                                        ship.Refund > 0
+                                            ? $", and {ship.Refund:N0} SC paid for it comes back."
+                                            : "."
+                                    )
+                        )
                 );
+            if (ship != null)
+                Warn(ship.Player, "your");
+            if (obstacle.BigOwners.FirstOrDefault() is var owner and not 0 && owner != ship?.Player)
+                Warn(owner, ship == null ? "" : $"{Name(ship.Player)}'s");
             return;
         }
         if (DateTime.UtcNow - blocker.At < TimeSpan.FromMinutes(Config.ShipyardClearMinutes))
             return;
-        blockers.Remove(id);
-        MoveOut(shipyard, obstacle);
+        if (ship == null)
+        {
+            blockers.Remove(id);
+            MoveOut(shipyard, obstacle);
+            return;
+        }
+        Retire(station, shipyard, obstacle, ship);
     }
 
-    private static void MoveOut(MyCubeGrid shipyard, MyCubeGrid obstacle)
+    // The ships the station's last queue answer named, by shipyard
+    private static readonly Dictionary<long, List<BuiltShip>> builtShips = new();
+
+    // A refund the authority was asked for: the same operation again if it didn't answer, as it may have paid
+    private static readonly Dictionary<long, Guid> refunds = new();
+    private static readonly HashSet<long> refunding = [];
+
+    private static BuiltShip BuiltShipOf(MyCubeGrid shipyard, MyCubeGrid grid)
+    {
+        if (!builtShips.TryGetValue(shipyard.EntityId, out var ships))
+            return null;
+        var group = Grids(grid);
+        return ships.FirstOrDefault(s => group.Any(g => g.EntityId == s.Grid));
+    }
+
+    // Takes note of the built ships in the queue's answer; those no longer in the build space are
+    // like any other grid from now on
+    private static void Inspect(MyCubeGrid shipyard, string station, string text)
+    {
+        var ships = text.Split('\n')
+            .Where(l => l.StartsWith("S\t"))
+            .Select(BuiltShip.Decode)
+            .ToList();
+        builtShips[shipyard.EntityId] = ships;
+        if (ships.Count == 0)
+            return;
+        var space = FreeSpace(shipyard);
+        var here = GridsIn(space).Where(g => HasBlockIn(g, space)).Select(g => g.EntityId).ToHashSet();
+        foreach (
+            var ship in ships.Where(s => !here.Contains(s.Grid) && !refunds.ContainsKey(s.Grid))
+        )
+            Builds.Execute(
+                Guid.NewGuid(),
+                new BuildRequest
+                {
+                    Verb = BuildVerb.ShipOut,
+                    Station = station,
+                    Grid = ship.Grid,
+                },
+                (_, _) => { }
+            );
+    }
+
+    private static void Retire(
+        string station,
+        MyCubeGrid shipyard,
+        MyCubeGrid obstacle,
+        BuiltShip ship
+    )
+    {
+        var name = obstacle.DisplayName;
+        var grids = Grids(obstacle);
+        if (!refunds.ContainsKey(ship.Grid))
+        {
+            var table = StationTables()[station][0].PositionComp.GetPosition();
+            var (stored, full, error) = HangarFee.Store(ship.Player, grids, table);
+            if (stored)
+            {
+                blockers.Remove(shipyard.EntityId);
+                Plugin.Log.Info(
+                    $"Shipyard {shipyard.DisplayName}: '{name}' went into the Hangar of {Name(ship.Player)}"
+                );
+                Tell(
+                    ship.Player,
+                    $"'{name}' stayed in {shipyard.DisplayName} past the deadline, so it is in your Hangar now. "
+                        + $"!hangar load {name} brings it back, free at this station."
+                );
+                return;
+            }
+            if (!full)
+            {
+                Plugin.Log.Warning(
+                    $"Shipyard {shipyard.DisplayName}: '{name}' can't go into a Hangar, moving it out: {error}"
+                );
+                blockers.Remove(shipyard.EntityId);
+                MoveOut(shipyard, obstacle, ship.Player);
+                return;
+            }
+            refunds[ship.Grid] = Guid.NewGuid();
+        }
+        if (!refunding.Add(ship.Grid))
+            return;
+        // Paid first: a crash here leaves a ship and its money, not a player with neither
+        Builds.Execute(
+            refunds[ship.Grid],
+            new BuildRequest
+            {
+                Verb = BuildVerb.ShipOut,
+                Station = station,
+                Grid = ship.Grid,
+                Refund = true,
+            },
+            (ok, answer) =>
+            {
+                refunding.Remove(ship.Grid);
+                if (!ok)
+                {
+                    // Asked again at the next check
+                    Plugin.Log.Warning(
+                        $"Shipyard {shipyard.DisplayName}: no refund for '{name}': {answer}"
+                    );
+                    return;
+                }
+                refunds.Remove(ship.Grid);
+                blockers.Remove(shipyard.EntityId);
+                foreach (var grid in grids)
+                {
+                    foreach (var seat in grid.GetFatBlocks<MyCockpit>().Where(c => c.Pilot != null))
+                    {
+                        seat.RequestRemovePilot();
+                        seat.RemovePilot();
+                    }
+                    grid.Close();
+                }
+                Plugin.Log.Info(
+                    $"Shipyard {shipyard.DisplayName}: '{name}' of {Name(ship.Player)} removed, Hangar full, refund {ship.Refund} SC"
+                );
+                Tell(
+                    ship.Player,
+                    $"'{name}' stayed in {shipyard.DisplayName} past the deadline and your Hangar has no free slot, so it was removed. {answer}".TrimEnd()
+                );
+            }
+        );
+    }
+
+    // orderer: who ordered the grid, told as well as its owner
+    private static void MoveOut(MyCubeGrid shipyard, MyCubeGrid obstacle, long orderer = 0)
     {
         var box = BoundingBoxD.CreateInvalid();
         foreach (var node in MyCubeGridGroups.Static.Physical.GetGroup(obstacle).Nodes)
@@ -777,10 +929,11 @@ internal static partial class ShipyardOrders
         Plugin.Log.Info(
             $"Shipyard {shipyard.DisplayName}: '{obstacle.DisplayName}' moved out of the build space, to {target.Value}"
         );
-        if (obstacle.BigOwners.FirstOrDefault() is var owner and not 0)
-            Tell(
-                owner,
-                $"'{obstacle.DisplayName}' was moved out of {shipyard.DisplayName}: the next order was waiting."
-            );
+        var text =
+            $"'{obstacle.DisplayName}' was moved out of {shipyard.DisplayName}: the next order was waiting.";
+        if (orderer != 0)
+            Tell(orderer, text);
+        if (obstacle.BigOwners.FirstOrDefault() is var owner and not 0 && owner != orderer)
+            Tell(owner, text);
     }
 }

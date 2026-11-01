@@ -1530,6 +1530,7 @@ internal static partial class ShipyardOrders
                 if (text == null || shipyard.MarkedForClose)
                     return;
                 var queue = DecodeQueue(text);
+                Inspect(shipyard, station, text);
                 if (queue.Count > 0)
                     queued.Add(shipyard.EntityId);
                 else
@@ -1580,7 +1581,7 @@ internal static partial class ShipyardOrders
     }
 
     private static List<BuildOrder> DecodeQueue(string text) =>
-        text.Split('\n').Where(l => l.Length > 0).Select(BuildBook.DecodeOrder).ToList();
+        text.Split('\n').Where(l => l.StartsWith("O\t")).Select(BuildBook.DecodeOrder).ToList();
 
     private static void ShowQueue(
         List<MyCubeGrid> grids,
@@ -1648,7 +1649,7 @@ internal static partial class ShipyardOrders
         Sweep(shipyard, true);
         if (Obstacle(shipyard) is { } obstacle)
         {
-            ClearWay(shipyard, obstacle);
+            ClearWay(station, shipyard, obstacle);
             starting.Remove(shipyard.EntityId);
             return;
         }
@@ -1873,7 +1874,8 @@ internal static partial class ShipyardOrders
             );
     }
 
-    private static void Finish(BuildOrder order, string message)
+    // ship: the grid the order leaves in the build space
+    private static void Finish(BuildOrder order, string message, long ship = 0)
     {
         Builds.Execute(
             Guid.NewGuid(),
@@ -1882,6 +1884,7 @@ internal static partial class ShipyardOrders
                 Verb = BuildVerb.Finish,
                 Id = order.Id,
                 Station = order.Station,
+                Grid = ship,
             },
             (ok, answer) =>
             {
@@ -1966,13 +1969,14 @@ internal static partial class ShipyardOrders
         }
         if (order.Free)
             RemoveLeftovers(shipyard, order.Components);
-        Report(shipyard, order, name, gone ? "gone" : null, why, filled, "");
+        Report(shipyard, order, ship, name, gone ? "gone" : null, why, filled, "");
     }
 
     // Tells the player how the build ended, and a paid build goes on to the last part of the turn
     private static void Report(
         MyCubeGrid shipyard,
         Order order,
+        MyCubeGrid ship,
         string name,
         string missing,
         string why,
@@ -2019,6 +2023,7 @@ internal static partial class ShipyardOrders
         else if (filled > 0)
             message += $" Its H2 tanks have {filled:N0} L of hydrogen.";
         message += extra;
+        var left = gone || order.Refund || ship == null ? 0 : ship.EntityId;
         var ended = new BuildOrder
         {
             Id = order.Id,
@@ -2034,10 +2039,14 @@ internal static partial class ShipyardOrders
                     : 0,
                 order.Refund,
                 order.Sold,
-                $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}"
+                $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}",
+                ship: left,
+                percent: why == null || left == 0 || order.Blocks == 0
+                    ? 100
+                    : Math.Min(100, Built(ship) * 100 / order.Blocks)
             );
         else if (order.Id.Length > 0)
-            Finish(ended, message);
+            Finish(ended, message, left);
         else
         {
             Tell(order.Player, message);
@@ -2768,6 +2777,7 @@ internal static partial class ShipyardOrders
         Report(
             shipyard,
             order,
+            ship,
             order.Name,
             alive ? null
                 : ship == null && why != null && why != "the ship is gone" ? "unbuilt"
@@ -3757,6 +3767,10 @@ internal static partial class ShipyardOrders
                     own.Contains(g)
                     || removed.Contains(g)
                     || (towGiven.TryGetValue(g.EntityId, out var until) && DateTime.UtcNow < until)
+                    || (
+                        builtShips.TryGetValue(shipyard.EntityId, out var built)
+                        && built.Any(b => b.Grid == g.EntityId)
+                    )
                 ) || !Garbage(group)
             )
                 continue;

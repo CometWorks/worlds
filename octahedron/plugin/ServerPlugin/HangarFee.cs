@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
 using HarmonyLib;
 using Sandbox.Game;
+using Sandbox.Game.Entities;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.World;
+using VRageMath;
 
 namespace ServerPlugin;
 
@@ -83,6 +87,34 @@ internal static class HangarFee
             identityId
         );
         return null;
+    }
+
+    // Hangar's HangarHooks.Store, by reflection for the same reason. Not stored and not full: Hangar
+    // can't take it, it is too big, or it isn't there.
+    public static (bool Stored, bool Full, string Error) Store(
+        long identityId,
+        List<MyCubeGrid> grids,
+        Vector3D zoneAt
+    )
+    {
+        var store = AccessTools.TypeByName("ServerPlugin.HangarHooks")?.GetMethod("Store");
+        if (store == null)
+            return (false, false, "Hangar 1.2.0 or later is not loaded");
+        var steamId = MySession.Static.Players.TryGetSteamId(identityId);
+        if (steamId == 0)
+            return (false, false, $"identity {identityId} has no Steam id here");
+        try
+        {
+            var name = MySession.Static.Players.TryGetIdentity(identityId)?.DisplayName;
+            var (stored, full, error) = ((bool, bool, string))
+                store.Invoke(null, [steamId, name, grids, zoneAt]);
+            return (stored, full, error);
+        }
+        catch (TargetInvocationException e)
+        {
+            Plugin.Log.Error("Hangar's Store failed", e.InnerException);
+            return (false, false, e.InnerException?.Message);
+        }
     }
 
     private static string N(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
