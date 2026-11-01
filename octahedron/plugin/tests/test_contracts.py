@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import re
 import sys
-import time
 
 import rig
 from test_client import log
@@ -144,6 +143,11 @@ def contracts(remote, post: bool = False) -> dict[str, list[tuple]]:
     return stations
 
 
+def run_check(remote) -> None:
+    """Scans, checks the targets and posts now, as the plugin does on its timers"""
+    log(" | ".join(rig.chat(remote, "!oct contracts post", 4)))
+
+
 def balances(remote) -> tuple[int, int]:
     """(OCT's balance, the caller's)"""
     text = " ".join(rig.chat(remote, "!oct money", 4))
@@ -246,12 +250,14 @@ def main() -> int:
     remote.character_teleport(sx, sy - 900, sz)
     before = balances(remote)
     act(remote, f"accept {salvage[0]}", "Success", "take the salvage contract")
-    # The plugin checks its targets every 30 seconds
-    time.sleep(40)
+    run_check(remote)
     check(balances(remote) == before, "not at the shipyard yet: not paid")
-    # The radius grows instead of the grid moving: it is in reach now
+    # The radius grows instead of the grid moving: it is in reach now. The plugin's own
+    # check, every 30 seconds, finishes it
     set_options(remote, ContractSalvageRadius=3000)
-    time.sleep(40)
+    rig.wait_until(
+        lambda: balances(remote)[1] != before[1], 60, "the plugin's check to pay"
+    )
     paid_for(remote, salvage, before, "salvage finished by the plugin, paid by OCT")
 
     # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
@@ -263,7 +269,6 @@ def main() -> int:
     )
     remote.set_admin_flag("creativeTools", False)
     check(built.get("reply") is True, f"the player builds an armor block: {built}")
-    time.sleep(70)
     check(
         not any(
             c[1] == "salvage" and "Grid" in c[4]
@@ -272,7 +277,6 @@ def main() -> int:
         "under the minimum blocks: no contract",
     )
     set_options(remote, ContractSalvageMinBlocks=1)
-    time.sleep(70)
     own = next(
         (
             c
@@ -285,7 +289,7 @@ def main() -> int:
     if own:
         before = balances(remote)
         act(remote, f"accept {own[0]}", "Success", "they take it")
-        time.sleep(40)
+        run_check(remote)
         check(balances(remote) == before, "their own ship: not paid")
         check(
             not any(c[0] == own[0] for c in contracts(remote)["Alpha Station"]),
@@ -293,7 +297,7 @@ def main() -> int:
         )
     # Back to the default: past a scan and a check, its next contract is withdrawn
     set_options(remote, ContractSalvageMinBlocks=20)
-    time.sleep(70)
+    run_check(remote)
 
     before = balances(remote)
     act(remote, f"accept {bounty[0]}", "Success", "take the bounty")
