@@ -475,8 +475,15 @@ chat messages find the player on any node. One who is logged off misses them.
   less tax if it has none, into OCT's stock. The money goes to the player, with a chat
   message.
 - A ship in the build space holds up the next order. Its owner is told, and after
-  `ShipyardClearMinutes` (5) it is moved out over the shipyard. A restart starts
-  that wait over.
+  `ShipyardClearMinutes` (5) a ship an order built, until it first leaves the build
+  space, goes into the Hangar of the player who ordered it (Hangar 1.2.0 or later). The
+  entry counts as stored at this station, so it comes back free here. With no free slot
+  it is removed with all that is in it, and the player gets back the SC the build took:
+  the Store's price and the labor fee, less what the ice the ship didn't take sold for,
+  and for an unfinished ship the share of its blocks that were built. A free ship is
+  just removed. Components the player brought aren't paid for. A ship Hangar can't take
+  (over its entry limits, or no Hangar) and any other grid are moved out over the
+  shipyard. A restart starts that wait over.
 - A towed grid over the player's limits is broken down at once on arrival: each block
   yields the components it really has, and its cargo comes along. With the shipyard
   free that is into the containers, with a turn for the player and the last window;

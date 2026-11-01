@@ -649,8 +649,7 @@ internal static partial class ShipyardOrders
                 var mine = Mine(DecodeQueue(text), identityId);
                 var holder = Holder(table);
                 var hasBlueprint =
-                    TableHologram.Blueprint(table) != null
-                    && (holder == 0 || holder == identityId);
+                    TableHologram.Blueprint(table) != null && (holder == 0 || holder == identityId);
                 if (mine != null && mine.Phase is BuildPhase.Waiting or BuildPhase.Building)
                     Cancel(mine, station, shipyard, tell);
                 else if (hasBlueprint)
@@ -967,11 +966,11 @@ internal static partial class ShipyardOrders
                     mine?.Phase == BuildPhase.After && !plan.Free ? null
                     : mine != null
                         ? mine.Active
-                            ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
+                                ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
                             : $"'{mine.Ship}' is in the queue for you. Press the button to cancel it first."
-                        : queue.Count >= Config.ShipyardQueueMax
-                            ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
-                            : null;
+                    : queue.Count >= Config.ShipyardQueueMax
+                        ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
+                    : null;
                 if (plan.Free)
                 {
                     ShowQuote(plan, null);
@@ -1048,9 +1047,7 @@ internal static partial class ShipyardOrders
             if (plan.Blocker != null)
                 text.AppendLine(plan.Blocker);
             else if (quote?.Short(Hydrogen) != null)
-                text.AppendLine(
-                    "Not everything is for sale here: bring the rest at your turn."
-                );
+                text.AppendLine("Not everything is for sale here: bring the rest at your turn.");
             else
                 text.AppendLine("Press the button to confirm the build.");
         }
@@ -1527,6 +1524,7 @@ internal static partial class ShipyardOrders
                 if (text == null || shipyard.MarkedForClose)
                     return;
                 var queue = DecodeQueue(text);
+                Inspect(shipyard, station, text);
                 if (queue.Count > 0)
                     queued.Add(shipyard.EntityId);
                 else
@@ -1577,7 +1575,7 @@ internal static partial class ShipyardOrders
     }
 
     private static List<BuildOrder> DecodeQueue(string text) =>
-        text.Split('\n').Where(l => l.Length > 0).Select(BuildBook.DecodeOrder).ToList();
+        text.Split('\n').Where(l => l.StartsWith("O\t")).Select(BuildBook.DecodeOrder).ToList();
 
     private static void ShowQueue(
         List<MyCubeGrid> grids,
@@ -1645,7 +1643,7 @@ internal static partial class ShipyardOrders
         Sweep(shipyard, true);
         if (Obstacle(shipyard) is { } obstacle)
         {
-            ClearWay(shipyard, obstacle);
+            ClearWay(station, shipyard, obstacle);
             starting.Remove(shipyard.EntityId);
             return;
         }
@@ -1873,7 +1871,8 @@ internal static partial class ShipyardOrders
             );
     }
 
-    private static void Finish(BuildOrder order, string message)
+    // ship: the grid the order leaves in the build space
+    private static void Finish(BuildOrder order, string message, long ship = 0)
     {
         Builds.Execute(
             Guid.NewGuid(),
@@ -1882,6 +1881,7 @@ internal static partial class ShipyardOrders
                 Verb = BuildVerb.Finish,
                 Id = order.Id,
                 Station = order.Station,
+                Grid = ship,
             },
             (ok, answer) =>
             {
@@ -1964,13 +1964,14 @@ internal static partial class ShipyardOrders
         }
         if (order.Free)
             RemoveLeftovers(shipyard, order.Components);
-        Report(shipyard, order, name, gone ? "gone" : null, why, filled, "");
+        Report(shipyard, order, ship, name, gone ? "gone" : null, why, filled, "");
     }
 
     // Tells the player how the build ended, and a paid build goes on to the last part of the turn
     private static void Report(
         MyCubeGrid shipyard,
         Order order,
+        MyCubeGrid ship,
         string name,
         string missing,
         string why,
@@ -1983,11 +1984,10 @@ internal static partial class ShipyardOrders
             NoteFreeEnd(order, name);
         var stalled =
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
-        var message =
-            order.Canceled
-                ? missing != null
-                    ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
-                    : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
+        var message = order.Canceled
+            ? missing != null
+                ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
+                : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
             : order.Refund
                 ? $"{stalled}, with {order.Missing} missing. The ship was removed, "
                     + (
@@ -1995,15 +1995,16 @@ internal static partial class ShipyardOrders
                             ? "and the free build doesn't count."
                             : "its components are in the containers."
                     )
-            : order.Missing != null && !gone
-                ? $"{stalled}. The ship is yours without {order.Missing}."
-            : missing == "unbuilt"
-                ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
-            : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
-            : why == null
-                ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
-            : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
-                + "The unfinished ship is yours.";
+                : order.Missing != null && !gone
+                    ? $"{stalled}. The ship is yours without {order.Missing}."
+                    : missing == "unbuilt"
+                        ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
+                        : gone
+                            ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
+                            : why == null
+                                ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
+                                : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
+                                    + "The unfinished ship is yours.";
         if (!order.Free)
         {
             if (order.Hydrogen > 0 && !gone)
@@ -2015,6 +2016,7 @@ internal static partial class ShipyardOrders
                     : $" Its H2 tanks have {filled:N0} L of hydrogen.";
         }
         message += extra;
+        var left = gone || order.Refund || ship == null ? 0 : ship.EntityId;
         var ended = new BuildOrder
         {
             Id = order.Id,
@@ -2030,10 +2032,14 @@ internal static partial class ShipyardOrders
                     : 0,
                 order.Refund,
                 order.Sold,
-                $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}"
+                $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}",
+                ship: left,
+                percent: why == null || left == 0 || order.Blocks == 0
+                    ? 100
+                    : Math.Min(100, Built(ship) * 100 / order.Blocks)
             );
         else if (order.Id.Length > 0)
-            Finish(ended, message);
+            Finish(ended, message, left);
         else
         {
             Tell(order.Player, message);
@@ -2752,6 +2758,7 @@ internal static partial class ShipyardOrders
         Report(
             shipyard,
             order,
+            ship,
             order.Name,
             alive ? null
                 : ship == null && why != null && why != "the ship is gone" ? "unbuilt"
@@ -3633,6 +3640,10 @@ internal static partial class ShipyardOrders
                     own.Contains(g)
                     || removed.Contains(g)
                     || (towGiven.TryGetValue(g.EntityId, out var until) && DateTime.UtcNow < until)
+                    || (
+                        builtShips.TryGetValue(shipyard.EntityId, out var built)
+                        && built.Any(b => b.Grid == g.EntityId)
+                    )
                 ) || !Garbage(group)
             )
                 continue;

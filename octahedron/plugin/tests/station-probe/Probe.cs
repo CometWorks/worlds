@@ -404,6 +404,29 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "movegrid",
+        "Moves the grids of this name along their up by this many meters: MOVED count",
+        "!kprobe movegrid <name with _ for spaces> <meters>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string MoveGrid(string name, double meters)
+    {
+        name = name.Replace('_', ' ');
+        var grids = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .Where(g => g.DisplayName == name)
+            .ToList();
+        foreach (var grid in grids)
+        {
+            var matrix = grid.WorldMatrix;
+            matrix.Translation += matrix.Up * meters;
+            grid.Teleport(matrix);
+        }
+        return $"MOVED {grids.Count}";
+    }
+
+    [Command(
         "yardblocker",
         "Builds a powered ship of the caller's with a cockpit in the middle of the shipyard, which the sweep leaves alone: BLOCKER grid-id",
         "!kprobe yardblocker <station>"
