@@ -294,6 +294,14 @@ def run(bench) -> None:
     )
     api = join()
     came_back(api, "after a held save", body, bank, 16_000)
+    # A WA restored from a save before that hands them out again: SE-908
+    wait_until(
+        lambda: not re.search(
+            rf"P \d+ {body} 16000 ", wa.global_save(bench.run_root / "wa-1-data")
+        ),
+        180,
+        "a save without what was handed out",
+    )
 
     # --- the WA killed in that hold: the body stays, and nothing is lost ---
     minutes(1)
@@ -320,10 +328,18 @@ def run(bench) -> None:
             row for row in cluster.get("/registry/nodes") if row["Node"] == "wa-1"
         )
         generation = max(row["SaveId"]["Generation"] for row in rows)
-        cluster.post(
-            f"/registry/global-saves?node=wa-1&epoch={authority['Epoch']}&generation={generation}"
-            "&sequence=1000000&kind=Periodic&size=1&checksum=forced&clusterTime=0&location=forced-ahead"
-        )
+
+        def row_ahead(sequence: int) -> None:
+            cluster.post(
+                f"/registry/global-saves?node=wa-1&epoch={authority['Epoch']}&generation={generation}"
+                f"&sequence={sequence}&kind=Periodic&size=1&checksum=forced&clusterTime=0&location=forced-ahead"
+            )
+
+        try:
+            row_ahead(1_000_000)
+        except ClusterError as error:
+            # A cluster before SE-819 takes only the next sequence, and the WA is left refused all the same
+            row_ahead(int(re.search(r"expected (\d+)", str(error)).group(1)))
         bench.kill_client(CLIENT_ID)
         wait_kept(body, away)
         not_removed(body, "saves refused")
