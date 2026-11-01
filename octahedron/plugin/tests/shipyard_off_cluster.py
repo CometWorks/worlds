@@ -33,6 +33,7 @@ from wa_economy_cluster import (  # noqa: E402
     wait_until,
 )
 
+from scenarios_core import _lines  # noqa: E402
 from scenarios_offline import _put_config  # noqa: E402
 import shipyard_turn_cluster as turn  # noqa: E402
 import station_tests as st  # noqa: E402
@@ -260,6 +261,10 @@ def run(bench) -> None:
     on_for_refill(yard(api), "at the start")
     yard_id = shipyard_id(api)
     settle_offline()
+    # SE-903: "blocker" with a cluster and Magnetar that have the SDK call, "patch" without. Either keeps the job.
+    way = os.environ.get("OCT_STAY_ONLINE", "blocker")
+    line = {"blocker": "with an offline blocker", "patch": "with a patch of this older cluster"}[way]
+    check(f"the shipyard stays online by {way} on the nodes", all(_lines(bench, node, line) for node in NODES))
 
     # --- a paid build: the player leaves during the build ---
     probe(api, "balance 300000")
