@@ -110,9 +110,9 @@ holds no blueprint for the server.
   player's grids in offline cluster partitions don't count yet.
 - It appears past the station's safe zone, `StarterShipClearance` (50 m) beyond
   its edge, on the table's side of the station if there is room there, else
-  turned about the station's up. Its main cockpit (else any cockpit, control seat
-  or remote control, else the grid's forward) faces away from the station and its
-  up is the station's up.
+  turned about the station's up. Its main cockpit (else any block that flies the
+  ship, else a seat or bed, else the grid's forward) faces away from the station
+  and its up is the station's up.
 - It is built as a projector would build it: empty cargo, no fuel or gas,
   nobody seated, scripts as the table got them. With `StarterShipChargeBatteries`
   its batteries are full. The player owns every block and has built it, so it
@@ -136,8 +136,9 @@ grids, uniformly to fit that space, from `StarterShipHologramTableTop` (0.33 m
 below the block's center) to the top of the block, with
 `StarterShipHologramMargin` (5 cm) kept free on every side, and centers it there.
 It turns the blueprint so that the up and forward of the main grid's main cockpit,
-or of any cockpit, control seat or remote control, point along the table's up and
-forward. A blueprint without one keeps its main grid's own up and forward. It sets
+or of a cockpit, control seat or remote control, or else of a seat or bed, point
+along the table's up and forward. A blueprint without one keeps its main grid's
+own up and forward. It sets
 the projector's offset, rotation and scale, which the server sends to every
 client. The offset moves in whole scaled cubes and the game keeps it within 50 of
 them, so a blueprint longer than about 150 m may sit a little off center.
@@ -345,7 +346,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   ShipyardQueue`) show it, and which ship blocks the shipyard.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
-  shipyard, its components the shipyard's containers, and it may have at most
+  shipyard or, when it only fits another way, by right angles from there,
+  its components the shipyard's containers, and it may have at most
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back.
@@ -1041,6 +1043,10 @@ same zone a player's hand welder and grinder, ship welder and grinder, and an
 OmniArc welder on a player's grid named like a shipyard do nothing, and that the
 player's tools work outside the zone. It runs with the plugin's rules on, on
 with the zones holding every test grid from the start, and off.
+`tests/test_shipyard_align.py` orders 150 m ships that only fit along the shipyard,
+one behind a cryo chamber facing sideways and one with its only cockpit sideways,
+and a short one that fits with its cockpit along the shipyard and stays so, and
+checks how they lie in the saved world. `OCT_ALIGN_BP` adds a real `bp.sbc`.
 `tests/test_shipyard_placement.py` checks in the saved world where ships end up
 along the shipyard: short ones at the 1/3 point nearer the station, at pole and
 equatorial stations, the widest small grid ship among them, and a ship of 1/4 of

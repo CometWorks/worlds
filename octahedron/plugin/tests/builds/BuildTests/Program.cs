@@ -98,6 +98,27 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     );
     Check(ShipyardPlacement.Offset(282.5 / 4, 282.5) == 0, "placement: a quarter long is centered");
     Check(ShipyardPlacement.Offset(100, 282.5) == 0, "placement: long ship centered");
+    double[] room = [90, 60, 280];
+    Check(
+        ShipyardPlacement.Align([80, 20, 30], room).SequenceEqual([0, 1, 2]),
+        "align: a ship that fits as it is stays"
+    );
+    Check(
+        ShipyardPlacement.Align([100, 20, 30], room).SequenceEqual([2, 1, 0]),
+        "align: too wide, turned about its up"
+    );
+    Check(
+        ShipyardPlacement.Align([20, 70, 100], room).SequenceEqual([1, 0, 2]),
+        "align: too tall, rolled"
+    );
+    Check(
+        ShipyardPlacement.Align([200, 70, 20], room).SequenceEqual([1, 2, 0]),
+        "align: long sideways and too tall, the last axis along the shipyard's width"
+    );
+    Check(
+        ShipyardPlacement.Align([300, 10, 10], room).SequenceEqual([2, 1, 0]),
+        "align: too long for any turn, the one that misses the least"
+    );
     Check(BuildBook.Fee(60_000, 10) == 6_000, "fee: 60k PCU at 10 SC is 6,000 SC");
     Check(BuildBook.Fee(15, 10) == 2 && BuildBook.Fee(101, 1) == 2, "fee: rounded up");
     Check(BuildBook.Fee(0, 10) == 0 && BuildBook.Fee(500, 0) == 0, "fee: none");
