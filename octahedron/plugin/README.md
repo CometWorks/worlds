@@ -102,7 +102,7 @@ holds no blueprint for the server.
 
 - It must be a single grid of at most `StarterShipMaxShipPcu` (10,000) PCU, and
   of no more than `GroupPcuLimit`.
-- Only a player with less than `FreeBuildPcuLimit` (10,000) PCU gets one; the
+- Only a player with less than `FreeBuildPcuLimit` (60,000) PCU gets one; the
   others are told to build at the station's shipyard. It counts the blocks the
   player built, on every cluster node through the cluster plugin's PCU ledger,
   and the player's ships in Hangar, read from Hangar's storage when the Hangar
@@ -338,10 +338,13 @@ of the nearest table, `!oct table remove [table name]` (admin) removes the bluep
 of a table nobody else holds and `!oct table show [table name]` (admin) prints its screens.
 
 - A ship is a free build for a player with less than `FreeBuildPcuLimit`
-  (10,000) PCU, counted as for the starter ship, once `FreeBuildCooldownMinutes`
-  (10) have passed since their last free build ended, and when it has none of
-  the blocks `FreeBuildBlockedBlocks` names (prototech blocks, large ion
-  thrusters and jump drives). The cool-down starts when a free build ends with
+  (60,000) PCU, counted as for the starter ship, once `FreeBuildCooldownMinutes`
+  (10) have passed since their last free build ended, and when none of its blocks
+  needs a component `FreeBuildExcludedComponents` names (subtypes with `*`, by
+  default `PrototechFrame`, which every prototech block needs) or is named by
+  `FreeBuildBlockedBlocks` (type/subtype with `*`, by default none). All three are
+  in `config/octahedron.cfg` too, because a running cluster keeps the values it has
+  for options that file doesn't name. The cool-down starts when a free build ends with
   the ship handed over, finished or not; a canceled order or one whose ship was
   removed starts none. The plugin keeps the times in the world variable
   `Octahedron-FreePrints`, on a cluster in the World Authority's world: the node
@@ -1276,10 +1279,12 @@ PCU limits, over a lowered `GroupPcuLimit` and with a blocked block, is refused
 without the flag and free with it, and is still welded and free with the flag
 turned off once its build started, as on a cluster node without the admin's
 settings.
-`tests/test_free_build.py` checks the free-build limits at their defaults with
-the client and a ship in Hangar: a starter ship blueprint over 10,000 PCU is
-refused, and a player who reaches 10,000 PCU gets no more starter ships and a
-paid quote at the shipyard.
+`tests/test_free_build.py` checks the free-build rule with the client and a ship in
+Hangar: a starter ship blueprint over 10,000 PCU is refused, a player who reaches
+60,000 PCU gets no more starter ships and a paid quote at the shipyard, a ship with
+superconductors is free and one with a prototech frame paid, and each of
+`FreeBuildPcuLimit`, `FreeBuildExcludedComponents` and `FreeBuildBlockedBlocks`
+changes the quote.
 `tests/test_ignore_pcu.py` checks the "Ignore PCU limits" exemption with the
 client: with the flag on, a free build over `FreeBuildPcuLimit` that starts no
 cool-down, a free quote during a cool-down and a starter ship past both limits;

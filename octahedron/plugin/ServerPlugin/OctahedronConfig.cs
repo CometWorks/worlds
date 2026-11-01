@@ -328,7 +328,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = 10_000;
+    } = 60_000;
 
     [IntOption(
         0,
@@ -439,16 +439,26 @@ public class OctahedronConfig : PluginConfig
     } = 10;
 
     [StringOption(
-        description: "Blocks a free shipyard build can't have, comma separated, as type/subtype, where * matches any text: "
-            + "prototech blocks, large ion thrusters and jump drives. The type is without MyObjectBuilder_.",
+        description: "Components a free shipyard build can't need, comma separated, by subtype, where * matches any text: "
+            + "a ship with a block made of one of them is a paid build. The prototech frame by default, which every prototech block needs.",
+        Parent = "shipyard"
+    )]
+    public string FreeBuildExcludedComponents
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "PrototechFrame";
+
+    [StringOption(
+        description: "Blocks a free shipyard build can't have besides those of FreeBuildExcludedComponents, comma separated, as type/subtype, "
+            + "where * matches any text. The type is without MyObjectBuilder_. None by default.",
         Parent = "shipyard"
     )]
     public string FreeBuildBlockedBlocks
     {
         get;
         set => SetField(ref field, value);
-    } =
-        "*/*Prototech*, JumpDrive/*, Thrust/*LargeThrust, Thrust/*LargeThrustSciFi, Thrust/*LargeModularThruster";
+    } = "";
 
     [LongOption(
         0,
