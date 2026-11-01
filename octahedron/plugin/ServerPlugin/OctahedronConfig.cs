@@ -519,7 +519,7 @@ public class OctahedronConfig : PluginConfig
     [IntOption(
         0,
         100,
-        "A paid build's materials include the hydrogen to fill the new ship's H2 tanks to this percent.",
+        "A new ship's H2 tanks are filled to this percent: a paid build's materials include the hydrogen.",
         Parent = "shipyard"
     )]
     public int ShipyardHydrogenFillPercent
@@ -1013,7 +1013,7 @@ public class OctahedronConfig : PluginConfig
         "Component/SteelPlate=300,Component/Construction=500,Component/InteriorPlate=500,Component/MetalGrid=100,"
         + "Component/SmallTube=200,Component/LargeTube=40,Component/Motor=60,Component/Computer=200,Component/Display=30,"
         + "Component/BulletproofGlass=30,Component/Girder=50,Ingot/Iron=2000,Ingot/Nickel=500,Ingot/Silicon=500,"
-        + "Ingot/Cobalt=300,Ore/Ice=330";
+        + "Ingot/Cobalt=300,Ore/Ice=100000";
 
     [StringOption(
         description: "The stations' profiles: what a station stocks besides or instead of MarketMinStock, "

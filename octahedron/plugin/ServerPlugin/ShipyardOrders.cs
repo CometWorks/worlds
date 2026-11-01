@@ -58,8 +58,9 @@ namespace ServerPlugin;
 // on the player's turn at the shipyard (ShipyardOrderTurns.cs): they load the components into its
 // containers, and pressing the button buys what is missing and the ice for the hydrogen to fill its
 // H2 tanks to ShipyardHydrogenFillPercent at the station's Store from the player's account, plus
-// the labor fee; hydrogen in the tanks of the player's ships docked at the shipyard or the station
-// counts as ice first, then ice in the shipyard's containers.
+// the labor fee; what the player's ships docked at the shipyard or the station have in their tanks
+// over DockedTankKeep counts as ice first, then the ice in those ships' containers and in the
+// shipyard's. A free ship's H2 tanks are filled too, from the same ships and then by OCT.
 //
 // When the shipyard is free, the next order starts. The ship starts as a static grid of one of
 // its blocks, centered in the shipyard's free space, with an NPC-owned projector and battery
@@ -239,7 +240,7 @@ internal static partial class ShipyardOrders
         public Dictionary<string, long> Needed = new();
         public double HydrogenLiters;
 
-        // Liters the player's docked ships have, at most what the build needs
+        // Liters the player's docked ships can spare, their ice too, at most what the build needs
         public double ShipHydrogen;
 
         // Why a press won't queue this ship: the queue is full, or the player's order is in it
@@ -327,9 +328,12 @@ internal static partial class ShipyardOrders
         if (plan.HydrogenLiters > 0)
         {
             plan.Needed[Hydrogen] = IceFor(plan.HydrogenLiters, up: true);
+            var ships = DockedShips(table, identityId);
             plan.ShipHydrogen = Math.Min(
                 plan.HydrogenLiters,
-                ShipTanks(plan).Sum(t => t.FilledRatio * t.Capacity)
+                SpareTanks(ships).Sum(Spare)
+                    + Cargo(ships).Sum(i => (double)i.GetItemAmount(ItemId(Hydrogen)))
+                        * Config.ShipyardHydrogenLitersPerIce
             );
         }
         return plan;
@@ -1803,10 +1807,7 @@ internal static partial class ShipyardOrders
         if (MyEntities.CreateFromObjectBuilderAndAdd(ship, true) is not MyCubeGrid grid)
             return "the ship could not be started";
 
-        var hydrogen =
-            next.Free || !next.Items.TryGetValue(Hydrogen, out var ice)
-                ? 0
-                : ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce;
+        var hydrogen = BuildHydrogen(next, blueprint);
         var projector = grid.GetFatBlocks<MyProjectorBase>().First();
         projector.CustomData = string.Join(
             "\n",
@@ -1959,7 +1960,9 @@ internal static partial class ShipyardOrders
             HandOver(ship, order.Player);
             NoteFreeEnd(order, name);
             if (order.Hydrogen > 0)
-                filled = FillHydrogen(ship, order.Hydrogen);
+                filled = order.Free
+                    ? FillFree(shipyard, ship, order)
+                    : FillHydrogen(ship, order.Hydrogen);
             Dynamic(shipyard, ship);
         }
         if (order.Free)
@@ -2014,6 +2017,8 @@ internal static partial class ShipyardOrders
                         ? $" Its H2 tanks took {filled:N0} of {order.Hydrogen:N0} L, the ice for the rest is sold back."
                     : $" Its H2 tanks have {filled:N0} L of hydrogen.";
         }
+        else if (filled > 0)
+            message += $" Its H2 tanks have {filled:N0} L of hydrogen.";
         message += extra;
         var ended = new BuildOrder
         {
@@ -2149,10 +2154,7 @@ internal static partial class ShipyardOrders
 
         var npc = ShipyardTurn.Npc(shipyard);
         var ends = DateTime.UtcNow.AddMinutes(Config.ShipyardOrderMinutes);
-        var hydrogen =
-            next.Free || !next.Items.TryGetValue(Hydrogen, out var ice)
-                ? 0
-                : ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce;
+        var hydrogen = BuildHydrogen(next, blueprint);
         var arm = layout
             .Plan.Blocks.Select(b => new Vector3I(b.Cell.X, b.Cell.Y, b.Cell.Z))
             .ToList();
@@ -2717,7 +2719,9 @@ internal static partial class ShipyardOrders
         if (alive)
         {
             if (order.Hydrogen > 0)
-                filled = FillHydrogen(ship, order.Hydrogen);
+                filled = order.Free
+                    ? FillFree(shipyard, ship, order)
+                    : FillHydrogen(ship, order.Hydrogen);
             if (connected)
                 foreach (
                     var battery in Group(ship)
@@ -3068,6 +3072,9 @@ internal static partial class ShipyardOrders
 
     // --- hydrogen ---
 
+    // A docked ship keeps this share of each H2 tank, for its way home
+    private const double DockedTankKeep = 0.5;
+
     private static long IceFor(double liters, bool up)
     {
         var raw = liters / Config.ShipyardHydrogenLitersPerIce * Amounts.Unit;
@@ -3089,41 +3096,87 @@ internal static partial class ShipyardOrders
                     : 0
             );
 
-    // The H2 tanks with hydrogen of the player's ships docked at the station
-    private static List<MyGasTank> ShipTanks(Plan plan)
+    // The liters of a new ship: a paid build's came with its bill, a free build's are all it holds
+    private static double BuildHydrogen(BuildOrder order, List<MyObjectBuilder_CubeGrid> blueprint)
     {
-        var station = Grids(plan.Table.CubeGrid);
-        if (FindShipyard(plan.Table) is { } shipyard)
+        if (order.Free)
+            return HydrogenCapacity(blueprint) * Config.ShipyardHydrogenFillPercent / 100;
+        return order.Items.TryGetValue(Hydrogen, out var ice)
+            ? ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce
+            : 0;
+    }
+
+    // The player's ships docked at the station; not the ship the build gives them
+    private static List<MyCubeGrid> DockedShips(
+        MyProjectorBase table,
+        long player,
+        MyCubeGrid built = null
+    )
+    {
+        var station = Grids(table.CubeGrid);
+        if (FindShipyard(table) is { } shipyard)
             station = station.Concat(Grids(shipyard)).ToList();
-        var ships = station
+        if (built != null)
+            station = station.Concat(Grids(built)).ToList();
+        return station
             .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
             .Where(c => c.Connected && c.Other != null)
             .SelectMany(c => Grids(c.Other.CubeGrid))
-            .Where(g => !station.Contains(g))
-            .Distinct();
-        return ships
-            .Where(g => g.BigOwners.Contains(plan.Player))
-            .SelectMany(g => g.GetFatBlocks<MyGasTank>())
-            .Where(t => IsHydrogen(t) && t.IsFunctional && t.FilledRatio > 0)
+            .Where(g => !station.Contains(g) && g.BigOwners.Contains(player))
+            .Distinct()
             .ToList();
     }
 
-    // Takes the build's hydrogen, as far as there is any, from the payer's docked ships
-    private static List<(MyGasTank Tank, double Liters)> Drain(Plan plan)
+    private static double Spare(MyGasTank tank) =>
+        Math.Max(0, tank.FilledRatio - DockedTankKeep) * tank.Capacity;
+
+    private static IEnumerable<MyGasTank> SpareTanks(IEnumerable<MyCubeGrid> ships) =>
+        ships
+            .SelectMany(g => g.GetFatBlocks<MyGasTank>())
+            .Where(t => IsHydrogen(t) && t.IsFunctional && Spare(t) > 0);
+
+    private static IEnumerable<MyInventory> Cargo(IEnumerable<MyCubeGrid> ships) =>
+        ships.SelectMany(g => g.GetFatBlocks<MyCargoContainer>()).Select(c => c.GetInventory());
+
+    // Takes up to the liters out of what the docked ships' tanks can spare
+    private static List<(MyGasTank Tank, double Liters)> Drain(
+        IEnumerable<MyCubeGrid> ships,
+        double liters
+    )
     {
         var taken = new List<(MyGasTank, double)>();
-        if (plan.HydrogenLiters <= 0)
-            return taken;
-        var left = plan.HydrogenLiters;
-        foreach (var tank in ShipTanks(plan))
+        var left = liters;
+        foreach (var tank in SpareTanks(ships))
         {
             if (left <= 0)
                 break;
-            var have = tank.FilledRatio * tank.Capacity;
-            var take = Math.Min(have, left);
-            ((IMyGasTank)tank).ChangeFilledRatio((have - take) / tank.Capacity, true);
+            var take = Math.Min(Spare(tank), left);
+            ((IMyGasTank)tank).ChangeFilledRatio(tank.FilledRatio - take / tank.Capacity, true);
             taken.Add((tank, take));
             left -= take;
+        }
+        return taken;
+    }
+
+    // Takes up to the raw amount of ice out of the inventories, in their order
+    private static List<(MyInventory Inventory, long Raw)> TakeIce(
+        IEnumerable<MyInventory> inventories,
+        long raw
+    )
+    {
+        var taken = new List<(MyInventory, long)>();
+        var id = ItemId(Hydrogen);
+        foreach (var inventory in inventories)
+        {
+            if (raw <= 0)
+                break;
+            var have = inventory.GetItemAmount(id).RawValue;
+            if (have <= 0)
+                continue;
+            var take = Math.Min(have, raw);
+            inventory.RemoveItemsOfType(new MyFixedPoint { RawValue = take }, id);
+            taken.Add((inventory, take));
+            raw -= take;
         }
         return taken;
     }
@@ -3154,6 +3207,22 @@ internal static partial class ShipyardOrders
             left -= give;
         }
         return liters - left;
+    }
+
+    // A free ship's hydrogen: the player's docked ships give what they can spare, then their ice;
+    // OCT gives the rest, as it gives the components. Returns the liters that went in.
+    private static double FillFree(MyCubeGrid shipyard, MyCubeGrid ship, Order order)
+    {
+        var filled = FillHydrogen(ship, order.Hydrogen);
+        // A shipyard isn't on its station's grids: its station is the one whose table it serves
+        var tables = StationTables().Values.FirstOrDefault(t => FindShipyard(t[0]) == shipyard);
+        if (filled > 0 && tables != null)
+        {
+            var ships = DockedShips(tables[0], order.Player, ship);
+            var drained = Drain(ships, filled).Sum(d => d.Liters);
+            TakeIce(Cargo(ships), IceFor(filled - drained, up: false));
+        }
+        return filled;
     }
 
     // --- the blueprint in the queue ---
