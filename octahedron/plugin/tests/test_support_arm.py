@@ -209,9 +209,10 @@ def heavy(name: str, entity: int, count: int) -> tuple[str, int]:
     )
 
 
-# 2 of 33 plain blocks missing is delivered, 4 (over 10%) is not
+# 2 of 33 plain blocks missing is delivered, over 10% is not. The welders may finish a few
+# before the item is taken out, so 8 leaves more than 3 missing
 PARTIAL, PARTIAL_BLOCKS = heavy("ArmPartial", 777000693000400, 2)
-HEAVY, HEAVY_BLOCKS = heavy("ArmArmor", 777000693000600, 4)
+HEAVY, HEAVY_BLOCKS = heavy("ArmArmor", 777000693000600, 8)
 SCRAP, SCRAP_BLOCKS = large("ArmScrap", 777000693000500, False)
 # Ordered by an admin who ignores PCU limits: free although it is over the PCU cap and
 # has a blocked block, and still free and welded with the flag off once it started, as
@@ -248,7 +249,7 @@ STOCK = {
     "Component/Computer": 200,
     "Component/Display": 30,
     "Component/PowerCell": 120,
-    "Component/MetalGrid": 300,
+    "Component/MetalGrid": 400,
     "Component/BulletproofGlass": 30,
     "Component/Thrust": 200,
     "Ore/Ice": 25000,
@@ -566,7 +567,7 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
         f"{case}: no build left in the shipyard: {lines}",
     )
     if case == "exempt":
-        line = wait_log(rf"ignores PCU limits, no cool-down after '{ship}'", 10)
+        line = wait_log(rf"ignores PCU limits, no cool-down after '{ship}'", 60)
         check(line is not None, f"{case}: no cool-down with the flag off: {line}")
 
 

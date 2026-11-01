@@ -2402,16 +2402,12 @@ internal static partial class ShipyardOrders
                 (missing.TryGetValue(block.BlockDefinition, out var had) ? had : 0) + 1;
             block.GetMissingComponents(parts);
         }
-        var leftOut = LeftOutGrids(order, blocks);
+        var shortOf = Short(shipyard, parts);
+        var leftOut = shortOf == null ? LeftOutGrids(order, blocks) : null;
         var waited = order.ShortSince != null;
         order.ShortSince ??= DateTime.UtcNow;
         var until = order.ShortSince.Value.AddMinutes(Config.ShipyardTopUpMinutes);
-        if (
-            !order.Free
-            && leftOut == null
-            && DateTime.UtcNow < until
-            && Short(shipyard, parts) is { } shortOf
-        )
+        if (!order.Free && DateTime.UtcNow < until && shortOf != null)
         {
             // Short of components: it waits for a top-up, and says so once
             order.Idle = 0;
@@ -2453,10 +2449,11 @@ internal static partial class ShipyardOrders
     }
 
     // The grids with blocks that can't be placed as the ship stands, like a grid docked by a
-    // connector or a part overlapping another: null if a block could still be placed or finished
+    // connector or a part overlapping another: null if a block could still be placed or finished,
+    // or if no ship was started
     private static string LeftOutGrids(Order order, List<MySlimBlock> blocks)
     {
-        if (blocks.Any(b => !b.IsFullIntegrity))
+        if (blocks.Count == 0 || blocks.Any(b => !b.IsFullIntegrity))
             return null;
         var grids = new List<string>();
         foreach (var preview in order.Projector.Clipboard.PreviewGrids)

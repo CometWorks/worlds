@@ -132,8 +132,8 @@ def dlc(owned: bool) -> None:
     no_plugin_errors(stalled=False)
 
 
-def paid_order(remote) -> None:
-    """A paid order up to the press at the player's turn"""
+def paid_order(remote, loaded: dict | None = None) -> None:
+    """A paid order up to the press at the player's turn, with what is loaded before it"""
     tc.with_config(
         remote,
         FreeBuildPcuLimit=0,
@@ -149,6 +149,8 @@ def paid_order(remote) -> None:
     reply = pb.press(remote)
     check("is in the queue" in reply, f"ordered: {reply}")
     check(so.wait_chat(remote, "It is your turn", 60), "the player's turn")
+    for item, count in (loaded or {}).items():
+        st.probe(remote, f"yardload Alpha {item} {count}")
     reply = pb.press(remote)
     check(f"builds '{NAME}' for you now" in reply, f"the press starts it: {reply}")
 
@@ -158,7 +160,15 @@ def paid_offline() -> None:
     rig.start_server()
     remote = rig.start_client()
     try:
-        paid_order(remote)
+        # The DLC blocks' parts the station doesn't sell
+        paid_order(
+            remote,
+            {
+                "Component/PowerCell": 80,
+                "Component/Reactor": 100,
+                "Component/MetalGrid": 4,
+            },
+        )
         rig.stop_client()
         deadline = time.monotonic() + 600
         pattern = rf"'{NAME}' of .* built or broken down"
