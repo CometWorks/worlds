@@ -12,8 +12,7 @@ namespace GravityProbe;
 
 // Test only, for tests/test_gravity_drive.py: every 100 ms or so, a line per grid named "GD ...",
 // loose object and character with the name, speed, fastest speed so far and position the server has
-// for it. The line of an entity that is gone stays. With a gravity-probe.wake file there, the grids
-// are kept awake.
+// for it. The line of an entity that is gone stays.
 // ReSharper disable once UnusedType.Global
 public class Plugin : IPlugin
 {
@@ -30,7 +29,6 @@ public class Plugin : IPlugin
         if (++frame % 6 != 0 || MySession.Static == null)
             return;
         var path = Path.Combine(MyFileSystem.UserDataPath, "gravity-probe.txt");
-        var wake = File.Exists(Path.ChangeExtension(path, "wake"));
         foreach (var entity in MyEntities.GetEntities())
         {
             var name = entity switch
@@ -43,8 +41,6 @@ public class Plugin : IPlugin
             };
             if (name == null || entity.Physics == null)
                 continue;
-            if (wake && entity is MyCubeGrid)
-                entity.Physics.RigidBody?.Activate();
             var speed = entity.Physics.LinearVelocity.Length();
             fastest[name] = fastest.TryGetValue(name, out var most) ? Math.Max(most, speed) : speed;
             var p = entity.PositionComp.GetPosition();

@@ -3,13 +3,17 @@ generator (saved off) and either artificial mass or a space ball wait in empty s
 or piloted by the client, while its generator is turned on. Server speeds come from the probe
 (tests/gravity-probe), the client's own view from Remote.
 
-- Stopped, the default: no ship moves on the server, and the log says the patch is on. On a version without
-  the plugin's patch this fails, and so does it on main.
+- Stopped, the default: no ship gains speed on the server, and the log says the patch is on. This fails on
+  main, whose plugin has no patch. A ship with thrusters and the drive on flies and stops on the server as
+  with the drive off, and the client's view, which predicts the drive, rejoins the server's when it flies.
 - Moving, with --game-version X (another version than 1.210.*): the gate is off, the log says so and the
   ships fly as in the game.
 
 Either way a character and a loose object in a generator's field get pulled, and a grid with artificial
 mass falls in a planet's natural gravity.
+
+The ships left alone drift at 1 m/s: a sleeping grid doesn't notice a generator turned on around it, in the
+game's own code too, as a resting artificial mass doesn't reach the generator's field until something wakes it.
 
     OCT_TASK=SE-881 uv run --no-project --with httpx python tests/test_gravity_drive.py [--game-version 1.211.0]
 """
@@ -35,9 +39,10 @@ PROBE = (
 )
 GENERATOR = (0, 0, 2)
 FIELD = 100
-# A working drive passes this within a few seconds, single readings stay far below it otherwise
+# A working drive passes this within a few seconds. The drifting ships go at 1 m/s
 MOVING = 5.0
-STILL = 1.0
+STILL = 1.5
+DRIFT = (0, 0, 1)
 WINDOW = 25.0
 PULLED = 1.0
 BASE = 777000881000000
@@ -60,6 +65,9 @@ PULL = ("GD Field", BASE + 5, (104_000, -300_000, 0))
 LOOSE_OBJECT = (BASE + 6, (104_020, -300_000, 0))
 CHARACTER_AT = (104_000, -300_000, 20)
 FALLER = ("GD Faller", BASE + 7, (20_000, 13_000, 72_000))
+THRUST = ("GD Thrust", BASE + 8, (106_000, -300_000, 0))
+# The client's view rejoins the server's this close, normally 2 to 10 m
+JOINED = 20.0
 
 
 def ship(name: str, entity_id, position, drive, **kwargs) -> str:
@@ -79,6 +87,42 @@ def ship(name: str, entity_id, position, drive, **kwargs) -> str:
         ],
         position,
         **kwargs,
+    )
+
+
+def thruster(position, forward: str, up: str) -> str:
+    return rig.block(
+        "MyObjectBuilder_Thrust",
+        "LargeBlockSmallThrust",
+        position,
+        forward=forward,
+        up=up,
+    )
+
+
+def thrust_ship() -> str:
+    return rig.grid(
+        THRUST[0],
+        THRUST[1],
+        [
+            rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 0, 0)),
+            rig.block(
+                "MyObjectBuilder_BatteryBlock",
+                "LargeBlockBatteryBlock",
+                (0, 0, 1),
+                "<CurrentStoredPower>3</CurrentStoredPower>",
+            ),
+            generator(),
+            rig.block(MASS[0], MASS[1], (0, 0, 3), MASS[2]),
+            rig.block("MyObjectBuilder_Gyro", "LargeBlockGyro", (1, 0, 0)),
+            thruster((1, 0, 1), "Forward", "Up"),
+            thruster((-1, 0, 1), "Backward", "Up"),
+            thruster((1, 0, 2), "Left", "Up"),
+            thruster((-1, 0, 2), "Right", "Up"),
+            thruster((1, 0, 3), "Up", "Forward"),
+            thruster((-1, 0, 3), "Down", "Forward"),
+        ],
+        THRUST[2],
     )
 
 
@@ -109,7 +153,9 @@ def loose_object(entity_id: int, position) -> str:
 
 
 def world_grids() -> list[str]:
-    grids = [ship(n, i, p, d) for n, (i, p, d) in {**LOOSE, **PILOTED}.items()]
+    grids = [ship(n, i, p, d, velocity=DRIFT) for n, (i, p, d) in LOOSE.items()]
+    grids += [ship(n, i, p, d) for n, (i, p, d) in PILOTED.items()]
+    grids.append(thrust_ship())
     grids.append(
         rig.grid(
             PULL[0],
@@ -201,6 +247,52 @@ def watch(name: str, sample=None) -> dict:
     }
 
 
+def fly_with_thrusters(remote, check) -> None:
+    """With the drive on, the client's view strays while the server's grid sleeps. Thrust wakes the grid,
+    its states reach the client again, and when the dampeners stop it the drive doesn't push it on
+    """
+    name, entity_id, position = THRUST
+    remote.character_teleport(position[0], position[1] + 30, position[2])
+    wait_on_client(remote, entity_id)
+    enter_cockpit(remote, entity_id)
+    check(remote.get_character().get("state") == "sitting", f"pilot in {name}")
+    remote.set_enabled(entity_id, GENERATOR, True)
+
+    def apart() -> float:
+        return math.dist(remote.get_grid(entity_id)["position"], server()[name][1])
+
+    strayed = rig.wait_until(
+        lambda: (distance := apart()) > JOINED * 2 and distance,
+        30,
+        "the client's view straying",
+        interval=0.5,
+    )
+    log(f"{name}: the client's view strays {strayed:.0f} m from a parked ship")
+    remote.set_input_state(keys=["W"])
+    try:
+        rig.wait_until(
+            lambda: server()[name][0] > MOVING, 20, "thrust on the server", interval=0.2
+        )
+        rig.wait_until(
+            lambda: apart() < JOINED, 10, "the client's view rejoining", interval=0.2
+        )
+        check(
+            True, f"{name} flies on thrust and the client's view rejoins the server's"
+        )
+    except TimeoutError as error:
+        check(False, str(error))
+    remote.clear_input_state()
+    try:
+        rig.wait_until(
+            lambda: server()[name][0] < 0.5, 60, "the dampeners stopping it", interval=1
+        )
+        time.sleep(3)
+        check(server()[name][0] < 0.5, f"{name} stays stopped on the server, drive on")
+    except TimeoutError as error:
+        check(False, str(error))
+    leave(remote)
+
+
 def leave(remote) -> None:
     remote.character_use()
     rig.wait_until(
@@ -263,7 +355,8 @@ def main() -> int:
         else:
             check(seen["fastest"] < STILL, f"{name} stays still on the server")
 
-    for name, (entity_id, position, _) in LOOSE.items():
+    for name, (entity_id, _, _) in LOOSE.items():
+        position = server()[name][1]
         remote.character_teleport(position[0] + 200, position[1], position[2])
         wait_on_client(remote, entity_id)
         remote.set_enabled(entity_id, GENERATOR, True)
@@ -286,6 +379,9 @@ def main() -> int:
             f"at most {max(offsets):.2f} m from the server's position, last {offsets[-1]:.2f} m"
         )
         leave(remote)
+
+    if not moving:
+        fly_with_thrusters(remote, check)
 
     # The character first: off the jetpack, in the field. Below it the field is empty
     remote.character_teleport(*CHARACTER_AT)
