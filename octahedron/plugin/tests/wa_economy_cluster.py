@@ -5,7 +5,7 @@ the cluster's own scenario bench (CometWorks/cluster Test/): both keep their sta
 
 CLUSTER_TEST_DIR is the Test/ folder of a CometWorks/cluster checkout with its host.env (CLUSTER_PACKAGE,
 test root, port base) and `uv sync` done; run this with that folder's virtualenv python. host.env needs
-MAGNETAR_HOME at a Magnetar with ServerCommands.Execute (2.4.3.8 works) and, when that differs from what
+MAGNETAR_HOME at Magnetar 2.4.3.9 or later and, when that differs from what
 other benches on the host use, a MAGNETAR_GITHUB_CACHE of its own: Magnetars of different versions recompile
 each other's plugins in a shared cache, and a node can then fail at start. The zstd command reads the
 global save. WA + 2 regular

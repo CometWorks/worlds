@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using HarmonyLib;
@@ -50,42 +49,15 @@ internal static class ShipyardAway
     // in its queue is a reason to stay online, next to the cluster's own.
     private static void StayOnline()
     {
-        // PluginSdk contract 1.1 with a cluster built on it. By name, because this has to compile
-        // on an older Magnetar too, where the fallback below is what keeps a job going.
-        var register = typeof(PluginClusterClient).GetMethod(
-            "RegisterOfflineBlocker",
-            [typeof(Func<long, string>)]
-        );
-        Func<long, string> blocker = id => ShipyardOrders.Busy(id) ? "shipyard" : null;
-        if (register?.Invoke(Plugin.Cluster, [blocker]) != null)
-        {
+        if (
+            Plugin.Cluster.RegisterOfflineBlocker(id => ShipyardOrders.Busy(id) ? "shipyard" : null)
+            != null
+        )
             Plugin.Log.Info("Shipyard jobs keep their partition online with an offline blocker");
-            return;
-        }
-
-        var method = AccessTools
-            .TypeByName("ClusterPlugin.PartitionPersistence")
-            ?.GetMethod("OfflineMemberBlocker", BindingFlags.Static | BindingFlags.NonPublic);
-        if (method == null)
-        {
+        else
             Plugin.Log.Warning(
                 "No offline blocker in this cluster: shipyard jobs stop when their partition goes offline"
             );
-            return;
-        }
-        new Harmony(Plugin.Name + ".ShipyardAway").Patch(
-            method,
-            postfix: new HarmonyMethod(typeof(ShipyardAway), nameof(Blocker))
-        );
-        Plugin.Log.Info(
-            "Shipyard jobs keep their partition online with a patch of this older cluster"
-        );
-    }
-
-    private static void Blocker(MyEntity entity, ref string __result)
-    {
-        if (__result == null && entity is MyCubeGrid && ShipyardOrders.Busy(entity.EntityId))
-            __result = "shipyard";
     }
 
     // --- their welders keep placing DLC blocks ---
