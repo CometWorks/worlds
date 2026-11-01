@@ -99,11 +99,19 @@ internal static class ShipyardZoneWelding
         {
             if (!zone.Enabled || !zone.PositionComp.WorldAABB.Intersects(box))
                 continue;
-            if (on)
-                MyMultiplayer.RaiseEvent(zone, removeEvent, shipyard.EntityId, true);
-            else
-                MyMultiplayer.RaiseEvent(zone, insertEvent, shipyard.EntityId);
+            ShowOutside(zone, shipyard.EntityId, on);
         }
+    }
+
+    /// <summary>
+    /// Tells the clients that the zone doesn't hold the entity, or that it does again.
+    /// </summary>
+    internal static void ShowOutside(MySafeZone zone, long entityId, bool outside)
+    {
+        if (outside)
+            MyMultiplayer.RaiseEvent(zone, removeEvent, entityId, true);
+        else
+            MyMultiplayer.RaiseEvent(zone, insertEvent, entityId);
     }
 
     // ToolCore is internal to the mod, so this goes by name

@@ -76,6 +76,7 @@ public class Plugin : IPlugin
             StationRefillPatch.UpdateNode();
             worldEdge.Update();
             NoGravityDrives.Update();
+            BinocularsInZones.Update();
             TableHologram.Update();
             ShipyardOrders.Update();
             FreePrints.Update();
