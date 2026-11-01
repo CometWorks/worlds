@@ -138,11 +138,12 @@ def run(bench) -> None:
     check("the ship is re-pasted", line, line[0])
     ship = int(line[1])
     time.sleep(20)
-    cockpit = ap.find_cockpit(api, ship)
-    block = api.get_block(ship, tuple(cockpit["min"]))
-    builder = ET.fromstring(api.get_object_builder(block["entityId"]))
-    slots = [d for d in builder.iterfind("Toolbar/Slots/Slot/Data")]
-    refs = {d.findtext("BlockEntityId") for d in slots} - {None}
+    refs = set()  # Over all cockpits, a passenger seat has no slots
+    for cockpit in ap._find_blocks(api, ship, "MyCockpit"):
+        block = api.get_block(ship, tuple(cockpit["min"]))
+        builder = ET.fromstring(api.get_object_builder(block["entityId"]))
+        slots = builder.iterfind("Toolbar/Slots/Slot/Data")
+        refs |= {d.findtext("BlockEntityId") for d in slots} - {None}
     ids = set()
     offset = 0
     while True:
@@ -156,9 +157,9 @@ def run(bench) -> None:
     groups = api.list_block_groups(ship)
     ids |= {str(member) for members in groups.values() for member in members}
     check(
-        "the cockpit's toolbar points at the ship's blocks",
+        "the cockpits' toolbars point at the ship's blocks",
         refs and refs <= ids,
-        f"cockpit {block['entityId']}: slots on {sorted(refs)}, not on the ship: {sorted(refs - ids)}",
+        f"slots on {sorted(refs)}, not on the ship: {sorted(refs - ids)}",
     )
     print(
         f"groups: { {name: len(members) for name, members in groups.items()} }",
