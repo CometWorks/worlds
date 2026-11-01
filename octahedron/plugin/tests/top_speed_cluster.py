@@ -17,6 +17,7 @@ import math
 import os
 import re
 import shutil
+import statistics
 import sys
 import time
 import urllib.parse
@@ -121,6 +122,11 @@ def fly(read, seconds: float) -> list[tuple[float, float]]:
             break
         time.sleep(0.25)
     return samples
+
+
+def steady(samples: list[tuple[float, float]]) -> float:
+    """The speed it settled at: the median of the last 8 s, single readings jump a little"""
+    return statistics.median(s for t, s in samples if t > samples[-1][0] - 8)
 
 
 def acceleration(samples: list[tuple[float, float]]) -> float:
@@ -229,6 +235,7 @@ def run(bench) -> None:
         boost, resistance = rts_grid(section)
         results[label] = {
             "top": round(top, 1),
+            "steady": round(steady(samples), 1),
             "server": round(fastest_on_server[0], 1),
             "accel": round(accel, 1),
             # A limit L braking at 1 m/s2 per m/s over it settles at L + accel, likewise for the mod's multiplier
@@ -247,6 +254,12 @@ def run(bench) -> None:
             f"the {label} stays within Relative Top Speed's boost limit",
             top <= boost * 1.01,
             results[label],
+        )
+        # The dampeners stop it first: a character leaving at speed keeps that speed
+        wait_until(
+            lambda: api.get_grid(grid)["speed"] < 2,
+            180,
+            f"the {label} stopping",
         )
         api.character_use()
         wait_until(
@@ -282,6 +295,7 @@ def run(bench) -> None:
     top = max(s for _, s in samples)
     results["character"] = {
         "top": round(top, 1),
+        "steady": round(steady(samples), 1),
         "server": round(fastest_on_server[0], 1),
         "accel": round(acceleration(samples), 1),
         "seconds": round(samples[-1][0], 1),
