@@ -64,6 +64,9 @@ def leave_paid(a, blueprint: str = tu.PAID) -> int:
     """A paid ship is built and its turn ended, the ship stays where it is; returns what it took"""
     with_config(a, **PAY)
     tu.probe(a, "air")
+    # What the Store's plates cost; a client with no Steam crashes at 1,000,000 SC
+    if tu.money(a) < 100_000:
+        tu.probe(a, "balance 100000")
     before = tu.money(a)
     tu.turn(a, blueprint)
     tu.start(a)

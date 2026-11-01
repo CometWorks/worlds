@@ -214,6 +214,11 @@ def run(bench) -> None:
         check("the order is in the queue", "is in the queue" in order(api, PAID))
         told = tp.wait_chat(api, "It is your turn", 60, mark)
         check("its turn", told, told)
+        # Most of it loaded: the Store's stock and the account are for the rest
+        print(
+            probe(api, f"yardload {STATION} {turn.PLATE} {turn.PLATES - 20}"),
+            flush=True,
+        )
         mark = tp.latest(api)
         press(api)
         done = tp.wait_chat(api, "Take what is in", 400, mark)
