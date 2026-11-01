@@ -196,7 +196,9 @@ loose objects and natural gravity on grids work as before.
 
 The server also turns these blocks off. When a working one on a ship is in the field of a
 working generator, on the same grid or another, all of them on that grid go off, within
-about 170 ms, and go off again if a player turns them back on. The generators stay on. A
+about 170 ms, and go off again if a player turns them back on. The generators stay on.
+Nothing turns the blocks back on: they stay off when the field goes, and a player can
+then turn them on again, which holds until they are in a field again. A
 client has no patch and would otherwise fly its own copy of the ship while the server's
 grid sleeps: the pilot of a parked ship would see it creep away without limit. Static
 grids keep theirs, they can't move. The player gets no message, the server's log names the

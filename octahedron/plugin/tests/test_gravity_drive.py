@@ -3,8 +3,9 @@ a gravity generator (saved off) and two blocks of artificial mass or two space b
 the generator on. Server speeds come from the probe (tests/gravity-probe), the client's own view from Remote.
 
 - Stopped, the default: the server turns both blocks off and keeps them off, the generator stays on, no ship
-  gains speed on the server, the client's view stays with the server's, and the log says the patch is on. This
-  fails on main, whose plugin has no patch. A ship with thrusters and the drive on flies and stays stopped once
+  gains speed on the server, the client's view stays with the server's, and the log says the patch is on. A
+  block turned back on in the field goes off again. With the field gone the blocks stay off, and one a player
+  turns on then stays on. This fails on main, whose plugin has no patch. A ship with thrusters and the drive on flies and stays stopped once
   the dampeners stop it.
 - Moving, with --game-version X (another version than 1.210.*): the gate is off, the log says so, the blocks stay
   on and the ships fly as in the game.
@@ -278,6 +279,35 @@ def drives_on(remote, entity_id: int) -> list[bool]:
     return [enabled(remote, entity_id, p) for p in (DRIVE, DRIVE_2)]
 
 
+def stays_on_without_field(remote, name: str, entity_id: int, check) -> None:
+    """Off the blocks stay when the field goes, and with no field a player's choice holds"""
+    remote.set_enabled(entity_id, GENERATOR, False)
+    rig.wait_until(
+        lambda: not enabled(remote, entity_id, GENERATOR),
+        10,
+        f"{name}: the generator off",
+        interval=0.2,
+    )
+    time.sleep(1)
+    check(
+        drives_on(remote, entity_id) == [False, False],
+        f"{name}: the blocks stay off when the field is gone",
+    )
+    remote.set_enabled(entity_id, DRIVE, True)
+    rig.wait_until(
+        lambda: enabled(remote, entity_id, DRIVE),
+        10,
+        f"{name}: the block on",
+        interval=0.2,
+    )
+    # Many times the server's check interval
+    time.sleep(2)
+    check(
+        drives_on(remote, entity_id) == [True, False],
+        f"{name}: with no field a block turned on stays on",
+    )
+
+
 def fly_with_thrusters(remote, check) -> None:
     """With the drive's blocks off the ship flies and stops as any other, and the client's view stays with the
     server's, also once the server's grid sleeps"""
@@ -454,6 +484,8 @@ def main() -> int:
         check(
             max(offsets) < JOINED, f"{name}: the client's view stays with the server's"
         )
+        if not moving:
+            stays_on_without_field(remote, name, entity_id, check)
         leave(remote)
 
     if not moving:
