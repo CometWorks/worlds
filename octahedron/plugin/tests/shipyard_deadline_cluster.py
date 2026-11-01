@@ -283,6 +283,9 @@ def run(bench) -> None:
 
     cluster.kill()
     cluster.prepare(wipe=True)
+    # A reused run folder keeps Hangar's entries and cool-downs in the shared storage
+    for stale in (bench.run_root / "shared" / "plugins").glob("17C928CE-*"):
+        shutil.rmtree(stale)
     processes = ["wa-1", *NODES]
     for process in processes:
         wa.link_mods(bench.run_root / f"{process}-data" / "Mods")
@@ -297,9 +300,6 @@ def run(bench) -> None:
     api = join()
     home = wait_until(where, 120, "the client's partition")
     away = NODES[1 - NODES.index(home)]
-
-    # A reused run folder keeps the shared storage
-    until(lambda: "empty" in hangar(api, "remove 1"), 30, 1)
 
     # --- stored by the node, over a node restart in the wait, counted once ---
     paid = leave_ship(api)
