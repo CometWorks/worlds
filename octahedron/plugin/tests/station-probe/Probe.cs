@@ -11,6 +11,7 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
+using Sandbox.Game.SessionComponents;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using SpaceEngineers.Game.Definitions.SafeZone;
@@ -573,6 +574,25 @@ public sealed class ProbeCommands : CommandModule
         if (rank == "member" && faction.IsLeader(me))
             factions.DemoteMember(faction.FactionId, me);
         return "FACTION " + tag + " " + rank;
+    }
+
+    // A client on the test's transport owns them all, for the server; without any, as a Steam
+    // player without them. It lasts until the client joins again.
+    [Command("nodlc", "The caller owns no DLC", "!sprobe nodlc")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string NoDlc()
+    {
+        var owned =
+            (Dictionary<ulong, HashSet<uint>>)
+                typeof(MySessionComponentDLC)
+                    .GetField(
+                        "m_clientAvailableDLCs",
+                        BindingFlags.Instance | BindingFlags.NonPublic
+                    )
+                    .GetValue(MySession.Static.GetComponent<MySessionComponentDLC>());
+        var steamId = MySession.Static.Players.TryGetSteamId(Context.Caller.IdentityId);
+        owned[steamId] = [];
+        return $"NODLC {steamId}";
     }
 
     [Command("whoami", "The caller's faction and rank: ME tag rank", "!sprobe whoami")]

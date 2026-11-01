@@ -217,6 +217,9 @@ internal static class ShipyardOrders
         public int Pcu;
         public bool Free;
 
+        // The blocks left out, of DLCs the player doesn't own (ShipyardDlc)
+        public string LeftOut;
+
         // The player ignores PCU limits: a free build whatever the ship (FreePrints.Exempt)
         public bool Exempt;
 
@@ -262,8 +265,18 @@ internal static class ShipyardOrders
             .ToList();
         if (blueprint == null || blueprint.Count == 0)
             return Fail(plan, "Switch the hologram table on and load a blueprint into it first.");
-        plan.Blueprint = blueprint;
         plan.Ship = blueprint[0].DisplayName ?? "Ship";
+        var main = blueprint[0];
+        plan.LeftOut = ShipyardDlc.LeaveOut(
+            blueprint,
+            MySession.Static.Players.TryGetSteamId(identityId)
+        );
+        if (!blueprint.Contains(main))
+            return Fail(
+                plan,
+                $"'{plan.Ship}' can't be built: its main grid needs DLCs you don't own ({plan.LeftOut})."
+            );
+        plan.Blueprint = blueprint;
         plan.Pcu = blueprint.Sum(g => g.CalculatePCUs());
         // The player is on this node, so its copy of their admin settings is current
         plan.Exempt = FreePrints.Exempt(identityId);
@@ -889,7 +902,8 @@ internal static class ShipyardOrders
                     tell(
                         quote == null && !plan.Free
                             ? "The station's market did not answer, try again."
-                            : $"Your quote for '{plan.Ship}' is on the hologram table's screen"
+                            : LeftOutText(plan)
+                                + $"Your quote for '{plan.Ship}' is on the hologram table's screen"
                                 + (
                                     plan.Free
                                         ? ", a free build."
@@ -941,7 +955,7 @@ internal static class ShipyardOrders
                 if (!ok)
                     foreach (var (tank, liters) in drained)
                         AddHydrogen(tank, liters);
-                tell(message);
+                tell(ok ? LeftOutText(plan) + message : message);
                 if (ok)
                 {
                     if (plan.Exempt)
@@ -1048,6 +1062,9 @@ internal static class ShipyardOrders
         );
     }
 
+    private static string LeftOutText(Plan plan) =>
+        plan.LeftOut == null ? "" : $"Left out, you don't own their DLCs: {plan.LeftOut}. ";
+
     private static void ShowQuote(Plan plan, BuildQuote quote)
     {
         quotes[plan.Table.EntityId] = new TableQuote
@@ -1071,6 +1088,8 @@ internal static class ShipyardOrders
                 .AppendLine($"{quote.Total:N0} SC from your account.");
         if (plan.Error == null)
         {
+            if (plan.LeftOut != null)
+                text.AppendLine(LeftOutText(plan).TrimEnd());
             text.AppendLine();
             if (plan.Blocker != null)
                 text.AppendLine(plan.Blocker);
@@ -2305,10 +2324,10 @@ internal static class ShipyardOrders
                 .SelectMany(g => ((MyCubeGrid)g).GetBlocks())
                 .Where(b => !(b.FatBlock is MyTerminalBlock t && IsScaffold(t)));
 
-    // The welders stopped. A ship missing only armor and other plain blocks, at most
-    // MaxMissingPlain of them, is delivered, and the payer gets the missing pieces' components
-    // back; one missing a functional block or more of the plain ones is removed and the build
-    // refunded, the labor fee with it.
+    // The welders stopped. A ship missing only blocks no welder can place, or only armor and other
+    // plain blocks, at most MaxMissingPlain of them, is delivered, and the payer gets the missing
+    // pieces' components back; one missing a functional block or more of the plain ones is removed
+    // and the build refunded, the labor fee with it.
     private static void Stall(MyCubeGrid shipyard, Order order)
     {
         var projected = (
@@ -2345,10 +2364,16 @@ internal static class ShipyardOrders
                 .OrderByDescending(m => m.Value)
                 .Select(m => $"{m.Value} {m.Key.DisplayNameText}")
         );
+        var leftOut = LeftOutGrids(order, blocks);
+        if (leftOut != null)
+            order.Missing += $", left out on {leftOut}, where no welder can place them";
         order.Refund =
-            missing.Keys.Any(d => Functional(d.Id))
-            || missing.Where(m => !Functional(m.Key.Id)).Sum(m => m.Value)
-                > MaxMissingPlain * plain;
+            leftOut == null
+            && (
+                missing.Keys.Any(d => Functional(d.Id))
+                || missing.Where(m => !Functional(m.Key.Id)).Sum(m => m.Value)
+                    > MaxMissingPlain * plain
+            );
         order.Refunded = parts.ToDictionary(
             p => Stations.ItemName(new MyDefinitionId(typeof(MyObjectBuilder_Component), p.Key)),
             p => p.Value * Amounts.Unit
@@ -2361,6 +2386,30 @@ internal static class ShipyardOrders
         if (order.Refund)
             Scrap(shipyard, order);
         End(shipyard, order, "stalled");
+    }
+
+    // The grids with blocks that can't be placed as the ship stands, like a grid docked by a
+    // connector or a part overlapping another: null if a block could still be placed or finished
+    private static string LeftOutGrids(Order order, List<MySlimBlock> blocks)
+    {
+        if (blocks.Any(b => !b.IsFullIntegrity))
+            return null;
+        var grids = new List<string>();
+        foreach (var preview in order.Projector.Clipboard.PreviewGrids)
+        {
+            var left = 0;
+            foreach (var block in preview.GetBlocks())
+            {
+                var result = order.Projector.CanBuild(block, true);
+                if (result == BuildCheckResult.OK)
+                    return null;
+                if (result != BuildCheckResult.AlreadyBuilt)
+                    left++;
+            }
+            if (left > 0)
+                grids.Add($"{preview.DisplayName} ({left} of {preview.BlocksCount} blocks)");
+        }
+        return grids.Count == 0 ? null : string.Join(", ", grids);
     }
 
     // What the welders had when they stopped, for finding out why
@@ -3531,7 +3580,7 @@ internal static class ShipyardOrders
         return grids;
     }
 
-    private static bool IsScaffold(MyTerminalBlock block) =>
+    internal static bool IsScaffold(MyTerminalBlock block) =>
         block.CustomName.ToString() == ScaffoldName
         && MySession.Static.Players.IdentityIsNpc(block.OwnerId);
 
