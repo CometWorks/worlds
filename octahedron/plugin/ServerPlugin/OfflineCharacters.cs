@@ -53,8 +53,8 @@ internal static class OfflineCharacters
     private const string TakeCommand = "offline-character-take";
     private const string ConsumeCommand = "offline-character-consume";
 
-    // Answers once a recoverable global save holds what the WA did before it. Up to cluster 0.1.26
-    // nothing does, Unsupported.
+    // Answers once a recoverable global save holds what the WA did before it. A cluster from before
+    // this command answers Unsupported.
     private const string GlobalSaveCommand = "cluster.global-save";
     private const string Credit = "SpaceCredit";
     private const int Attempts = 4;
@@ -141,7 +141,7 @@ internal static class OfflineCharacters
     private static Guid saveOperation;
     private static bool saveAsked;
 
-    // Without it, up to cluster 0.1.26, a plugin's global command doesn't wait for a save, so this
+    // Without it a plugin's global command doesn't wait for a save either, so this
     // looks at the saves. Their place in the order: the generation, then the sequence. Only without
     // saves at all is everything saved. Goes once no cluster without the command is left.
     private static long SaveMark(long generation, long sequence) => (generation << 32) + sequence;
