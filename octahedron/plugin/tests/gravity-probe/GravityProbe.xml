@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>gravity-probe</Id>
+    <GroupId>gravity-probe</GroupId>
+    <RepoId>local/gravity-probe</RepoId>
+
+    <FriendlyName>Gravity Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: writes where the server has the test's entities</Tooltip>
+    <Description>Test only. Writes the speed and position the server has for the test's grids,
+        loose objects and characters to gravity-probe.txt in the game's user data folder.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>

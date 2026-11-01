@@ -188,6 +188,30 @@ It happens once. A player who turns the setting back on keeps it: a grid loaded 
 save or moved to another cluster node isn't built, so it isn't cleared again. Grids
 already in a world keep what they have.
 
+### No gravity drives
+
+With `NoGravityDrivesEnabled` on (the default), artificial mass and space ball blocks
+don't react to gravity generators, so a gravity drive doesn't move its ship. Characters,
+loose objects and natural gravity on grids work as before.
+
+The server also turns these blocks off. When a working one on a ship is in the field of a
+working generator, on the same grid or another, all of them on that grid go off within
+about 170 ms, and go off again if a player turns one back on. The generators stay on.
+Nothing turns the blocks back on: they stay off when the field goes, and a player can then
+turn them on, which holds until they are in a field again. Static grids keep theirs, they
+can't move. The player gets no message, the server's log names the grid. An off block adds
+no mass to its grid.
+
+A client has no patch and would otherwise fly its own copy of the ship while the server's
+grid sleeps: the pilot of a parked ship would see it creep away without limit. The ship's
+grid stays awake for 5 s after the blocks go off, so that the server's states correct what
+the client's copy did until then.
+
+The game's Warfare 3 update brings the rule as a world setting. Until then it applies on
+game version 1.210.* only; on any other version the patches aren't applied, and the log
+says at load which way it went. [SE-882](https://tasks.cometworks.se/tasks/1769) removes
+it and turns the world setting on.
+
 ### PCU per ship or station
 
 A ship or station may have at most `GroupPcuLimit` (60,000) PCU: all grids
@@ -1080,6 +1104,9 @@ Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
 blocks to their functional level, two grids merging and a rotor attaching a
 head, each stopped by the cap, next to a copy built by nobody that isn't.
+`tests/test_gravity_drive.py` pilots ships with a gravity drive, and with
+`--game-version` checks the other side of the version gate.
+`tests/gravity_drive_cluster.py` pilots them on a cluster node.
 `tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
 with the client, welding them through shipyard orders, with the rule off too, and a
 test mod's turret whose definition has it on. It buys ships at a store block and

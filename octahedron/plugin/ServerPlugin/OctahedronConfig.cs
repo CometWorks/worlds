@@ -12,6 +12,7 @@ namespace ServerPlugin;
 [Section("starter", caption: "Starter Ship")]
 [Section("projections", caption: "Projections")]
 [Section("weapons", caption: "Weapons")]
+[Section("drives", caption: "Gravity Drives")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
@@ -294,6 +295,16 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     }
+
+    [BoolOption(
+        "Artificial mass and space balls don't react to gravity generators, and the server turns them off on a ship with one in a generator's field. On game version 1.210.* only.",
+        Parent = "drives"
+    )]
+    public bool NoGravityDrivesEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
 
     [IntOption(
         0,
