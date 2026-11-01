@@ -155,9 +155,18 @@ def server() -> dict[str, tuple[float, tuple[float, float, float]]]:
     except FileNotFoundError:
         return found
     for line in text.splitlines():
-        name, speed, x, y, z = line.split(";")
+        name, speed, _, x, y, z = line.split(";")
         found[name] = (float(speed), (float(x), float(y), float(z)))
     return found
+
+
+def fastest_on_server(name: str) -> float:
+    text = (rig.SERVER_DATA / "gravity-probe.txt").read_text(encoding="utf-8")
+    return next(
+        float(line.split(";")[2])
+        for line in text.splitlines()
+        if line.startswith(name + ";")
+    )
 
 
 def wait_on_client(remote, entity_id: int) -> None:
@@ -306,8 +315,9 @@ def main() -> int:
     check(fastest["GD Loose"] > PULLED, "the loose object gets pulled")
     check(fastest["GD Character"] > PULLED, "the character gets pulled")
 
-    falling = server()[FALLER[0]][0]
-    log(f"{FALLER[0]}: {falling:.2f} m/s")
+    # It may have hit the planet by now
+    falling = fastest_on_server(FALLER[0])
+    log(f"{FALLER[0]}: fastest {falling:.2f} m/s")
     check(falling > MOVING, "a grid with artificial mass falls in natural gravity")
 
     log("PASS" if not failures else f"FAIL {len(failures)}: {failures}")

@@ -19,8 +19,13 @@ internal static class NoGravityDrives
     private const int GameMajor = 1;
     private const int GameMinor = 210;
 
-    // Harmony asks once, when the plugin loads. OCTAHEDRON_GAME_VERSION is for tests of the gate.
-    private static bool Prepare()
+    // Read once: Harmony asks Prepare again for each method it patches
+    private static readonly bool Applies = CheckGameVersion();
+
+    private static bool Prepare() => Applies;
+
+    // OCTAHEDRON_GAME_VERSION is for tests of the gate
+    private static bool CheckGameVersion()
     {
         var version = Environment.GetEnvironmentVariable("OCTAHEDRON_GAME_VERSION") is { } forced
             ? Version.Parse(forced)
