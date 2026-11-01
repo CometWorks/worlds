@@ -240,7 +240,7 @@ STALLS = {
 # For the paid builds: OCT's stock of the components, and of the ice for 500,000 L of hydrogen
 BUILD_MONEY = 800_000
 STOCK = {
-    "Component/SteelPlate": 1500,
+    "Component/SteelPlate": 2500,
     "Component/Construction": 300,
     "Component/InteriorPlate": 200,
     "Component/LargeTube": 60,
