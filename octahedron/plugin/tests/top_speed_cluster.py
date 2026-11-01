@@ -6,8 +6,8 @@ Speed config and the Trade Lanes mod. Same bench and world as wa_economy_cluster
         TOP_SPEED_BLUEPRINTS=<folder> python3 tests/top_speed_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 
 OCT_TRADE_LANES: the Trade Lanes mod to run, by default the Workshop's. TOP_SPEED_BLUEPRINTS: a folder holding
-copies of Viktor's two blueprints, which aren't in this repo. Their tanks and batteries are filled in the copy
-that gets spawned, the blocks stay as they are.
+copies of Viktor's two blueprints, which aren't in this repo. The copy that gets spawned has full tanks and
+batteries and its thrusters on (the small ship's blueprint was saved with all of them off).
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ BATTERY_MWH = {"SmallBlockSmallBatteryBlock": 0.05, "LargeBlockBatteryBlock": 3}
 
 
 def filled_blueprint(name: str, out: Path) -> Path:
-    """A copy of the blueprint with full tanks and batteries"""
+    """A copy of the blueprint with full tanks and batteries and its thrusters on"""
     text = (BLUEPRINTS / name / "bp.sbc").read_text(encoding="utf-8")
     text = re.sub(r"<FilledRatio>[^<]*", "<FilledRatio>1", text)
 
@@ -85,6 +85,13 @@ def filled_blueprint(name: str, out: Path) -> Path:
         r'<MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_BatteryBlock">\s*'
         r"<SubtypeName>(\w+)</SubtypeName>.*?</MyObjectBuilder_CubeBlock>",
         battery,
+        text,
+        flags=re.S,
+    )
+    text = re.sub(
+        r'(<MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_Thrust">'
+        r"(?:(?!</MyObjectBuilder_CubeBlock>).)*?<Enabled>)false",
+        r"\1true",
         text,
         flags=re.S,
     )
@@ -129,7 +136,9 @@ def server_speed(bench) -> float | None:
     speeds = []
     for node in NODES:
         try:
-            speeds += [row.get("maxSpeed") or 0 for row in _partitions(bench, node)]
+            speeds += [
+                row.get("maxMemberSpeed") or 0 for row in _partitions(bench, node)
+            ]
         except (ClusterError, OSError):
             pass
     return max(speeds) if speeds else None
