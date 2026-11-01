@@ -77,7 +77,9 @@ internal static class ShipyardAway
             method,
             postfix: new HarmonyMethod(typeof(ShipyardAway), nameof(Blocker))
         );
-        Plugin.Log.Info("Shipyard jobs keep their partition online with a patch of this older cluster");
+        Plugin.Log.Info(
+            "Shipyard jobs keep their partition online with a patch of this older cluster"
+        );
     }
 
     private static void Blocker(MyEntity entity, ref string __result)
