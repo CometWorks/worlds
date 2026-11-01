@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace ServerPlugin;
@@ -24,6 +25,20 @@ internal static class ShipyardPlacement
         Turns
             .OrderBy(turn => Math.Max(1, Enumerable.Range(0, 3).Max(i => size[turn[i]] / room[i])))
             .First();
+
+    // Which of a blueprint's ship controllers sets its frame: the main cockpit, else the first
+    // that flies the ship, null if none does. A cryo chamber, a passenger seat or a bed is a ship
+    // controller too and faces anywhere, so it never counts, even flagged as main.
+    public static T FrameBlock<T>(
+        IEnumerable<T> controllers,
+        Func<T, bool> flies,
+        Func<T, bool> main
+    )
+        where T : class
+    {
+        var flying = controllers.Where(flies).ToList();
+        return flying.FirstOrDefault(main) ?? flying.FirstOrDefault();
+    }
 
     // How far from the shipyard's middle a ship's center goes. A ship shorter than a quarter of
     // the shipyard sits around a 1/3 point, 1/6 of the length from the middle, where it shows

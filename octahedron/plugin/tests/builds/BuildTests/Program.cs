@@ -119,6 +119,40 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         ShipyardPlacement.Align([300, 10, 10], room).SequenceEqual([2, 1, 0]),
         "align: too long for any turn, the one that misses the least"
     );
+    string Frame(params (string Name, bool Flies, bool Main)[] controllers) =>
+        ShipyardPlacement
+            .FrameBlock(
+                controllers.Select(c => Tuple.Create(c.Name, c.Flies, c.Main)),
+                c => c.Item2,
+                c => c.Item3
+            )
+            ?.Item1;
+    Check(
+        Frame(
+            ("cryo", false, false),
+            ("seat", false, false),
+            ("bed", false, false),
+            ("helm", true, false)
+        ) == "helm",
+        "frame: the cockpit behind a cryo chamber, a seat and a bed"
+    );
+    Check(
+        Frame(("helm", true, false), ("bridge", true, true)) == "bridge",
+        "frame: the main cockpit wins"
+    );
+    Check(
+        Frame(("bed", false, true), ("helm", true, false)) == "helm",
+        "frame: a bed flagged as main doesn't count"
+    );
+    Check(
+        Frame(("helm", true, false), ("bridge", true, false)) == "helm",
+        "frame: the first cockpit"
+    );
+    Check(
+        Frame(("cryo", false, false), ("seat", false, false), ("bed", false, true)) == null,
+        "frame: nothing that flies the ship, none"
+    );
+    Check(Frame() == null, "frame: no controllers, none");
     Check(BuildBook.Fee(60_000, 10) == 6_000, "fee: 60k PCU at 10 SC is 6,000 SC");
     Check(BuildBook.Fee(15, 10) == 2 && BuildBook.Fee(101, 1) == 2, "fee: rounded up");
     Check(BuildBook.Fee(0, 10) == 0 && BuildBook.Fee(500, 0) == 0, "fee: none");
