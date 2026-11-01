@@ -201,7 +201,8 @@ Nothing turns the blocks back on: they stay off when the field goes, and a playe
 then turn them on again, which holds until they are in a field again. A
 client has no patch and would otherwise fly its own copy of the ship while the server's
 grid sleeps: the pilot of a parked ship would see it creep away without limit. Static
-grids keep theirs, they can't move. The player gets no message, the server's log names the
+grids keep theirs, they can't move. The ship's grid stays awake for 5 s after this, so
+that the server's states correct what the client's copy did in that moment. The player gets no message, the server's log names the
 grid. An off block adds no mass to its grid.
 
 The game's Warfare 3 update brings the rule as a world setting. Until then it applies on

@@ -26,11 +26,13 @@ internal static class NoGravityDrives
     private const int GameMajor = 1;
     private const int GameMinor = 210;
     private const int CheckFrames = 10;
+    private const int WakeFrames = 300;
 
     // Read once: Harmony asks Prepare again for each method it patches
     private static readonly bool Applies = CheckGameVersion();
 
     private static readonly ConcurrentDictionary<MyFunctionalBlock, byte> Blocks = new();
+    private static readonly Dictionary<MyCubeGrid, int> Waking = new();
     private static bool seenLoaded;
     private static int frame;
 
@@ -82,6 +84,13 @@ internal static class NoGravityDrives
             )
                 TurnOff(grid);
         }
+        foreach (var (grid, until) in Waking.ToList())
+        {
+            if (frame > until || grid.Closed)
+                Waking.Remove(grid);
+            else
+                grid.Physics?.RigidBody?.Activate();
+        }
     }
 
     private static IEnumerable<MyFunctionalBlock> Drives(MyCubeGrid grid) =>
@@ -91,8 +100,8 @@ internal static class NoGravityDrives
     {
         foreach (var block in Drives(grid))
             block.Enabled = false;
-        // Keeps the states going for a moment, they correct what a client's copy did before this
-        grid.Physics?.RigidBody?.Activate();
+        // A sleeping grid sends no states, and those correct what a client's copy did before this
+        Waking[grid] = frame + WakeFrames;
         Plugin.Log.Info(
             $"Gravity drive on {grid.DisplayName}: artificial mass and space balls off"
         );

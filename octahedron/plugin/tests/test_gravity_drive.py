@@ -503,6 +503,7 @@ def main() -> int:
             max(offsets) < JOINED, f"{name}: the client's view stays with the server's"
         )
         if not moving:
+            check(speeds[-1] < STILL / 2, f"{name}: the client's copy doesn't drift on")
             stays_on_without_field(remote, name, entity_id, check)
         leave(remote)
 
