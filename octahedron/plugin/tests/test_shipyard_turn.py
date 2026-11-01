@@ -536,11 +536,11 @@ def next_in_same_turn(a) -> None:
 
 
 def hydrogen(a) -> None:
-    """A ship docked at the shipyard first, then ice in the containers, then the store's"""
+    """A docked ship's hydrogen over half its tank first, then ice in the containers, then the store's"""
     with_config(a, **PAY, ShipyardTurnMinutes=WINDOW)
     sa.admin(a, f"!oct market set {STATION} Ore/Ice 30000")
     turn(a, TANKED)
-    docked = re.search(r"SHIP (\d+)", probe(a, f"yardship {STATION} H2=0.1"))
+    docked = re.search(r"SHIP (\d+)", probe(a, f"yardship {STATION} H2=0.6"))
     check(docked is not None, f"a ship with some hydrogen at the shipyard: {docked}")
     ship = docked[1] if docked else "0"
     check(st.wait_docked(a, ship), "it docks")
@@ -548,9 +548,9 @@ def hydrogen(a) -> None:
     log(probe(a, f"yardload {STATION} {PLATE} 200"))
     ice = market(a, "Ore/Ice")
     start(a)
-    wait_for(lambda: liters(a, ship) == 0, 15, 1)
+    wait_for(lambda: liters(a, ship) == 500_000, 15, 1)
     gas = liters(a, ship)
-    check(gas == 0, f"the docked ship's tank gave all it had: {gas}")
+    check(gas == 500_000, f"the docked ship's tank gave what is over half: {gas}")
     left = stock(a).get("Ore/Ice", 0)
     check(left == 0, f"then the ice in the containers: {left}")
     now = market(a, "Ore/Ice")

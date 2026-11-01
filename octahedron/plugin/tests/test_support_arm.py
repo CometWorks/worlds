@@ -912,9 +912,8 @@ def saved(cases: list[str]) -> None:
         for b in cubes:
             if b.findtext("SubtypeName") == "LargeHydrogenTankSmall":
                 ratio = float(b.findtext("FilledRatio") or 0)
-                # A free build comes without hydrogen
                 check(
-                    abs(ratio - (0.5 if paid else 0)) < 0.01,
+                    abs(ratio - 0.5) < 0.01,
                     f"saved: '{ship}' tank filled to {ratio}",
                 )
             if b.findtext("SubtypeName") == "LargeBlockBatteryBlock":

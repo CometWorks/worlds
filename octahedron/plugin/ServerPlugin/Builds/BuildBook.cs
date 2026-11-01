@@ -492,8 +492,8 @@ public sealed class BuildBook
 
     /// <summary>
     /// The player presses start: <paramref name="needed"/>, what the containers don't have, is
-    /// bought at the Store. <paramref name="provided"/> comes from outside (the hydrogen of a ship
-    /// at the station and the ice in the containers). All or nothing, but for the hydrogen, of
+    /// bought at the Store. <paramref name="provided"/> comes from outside (the hydrogen and ice of a
+    /// ship at the station and the ice in the containers). All or nothing, but for the hydrogen, of
     /// which the ship gets less if the station lacks it. The labor fee is paid. The order's Items
     /// then say what came, for the shipyard to load.
     /// </summary>
