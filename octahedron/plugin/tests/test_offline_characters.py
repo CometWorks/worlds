@@ -55,8 +55,6 @@ AWAY = 240
 QUIET = 15
 # How far from the sphere's edge "just inside" and "just outside" are
 EDGE = 3
-# For the client to have a ship just spawned before its player is seated in it
-SHIP_REPLICATION = 5
 QUIET_AWAY = 100
 CONFIG = {
     "OfflineCharacterMinutes": 1,
@@ -170,15 +168,36 @@ def to_edge(remote, offset: float) -> tuple[float, float]:
     center, radius, _, clear = sphere(remote)
     at = [c + d * (radius + offset) for c, d in zip(center, clear)]
     teleport(remote, *at)
+    # A new body has its dampeners off and a teleport keeps its velocity: it would drift off
+    remote.character_move_to(*at, speed="fly", timeout=3, reach=0.5)
+    remote.character_set_dampeners(True)
+    last = None
 
     def there() -> float | None:
+        nonlocal last
         distance = sphere(remote)[2]
         log(
             f"body {distance:.2f} m from the center of a {radius:.2f} m sphere, wanted {offset:+}"
         )
-        return distance if abs(distance - radius - offset) < 1 else None
+        if abs(distance - radius - offset) >= 1:
+            teleport(remote, *at)
+        at_rest = last is not None and abs(distance - last) < 0.05
+        last = distance
+        return distance if at_rest and abs(distance - radius - offset) < 1 else None
 
-    return rig.wait_until(there, 60, "the body at the sphere's edge"), radius
+    return rig.wait_until(there, 60, "the body at rest at the sphere's edge"), radius
+
+
+def sit(remote, seat: str, grid: str) -> None:
+    """Into a seat of a grid, once the client has it: see the probe's seat command"""
+
+    def there() -> bool:
+        at = position(remote.get_character()["position"])
+        entities = remote.get_entities(*at, 1000)["entities"]
+        return any(e["entityId"] == int(grid) and e["inScene"] for e in entities)
+
+    rig.wait_until(there, 120, "the client to have the grid")
+    probe(remote, f"seatin {seat}", "SEAT")
 
 
 def next_body(remote, body: int, timeout: float = 240) -> None:
@@ -328,11 +347,14 @@ def run() -> None:
     probe(remote, "clear", "CLEAR")
     probe(remote, "give Ingot/Gold 7", "GIVE True")
     probe(remote, "give PhysicalObject/SpaceCredit 100", "GIVE True")
-    seat = probe(remote, "seat", r"SEAT (\d+|none)")
+    seat = probe(remote, "seat", r"SEAT (\d+|none) ?(\d*)")
     bank = balance(remote)
     if seat[1] != "none":
+        sit(remote, seat[1], seat[2])
         body, _ = inventory(remote)
         check(probe(remote, "bodies", ":seated"), "seated at the station")
+        _, radius, distance, _ = sphere(remote)
+        check(distance < radius, f"seated: {distance:.1f} of {radius:.1f} m")
         removed = leave_and_wait(REMOVED)
         check(removed is not None and removed[2] == str(body), "the seated body goes")
         remote = spawned()
@@ -375,9 +397,9 @@ def run() -> None:
     check(distance > radius, f"just outside: still there: {distance:.1f} m")
 
     # --- seated in a ship with the seat just inside: the body goes, the ship stays ---
-    seat = probe(remote, "ship inside", r"SHIP (\d+)")[1]
-    time.sleep(SHIP_REPLICATION)
-    probe(remote, f"seatin {seat}", "SEAT")
+    ship = probe(remote, "ship inside", r"SHIP (\d+) (\d+)")
+    seat = ship[1]
+    sit(remote, seat, ship[2])
     probe(remote, "clear", "CLEAR")
     probe(remote, "give Ingot/Gold 4", "GIVE True")
     _, radius, distance, _ = sphere(remote)
@@ -399,9 +421,8 @@ def run() -> None:
 
     # --- seated in a ship reaching into the sphere with the seat just outside: it stays ---
     teleport(remote, alpha[0] + 150, alpha[1], alpha[2])
-    seat = probe(remote, "ship outside", r"SHIP (\d+)")[1]
-    time.sleep(SHIP_REPLICATION)
-    probe(remote, f"seatin {seat}", "SEAT")
+    ship = probe(remote, "ship outside", r"SHIP (\d+) (\d+)")
+    sit(remote, ship[1], ship[2])
     _, radius, distance, _ = sphere(remote)
     check(distance > radius, f"in a ship, outside: {distance:.1f} of {radius:.1f} m")
     body, items = inventory(remote)

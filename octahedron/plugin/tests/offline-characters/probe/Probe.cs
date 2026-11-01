@@ -117,13 +117,13 @@ public sealed class ProbeCommands : CommandModule
             );
     }
 
-    // Into the nearest seat within 500 m, as the player's own use of it
-    [Command("seat", "Seats the character in the nearest seat", "!cprobe seat")]
+    // Seating the client in a grid it is still receiving crashes its HUD, so this only names the
+    // nearest seat and its grid: SeatIn after the client has the grid
+    [Command("seat", "The nearest free seat within 500 m", "!cprobe seat")]
     [Permission(MyPromoteLevel.Admin)]
     public string Seat()
     {
-        var body = Body;
-        var at = body.PositionComp.GetPosition();
+        var at = Body.PositionComp.GetPosition();
         var seat = MyEntities
             .GetEntities()
             .OfType<MyCubeGrid>()
@@ -133,9 +133,7 @@ public sealed class ProbeCommands : CommandModule
             .FirstOrDefault();
         if (seat == null || Vector3D.Distance(seat.PositionComp.GetPosition(), at) > 500)
             return "SEAT none";
-        seat.AttachPilot(body, 0);
-        MySession.Static.Players.SetControlledEntity(Context.Caller.SteamId, seat);
-        return $"SEAT {seat.EntityId} {seat.DisplayNameText}";
+        return $"SEAT {seat.EntityId} {seat.CubeGrid.EntityId}";
     }
 
     // The nearest station's bounding sphere, as the plugin takes it
@@ -237,7 +235,7 @@ public sealed class ProbeCommands : CommandModule
                 }
             );
         var ship = (MyCubeGrid)MyEntities.CreateFromObjectBuilderAndAdd(grid, true);
-        return $"SHIP {ship.GetFatBlocks<MyCockpit>().First().EntityId}";
+        return $"SHIP {ship.GetFatBlocks<MyCockpit>().First().EntityId} {ship.EntityId}";
     }
 
     [Command("seatin", "Seats the character in a given seat", "!cprobe seatin <entity id>")]
