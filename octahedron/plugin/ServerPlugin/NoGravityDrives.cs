@@ -84,12 +84,12 @@ internal static class NoGravityDrives
             )
                 TurnOff(grid);
         }
-        foreach (var (grid, until) in Waking.ToList())
+        foreach (var waking in Waking.ToList())
         {
-            if (frame > until || grid.Closed)
-                Waking.Remove(grid);
+            if (frame > waking.Value || waking.Key.Closed)
+                Waking.Remove(waking.Key);
             else
-                grid.Physics?.RigidBody?.Activate();
+                waking.Key.Physics?.RigidBody?.Activate();
         }
     }
 

@@ -195,15 +195,17 @@ don't react to gravity generators, so a gravity drive doesn't move its ship. Cha
 loose objects and natural gravity on grids work as before.
 
 The server also turns these blocks off. When a working one on a ship is in the field of a
-working generator, on the same grid or another, all of them on that grid go off, within
-about 170 ms, and go off again if a player turns them back on. The generators stay on.
-Nothing turns the blocks back on: they stay off when the field goes, and a player can
-then turn them on again, which holds until they are in a field again. A
-client has no patch and would otherwise fly its own copy of the ship while the server's
-grid sleeps: the pilot of a parked ship would see it creep away without limit. Static
-grids keep theirs, they can't move. The ship's grid stays awake for 5 s after this, so
-that the server's states correct what the client's copy did in that moment. The player gets no message, the server's log names the
-grid. An off block adds no mass to its grid.
+working generator, on the same grid or another, all of them on that grid go off within
+about 170 ms, and go off again if a player turns one back on. The generators stay on.
+Nothing turns the blocks back on: they stay off when the field goes, and a player can then
+turn them on, which holds until they are in a field again. Static grids keep theirs, they
+can't move. The player gets no message, the server's log names the grid. An off block adds
+no mass to its grid.
+
+A client has no patch and would otherwise fly its own copy of the ship while the server's
+grid sleeps: the pilot of a parked ship would see it creep away without limit. The ship's
+grid stays awake for 5 s after the blocks go off, so that the server's states correct what
+the client's copy did until then.
 
 The game's Warfare 3 update brings the rule as a world setting. Until then it applies on
 game version 1.210.* only; on any other version the patches aren't applied, and the log
