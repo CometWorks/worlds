@@ -172,19 +172,14 @@ run.administrators = [CLIENT_ID]
 def press(api) -> str:
     """Presses the table's button once. The answer comes after the chat's first line, once a big
     blueprint has gone to the World Authority; another press would cancel that order."""
-    latest = api.get_chat_messages().get("latest", 0)
+    before = api.get_chat_messages()
     reply = " ".join(rig.chat(api, "!oct order", 15))
     deadline = time.monotonic() + 60
     while (
         not reply.strip() or reply.strip().endswith("answers in chat.")
     ) and time.monotonic() < deadline:
         time.sleep(2)
-        got = api.get_chat_messages(after=latest)
-        reply = " ".join(
-            m.get("Text", "")
-            for m in got.get("messages", [])
-            if m.get("Text") != "!oct order"
-        )
+        reply = " ".join(rig.new_chat_lines(api, before, "!oct order"))
     print(f"!oct order -> {reply}", flush=True)
     return reply
 
