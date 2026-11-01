@@ -871,6 +871,28 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "griditem",
+        "How much of an item a grid's cargo containers hold: ITEM grid-id amount",
+        "!sprobe griditem <grid id> <Type/Subtype>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string GridItem(string grid, string item)
+    {
+        if (!MyDefinitionId.TryParse("MyObjectBuilder_" + item, out var id))
+            return $"BADITEM {item}";
+        var found = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .FirstOrDefault(g => g.EntityId.ToString() == grid);
+        if (found == null)
+            return $"NOGRID {grid}";
+        var amount = found
+            .GetFatBlocks<MyCargoContainer>()
+            .Sum(c => (double)c.GetInventory().GetItemAmount(id));
+        return string.Format(CultureInfo.InvariantCulture, "ITEM {0} {1:0}", grid, amount);
+    }
+
+    [Command(
         "pay",
         "Adds money to a faction's account, by its tag: PAID tag balance",
         "!sprobe pay <tag> <SC>"

@@ -217,17 +217,17 @@ internal static partial class ShipyardOrders
                     return;
                 }
 
-                var plan = new Plan
-                {
-                    Table = table,
-                    Player = next.Player,
-                    Payer = next.Payer,
-                    HydrogenLiters = next.Items.TryGetValue(Hydrogen, out var ice)
-                        ? ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce
-                        : 0,
-                };
-                var drained = Drain(plan);
-                var iceTaken = TakeIce(shipyard, next, drained.Sum(d => d.Liters));
+                next.Items.TryGetValue(Hydrogen, out var ice);
+                var ships = DockedShips(table, next.Player);
+                var drained = Drain(
+                    ships,
+                    ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce
+                );
+                var liters = drained.Sum(d => d.Liters);
+                var iceTaken = TakeIce(
+                    Cargo(ships).Concat(TurnInventories(shipyard)),
+                    ice - IceFor(liters, up: false)
+                );
                 var request = new BuildRequest
                 {
                     Verb = BuildVerb.Begin,
@@ -236,9 +236,9 @@ internal static partial class ShipyardOrders
                     Player = next.Player,
                     Needed = lacking,
                 };
-                var liters = drained.Sum(d => d.Liters);
-                if (liters > 0 || iceTaken > 0)
-                    request.Provided[Hydrogen] = IceFor(liters, up: false) + iceTaken;
+                if (liters > 0 || iceTaken.Count > 0)
+                    request.Provided[Hydrogen] =
+                        IceFor(liters, up: false) + iceTaken.Sum(t => t.Raw);
                 Builds.Execute(
                     Guid.NewGuid(),
                     request,
@@ -249,12 +249,10 @@ internal static partial class ShipyardOrders
                         {
                             foreach (var (tank, l) in drained)
                                 AddHydrogen(tank, l);
-                            if (iceTaken > 0)
-                                Put(
-                                    Containers(shipyard).ToList(),
-                                    (MyObjectBuilder_PhysicalObject)
-                                        MyObjectBuilderSerializer.CreateNewObject(ItemId(Hydrogen)),
-                                    new MyFixedPoint { RawValue = iceTaken }
+                            foreach (var (inventory, raw) in iceTaken)
+                                inventory.AddItems(
+                                    new MyFixedPoint { RawValue = raw },
+                                    MyObjectBuilderSerializer.CreateNewObject(ItemId(Hydrogen))
                                 );
                             tell(message);
                             return;
@@ -275,27 +273,6 @@ internal static partial class ShipyardOrders
                 });
             }
         );
-    }
-
-    // Takes the ice the docked ships' hydrogen didn't cover out of the shipyard; returns it, raw
-    private static long TakeIce(MyCubeGrid shipyard, BuildOrder order, double liters)
-    {
-        if (!order.Items.TryGetValue(Hydrogen, out var needed))
-            return 0;
-        var left = needed - IceFor(liters, up: false);
-        var id = ItemId(Hydrogen);
-        foreach (var inventory in TurnInventories(shipyard))
-        {
-            if (left <= 0)
-                break;
-            var have = inventory.GetItemAmount(id).RawValue;
-            if (have <= 0)
-                continue;
-            var take = Math.Min(have, left);
-            inventory.RemoveItemsOfType(new MyFixedPoint { RawValue = take }, id);
-            left -= take;
-        }
-        return needed - IceFor(liters, up: false) - Math.Max(left, 0);
     }
 
     // The bought components of a started paid build, to load
