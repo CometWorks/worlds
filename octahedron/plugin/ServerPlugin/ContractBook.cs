@@ -120,6 +120,25 @@ internal sealed class ContractGrid
     }
 }
 
+// A grid of an offline partition as the gateway's row says it was at the freeze. A null fact is unknown:
+// a row read back from a Final save has none of them.
+internal sealed record ContractOfflineGrid(
+    long Id,
+    string Name,
+    bool Static,
+    int Blocks,
+    ContractPoint Position,
+    long[] Owners,
+    double? MassKg,
+    long? Group,
+    bool? Functional,
+    bool? Powered,
+    bool? Station
+);
+
+// A physical group of those that is a wreck candidate, and its grids
+internal sealed record ContractOfflineRow(ContractGrid Grid, long[] Members);
+
 // What a bounty, salvage or wreck contract watches. Kind: b, s or w. Size: the threat score of a
 // bounty's target or the blocks of a wreck when posted.
 internal sealed class ContractTarget(
@@ -188,6 +207,10 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     // Grids in offline partitions and since when, from the gateway; null while unknown, when nothing
     // can be said about a grid no report names
     public Dictionary<long, DateTime> Offline;
+
+    // The gateway's rows that could be wrecks, for the grids that went offline with no report naming
+    // them. Not saved: the gateway has them. A contract on one puts its row into Grids.
+    public List<ContractOfflineRow> OfflineRows = [];
 
     // Reports served since the authority started, for !oct contracts
     public long Reports;
@@ -425,6 +448,87 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             || (flags.HasFlag(ContractGridFlags.Unpowered) && offline >= offlineFor)
         );
 
+    /// <summary>
+    /// The gateway's rows as a node would report them, one per physical group, the rules of
+    /// ContractGrids.Describe: a group with an unknown fact is no wreck. What the rows can't tell is
+    /// fixed once the partition wakes and a node reports the grid: who built it, a seat in use, a
+    /// safe zone. isOct: an identity of OCT's faction.
+    /// </summary>
+    public static List<ContractOfflineRow> OfflineGroups(
+        IEnumerable<ContractOfflineGrid> rows,
+        int minBlocks,
+        Func<long, bool> isOct,
+        DateTime now
+    )
+    {
+        var found = new List<ContractOfflineRow>();
+        foreach (var group in rows.GroupBy(r => r.Group))
+        {
+            // Mass 0 says nothing either: an older node reads a static grid's physics, which has none
+            var known = group.All(r =>
+                r.MassKg > 0
+                && r.Group != null
+                && r.Functional != null
+                && r.Powered != null
+                && r.Station != null
+            );
+            if (
+                !known
+                || group.Sum(r => r.Blocks) < minBlocks
+                || group.Any(r => r.Station == true || r.Owners.Any(isOct) || IsLaneComputer(r))
+            )
+                continue;
+            var flags = ContractGridFlags.None;
+            if (group.All(r => r.Powered == false))
+                flags |= ContractGridFlags.Unpowered;
+            if (group.All(r => r.Owners.Length == 0 && r.Functional == false))
+                flags |= ContractGridFlags.Wreck;
+            if (flags == ContractGridFlags.None)
+                continue;
+            // The same grid every time, so a restart finds its contract
+            var biggest = group.OrderByDescending(r => r.Blocks).ThenBy(r => r.Id).First();
+            found.Add(
+                new ContractOfflineRow(
+                    new ContractGrid
+                    {
+                        Id = biggest.Id,
+                        Flags = flags,
+                        Position = biggest.Position,
+                        Blocks = group.Sum(r => r.Blocks),
+                        MassKg = group.Sum(r => r.MassKg.Value),
+                        Name = biggest.Name,
+                        Seen = now,
+                        Owner = biggest
+                            .Owners.Concat(group.SelectMany(r => r.Owners))
+                            .FirstOrDefault(),
+                    },
+                    group.Select(r => r.Id).ToArray()
+                )
+            );
+        }
+        return found;
+    }
+
+    // ContractGrids looks for the block; a row has only the grid. build_world.py names them.
+    private static bool IsLaneComputer(ContractOfflineGrid row) =>
+        row.Static
+        && row.Blocks == 1
+        && row.Owners.Length == 0
+        && row.Name?.StartsWith("TL ", StringComparison.Ordinal) == true;
+
+    /// <summary>
+    /// The candidates only the gateway knows. What a node reported wins for the whole group: a row a
+    /// load has claimed stays listed until it drops, and a target or a given grid is reported by id.
+    /// </summary>
+    public IEnumerable<ContractGrid> Unreported() =>
+        OfflineRows
+            .Where(r =>
+                !r.Members.Any(m =>
+                    Grids.ContainsKey(m) || Given.ContainsKey(m) || closing.ContainsKey(m)
+                )
+            )
+            .Select(r => r.Grid);
+
     /// <summary>Wanted wrecks picked at random from the pool biggest ones, by blocks.</summary>
     public List<ContractGrid> Wrecks(
         DateTime now,
@@ -437,6 +541,7 @@ internal sealed class ContractBook(TimeSpan goneAfter)
         if (Offline == null)
             return [];
         var biggest = Free()
+            .Concat(Unreported())
             .Where(r =>
                 Offline.TryGetValue(r.Id, out var since)
                 && IsWreck(r.Flags, now - since, offlineFor)
@@ -478,6 +583,9 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             target.HunterSeen = now;
         if (row != null)
             target.Position = row.Position;
+        // Posted from a gateway's row, which can't tell: a player can't be paid for their own disowned ship
+        if (row != null && target.Builder == 0)
+            target.Builder = row.Builder;
         if (!active)
             return
                 !gone

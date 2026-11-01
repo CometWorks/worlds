@@ -554,6 +554,7 @@ internal static class Contracts
             .ToList();
         if (yards.Count == 0)
             return 0;
+        state.OfflineRows = OfflineRows();
         var wrecks = state.Wrecks(
             DateTime.UtcNow + OfflineClockShift,
             TimeSpan.FromDays(Config.ContractWreckOfflineDays),
@@ -593,6 +594,8 @@ internal static class Contracts
             );
             if (!Add(system, contract, station, out var id))
                 continue;
+            // From a gateway's row: the book needs it now, a node reports it once its partition wakes
+            state.Grids.TryAdd(grid.Id, grid);
             state.Targets[id] = new ContractTarget(
                 'w',
                 grid.Id,
@@ -607,6 +610,18 @@ internal static class Contracts
             posted++;
         }
         return posted;
+    }
+
+    private static List<ContractOfflineRow> OfflineRows()
+    {
+        var oct = Oct;
+        var factions = MySession.Static.Factions;
+        return ContractBook.OfflineGroups(
+            ContractOffline.Rows,
+            Config.ContractSalvageMinBlocks,
+            identity => factions.GetPlayerFaction(identity)?.FactionId == oct?.FactionId,
+            DateTime.UtcNow
+        );
     }
 
     // Bounties and salvage: done, failed, or withdrawn when the target is gone before anyone took it
@@ -824,17 +839,19 @@ internal static class Contracts
         }
         var now = DateTime.UtcNow + OfflineClockShift;
         var days = TimeSpan.FromDays(Config.ContractWreckOfflineDays);
+        state.OfflineRows = OfflineRows();
         var wrecks =
             state.Offline == null
                 ? "unknown"
                 : state
-                    .Grids.Values.Count(r =>
+                    .Grids.Values.Concat(state.Unreported())
+                    .Count(r =>
                         state.Offline.TryGetValue(r.Id, out var since)
                         && ContractBook.IsWreck(r.Flags, now - since, days)
                         && !state.InActiveSafeZone(r)
                     )
                     .ToString(CultureInfo.InvariantCulture);
-        yield return $"Known grids: {state.Grids.Count}, in offline partitions {state.Offline?.Count.ToString(CultureInfo.InvariantCulture) ?? "unknown"}, wrecks {wrecks}, reports {state.Reports}";
+        yield return $"Known grids: {state.Grids.Count}, in offline partitions {state.Offline?.Count.ToString(CultureInfo.InvariantCulture) ?? "unknown"}, wrecks {wrecks}, reports {state.Reports}, gateway rows {ContractOffline.Rows.Count}, partitions unread {ContractOffline.Unread}";
     }
 
     private static string Kind(MyContract contract, ContractBook state) =>
