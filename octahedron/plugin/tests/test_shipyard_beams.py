@@ -243,7 +243,9 @@ def check_beams() -> None:
         )
 
     first = next((at for at, text in marks if "goes" in text or "leaves" in text), ends)
-    shooting("before any step", [s for s in building if s["t"] < first])
+    # The first blocks may come a moment before the switch, which comes after the welders are on
+    begins = building[0]["t"] + 5 if building else 0
+    shooting("before any step", [s for s in building if begins <= s["t"] < first])
     # The next 10 s check of the build sends the switch again, 10 s more if a tool's packet
     # came before the zone's
     settle = 25

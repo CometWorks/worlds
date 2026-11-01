@@ -329,7 +329,66 @@ public sealed class ProbeCommands : CommandModule
         return $"OFF {connectors.Count}";
     }
 
-    [Command("removegrid", "Removes the grids of this name: REMOVED count", "!kprobe removegrid <name with _ for spaces>")]
+    [Command(
+        "yardon",
+        "Switches the shipyard's connectors and welders on, as a world from before they start off has them: ON count",
+        "!kprobe yardon <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardOn(string station)
+    {
+        var yard = Yard(station);
+        var blocks = yard.GetFatBlocks<MyShipConnector>()
+            .Cast<MyCubeBlock>()
+            .Concat(Beams(yard))
+            .Cast<MyFunctionalBlock>()
+            .ToList();
+        foreach (var block in blocks)
+            block.Enabled = true;
+        return $"ON {blocks.Count}";
+    }
+
+    [Command("nodlc", "The server forgets the caller's DLCs: NODLC steam-id", "!sprobe nodlc")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string NoDlc()
+    {
+        var owned =
+            (Dictionary<ulong, HashSet<uint>>)
+                typeof(MySessionComponentDLC)
+                    .GetField(
+                        "m_clientAvailableDLCs",
+                        BindingFlags.Instance | BindingFlags.NonPublic
+                    )
+                    .GetValue(MySession.Static.GetComponent<MySessionComponentDLC>());
+        var steamId = MySession.Static.Players.TryGetSteamId(Context.Caller.IdentityId);
+        owned[steamId] = [];
+        return $"NODLC {steamId}";
+    }
+
+    [Command(
+        "dlc",
+        "How many of the game's DLCs the server says a player owns: DLC owned total",
+        "!sprobe dlc <player name>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Dlc(string player)
+    {
+        var steamId = MySession.Static.Players.TryGetSteamId(
+            MySession
+                .Static.Players.GetAllIdentities()
+                .First(i => i.DisplayName == player)
+                .IdentityId
+        );
+        var dlcs = MySession.Static.GetComponent<MySessionComponentDLC>();
+        var names = MyDLCs.DLCs.Values.Select(d => d.Name).ToList();
+        return $"DLC {names.Count(n => dlcs.HasDLC(n, steamId))} {names.Count}";
+    }
+
+    [Command(
+        "removegrid",
+        "Removes the grids of this name: REMOVED count",
+        "!kprobe removegrid <name with _ for spaces>"
+    )]
     [Permission(MyPromoteLevel.Admin)]
     public string RemoveGrid(string name)
     {
@@ -459,10 +518,9 @@ public sealed class ProbeCommands : CommandModule
         var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
         var containers = entity.GetFatBlocks<MyCargoContainer>().ToList();
         var stone = new MyDefinitionId(typeof(MyObjectBuilder_Ore), "Stone");
-        var left =
-            (MyFixedPoint)(
-                (room + 5) / MyDefinitionManager.Static.GetPhysicalItemDefinition(stone).Volume
-            );
+        var left = (MyFixedPoint)(
+            (room + 5) / MyDefinitionManager.Static.GetPhysicalItemDefinition(stone).Volume
+        );
         foreach (
             var large in containers.Where(c =>
                 c.BlockDefinition.Id.SubtypeName == "LargeBlockLargeContainer"
@@ -470,9 +528,7 @@ public sealed class ProbeCommands : CommandModule
         )
         {
             var amount = MyFixedPoint.Min(left, large.GetInventory().ComputeAmountThatFits(stone));
-            large
-                .GetInventory()
-                .AddItems(amount, MyObjectBuilderSerializer.CreateNewObject(stone));
+            large.GetInventory().AddItems(amount, MyObjectBuilderSerializer.CreateNewObject(stone));
             left -= amount;
         }
         var cargo = containers
@@ -546,11 +602,11 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "yardtarget",
-        "Builds a ship to repair in the middle of the station's shipyard: a projector, a battery, an armor block at 30% and two more only in the projection: TARGET grid-id",
-        "!kprobe yardtarget <station>"
+        "Builds a ship to repair in the middle of the station's shipyard: a projector, a battery, an armor block at 30% and two more, or the given number, only in the projection: TARGET grid-id",
+        "!kprobe yardtarget <station> [projected blocks]"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string YardTarget(string station)
+    public string YardTarget(string station, int projected = 2)
     {
         var yard = Yard(station);
         var beams = Beams(yard).ToList();
@@ -596,10 +652,14 @@ public sealed class ProbeCommands : CommandModule
                 (MyObjectBuilder_CubeBlock)projector.Clone(),
                 (MyObjectBuilder_CubeBlock)battery.Clone(),
                 Armor(2, 1),
-                Armor(3, 1),
-                Armor(4, 1),
             ],
         };
+        for (var i = 0; i < projected; i++)
+        {
+            var armor = Armor(3 + i / 8, 1);
+            armor.Min = new Vector3I(i % 8, 0, 3 + i / 8);
+            plan.CubeBlocks.Add(armor);
+        }
         foreach (var block in plan.CubeBlocks)
             block.EntityId = MyEntityIdentifier.AllocateId();
         projector.ProjectedGrids = [plan];
@@ -649,6 +709,9 @@ public sealed class ProbeCommands : CommandModule
         var beams = Beams(yard).ToList();
         var reactors = yard.GetFatBlocks<MyReactor>().Cast<MyCubeBlock>().ToList();
         var batteries = yard.GetFatBlocks<MyBatteryBlock>().Cast<MyCubeBlock>().ToList();
+        var refills = yard.GetFatBlocks<MyCubeBlock>()
+            .Where(b => b.BlockDefinition.Id.SubtypeName == "InsetRefillStation")
+            .ToList();
         var uranium = new MyDefinitionId(typeof(MyObjectBuilder_Ingot), "Uranium");
         var text =
             $"YARD {yard.EntityId} cargo={Summary(cargo)} welders={Summary(beams)} connectors={Summary(connectors)} "
@@ -659,6 +722,11 @@ public sealed class ProbeCommands : CommandModule
             + $"items={Count(cargo.Concat(beams).Concat(connectors), i => (double)i.GetItems().Sum(x => (double)x.Amount))} "
             + $"connected={connectors.Count(c => c.Connected)} trading={connectors.Count(c => c.TradingEnabled)} "
             + $"disabled={connectors.Count(c => !c.Enabled)} "
+            + $"connectorson={connectors.Count(c => c.Enabled)} "
+            + $"welderson={beams.Count(b => ((MyFunctionalBlock)b).Enabled)} "
+            + $"reactorson={reactors.Count(b => b.IsWorking)}/{reactors.Count} "
+            + $"batterieson={batteries.Count(b => b.IsWorking)}/{batteries.Count} "
+            + $"refill={refills.Count(b => b.IsWorking)}/{refills.Count} "
             + $"cell={cargo[0].Position.X},{cargo[0].Position.Y},{cargo[0].Position.Z} "
             + $"reactorcell={reactors[0].Position.X},{reactors[0].Position.Y},{reactors[0].Position.Z}";
         if (player != null)
@@ -670,7 +738,8 @@ public sealed class ProbeCommands : CommandModule
             bool All(IEnumerable<MyCubeBlock> blocks) =>
                 blocks.All(b => ((MyTerminalBlock)b).HasPlayerAccess(who));
             text +=
-                $" access cargo={All(cargo)} welders={All(beams)} connectors={All(connectors)} reactors={All(reactors)}";
+                $" access cargo={All(cargo)} welders={All(beams)} connectors={All(connectors)} reactors={All(reactors)} "
+                + $"refill={refills.All(b => b.GetUserRelationToOwner(who).IsFriendly())}";
         }
         return text;
     }
@@ -904,25 +973,6 @@ public sealed class ProbeCommands : CommandModule
         if (rank == "member" && faction.IsLeader(me))
             factions.DemoteMember(faction.FactionId, me);
         return "FACTION " + tag + " " + rank;
-    }
-
-    // A client on the test's transport owns them all, for the server; without any, as a Steam
-    // player without them. It lasts until the client joins again.
-    [Command("nodlc", "The caller owns no DLC", "!sprobe nodlc")]
-    [Permission(MyPromoteLevel.Admin)]
-    public string NoDlc()
-    {
-        var owned =
-            (Dictionary<ulong, HashSet<uint>>)
-                typeof(MySessionComponentDLC)
-                    .GetField(
-                        "m_clientAvailableDLCs",
-                        BindingFlags.Instance | BindingFlags.NonPublic
-                    )
-                    .GetValue(MySession.Static.GetComponent<MySessionComponentDLC>());
-        var steamId = MySession.Static.Players.TryGetSteamId(Context.Caller.IdentityId);
-        owned[steamId] = [];
-        return $"NODLC {steamId}";
     }
 
     [Command("whoami", "The caller's faction and rank: ME tag rank", "!sprobe whoami")]

@@ -1191,6 +1191,7 @@ internal static partial class ShipyardOrders
     public static void Update()
     {
         ticks++;
+        ShipyardAway.Update();
         ShipyardArm.Update();
         if (docks.Count > 0)
             UpdateDocks();
@@ -1227,6 +1228,12 @@ internal static partial class ShipyardOrders
             .ToList();
         foreach (var shipyard in shipyards)
             Check(shipyard);
+        ShipyardAway.Working(
+            orders
+                .Values.Where(o => !o.Free)
+                .Select(o => o.Player)
+                .Concat(repairs.Values.Select(r => r.Player))
+        );
         foreach (var station in StationTables())
         {
             Expire(station.Value);
@@ -1359,12 +1366,21 @@ internal static partial class ShipyardOrders
         );
     }
 
+    /// <summary>The shipyard has a job, or one coming, as of the queue's last answer.</summary>
+    internal static bool Busy(long shipyard) =>
+        queued.Contains(shipyard)
+        || orders.ContainsKey(shipyard)
+        || repairs.ContainsKey(shipyard)
+        || docks.ContainsKey(shipyard)
+        || starting.Contains(shipyard);
+
     private static void Check(MyCubeGrid shipyard)
     {
         if (!Plugin.Simulated(shipyard))
         {
             orders.Remove(shipyard.EntityId);
             repairs.Remove(shipyard.EntityId);
+            queued.Remove(shipyard.EntityId);
             return;
         }
         if (docks.ContainsKey(shipyard.EntityId))
@@ -1511,17 +1527,30 @@ internal static partial class ShipyardOrders
                 if (text == null || shipyard.MarkedForClose)
                     return;
                 var queue = DecodeQueue(text);
+                if (queue.Count > 0)
+                    queued.Add(shipyard.EntityId);
+                else
+                    queued.Remove(shipyard.EntityId);
                 ShowQueue(grids, shipyard, queue);
                 foreach (var table in tables)
                     ShowEmpty(table, queue);
-                // A turn the queue doesn't know of, as after a crash between the two saves
+                // No turn: the shipyard is off, also right after a start and in a world from before
+                // this rule. A turn the queue doesn't know of ends, as after a crash between the
+                // two saves. A free build keeps its welders, whose switch Check holds on.
                 if (
                     !queue.Any(o => o.Active && (!o.Free || o.Repair))
                     && !repairs.ContainsKey(shipyard.EntityId)
                     && !starting.Contains(shipyard.EntityId)
-                    && ShipyardTurn.Holder(shipyard) != 0
+                    && (
+                        ShipyardTurn.Holder(shipyard) != 0
+                        || !(
+                            queue.Any(o => o.Active)
+                            || orders.ContainsKey(shipyard.EntityId)
+                            || docks.ContainsKey(shipyard.EntityId)
+                        )
+                    )
                 )
-                    ShipyardTurn.Take(shipyard);
+                    FloatFree(shipyard, 0);
                 if (queue.Count == 0)
                     return;
                 var next = queue[0];
@@ -3516,11 +3545,14 @@ internal static partial class ShipyardOrders
         {
             Fuel(shipyard);
             Sweep(shipyard, false);
+            WakeBeams(shipyard);
+            if (Waking(shipyard))
+                return;
         }
+        else
+            waking.Remove(shipyard.EntityId);
         foreach (var beam in Beams(shipyard))
         {
-            if (on)
-                beam.Enabled = true;
             var block = (IMyTerminalBlock)beam;
             if (block.GetValueBool(TrackProperty) != on)
                 block.SetValueBool(TrackProperty, on);
@@ -3528,6 +3560,31 @@ internal static partial class ShipyardOrders
                 block.SetValueBool(ShootProperty, on);
         }
         ShipyardZoneWelding.ShowShooting(Beams(shipyard), on);
+    }
+
+    // A client's ToolCore drops the switch of a tool it still has off, and the block's Enabled
+    // reaches it another way, so it may come after the switch. Between the two, nothing tells the
+    // client to shoot again: the switch waits for a later check of the build.
+    private const int WakeSeconds = 3;
+    private static readonly Dictionary<long, DateTime> waking = [];
+
+    internal static void WakeBeams(MyCubeGrid shipyard)
+    {
+        foreach (var beam in Beams(shipyard).Where(b => !b.Enabled))
+        {
+            beam.Enabled = true;
+            waking[shipyard.EntityId] = DateTime.UtcNow.AddSeconds(WakeSeconds);
+        }
+    }
+
+    private static bool Waking(MyCubeGrid shipyard)
+    {
+        if (!waking.TryGetValue(shipyard.EntityId, out var until))
+            return false;
+        if (DateTime.UtcNow < until)
+            return true;
+        waking.Remove(shipyard.EntityId);
+        return false;
     }
 
     // The welders stop without power: the shipyard's reactors are topped up to ReactorUranium
@@ -3627,8 +3684,7 @@ internal static partial class ShipyardOrders
     private static string Name(long identityId) =>
         MySession.Static.Players.TryGetIdentity(identityId)?.DisplayName ?? "someone";
 
-    private static void Tell(long identityId, string text) =>
-        MyVisualScriptLogicProvider.SendChatMessage(text, "Shipyard", identityId);
+    private static void Tell(long identityId, string text) => ShipyardAway.Tell(identityId, text);
 
     // An amount in its item's unit: whole components, kg of ore and ingots
     private static string Units(string item, long raw)
