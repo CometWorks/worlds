@@ -110,9 +110,9 @@ holds no blueprint for the server.
   player's grids in offline cluster partitions don't count yet.
 - It appears past the station's safe zone, `StarterShipClearance` (50 m) beyond
   its edge, on the table's side of the station if there is room there, else
-  turned about the station's up. Its main cockpit (else any cockpit, control seat
-  or remote control, else the grid's forward) faces away from the station and its
-  up is the station's up.
+  turned about the station's up. Its main cockpit (else the first block that flies
+  the ship, else the grid's forward) faces away from the station
+  and its up is the station's up.
 - It is built as a projector would build it: empty cargo, no fuel or gas,
   nobody seated, scripts as the table got them. With `StarterShipChargeBatteries`
   its batteries are full. The player owns every block and has built it, so it
@@ -136,8 +136,10 @@ grids, uniformly to fit that space, from `StarterShipHologramTableTop` (0.33 m
 below the block's center) to the top of the block, with
 `StarterShipHologramMargin` (5 cm) kept free on every side, and centers it there.
 It turns the blueprint so that the up and forward of the main grid's main cockpit,
-or of any cockpit, control seat or remote control, point along the table's up and
-forward. A blueprint without one keeps its main grid's own up and forward. It sets
+or of the first cockpit, control seat or remote control, point along the table's up
+and forward. Only a block that flies the ship counts: never a cryo chamber, a
+passenger seat or furniture. A blueprint without one keeps its main grid's own up
+and forward. It sets
 the projector's offset, rotation and scale, which the server sends to every
 client. The offset moves in whole scaled cubes and the game keeps it within 50 of
 them, so a blueprint longer than about 150 m may sit a little off center.
@@ -360,7 +362,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   ShipyardQueue`) show it, and which ship blocks the shipyard.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
-  shipyard, its components the shipyard's containers, and it may have at most
+  shipyard or, when it only fits another way, by right angles from there,
+  its components the shipyard's containers, and it may have at most
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back.
@@ -1056,6 +1059,12 @@ same zone a player's hand welder and grinder, ship welder and grinder, and an
 OmniArc welder on a player's grid named like a shipyard do nothing, and that the
 player's tools work outside the zone. It runs with the plugin's rules on, on
 with the zones holding every test grid from the start, and off.
+`tests/test_shipyard_align.py` orders 150 m ships that only fit along the shipyard,
+one behind a cryo chamber facing sideways and one with its only cockpit sideways,
+and short ones that fit: one with its cockpit along the shipyard, which stays so, one
+whose cockpit comes after a cryo chamber, a passenger seat and a bed, one whose
+sideways bed is flagged as main, and one with nothing that flies the ship, which
+keeps the grid's forward. It checks how they lie in the saved world. `OCT_ALIGN_BP` adds a real `bp.sbc`.
 `tests/test_shipyard_placement.py` checks in the saved world where ships end up
 along the shipyard: short ones at the 1/3 point nearer the station, at pole and
 equatorial stations, the widest small grid ship among them, and a ship of 1/4 of
@@ -1078,7 +1087,8 @@ check on a test cluster, with a trip to a station on the other node.
 `tests/builds/BuildTests` checks the queues without the game
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
 from OCT's stock, paid orders all or none, cancel, start and finish with leftovers
-and hydrogen, free orders, the queue, the formats, and that no money is made or lost.
+and hydrogen, free orders, the queue, the formats, blueprints in parts, and that no money
+is made or lost.
 `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with the
 shipyard's mods: the quote and the order, the hydrogen from a docked ship's tank into
 the new ship's, the payment and OCT's stock, a press while it builds, an order queued
@@ -1125,6 +1135,10 @@ without a client that a restart pays no hour twice and that hours missed while d
 make one payout. `tests/money/MoneyTests` checks the arithmetic of the tax, the payout,
 a whole day of payouts and Hangar's retrieval fee alone
 (`dotnet run -c Release --project tests/money/MoneyTests`).
+`tests/shipyard_cluster.py` orders a ship on a cluster from a client with Multigrid
+Projector. A cluster's plugin messages carry 64 KiB at most, so a blueprint goes to and
+from the World Authority in parts; `tests/mech_blueprint.py bp.sbc big` writes a ship
+that needs them and still builds fast.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
 `tests/test_hangar_fee.py` checks the Hangar fee with the client and a Hangar working

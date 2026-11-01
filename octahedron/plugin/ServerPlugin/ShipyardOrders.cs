@@ -345,9 +345,9 @@ internal static class ShipyardOrders
         var outward = Vector3I.Zero;
         if (!arms && !FindStart(main, out start, out outward))
             return "The blueprint's main grid needs a 1x1x1 block on its outside to start from.";
-        var size = Size(blueprint, start, outward, out _);
         var space = FreeSpace(shipyard);
         var room = space.HalfExtent * 2;
+        var size = Size(blueprint, start, outward, room, out _, out var turn);
         if (size.X > room.X || size.Y > room.Y || size.Z > room.Z)
             return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}.";
         var needed = Components(blueprint, skipFirst: !arms)
@@ -360,7 +360,7 @@ internal static class ShipyardOrders
             layout = ShipyardArm.Plan(
                 shipyard,
                 ShipCenter(shipyard, space, size.Z),
-                ShipRotation(shipyard, main),
+                turn * shipyard.WorldMatrix.GetOrientation(),
                 blueprint,
                 out var error,
                 out pending
@@ -370,13 +370,16 @@ internal static class ShipyardOrders
         return null;
     }
 
-    // The ship's size along the shipyard, turned so its cockpit points along it, the scaffold on
-    // the start block included
+    // The ship's size along the shipyard, the scaffold on the start block included, and the turn
+    // of its main grid that gives it: its cockpit along the shipyard if it fits that way, else by
+    // right angles from there until it fits the room
     private static Vector3D Size(
         List<MyObjectBuilder_CubeGrid> blueprint,
         MyObjectBuilder_CubeBlock start,
         Vector3I outward,
-        out BoundingBoxD bounds
+        Vector3D room,
+        out BoundingBoxD bounds,
+        out MatrixD turn
     )
     {
         var main = blueprint[0];
@@ -390,19 +393,22 @@ internal static class ShipyardOrders
                     new BoundingBoxD(((Vector3D)cell - 0.5) * cube, ((Vector3D)cell + 0.5) * cube)
                 );
         }
-        return Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, CockpitTurn(main)));
-    }
-
-    // Turns the main grid so its cockpit points along the shipyard, up its up
-    private static MatrixD CockpitTurn(MyObjectBuilder_CubeGrid main)
-    {
         var (forward, up) = StarterShip.CockpitFrame(main);
-        return MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
+        var cockpit = MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
+        var size = Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, cockpit));
+        var axes = ShipyardPlacement.Align([size.X, size.Y, size.Z], [room.X, room.Y, room.Z]);
+        var align = MatrixD.Identity;
+        for (var i = 0; i < 3; i++)
+        {
+            align[i, i] = 0;
+            align[axes[i], i] = 1;
+        }
+        // Swapping two axes alone would mirror the ship
+        if (align.Determinant() < 0)
+            align[axes[0], 0] = -1;
+        turn = cockpit * align;
+        return Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, turn));
     }
-
-    // The ship's main grid's orientation in the world when built
-    private static MatrixD ShipRotation(MyCubeGrid shipyard, MyObjectBuilder_CubeGrid main) =>
-        CockpitTurn(main) * shipyard.WorldMatrix.GetOrientation();
 
     // --- the button ---
 
@@ -927,7 +933,7 @@ internal static class ShipyardOrders
             if (liters > 0)
                 request.Provided[Hydrogen] = IceFor(liters, up: false);
         }
-        Builds.Execute(
+        Builds.Order(
             Guid.NewGuid(),
             request,
             (ok, message) =>
@@ -1597,62 +1603,74 @@ internal static class ShipyardOrders
                     return;
                 }
                 var next = BuildBook.DecodeOrder(text);
-                var blueprint = DecodeBlueprint(next.Blueprint);
-                ShipyardArm.Layout layout = null;
-                var pending = false;
-                var error =
-                    blueprint == null || blueprint.Count == 0
-                        ? "its blueprint could not be read"
-                        : Fits(shipyard, blueprint, next.Exempt, out layout, out pending);
-                if (pending)
+                Builds.ReadBlueprint(
+                    next.Id,
+                    encoded =>
+                    {
+                        // Still in the queue if only the read failed: the next update tries again
+                        if (encoded == null || shipyard.MarkedForClose)
+                            starting.Remove(shipyard.EntityId);
+                        else
+                            StartOrder(shipyard, station, next, encoded);
+                    }
+                );
+            }
+        );
+    }
+
+    private static void StartOrder(
+        MyCubeGrid shipyard,
+        string station,
+        BuildOrder next,
+        string encoded
+    )
+    {
+        var blueprint = DecodeBlueprint(encoded);
+        ShipyardArm.Layout layout = null;
+        var pending = false;
+        var error =
+            blueprint == null || blueprint.Count == 0
+                ? "its blueprint could not be read"
+                : Fits(shipyard, blueprint, next.Exempt, out layout, out pending);
+        if (pending)
+        {
+            // Nothing has started yet: the next check starts it, once the plan is done
+            starting.Remove(shipyard.EntityId);
+            ShipyardArm.WhenDone(() => Refresh(station));
+            return;
+        }
+        if (error != null)
+        {
+            // Not started: nothing left the order
+            Finish(next, Taken(next), 0, refund: true, $"'{next.Ship}' can't be built: {error}");
+            starting.Remove(shipyard.EntityId);
+            return;
+        }
+        Builds.Execute(
+            Guid.NewGuid(),
+            new BuildRequest
+            {
+                Verb = BuildVerb.Start,
+                Id = next.Id,
+                Station = station,
+            },
+            (ok, message) =>
+            {
+                starting.Remove(shipyard.EntityId);
+                if (!ok)
                 {
-                    // Nothing has started yet: the next check starts it, once the plan is done
-                    starting.Remove(shipyard.EntityId);
-                    ShipyardArm.WhenDone(() => Refresh(station));
+                    Plugin.Log.Warning($"Shipyard order {next.Id} did not start: {message}");
                     return;
                 }
+                error = Create(shipyard, next, blueprint, layout);
                 if (error != null)
-                {
-                    // Not started: nothing left the order
                     Finish(
                         next,
-                        new Dictionary<string, long>(),
+                        Taken(next),
                         0,
                         refund: true,
                         $"'{next.Ship}' can't be built: {error}"
                     );
-                    starting.Remove(shipyard.EntityId);
-                    return;
-                }
-                Builds.Execute(
-                    Guid.NewGuid(),
-                    new BuildRequest
-                    {
-                        Verb = BuildVerb.Start,
-                        Id = next.Id,
-                        Station = station,
-                    },
-                    (ok, message) =>
-                    {
-                        starting.Remove(shipyard.EntityId);
-                        if (!ok)
-                        {
-                            Plugin.Log.Warning(
-                                $"Shipyard order {next.Id} did not start: {message}"
-                            );
-                            return;
-                        }
-                        error = Create(shipyard, next, blueprint, layout);
-                        if (error != null)
-                            Finish(
-                                next,
-                                Taken(next),
-                                0,
-                                refund: true,
-                                $"'{next.Ship}' can't be built: {error}"
-                            );
-                    }
-                );
             }
         );
     }
@@ -1684,9 +1702,14 @@ internal static class ShipyardOrders
         main.CubeBlocks.Insert(0, start);
         Vector3I startCell = start.Min;
         var scaffold = new[] { startCell + outward, startCell + 2 * outward };
-        var size = Size(blueprint, start, outward, out var bounds);
-        var (forward, up) = StarterShip.CockpitFrame(main);
-        var turn = MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
+        var size = Size(
+            blueprint,
+            start,
+            outward,
+            space.HalfExtent * 2,
+            out var bounds,
+            out var turn
+        );
 
         var components = Components(blueprint, skipFirst: true);
         var containers = Containers(shipyard).ToList();
@@ -2334,9 +2357,78 @@ internal static class ShipyardOrders
             $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
                 + $"missing {order.Missing}: {(order.Refund ? "removed and refunded" : "delivered")}"
         );
+        LogStall(shipyard, order, blocks, parts);
         if (order.Refund)
             Scrap(shipyard, order);
         End(shipyard, order, "stalled");
+    }
+
+    // What the welders had when they stopped, for finding out why
+    private static void LogStall(
+        MyCubeGrid shipyard,
+        Order order,
+        List<MySlimBlock> blocks,
+        Dictionary<string, int> parts
+    )
+    {
+        try
+        {
+            var prefix = $"Shipyard order {order.Id} stalled:";
+            Plugin.Log.Info(
+                $"{prefix} built so far "
+                    + string.Join(
+                        ", ",
+                        Grids(order.Projector.CubeGrid)
+                            .Select(g =>
+                                $"{g.DisplayName} {g.GetBlocks().Count(b => b.IsFullIntegrity)}/{g.BlocksCount}"
+                            )
+                    )
+            );
+            var stock = new Dictionary<string, double>();
+            foreach (var item in Containers(shipyard).SelectMany(i => i.GetItems()))
+                stock[item.Content.SubtypeName] =
+                    (stock.TryGetValue(item.Content.SubtypeName, out var had) ? had : 0)
+                    + (double)item.Amount;
+            Plugin.Log.Info(
+                $"{prefix} needs {string.Join(", ", parts.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}"))}"
+            );
+            Plugin.Log.Info(
+                $"{prefix} containers hold {string.Join(", ", stock.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value:0}"))}"
+            );
+            var beams = Beams(shipyard).ToList();
+            Plugin.Log.Info(
+                $"{prefix} {beams.Count} welders, {beams.Count(b => b.Enabled)} on, {beams.Count(b => b.IsWorking)} working"
+            );
+            var held = new Dictionary<string, double>();
+            foreach (var item in beams.SelectMany(b => b.GetInventory().GetItems()))
+                held[item.Content.SubtypeName] =
+                    (held.TryGetValue(item.Content.SubtypeName, out var had) ? had : 0)
+                    + (double)item.Amount;
+            Plugin.Log.Info(
+                $"{prefix} welders hold {string.Join(", ", held.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value:0}"))}, "
+                    + $"{beams.Sum(b => (double)b.GetInventory().CurrentVolume):0.##} of {beams.Sum(b => (double)b.GetInventory().MaxVolume):0.##} m³"
+            );
+            foreach (var block in blocks.Where(b => !b.IsFullIntegrity).Take(20))
+            {
+                var needs = new Dictionary<string, int>();
+                block.GetMissingComponents(needs);
+                var at = block.CubeGrid.GridIntegerToWorld(block.Position);
+                var nearest =
+                    beams.Count == 0
+                        ? -1
+                        : beams.Min(b => Vector3D.Distance(b.PositionComp.GetPosition(), at));
+                Plugin.Log.Info(
+                    $"{prefix} {block.BlockDefinition.Id.SubtypeName} on {block.CubeGrid.DisplayName}, "
+                        + $"integrity {block.Integrity:0}/{block.MaxIntegrity:0}, "
+                        + $"missing {string.Join(" ", needs.Select(n => $"{n.Key} {n.Value}"))}, "
+                        + $"{nearest:0} m from the nearest welder"
+                );
+            }
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Error("Logging a stalled order failed", e);
+        }
     }
 
     // A ship missing more than this share of its plain blocks is not delivered

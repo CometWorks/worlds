@@ -1,11 +1,13 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using PluginSdk.Commands;
 using Sandbox;
 using Sandbox.Common.ObjectBuilders;
+using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Character;
@@ -234,21 +236,17 @@ internal static class StarterShip
         return (sphere.Center, sphere.Radius);
     }
 
-    // The forward and up of the main cockpit, else of any cockpit, control seat or remote
-    // control, in grid coordinates; the grid's own without any
+    // The forward and up of the block that sets a blueprint's frame, in grid coordinates; the
+    // grid's own without any
     internal static (Vector3D Forward, Vector3D Up) CockpitFrame(MyObjectBuilder_CubeGrid grid)
     {
-        MyObjectBuilder_CubeBlock found = null;
-        foreach (var block in grid.CubeBlocks)
-        {
-            if (block is MyObjectBuilder_ShipController { IsMainCockpit: true })
-            {
-                found = block;
-                break;
-            }
-            if (found == null && block is MyObjectBuilder_ShipController)
-                found = block;
-        }
+        var found = ShipyardPlacement.FrameBlock(
+            grid.CubeBlocks.OfType<MyObjectBuilder_ShipController>(),
+            block =>
+                MyDefinitionManager.Static.TryGetCubeBlockDefinition(block.GetId(), out var d)
+                && d is MyShipControllerDefinition { EnableShipControl: true },
+            block => block.IsMainCockpit
+        );
         if (found == null)
             return (Vector3D.Forward, Vector3D.Up);
         var orientation = found.BlockOrientation;
