@@ -422,10 +422,15 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   components in the shipyard first waits `ShipyardTopUpMinutes` (5) for a top-up and
   tells the player. Plain blocks, armor and decorations, are those of the plain
   `CubeBlock` type; every block of its own type, lights, panels and conveyors included,
-  is functional. When the ship misses only plain blocks, at most 10% of them, it is
-  delivered as usual. When it misses a functional block or more plain ones, the ship
-  is removed: a free build doesn't count, a paid build's components go into the
-  containers and the labor fee comes back. The player gets a chat message either way.
+  is functional. Only the main grid decides. When it misses only plain blocks, at most
+  10% of them, the ship is delivered as usual. When it misses a functional block or more
+  plain ones, the ship is removed: a free build doesn't count, a paid build's components
+  go into the containers and the labor fee comes back. An unfinished subgrid is no reason
+  to remove a ship, as a subgrid's hitboxes may just intersect the ship's blocks: the ship
+  is delivered without what is missing, as a finished build. A free build counts and its
+  cool-down starts, what is left of its components is removed. What is left of a paid
+  build stays in the containers for the last part of the turn and is then sold, and the
+  labor fee is kept. The player gets a chat message either way, naming what is missing.
 - Every projected block welded onto the ship or its subgrids is the player's,
   owner and `BuiltBy`, so it counts toward the player's PCU and the projection
   limits check it for them.
@@ -1245,7 +1250,10 @@ the button itself.
 `tests/test_shipyard_left_out.py` checks what a ship is built without: a player gets
 only the blocks of the DLCs they own, built by the station's welders, and a paid ship
 with a grid no welder can place is delivered without it, the grid named and its
-components refunded.
+components refunded. An unfinished subgrid, with a block intersecting the main grid and
+a battery short of parts, doesn't remove the ship, free or paid; the same battery on the
+main grid still does. `OCT_BLUEPRINT` and the case `blueprint` order a real ship's
+`bp.sbc` free.
 `tests/test_table_rules.py` runs two players at one table on a world built by
 `build_world.py`: the screens, one press to order and one to cancel, the loader's
 sole access, removing another player's blueprint, a full queue and an owner who
