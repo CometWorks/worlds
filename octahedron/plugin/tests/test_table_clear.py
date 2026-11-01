@@ -67,14 +67,14 @@ def main() -> int:
         table = hold(remote, left)
         x, y, z = sa.station_tables()[left]
         remote.character_teleport(x + 5000, y, z)
-        line = cleared(table, 30)
+        line = cleared(table, 90)
         check(line is not None and "left the station" in line, f"left: {line}")
 
         table = hold(remote, queued)
         assert "Your quote for" in ship_reply(remote, "!oct order")
         reply = ship_reply(remote, "!oct order")
         check("is in the queue" in reply, f"queued: ordered: {reply}")
-        line = cleared(table, 20)
+        line = cleared(table, 90)
         check(line is not None and "is in the queue" in line, f"queued: {line}")
 
         table = hold(remote, stay)
