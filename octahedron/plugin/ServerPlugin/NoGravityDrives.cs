@@ -31,6 +31,7 @@ internal static class NoGravityDrives
     private static readonly bool Applies = CheckGameVersion();
 
     private static readonly ConcurrentDictionary<MyFunctionalBlock, byte> Blocks = new();
+    private static bool seenLoaded;
     private static int frame;
 
     private static bool Active =>
@@ -55,6 +56,14 @@ internal static class NoGravityDrives
     {
         if (!Active || ++frame % CheckFrames != 0)
             return;
+        // A server's plugins load after its world, so these came before the patch that records them
+        if (!seenLoaded)
+        {
+            seenLoaded = true;
+            foreach (var grid in MyEntities.GetEntities().OfType<MyCubeGrid>())
+            foreach (var block in Drives(grid))
+                Blocks.TryAdd(block, 0);
+        }
         foreach (var block in Blocks.Keys)
         {
             if (!block.InScene)
@@ -75,11 +84,12 @@ internal static class NoGravityDrives
         }
     }
 
+    private static IEnumerable<MyFunctionalBlock> Drives(MyCubeGrid grid) =>
+        grid.GetFatBlocks<MyFunctionalBlock>().Where(b => b is IMyVirtualMass);
+
     private static void TurnOff(MyCubeGrid grid)
     {
-        foreach (
-            var block in grid.GetFatBlocks<MyFunctionalBlock>().Where(b => b is IMyVirtualMass)
-        )
+        foreach (var block in Drives(grid))
             block.Enabled = false;
         // Keeps the states going for a moment, they correct what a client's copy did before this
         grid.Physics?.RigidBody?.Activate();
