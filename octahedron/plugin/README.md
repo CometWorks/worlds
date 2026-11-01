@@ -378,8 +378,10 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back.
-- The next order starts when the shipyard's free space is empty: a ship left
-  there has to fly out first. The ship is built on the free space's center line:
+- The next order starts when no block of another ship is in the shipyard's free
+  space: a ship left there has to fly out first. The space ends at the walls, so
+  a ship docked at the connectors outside them is not in the way, and neither the
+  connectors nor the conveyors leading to them are in the space. The ship is built on the free space's center line:
   a ship shorter than 1/4 of the shipyard's length around the 1/3 point nearer the
   station, where it shows better from the lobby; a longer one in the middle. It is
   built from
@@ -395,8 +397,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   to skip the component cost. While a build runs the plugin also tops up the
   shipyard's reactors to 1000 uranium each, at OCT's cost: without power the
   welders stop. Floating objects in the shipyard main grid's bounding box are
-  removed while a build runs. Before a build starts, grids in that box that no
-  player owns are removed too, and so are players' wrecks: grids with no power
+  removed while a build runs. Before a build starts, grids with a block in that
+  box that no player owns are removed too, and so are players' wrecks: grids with no power
   and no cockpit or remote control in their whole mechanical group. Characters,
   players' other grids and the shipyard's own grids stay; those still block the
   next build until they leave. In a no-welding safe zone ToolCore on the clients,
@@ -1222,7 +1224,8 @@ formats, blueprints in parts, and that no money is made or lost. `tests/test_shi
 player's turn in game at Alpha Station: who owns what, the window, the purchase, the
 sale, overflow, a ship in the way, a tow reaching the shipyard, restarts;
 `tests/shipyard_turn_cluster.py` does the same on a cluster with moves of the station's
-partition. `tests/test_shipyard_off.py` checks that a shipyard is off without a job and on only
+partition. `tests/test_shipyard_docked.py` checks what is in a shipyard's way: a ship docked
+at its connectors isn't, a block of a ship in the free space is. `tests/test_shipyard_off.py` checks that a shipyard is off without a job and on only
 for the slot's player and faction, and a build and a repair slot going on after the player left;
 `tests/shipyard_off_cluster.py` does that with the player on another node and the station's
 partition free to go offline, and `tests/shipyard_stop_cluster.py` with a cluster stop and start

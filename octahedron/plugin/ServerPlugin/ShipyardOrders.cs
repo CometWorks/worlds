@@ -3308,11 +3308,38 @@ internal static partial class ShipyardOrders
         return true;
     }
 
-    // A grid in the shipyard's free space that isn't the shipyard or on its rotors
+    // A grid with a block in the shipyard's free space that isn't the shipyard or on its rotors.
+    // A ship docked at the connectors is outside the walls, so outside the free space.
     private static MyCubeGrid Obstacle(MyCubeGrid shipyard)
     {
         var own = Grids(shipyard);
-        return GridsIn(FreeSpace(shipyard)).FirstOrDefault(g => !own.Contains(g));
+        var space = FreeSpace(shipyard);
+        return GridsIn(space).FirstOrDefault(g => !own.Contains(g) && HasBlockIn(g, space));
+    }
+
+    // GridsIn goes by the world axis box around each grid, which at a shipyard lying at an angle
+    // holds much that is outside the shipyard
+    private static bool HasBlockIn(MyCubeGrid grid, MyOrientedBoundingBoxD box)
+    {
+        var toGrid = grid.PositionComp.WorldMatrixNormalizedInv;
+        var local = new MyOrientedBoundingBoxD(
+            Vector3D.Transform(box.Center, toGrid),
+            box.HalfExtent,
+            Quaternion.CreateFromRotationMatrix(
+                MatrixD.CreateFromQuaternion(box.Orientation) * toGrid
+            )
+        );
+        var cube = grid.GridSize;
+        foreach (var block in grid.GetBlocks())
+        {
+            var cells = new BoundingBoxD(
+                ((Vector3D)block.Min - 0.5) * cube,
+                ((Vector3D)block.Max + 0.5) * cube
+            );
+            if (local.Intersects(ref cells))
+                return true;
+        }
+        return false;
     }
 
     private static List<MyCubeGrid> GridsIn(MyOrientedBoundingBoxD box)
@@ -3619,7 +3646,11 @@ internal static partial class ShipyardOrders
         var entities = MyEntities.GetEntitiesInOBB(ref box);
         var floating = entities.OfType<MyFloatingObject>().ToList();
         var found = grids
-            ? entities.OfType<MyCubeGrid>().Where(g => !g.IsPreview).Select(Grids).ToList()
+            ? entities
+                .OfType<MyCubeGrid>()
+                .Where(g => !g.IsPreview && HasBlockIn(g, box))
+                .Select(Grids)
+                .ToList()
             : [];
         entities.Clear();
         foreach (var item in floating)

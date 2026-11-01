@@ -241,6 +241,174 @@ public sealed class ProbeCommands : CommandModule
             : Hauler(free, Context.Caller.IdentityId, "Dock Hauler", items);
     }
 
+    [Command(
+        "yarddock",
+        "Builds a ship 150 m long along the shipyard's wall at a free connector of it and connects it: a powered one or, with pod, one without power or a cockpit: SHIP grid-id",
+        "!sprobe yarddock <station> <name> [pod]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardDock(string station, string name, string kind = "")
+    {
+        var yard = Yard(station);
+        var free = yard.GetFatBlocks<MyShipConnector>()
+            .FirstOrDefault(c => !c.Connected && connecting.All(x => x.Station != c));
+        if (free == null)
+            return "NOCONNECTOR";
+        long me = Context.Caller.IdentityId;
+        var outward = free.WorldMatrix.Forward;
+        var blocks = new List<MyObjectBuilder_CubeBlock>
+        {
+            Block<MyObjectBuilder_ShipConnector>("Connector", Vector3I.Zero, me),
+            Block<MyObjectBuilder_CargoContainer>(
+                "LargeBlockSmallContainer",
+                new Vector3I(0, 0, 1),
+                me
+            ),
+        };
+        blocks.AddRange(Row(new Vector3I(0, 0, 2)));
+        if (kind != "pod")
+            blocks.AddRange(Power(new Vector3I(0, 0, 3), me));
+        var entity = (MyCubeGrid)
+            MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(
+                Ship(
+                    name,
+                    free.WorldMatrix.Translation + outward * yard.GridSize,
+                    -outward,
+                    yard.WorldMatrix.Forward,
+                    blocks
+                )
+            );
+        connecting.Add((entity.GetFatBlocks<MyShipConnector>().First(), free, 0));
+        return $"SHIP {entity.EntityId}";
+    }
+
+    [Command(
+        "yardat",
+        "Builds a ship at a cell of the shipyard's grid, along the shipyard: a cockpit there and a battery one cell toward its +Z. With turned, across: the battery toward -X. With pod: a row of armor 150 m long and a container, no power or cockpit: SHIP grid-id",
+        "!sprobe yardat <station> <name> <x,y,z> [turned|pod]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardAt(string station, string name, string cell, string kind = "")
+    {
+        var yard = Yard(station);
+        var c = cell.Split(',').Select(int.Parse).ToArray();
+        var m = yard.WorldMatrix;
+        var position = Vector3D.Transform(new Vector3D(c[0], c[1], c[2]) * yard.GridSize, m);
+        long me = Context.Caller.IdentityId;
+        MyObjectBuilder_CubeGrid grid;
+        if (kind == "pod")
+        {
+            var blocks = new List<MyObjectBuilder_CubeBlock>
+            {
+                Block<MyObjectBuilder_CargoContainer>(
+                    "LargeBlockSmallContainer",
+                    Vector3I.Zero,
+                    me
+                ),
+            };
+            blocks.AddRange(Row(new Vector3I(0, 0, 1)));
+            grid = Ship(name, position, m.Right, m.Forward, blocks);
+        }
+        else
+            grid = Ship(
+                name,
+                position,
+                kind == "turned" ? m.Right : m.Forward,
+                m.Up,
+                Power(Vector3I.Zero, me)
+            );
+        var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
+        return $"SHIP {entity.EntityId}";
+    }
+
+    [Command(
+        "yardspace",
+        "The shipyard's build space in meters and how many of its connectors and conveyors are in it: SPACE width height length connectors=count in=count conveyors=count in=count",
+        "!sprobe yardspace <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardSpace(string station)
+    {
+        var yard = Yard(station);
+        var space = (MyOrientedBoundingBoxD)
+            AppDomain
+                .CurrentDomain.GetAssemblies()
+                .Select(a => a.GetType("ServerPlugin.ShipyardOrders"))
+                .First(t => t != null)
+                .GetMethod("FreeSpace", BindingFlags.NonPublic | BindingFlags.Static)
+                .Invoke(null, [yard]);
+        var connectors = yard.GetFatBlocks<MyShipConnector>().Cast<MyCubeBlock>().ToList();
+        var conveyors = yard.GetFatBlocks<MyCubeBlock>()
+            .Where(b => b is MyConveyor or MyConveyorConnector)
+            .ToList();
+        int In(List<MyCubeBlock> blocks) =>
+            blocks.Count(b =>
+            {
+                var position = b.PositionComp.GetPosition();
+                return space.Contains(ref position);
+            });
+        var size = space.HalfExtent * 2;
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "SPACE {0} {1} {2} connectors={3} in={4} conveyors={5} in={6}",
+            size.X,
+            size.Y,
+            size.Z,
+            connectors.Count,
+            In(connectors),
+            conveyors.Count,
+            In(conveyors)
+        );
+    }
+
+    private static MyObjectBuilder_CubeGrid Ship(
+        string name,
+        Vector3D position,
+        Vector3D forward,
+        Vector3D up,
+        List<MyObjectBuilder_CubeBlock> blocks
+    ) =>
+        new()
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = false,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = name,
+            PositionAndOrientation = new MyPositionAndOrientation(
+                position,
+                (Vector3)forward,
+                (Vector3)up
+            ),
+            CubeBlocks = blocks,
+        };
+
+    // A cockpit and, a cell toward the grid's +Z, a charged battery
+    private static List<MyObjectBuilder_CubeBlock> Power(Vector3I at, long owner)
+    {
+        var battery = Block<MyObjectBuilder_BatteryBlock>(
+            "LargeBlockBatteryBlock",
+            at + new Vector3I(0, 0, 1),
+            owner
+        );
+        battery.CurrentStoredPower = 3;
+        return [Block<MyObjectBuilder_Cockpit>("LargeBlockCockpit", at, owner), battery];
+    }
+
+    // Armor around the cell along the grid's Y axis, 150 m in all
+    private static IEnumerable<MyObjectBuilder_CubeBlock> Row(Vector3I around) =>
+        Enumerable
+            .Range(-30, 61)
+            .Select(y => new MyObjectBuilder_CubeBlock
+            {
+                SubtypeName = "LargeBlockArmorBlock",
+                Min = around + new Vector3I(0, y, 0),
+                BlockOrientation = new SerializableBlockOrientation(
+                    Base6Directions.Direction.Forward,
+                    Base6Directions.Direction.Up
+                ),
+            });
+
     private static IEnumerable<MyInventory> YardInventories(MyCubeGrid yard) =>
         yard.GetFatBlocks<MyCargoContainer>()
             .Cast<MyCubeBlock>()
