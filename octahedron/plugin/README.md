@@ -1110,7 +1110,7 @@ cluster's preparation (`-prepareManaged`) exports it with the build.
 
 ## Loading it on a cluster
 
-A Quasar cluster loads it as a dev folder too, with Magnetar 2.4.3.4 or later.
+A Quasar cluster loads it as a dev folder too, with Magnetar 2.4.3.9 or later.
 On the Quasar host, add this folder of a `worlds` checkout, with `Octahedron.xml`,
 as a dev folder (Configs, Developer panel) and select the plugin in the
 cluster's config profile. Cluster setup and every profile staging compile it
