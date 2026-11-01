@@ -1057,9 +1057,10 @@ Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
 blocks to their functional level, two grids merging and a rotor attaching a
 head, each stopped by the cap, next to a copy built by nobody that isn't.
-`tests/test_gravity_drive.py` pilots ships with a gravity drive, and
-`tests/gravity_drive_cluster.py` does on a cluster node, with the gate's other side
-behind `--game-version`. `tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
+`tests/test_gravity_drive.py` pilots ships with a gravity drive, and with
+`--game-version` checks the other side of the version gate.
+`tests/gravity_drive_cluster.py` pilots them on a cluster node.
+`tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
 with the client, welding them through shipyard orders, with the rule off too, and a
 test mod's turret whose definition has it on. It buys ships at a store block and
 respawns in one, through the tests/neutrals-probe plugin, and spawns one for an NPC,
