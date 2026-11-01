@@ -289,6 +289,9 @@ def _alive(pid_file: Path, marker: str) -> int | None:
     try:
         pid = int(pid_file.read_text().strip())
         cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+        if not cmdline:  # Empty for a moment during an exec, like run-test.sh's env to bash
+            time.sleep(0.2)
+            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
     except (OSError, ValueError):
         return None
     return pid if marker.encode() in cmdline else None
