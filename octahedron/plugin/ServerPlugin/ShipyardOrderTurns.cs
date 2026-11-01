@@ -803,7 +803,8 @@ internal static partial class ShipyardOrders
         builtShips[shipyard.EntityId] = ships;
         if (ships.Count == 0)
             return;
-        var here = GridsIn(FreeSpace(shipyard)).Select(g => g.EntityId).ToHashSet();
+        var space = FreeSpace(shipyard);
+        var here = GridsIn(space).Where(g => HasBlockIn(g, space)).Select(g => g.EntityId).ToHashSet();
         foreach (
             var ship in ships.Where(s => !here.Contains(s.Grid) && !refunds.ContainsKey(s.Grid))
         )
