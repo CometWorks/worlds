@@ -125,9 +125,12 @@ def main() -> int:
     # Slots may be on any of the ship's grids
     sector, _ = so.saved()
     ids = {e.text for e in sector.findall("./SectorObjects/*/CubeBlocks/*/EntityId")}
+    # Not every ship has slots on the cockpit this finds, but toolbars emptied by the paste are wrong
+    slots = sector.findall(f"./SectorObjects/*[EntityId='{ship}']//BlockEntityId")
     check(
-        refs and refs <= ids,
-        f"cockpit {cockpit_id}: slots on {sorted(refs)}, off the ship: {sorted(refs - ids)}",
+        slots and refs <= ids,
+        f"{len(slots)} slots on the ship, cockpit {cockpit_id}: on {sorted(refs)}, "
+        f"off the ship: {sorted(refs - ids)}",
     )
     print("FAILED" if failed else "OK", flush=True)
     return 1 if failed else 0

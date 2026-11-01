@@ -175,7 +175,9 @@ def press(api) -> str:
     latest = api.get_chat_messages().get("latest", 0)
     reply = " ".join(rig.chat(api, "!oct order", 15))
     deadline = time.monotonic() + 60
-    while reply.strip().endswith("answers in chat.") and time.monotonic() < deadline:
+    while (
+        not reply.strip() or reply.strip().endswith("answers in chat.")
+    ) and time.monotonic() < deadline:
         time.sleep(2)
         got = api.get_chat_messages(after=latest)
         reply = " ".join(
