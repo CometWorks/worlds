@@ -120,11 +120,9 @@ def run(bench) -> None:
     print(api.get_block(table["gridId"], tuple(table["min"]))["projector"], flush=True)
     reply = ""
     for _ in range(12):
-        reply = " ".join(rig.chat(api, "!oct order", 15))
-        print(f"!oct order -> {reply}", flush=True)
+        reply = press(api)
         if "Your quote for" in reply:
-            reply = " ".join(rig.chat(api, "!oct order", 15))
-            print(f"!oct order -> {reply}", flush=True)
+            reply = press(api)
         if "is in the queue" in reply or "builds" in reply:
             break
         time.sleep(10)
@@ -169,6 +167,24 @@ def run(bench) -> None:
 
 
 run.administrators = [CLIENT_ID]
+
+
+def press(api) -> str:
+    """Presses the table's button once. The answer comes after the chat's first line, once a big
+    blueprint has gone to the World Authority; another press would cancel that order."""
+    latest = api.get_chat_messages().get("latest", 0)
+    reply = " ".join(rig.chat(api, "!oct order", 15))
+    deadline = time.monotonic() + 60
+    while reply.strip().endswith("answers in chat.") and time.monotonic() < deadline:
+        time.sleep(2)
+        got = api.get_chat_messages(after=latest)
+        reply = " ".join(
+            m.get("Text", "")
+            for m in got.get("messages", [])
+            if m.get("Text") != "!oct order"
+        )
+    print(f"!oct order -> {reply}", flush=True)
+    return reply
 
 
 def main() -> int:
