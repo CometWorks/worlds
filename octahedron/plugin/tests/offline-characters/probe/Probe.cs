@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
@@ -7,6 +8,7 @@ using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
+using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.World;
 using VRage;
 using VRage.Game;
@@ -149,25 +151,58 @@ public sealed class ProbeCommands : CommandModule
             .First();
     }
 
+    // A direction from the sphere's center with nothing around the point on its edge: no block and
+    // no asteroid within the reach of a ship across the edge. The shipyard stands next to the station.
+    private static Vector3D ClearDirection(BoundingSphereD sphere)
+    {
+        const double reach = 20;
+        for (var x = -1; x <= 1; x++)
+        for (var y = -1; y <= 1; y++)
+        for (var z = -1; z <= 1; z++)
+        {
+            if (x == 0 && y == 0 && z == 0)
+                continue;
+            var direction = Vector3D.Normalize(new Vector3D(x, y, z));
+            var around = new BoundingSphereD(sphere.Center + direction * sphere.Radius, reach);
+            var entities = new List<MyEntity>();
+            MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref around, entities);
+            var clear = !entities.Any(e =>
+                e is MyVoxelMap || (e is MyCubeGrid grid && BlocksIn(grid, around) > 0)
+            );
+            if (clear)
+                return direction;
+        }
+        throw new InvalidOperationException("no clear direction");
+    }
+
+    private static int BlocksIn(MyCubeGrid grid, BoundingSphereD around)
+    {
+        var blocks = new HashSet<MySlimBlock>();
+        grid.GetBlocksInsideSphere(ref around, blocks);
+        return blocks.Count;
+    }
+
     [Command("sphere", "The nearest station's bounding sphere", "!cprobe sphere")]
     [Permission(MyPromoteLevel.Admin)]
     public string Sphere()
     {
         var sphere = NearestSphere();
         var distance = Vector3D.Distance(sphere.Center, Body.PositionComp.GetPosition());
+        var clear = ClearDirection(sphere);
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"SPHERE {sphere.Center.X} {sphere.Center.Y} {sphere.Center.Z} {sphere.Radius} {distance}"
+            $"SPHERE {sphere.Center.X} {sphere.Center.Y} {sphere.Center.Z} {sphere.Radius} {distance} {clear.X} {clear.Y} {clear.Z}"
         );
     }
 
-    // A ship across the sphere's edge on its +X side: the seat 4 m on the given side of the edge,
-    // the hull through it to the other side
+    // A ship across the sphere's edge in the clear direction: the seat 4 m on the given side of the
+    // edge, the hull through it to the other side
     [Command("ship", "A ship across the sphere's edge", "!cprobe ship <inside|outside>")]
     [Permission(MyPromoteLevel.Admin)]
     public string Ship(string side)
     {
         var sphere = NearestSphere();
+        var clear = ClearDirection(sphere);
         var outside = side == "outside";
         var owner = Context.Caller.IdentityId;
         var grid = new MyObjectBuilder_CubeGrid
@@ -178,9 +213,9 @@ public sealed class ProbeCommands : CommandModule
             PersistentFlags = MyPersistentEntityFlags2.InScene,
             DisplayName = "Probe ship",
             PositionAndOrientation = new MyPositionAndOrientation(
-                sphere.Center + Vector3D.UnitX * (sphere.Radius + (outside ? 4 : -4)),
-                outside ? -Vector3.UnitX : Vector3.UnitX,
-                Vector3.UnitY
+                sphere.Center + clear * (sphere.Radius + (outside ? 4 : -4)),
+                (Vector3)(outside ? -clear : clear),
+                (Vector3)Vector3D.CalculatePerpendicularVector(clear)
             ),
         };
         grid.CubeBlocks.Add(

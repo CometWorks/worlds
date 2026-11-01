@@ -156,29 +156,29 @@ def position(at) -> tuple[float, float, float]:
     return (at["x"], at["y"], at["z"]) if isinstance(at, dict) else tuple(at)
 
 
-def sphere(remote) -> tuple[tuple[float, float, float], float, float]:
-    """The nearest station's bounding sphere and how far the body is from its center"""
-    found = probe(remote, "sphere", r"SPHERE (\S+) (\S+) (\S+) (\S+) (\S+)")
-    return (
-        (float(found[1]), float(found[2]), float(found[3])),
-        float(found[4]),
-        float(found[5]),
-    )
+def sphere(remote):
+    """The nearest station's bounding sphere: center, radius, how far the body is from the center,
+    and a direction with open space at the sphere's edge"""
+    found = probe(remote, "sphere", r"SPHERE " + " ".join([r"(\S+)"] * 8))
+    values = [float(found[i]) for i in range(1, 9)]
+    return values[:3], values[3], values[4], values[5:]
 
 
 def to_edge(remote, offset: float) -> tuple[float, float]:
-    """Into open space that far from the sphere's edge, on its +X side, and at rest there. The
-    body's distance from the center and the radius."""
-    center, radius, _ = sphere(remote)
-    x = center[0] + radius + offset
-    teleport(remote, x, center[1], center[2])
+    """Into open space that far from the sphere's edge. The body's distance from the center and
+    the radius."""
+    center, radius, _, clear = sphere(remote)
+    at = [c + d * (radius + offset) for c, d in zip(center, clear)]
+    teleport(remote, *at)
 
     def there() -> float | None:
         distance = sphere(remote)[2]
+        log(
+            f"body {distance:.2f} m from the center of a {radius:.2f} m sphere, wanted {offset:+}"
+        )
         return distance if abs(distance - radius - offset) < 1 else None
 
-    distance = rig.wait_until(there, 60, "the body at the sphere's edge")
-    return distance, radius
+    return rig.wait_until(there, 60, "the body at the sphere's edge"), radius
 
 
 def next_body(remote, body: int, timeout: float = 240) -> None:
@@ -380,7 +380,7 @@ def run() -> None:
     probe(remote, f"seatin {seat}", "SEAT")
     probe(remote, "clear", "CLEAR")
     probe(remote, "give Ingot/Gold 4", "GIVE True")
-    _, radius, distance = sphere(remote)
+    _, radius, distance, _ = sphere(remote)
     check(distance < radius, f"in a ship, inside: {distance:.1f} of {radius:.1f} m")
     body, _ = inventory(remote)
     removed = leave_and_wait(REMOVED)
@@ -402,7 +402,7 @@ def run() -> None:
     seat = probe(remote, "ship outside", r"SHIP (\d+)")[1]
     time.sleep(SHIP_REPLICATION)
     probe(remote, f"seatin {seat}", "SEAT")
-    _, radius, distance = sphere(remote)
+    _, radius, distance, _ = sphere(remote)
     check(distance > radius, f"in a ship, outside: {distance:.1f} of {radius:.1f} m")
     body, items = inventory(remote)
     stayed = leave_and_wait(REMOVED, QUIET_AWAY)
