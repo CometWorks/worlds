@@ -1,6 +1,7 @@
 """Gravity drives on a local test cluster (SE-881), as tests/test_gravity_drive.py checks them on one server: a
-client pilots a ship with artificial mass, then one with a space ball, on a regular node and turns the generator
-on. The nodes must not see them move, and the log of each process says the patch is applied.
+client pilots a ship with artificial mass, then one with space balls, on a regular node and turns the generator
+on. The node turns both blocks off, the nodes don't see the ship move, the client's view stays with theirs, and the
+log of each process says the patch is applied.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/gravity_drive_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 
@@ -120,6 +121,17 @@ def run(bench) -> None:
         bench.ensure_gameplay_focus(CLIENT_ID)
         start = api.get_grid(grid)["position"]
         api.set_enabled(grid, gd.GENERATOR, True)
+        try:
+            wait_until(
+                lambda: gd.drives_on(api, grid) == [False, False],
+                10,
+                f"{name}: both blocks off",
+            )
+            turned_off = True
+        except Exception as error:  # noqa: BLE001 -- the check below reports it
+            print(error, flush=True)
+            turned_off = False
+        check(f"the node turns both blocks of {name} off", turned_off)
 
         fastest_node = fastest_client = farthest = 0.0
         began = time.monotonic()
@@ -140,6 +152,11 @@ def run(bench) -> None:
         print(f"{name}: {json.dumps(result)}", flush=True)
         bench.record(name, result)
         check(f"{name} stays still on the nodes", fastest_node < gd.STILL, result)
+        check(
+            f"the client's view of {name} stays put",
+            farthest < gd.JOINED,
+            result,
+        )
         gd.leave(api)
         # The nodes report the fastest of a partition: a ship flying on doesn't blur the next one
         api.close_grid(grid)

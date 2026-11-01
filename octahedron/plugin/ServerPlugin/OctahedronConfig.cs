@@ -296,7 +296,7 @@ public class OctahedronConfig : PluginConfig
     }
 
     [BoolOption(
-        "Artificial mass and space balls don't react to gravity generators, on game version 1.210.* only. A block already in a field when this changes follows the new value once it leaves the field and comes back, or at the next server start.",
+        "Artificial mass and space balls don't react to gravity generators, and the server turns them off on a ship with one in a generator's field. On game version 1.210.* only.",
         Parent = "drives"
     )]
     public bool NoGravityDrivesEnabled

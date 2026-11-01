@@ -1,18 +1,20 @@
 """Gravity drives on the test server with the headless client (SE-881). The client pilots ships with a battery,
-a gravity generator (saved off) and either artificial mass or a space ball, in empty space, and turns the
-generator on. Server speeds come from the probe (tests/gravity-probe), the client's own view from Remote.
+a gravity generator (saved off) and two blocks of artificial mass or two space balls, in empty space, and turns
+the generator on. Server speeds come from the probe (tests/gravity-probe), the client's own view from Remote.
 
-- Stopped, the default: no ship gains speed on the server, and the log says the patch is on. This fails on
-  main, whose plugin has no patch. A ship with thrusters and the drive on flies and stops on the server as
-  with the drive off, and the client's view, which predicts the drive, rejoins the server's when it flies.
-- Moving, with --game-version X (another version than 1.210.*): the gate is off, the log says so and the
-  ships fly as in the game.
+- Stopped, the default: the server turns both blocks off and keeps them off, the generator stays on, no ship
+  gains speed on the server, the client's view stays with the server's, and the log says the patch is on. This
+  fails on main, whose plugin has no patch. A ship with thrusters and the drive on flies and stays stopped once
+  the dampeners stop it.
+- Moving, with --game-version X (another version than 1.210.*): the gate is off, the log says so, the blocks stay
+  on and the ships fly as in the game.
 
-Either way a character and a loose object in a generator's field get pulled, and a grid with artificial
-mass falls in a planet's natural gravity.
+A ship saved with its generator and mass on and nobody near gets them off too, when stopped. In every run:
+mass just outside a generator's small field stays on, as does mass on a static grid in a field, a character and
+a loose object in a field get pulled, and a grid with artificial mass falls in a planet's natural gravity.
 
-Ships nobody sits in aren't tested: a parked ship doesn't move when a client turns its generator on from
-outside, not on main either (2026-11-01), so such a test can't tell the patch from the game.
+Flying isn't tested on ships nobody sits in: a parked ship doesn't move when a client turns its generator on from
+outside, not on main either (2026-11-01), so it can't tell the patch from the game.
 
     OCT_TASK=SE-881 uv run --no-project --with httpx python tests/test_gravity_drive.py [--game-version 1.211.0]
 """
@@ -38,6 +40,7 @@ PROBE = (
 )
 GENERATOR = (0, 0, 2)
 DRIVE = (0, 0, 3)
+DRIVE_2 = (0, 0, 4)
 FIELD = 100
 # A working drive passes this within a few seconds
 MOVING = 5.0
@@ -61,7 +64,9 @@ LOOSE_OBJECT = (BASE + 6, (104_020, -300_000, 0))
 CHARACTER_AT = (104_000, -300_000, 20)
 FALLER = ("GD Faller", BASE + 7, (20_000, 13_000, 72_000))
 THRUST = ("GD Thrust", BASE + 8, (106_000, -300_000, 0))
-# The client's view rejoins the server's this close, normally 2 to 10 m
+PARKED = ("GD Parked", BASE + 9, (108_000, -300_000, 0))
+SMALL_FIELD = ("GD Small Field", BASE + 10, (110_000, -300_000, 0))
+# The client's view stays this close to the server's, normally 2 to 10 m
 JOINED = 20.0
 
 
@@ -79,6 +84,7 @@ def ship(name: str, entity_id, position, drive, **kwargs) -> str:
             ),
             generator(),
             rig.block(drive[0], drive[1], DRIVE, drive[2]),
+            rig.block(drive[0], drive[1], DRIVE_2, drive[2]),
         ],
         position,
         **kwargs,
@@ -121,14 +127,34 @@ def thrust_ship() -> str:
     )
 
 
-def generator() -> str:
+def generator(enabled: bool = False, field: int = FIELD) -> str:
     return rig.block(
         "MyObjectBuilder_GravityGenerator",
         "",
         GENERATOR,
-        "<Enabled>false</Enabled>"
-        f'<FieldSize x="{FIELD}" y="{FIELD}" z="{FIELD}" />'
+        f"<Enabled>{str(enabled).lower()}</Enabled>"
+        f'<FieldSize x="{field}" y="{field}" z="{field}" />'
         "<GravityAcceleration>9.81</GravityAcceleration>",
+    )
+
+
+def saved_on(name: str, entity_id: int, position, field: int) -> str:
+    """A ship saved with its generator on"""
+    return rig.grid(
+        name,
+        entity_id,
+        [
+            rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 0, 0)),
+            rig.block(
+                "MyObjectBuilder_BatteryBlock",
+                "LargeBlockBatteryBlock",
+                (0, 0, 1),
+                "<CurrentStoredPower>3</CurrentStoredPower>",
+            ),
+            generator(True, field),
+            rig.block(MASS[0], MASS[1], DRIVE, MASS[2]),
+        ],
+        position,
     )
 
 
@@ -150,6 +176,9 @@ def loose_object(entity_id: int, position) -> str:
 def world_grids() -> list[str]:
     grids = [ship(n, i, p, d) for n, (i, p, d) in PILOTED.items()]
     grids.append(thrust_ship())
+    grids.append(saved_on(*PARKED, FIELD))
+    # 3 m across, the mass's center is 2.5 m from the generator's
+    grids.append(saved_on(*SMALL_FIELD, 3))
     grids.append(
         rig.grid(
             PULL[0],
@@ -162,6 +191,7 @@ def world_grids() -> list[str]:
                     "<CurrentStoredPower>3</CurrentStoredPower>",
                 ),
                 generator(),
+                rig.block(MASS[0], MASS[1], DRIVE, MASS[2]),
             ],
             PULL[2],
         ).replace("<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>")
@@ -240,49 +270,61 @@ def watch(name: str, sample) -> dict:
     }
 
 
+def enabled(remote, entity_id: int, position) -> bool:
+    return remote.get_block(entity_id, position)["enabled"]
+
+
+def drives_on(remote, entity_id: int) -> list[bool]:
+    return [enabled(remote, entity_id, p) for p in (DRIVE, DRIVE_2)]
+
+
 def fly_with_thrusters(remote, check) -> None:
-    """With the drive on, the client's view strays while the server's grid sleeps. Thrust wakes the grid,
-    its states reach the client again, and when the dampeners stop it the drive doesn't push it on
-    """
+    """With the drive's blocks off the ship flies and stops as any other, and the client's view stays with the
+    server's, also once the server's grid sleeps"""
     name, entity_id, position = THRUST
     remote.character_teleport(position[0], position[1] + 30, position[2])
     wait_on_client(remote, entity_id)
     enter_cockpit(remote, entity_id)
     check(remote.get_character().get("state") == "sitting", f"pilot in {name}")
     remote.set_enabled(entity_id, GENERATOR, True)
+    farthest = [0.0]
 
     def apart() -> float:
-        return math.dist(remote.get_grid(entity_id)["position"], server()[name][1])
+        distance = math.dist(remote.get_grid(entity_id)["position"], server()[name][1])
+        farthest[0] = max(farthest[0], distance)
+        return distance
 
     try:
-        strayed = rig.wait_until(
-            lambda: (distance := apart()) > JOINED * 2 and distance,
-            30,
-            "the client's view straying",
-            interval=0.5,
+        rig.wait_until(
+            lambda: apart() >= 0 and not enabled(remote, entity_id, DRIVE),
+            10,
+            "the drive block off",
+            interval=0.2,
         )
-        log(f"{name}: the client's view strays {strayed:.0f} m from a parked ship")
         remote.set_input_state(keys=["W"])
         rig.wait_until(
-            lambda: server()[name][0] > MOVING, 20, "thrust on the server", interval=0.2
-        )
-        rig.wait_until(
-            lambda: apart() < JOINED, 10, "the client's view rejoining", interval=0.2
-        )
-        check(
-            True, f"{name} flies on thrust and the client's view rejoins the server's"
+            lambda: apart() >= 0 and server()[name][0] > MOVING,
+            20,
+            "thrust on the server",
+            interval=0.2,
         )
         remote.clear_input_state()
         rig.wait_until(
-            lambda: server()[name][0] < 0.5, 60, "the dampeners stopping it", interval=1
+            lambda: apart() >= 0 and server()[name][0] < 0.5,
+            60,
+            "the dampeners stopping it",
+            interval=0.5,
         )
-        # The grid sleeps then, the drive would have to wake it: not a moment's reading
-        time.sleep(3)
+        for _ in range(20):
+            apart()
+            time.sleep(0.5)
         check(server()[name][0] < 0.5, f"{name} stays stopped on the server, drive on")
     except TimeoutError as error:
         check(False, str(error))
     finally:
         remote.clear_input_state()
+    log(f"{name}: the client's view at most {farthest[0]:.1f} m from the server's")
+    check(farthest[0] < JOINED, f"{name}: the client's view stays with the server's")
     leave(remote)
 
 
@@ -348,14 +390,59 @@ def main() -> int:
         else:
             check(seen["fastest"] < STILL, f"{name} stays still on the server")
 
+    remote.character_teleport(
+        SMALL_FIELD[2][0], SMALL_FIELD[2][1] + 30, SMALL_FIELD[2][2]
+    )
+    wait_on_client(remote, SMALL_FIELD[1])
+    check(
+        enabled(remote, SMALL_FIELD[1], DRIVE)
+        and enabled(remote, SMALL_FIELD[1], GENERATOR),
+        "mass outside a generator's field stays on",
+    )
+    remote.character_teleport(PARKED[2][0], PARKED[2][1] + 30, PARKED[2][2])
+    wait_on_client(remote, PARKED[1])
+    check(
+        enabled(remote, PARKED[1], DRIVE) == moving
+        and enabled(remote, PARKED[1], GENERATOR),
+        f"a drive nobody sits in, at load: mass {'stays on' if moving else 'turned off'}",
+    )
+
     for name, (entity_id, position, _) in PILOTED.items():
         remote.character_teleport(position[0], position[1] + 30, position[2])
         wait_on_client(remote, entity_id)
         enter_cockpit(remote, entity_id)
         check(remote.get_character().get("state") == "sitting", f"pilot in {name}")
+        check(
+            drives_on(remote, entity_id) == [True, True], f"{name}: blocks on at first"
+        )
         remote.set_enabled(entity_id, GENERATOR, True)
+        if not moving:
+            try:
+                rig.wait_until(
+                    lambda: drives_on(remote, entity_id) == [False, False],
+                    10,
+                    f"{name}: both blocks off",
+                    interval=0.2,
+                )
+                check(True, f"{name}: the server turns both blocks off")
+                remote.set_enabled(entity_id, DRIVE, True)
+                time.sleep(1)
+                rig.wait_until(
+                    lambda: drives_on(remote, entity_id) == [False, False],
+                    10,
+                    f"{name}: the block off again",
+                    interval=0.2,
+                )
+                check(True, f"{name}: a block turned back on goes off again")
+            except TimeoutError as error:
+                check(False, str(error))
         seen = watch(name, lambda: remote.get_grid(entity_id))
         judge(name, seen)
+        check(enabled(remote, entity_id, GENERATOR), f"{name}: the generator stays on")
+        if moving:
+            check(
+                drives_on(remote, entity_id) == [True, True], f"{name}: blocks stay on"
+            )
         speeds = [view["speed"] for _, _, view in seen["views"]]
         offsets = [
             math.dist(position, view["position"]) for _, position, view in seen["views"]
@@ -363,6 +450,9 @@ def main() -> int:
         log(
             f"{name} on the client: fastest {max(speeds):.2f} m/s, last {speeds[-1]:.2f} m/s, "
             f"at most {max(offsets):.2f} m from the server's position, last {offsets[-1]:.2f} m"
+        )
+        check(
+            max(offsets) < JOINED, f"{name}: the client's view stays with the server's"
         )
         leave(remote)
 
@@ -394,6 +484,7 @@ def main() -> int:
     except TimeoutError as error:
         log(str(error))
     log(f"in the field: {fastest}")
+    check(enabled(remote, PULL[1], DRIVE), "mass on a static grid in a field stays on")
     check(fastest["GD Loose"] > PULLED, "the loose object gets pulled")
     check(fastest["GD Character"] > PULLED, "the character gets pulled")
 

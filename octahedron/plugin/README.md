@@ -192,20 +192,20 @@ already in a world keep what they have.
 
 With `NoGravityDrivesEnabled` on (the default), artificial mass and space ball blocks
 don't react to gravity generators, so a gravity drive doesn't move its ship. Characters,
-loose objects and natural gravity on grids work as before, and these blocks still add
-their mass to a grid.
+loose objects and natural gravity on grids work as before.
 
-The game's Warfare 3 update brings this as a world setting. Until then the rule applies
-on game version 1.210.* only; on any other version the patch isn't applied, and the log
+The server also turns these blocks off. When a working one on a ship is in the field of a
+working generator, on the same grid or another, all of them on that grid go off, within
+about 170 ms, and go off again if a player turns them back on. The generators stay on. A
+client has no patch and would otherwise fly its own copy of the ship while the server's
+grid sleeps: the pilot of a parked ship would see it creep away without limit. Static
+grids keep theirs, they can't move. The player gets no message, the server's log names the
+grid. An off block adds no mass to its grid.
+
+The game's Warfare 3 update brings the rule as a world setting. Until then it applies on
+game version 1.210.* only; on any other version the patches aren't applied, and the log
 says at load which way it went. [SE-882](https://tasks.cometworks.se/tasks/1769) removes
 it and turns the world setting on.
-
-It runs on the server, which decides where a ship is. A client doesn't have the patch and
-still applies the drive to its own copy of a ship it pilots. While the server's grid
-sleeps, it sends nothing that corrects this, so a pilot sitting in a parked ship with the
-drive on sees it creep away, at about 8 to 15 m/s and without limit. Thrust wakes the grid
-and the view is back within a second; so does leaving the seat, which puts the character
-where the server has the ship.
 
 ### PCU per ship or station
 
