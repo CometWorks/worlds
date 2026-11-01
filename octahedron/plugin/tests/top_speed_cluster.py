@@ -8,6 +8,11 @@ Speed config and the Trade Lanes mod. Same bench and world as wa_economy_cluster
 OCT_TRADE_LANES: the Trade Lanes mod to run, by default the Workshop's. TOP_SPEED_BLUEPRINTS: a folder holding
 copies of Viktor's two blueprints, which aren't in this repo. The copy that gets spawned has full tanks and
 batteries and its thrusters on (the small ship's blueprint was saved with all of them off).
+
+Run on polaris on 2026-11-01. With Trade Lanes before SE-807 it fails 2 of 10 checks, settled m/s on the client and
+on the nodes: small ship 131.8/131.2, large ship 104.8/104.7, character 370/370. With the fix, 10/10: small ship
+341.7/321.2, large ship 214.8/211.7, character 370/370. Pick a port base below 3300 in host.env: a node's control
+port is about 29,400 above it, and in the ephemeral range another connection can hold it, so the node aborts at start.
 """
 
 from __future__ import annotations
