@@ -204,6 +204,10 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     // grid never gets another contract, or a player could disown it and tow it in again for the pay.
     public readonly Dictionary<long, long> Given = new();
 
+    // Tows over the player's limits, grid to who and at which station, until the grid is gone. The
+    // node that holds the grid breaks it down.
+    public readonly Dictionary<long, (long Player, string Station)> Breakdowns = new();
+
     // Grids in offline partitions and since when, from the gateway; null while unknown, when nothing
     // can be said about a grid no report names
     public Dictionary<long, DateTime> Offline;
@@ -229,11 +233,12 @@ internal sealed class ContractBook(TimeSpan goneAfter)
         Targets
             .Values.Select(t => t.Grid)
             .Concat(Given.Where(g => g.Value != 0).Select(g => g.Key))
+            .Concat(Breakdowns.Keys)
             .Distinct();
 
     /// <summary>
     /// A node's rows. The answer, comma separated: "watched ids;ids to close;grid:player to give;
-    /// player:base64 text to tell".
+    /// player:base64 text to tell;grid:player:base64 station to break down".
     /// The orders go to every node; the one that holds the grid carries them out, after a handover
     /// the new one, and they repeat until a report shows it done.
     /// </summary>
@@ -263,7 +268,9 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             + ";"
             + string.Join(",", Given.Where(g => g.Value != 0).Select(g => $"{g.Key}:{g.Value}"))
             + ";"
-            + string.Join(",", Tells(node, now));
+            + string.Join(",", Tells(node, now))
+            + ";"
+            + string.Join(",", Breakdowns.Select(b => $"{b.Key}:{BreakdownText(b.Value)}"));
     }
 
     private IEnumerable<string> Tells(string node, DateTime now)
@@ -282,7 +289,8 @@ internal sealed class ContractBook(TimeSpan goneAfter)
         HashSet<long> Watched,
         List<long> Close,
         List<(long Grid, long Player)> Give,
-        List<(long Player, string Text)> Tell
+        List<(long Player, string Text)> Tell,
+        List<(long Grid, long Player, string Station)> BreakDown
     ) ParseAnswer(string answer)
     {
         static IEnumerable<long> Ids(string text) =>
@@ -309,7 +317,11 @@ internal sealed class ContractBook(TimeSpan goneAfter)
                 )
             )
             .ToList();
-        return (Ids(parts[0]).ToHashSet(), Ids(parts[1]).ToList(), give, tell);
+        var breakDown = parts[4]
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(ParseBreakdown)
+            .ToList();
+        return (Ids(parts[0]).ToHashSet(), Ids(parts[1]).ToList(), give, tell, breakDown);
     }
 
     /// <summary>
@@ -340,6 +352,8 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             row.Seen = now;
         foreach (var id in Given.Keys.Where(g => Given[g] != 0 && IsGone(g, now)).ToList())
             Given[id] = 0;
+        foreach (var id in Breakdowns.Keys.Where(g => IsGone(g, now)).ToList())
+            Breakdowns.Remove(id);
         var targeted = Watched.ToHashSet();
         foreach (
             var id in Grids
@@ -681,6 +695,26 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     /// <summary>The grid is to be given to the player by the node holding it.</summary>
     public void Give(long grid, long player) => Given[grid] = player;
 
+    // Given counts it as handled too: no contract and no other tow takes it now
+    public void BreakDown(long grid, long player, string station)
+    {
+        Given[grid] = 0;
+        Breakdowns[grid] = (player, station);
+    }
+
+    private static string BreakdownText((long Player, string Station) breakdown) =>
+        $"{breakdown.Player}:{Convert.ToBase64String(Encoding.UTF8.GetBytes(breakdown.Station))}";
+
+    private static (long Grid, long Player, string Station) ParseBreakdown(string text)
+    {
+        var p = text.Split(':');
+        return (
+            long.Parse(p[0], CultureInfo.InvariantCulture),
+            long.Parse(p[1], CultureInfo.InvariantCulture),
+            Encoding.UTF8.GetString(Convert.FromBase64String(p[2]))
+        );
+    }
+
     // --- saved in the world ---
 
     // contract:kind:grid:station:size:x:y:z:hunterSeen:owner:builder;...
@@ -734,6 +768,18 @@ internal sealed class ContractBook(TimeSpan goneAfter)
                 p[1],
                 CultureInfo.InvariantCulture
             );
+        }
+    }
+
+    public string SerializeBreakdowns() =>
+        string.Join(";", Breakdowns.Select(b => $"{b.Key}:{BreakdownText(b.Value)}"));
+
+    public void LoadBreakdowns(string text)
+    {
+        foreach (var entry in text.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var (grid, player, station) = ParseBreakdown(entry);
+            Breakdowns[grid] = (player, station);
         }
     }
 

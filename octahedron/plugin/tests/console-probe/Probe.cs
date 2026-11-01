@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using PluginSdk.Commands;
+using Sandbox.Game;
 using Sandbox.Game.Entities;
+using Sandbox.Game.EntityComponents;
 using Sandbox.Game.World;
 using VRage.Game;
 using VRage.Game.ModAPI;
@@ -26,6 +28,7 @@ namespace ConsoleProbe;
 /// Convert to Ship does, and are written to CONSOLEPROBE_PLAN.converted; on every process it is loaded on.
 /// Lines "tug grid player" in CONSOLEPROBE_PLAN.tow give the tug to the player and join it to the grid as a
 /// connector would, on the process holding the tug, and are written to CONSOLEPROBE_PLAN.towed.
+/// While the file CONSOLEPROBE_PLAN.air exists, suits stay charged and full on every process: long tests outlast them.
 /// </summary>
 public class Probe : IPlugin, ICommandResponder
 {
@@ -121,6 +124,18 @@ public class Probe : IPlugin, ICommandResponder
         if (convertPath == null || now < nextConvert || MySession.Static is not { Ready: true })
             return;
         nextConvert = now.AddSeconds(5);
+        if (File.Exists(planPathAll + ".air"))
+            foreach (var player in MySession.Static.Players.GetOnlinePlayers())
+                if (player.Character is { OxygenComponent: not null } character)
+                {
+                    character.OxygenComponent.SuitOxygenAmount = character
+                        .OxygenComponent
+                        .OxygenCapacity;
+                    character.SuitBattery.ResourceSource.SetRemainingCapacityByType(
+                        MyResourceDistributorComponent.ElectricityId,
+                        MyEnergyConstants.BATTERY_MAX_CAPACITY
+                    );
+                }
         if (!File.Exists(convertPath))
             return;
         foreach (var text in File.ReadAllLines(convertPath))

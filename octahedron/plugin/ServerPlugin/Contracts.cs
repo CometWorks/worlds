@@ -48,6 +48,7 @@ internal static class Contracts
     private const string VariableName = "Octahedron-Contracts";
     private const string GridsVariableName = "Octahedron-Contract-Grids";
     private const string GivenVariableName = "Octahedron-Contract-Given";
+    private const string BreakdownsVariableName = "Octahedron-Contract-Breakdowns";
     private const string ReportTopic = "contracts/report";
     private const double WitnessMeters = 5_000;
     private const double ShipyardSearchMeters = 3_000;
@@ -86,8 +87,6 @@ internal static class Contracts
     private static DateTime nextScout;
     private static DateTime nextScan;
     private static int reportsInFlight;
-    private static readonly TimeSpan RefusalEvery = TimeSpan.FromMinutes(5);
-    private static readonly Dictionary<long, DateTime> refused = new();
     private static HashSet<long> watched = [];
     private static IDisposable reportRegistration;
     private static ContractBook book;
@@ -189,6 +188,13 @@ internal static class Contracts
                 loaded.LoadGrids(grids, DateTime.UtcNow);
             if (MyAPIGateway.Utilities.GetVariable<string>(GivenVariableName, out var given))
                 loaded.LoadGiven(given);
+            if (
+                MyAPIGateway.Utilities.GetVariable<string>(
+                    BreakdownsVariableName,
+                    out var breakdowns
+                )
+            )
+                loaded.LoadBreakdowns(breakdowns);
         }
         catch (Exception e) when (e is FormatException or IndexOutOfRangeException)
         {
@@ -204,6 +210,7 @@ internal static class Contracts
         MyAPIGateway.Utilities.SetVariable(VariableName, book.SerializeTargets());
         MyAPIGateway.Utilities.SetVariable(GridsVariableName, book.SerializeGrids());
         MyAPIGateway.Utilities.SetVariable(GivenVariableName, book.SerializeGiven());
+        MyAPIGateway.Utilities.SetVariable(BreakdownsVariableName, book.SerializeBreakdowns());
     }
 
     // --- the grids: nodes report, the authority answers ---
@@ -261,13 +268,15 @@ internal static class Contracts
 
     private static void Apply(string answer)
     {
-        (watched, var close, var give, var tell) = ContractBook.ParseAnswer(answer);
+        (watched, var close, var give, var tell, var breakDown) = ContractBook.ParseAnswer(answer);
         foreach (var id in close)
             ContractGrids.Close(id);
         foreach (var (grid, player) in give)
             ContractGrids.Give(grid, player);
         foreach (var (player, text) in tell)
             MyVisualScriptLogicProvider.SendChatMessage(text, "Shipyard", player);
+        foreach (var (grid, player, station) in breakDown)
+            ContractGrids.BreakDown(grid, player, station);
     }
 
     private static void Serve()
@@ -678,13 +687,11 @@ internal static class Contracts
                         state.Scrap(target.Grid, now);
                     break;
                 case ContractVerdict.Give:
-                    // Refused, the contract stays open and the grid where it is
-                    if (Allows(state, state.Grids[target.Grid], hunter, now))
-                        if (system.TryFinishCustomContract(id))
-                        {
-                            state.Give(target.Grid, hunter);
-                            Plugin.Log.Info($"Contract {id}: grid {target.Grid} goes to {hunter}");
-                        }
+                    if (system.TryFinishCustomContract(id))
+                    {
+                        Hand(oct, state, state.Grids[target.Grid], hunter, now);
+                        Plugin.Log.Info($"Contract {id}: grid {target.Grid} goes to {hunter}");
+                    }
                     break;
                 case ContractVerdict.Fail:
                     system.TryFailCustomContract(id);
@@ -711,73 +718,58 @@ internal static class Contracts
         );
         foreach (var grid in towed)
         {
-            if (
-                !Near(grid.Tower, grid.Position, WitnessMeters)
-                || !Allows(state, grid, grid.Tower, now)
-            )
+            if (!Near(grid.Tower, grid.Position, WitnessMeters))
                 continue;
-            state.Give(grid.Id, grid.Tower);
+            Hand(oct, state, grid, grid.Tower, now);
             Plugin.Log.Info($"Towed in: grid {grid.Id} goes to {grid.Tower}");
         }
     }
 
-    // Whether the player may have the grid, against their PCU limit, counted over the whole cluster,
-    // and a ship's. Tells them either way.
-    private static bool Allows(ContractBook state, ContractGrid grid, long player, DateTime now)
+    // The player gets the grid, or over their PCU limit, counted over the whole cluster, or a ship's,
+    // the nearest station breaks it down for them
+    private static void Hand(
+        MyFaction oct,
+        ContractBook state,
+        ContractGrid grid,
+        long player,
+        DateTime now
+    )
     {
         var identity = MySession.Static.Players.TryGetIdentity(player);
-        if (identity == null)
-            return false;
-        var used = StarterShip.BuiltPcu(identity);
-        var limit = PcuLimitForTests ?? MyBlockLimits.GetMaxPCU(identity);
+        var used = identity == null ? 0 : StarterShip.BuiltPcu(identity);
+        var limit = PcuLimitForTests ?? (identity == null ? 0 : MyBlockLimits.GetMaxPCU(identity));
         var after = used + grid.Pcu;
+        void BreakDown(string why)
+        {
+            var station = oct.Stations.OrderBy(s => grid.Position.Distance(At(s.Position))).First();
+            state.Tell(player, $"\"{grid.Name}\" is too big to keep: {why}.", now);
+            state.BreakDown(grid.Id, player, station.Name);
+        }
         switch (ContractMath.Tow(grid.Pcu, used, limit, Config.GroupPcuLimit))
         {
             case ContractMath.TowResult.TooBig:
-                RefuseTow(
-                    state,
-                    grid,
-                    player,
-                    $"\"{grid.Name}\" stays as it is: it has {grid.Pcu:N0} PCU, and a ship may have at most {Config.GroupPcuLimit:N0}.",
-                    now
+                BreakDown(
+                    $"it has {grid.Pcu:N0} PCU, and a ship may have at most {Config.GroupPcuLimit:N0}"
                 );
-                return false;
+                break;
             case ContractMath.TowResult.OverLimit:
-                RefuseTow(
-                    state,
-                    grid,
-                    player,
-                    $"\"{grid.Name}\" stays as it is: with its {grid.Pcu:N0} PCU you would have {after:N0}, more than 10% over your limit of {limit:N0}.",
-                    now
+                BreakDown(
+                    $"with its {grid.Pcu:N0} PCU you would have {after:N0}, more than 10% over your limit of {limit:N0}"
                 );
-                return false;
+                break;
             case ContractMath.TowResult.TakeOverLimit:
                 state.Tell(
                     player,
                     $"\"{grid.Name}\" is yours. You now have {after:N0} PCU, over your limit of {limit:N0}: you can't build blocks until you are back under it.",
                     now
                 );
-                return true;
+                state.Give(grid.Id, player);
+                break;
             default:
                 state.Tell(player, $"\"{grid.Name}\" is yours.", now);
-                return true;
+                state.Give(grid.Id, player);
+                break;
         }
-    }
-
-    // For now a tow over the limits ends here: SE-840 breaks the grid down at the shipyard instead
-    private static void RefuseTow(
-        ContractBook state,
-        ContractGrid grid,
-        long player,
-        string text,
-        DateTime now
-    )
-    {
-        if (refused.TryGetValue(grid.Id, out var until) && now < until)
-            return;
-        refused[grid.Id] = now + RefusalEvery;
-        state.Tell(player, text, now);
-        Plugin.Log.Info($"Tow refused: grid {grid.Id} for {player}: {text}");
     }
 
     // The player or their faction owned or built the target when it was posted

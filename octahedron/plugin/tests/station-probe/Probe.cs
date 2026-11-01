@@ -10,6 +10,7 @@ using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.EntityComponents;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.SessionComponents;
 using Sandbox.Game.World;
@@ -240,13 +241,372 @@ public sealed class ProbeCommands : CommandModule
             : Hauler(free, Context.Caller.IdentityId, "Dock Hauler", items);
     }
 
+    private static IEnumerable<MyInventory> YardInventories(MyCubeGrid yard) =>
+        yard.GetFatBlocks<MyCargoContainer>()
+            .Cast<MyCubeBlock>()
+            .Concat(Beams(yard))
+            .Concat(yard.GetFatBlocks<MyShipConnector>())
+            .Select(b => b.GetInventory());
+
     [Command(
-        "yardtarget",
-        "Builds a ship to repair in the middle of the station's shipyard: a projector, a battery, an armor block at 30% and two more only in the projection: TARGET grid-id",
-        "!kprobe yardtarget <station>"
+        "yardload",
+        "Puts items into the shipyard's cargo containers, as a player would: LOADED amount",
+        "!kprobe yardload <station> <Type/Subtype> <amount>"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string YardTarget(string station)
+    public string YardLoad(string station, string item, string amount)
+    {
+        if (!MyDefinitionId.TryParse("MyObjectBuilder_" + item, out var id))
+            return $"BADITEM {item}";
+        var left = (MyFixedPoint)decimal.Parse(amount, CultureInfo.InvariantCulture);
+        foreach (var cargo in Yard(station).GetFatBlocks<MyCargoContainer>())
+        {
+            var inventory = cargo.GetInventory();
+            var fits = MyFixedPoint.Min(left, inventory.ComputeAmountThatFits(id));
+            if (fits <= 0)
+                continue;
+            inventory.AddItems(fits, MyObjectBuilderSerializer.CreateNewObject(id));
+            left -= fits;
+        }
+        return $"LOADED {amount} left {left}";
+    }
+
+    [Command(
+        "yardtake",
+        "Empties the inventories of the shipyard's containers, welders and connectors, as a player moving it all to their ship: TOOK items",
+        "!kprobe yardtake <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardTake(string station)
+    {
+        var count = 0;
+        foreach (var inventory in YardInventories(Yard(station)))
+            for (var i = inventory.GetItems().Count - 1; i >= 0; i--)
+            {
+                inventory.RemoveItemsAt(i);
+                count++;
+            }
+        return $"TOOK {count}";
+    }
+
+    [Command(
+        "yardstock",
+        "What the shipyard's containers, welders and connectors hold: STOCK item=amount ... ROOM m3",
+        "!kprobe yardstock <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardStock(string station)
+    {
+        var yard = Yard(station);
+        var stock = YardInventories(yard)
+            .SelectMany(i => i.GetItems())
+            .GroupBy(i => i.Content.GetObjectId().ToString().Replace("MyObjectBuilder_", ""))
+            .Select(g =>
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{g.Key}={g.Sum(i => (double)i.Amount):0.###}"
+                )
+            );
+        var room = yard.GetFatBlocks<MyCargoContainer>()
+            .Sum(c => (double)(c.GetInventory().MaxVolume - c.GetInventory().CurrentVolume));
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"STOCK {string.Join(" ", stock)} ROOM {room:0.###}"
+        );
+    }
+
+    [Command(
+        "yardoff",
+        "Switches the shipyard's connectors off: OFF count",
+        "!kprobe yardoff <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardOff(string station)
+    {
+        var connectors = Yard(station).GetFatBlocks<MyShipConnector>().ToList();
+        foreach (var connector in connectors)
+            connector.Enabled = false;
+        return $"OFF {connectors.Count}";
+    }
+
+    [Command(
+        "yardon",
+        "Switches the shipyard's connectors and welders on, as a world from before they start off has them: ON count",
+        "!kprobe yardon <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardOn(string station)
+    {
+        var yard = Yard(station);
+        var blocks = yard.GetFatBlocks<MyShipConnector>()
+            .Cast<MyCubeBlock>()
+            .Concat(Beams(yard))
+            .Cast<MyFunctionalBlock>()
+            .ToList();
+        foreach (var block in blocks)
+            block.Enabled = true;
+        return $"ON {blocks.Count}";
+    }
+
+    [Command("nodlc", "The server forgets the caller's DLCs: NODLC steam-id", "!sprobe nodlc")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string NoDlc()
+    {
+        var owned =
+            (Dictionary<ulong, HashSet<uint>>)
+                typeof(MySessionComponentDLC)
+                    .GetField(
+                        "m_clientAvailableDLCs",
+                        BindingFlags.Instance | BindingFlags.NonPublic
+                    )
+                    .GetValue(MySession.Static.GetComponent<MySessionComponentDLC>());
+        var steamId = MySession.Static.Players.TryGetSteamId(Context.Caller.IdentityId);
+        owned[steamId] = [];
+        return $"NODLC {steamId}";
+    }
+
+    [Command(
+        "dlc",
+        "How many of the game's DLCs the server says a player owns: DLC owned total",
+        "!sprobe dlc <player name>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Dlc(string player)
+    {
+        var steamId = MySession.Static.Players.TryGetSteamId(
+            MySession
+                .Static.Players.GetAllIdentities()
+                .First(i => i.DisplayName == player)
+                .IdentityId
+        );
+        var dlcs = MySession.Static.GetComponent<MySessionComponentDLC>();
+        var names = MyDLCs.DLCs.Values.Select(d => d.Name).ToList();
+        return $"DLC {names.Count(n => dlcs.HasDLC(n, steamId))} {names.Count}";
+    }
+
+    [Command(
+        "removegrid",
+        "Removes the grids of this name: REMOVED count",
+        "!kprobe removegrid <name with _ for spaces>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string RemoveGrid(string name)
+    {
+        name = name.Replace('_', ' ');
+        var grids = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .Where(g => g.DisplayName == name)
+            .ToList();
+        foreach (var grid in grids)
+            grid.Close();
+        return $"REMOVED {grids.Count}";
+    }
+
+    [Command(
+        "yardblocker",
+        "Builds a powered ship of the caller's with a cockpit in the middle of the shipyard, which the sweep leaves alone: BLOCKER grid-id",
+        "!kprobe yardblocker <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardBlocker(string station)
+    {
+        var yard = Yard(station);
+        var beams = Beams(yard).ToList();
+        var center = Vector3D.Zero;
+        foreach (var beam in beams)
+            center += beam.PositionComp.GetPosition();
+        center /= beams.Count;
+        long me = Context.Caller.IdentityId;
+        var battery = Block<MyObjectBuilder_BatteryBlock>(
+            "LargeBlockBatteryBlock",
+            new Vector3I(0, 0, 1),
+            me
+        );
+        battery.CurrentStoredPower = 3;
+        var grid = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = false,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = "Blocker",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                center,
+                (Vector3)yard.WorldMatrix.Forward,
+                (Vector3)yard.WorldMatrix.Up
+            ),
+            CubeBlocks =
+            [
+                Block<MyObjectBuilder_Cockpit>("LargeBlockCockpit", Vector3I.Zero, me),
+                battery,
+            ],
+        };
+        var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
+        return $"BLOCKER {entity.EntityId}";
+    }
+
+    [Command(
+        "yardwreck",
+        "Builds a wreck by the shipyard: 3 armor blocks, one at half its build, and a cargo container with the items: WRECK grid-id",
+        "!kprobe yardwreck <station> [Type/Subtype=amount,...] [in: in the build space | over: with more stone than the shipyard's containers hold | whole: no half block]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardWreck(
+        string station,
+        string items = "Ingot/Gold=100,Component/Motor=10",
+        string where = ""
+    )
+    {
+        var yard = Yard(station);
+        var position =
+            yard.PositionComp.WorldAABB.Center
+            + (
+                where == "in"
+                    ? Vector3D.Zero
+                    : yard.WorldMatrix.Up * (yard.PositionComp.LocalAABB.HalfExtents.Y + 30)
+            );
+        MyObjectBuilder_CubeBlock Armor(int z, float percent) =>
+            new()
+            {
+                SubtypeName = "LargeBlockArmorBlock",
+                Min = new Vector3I(0, 0, z),
+                BlockOrientation = new SerializableBlockOrientation(
+                    Base6Directions.Direction.Forward,
+                    Base6Directions.Direction.Up
+                ),
+                IntegrityPercent = percent,
+                BuildPercent = percent,
+            };
+        var grid = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = false,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = "Wreck",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                position,
+                (Vector3)yard.WorldMatrix.Forward,
+                (Vector3)yard.WorldMatrix.Up
+            ),
+            CubeBlocks =
+            [
+                Block<MyObjectBuilder_CargoContainer>("LargeBlockSmallContainer", Vector3I.Zero, 0),
+                Armor(1, 1),
+                Armor(2, 1),
+                Armor(3, where == "whole" ? 1 : 0.5f),
+            ],
+        };
+        // Just more stone than the shipyard has room for: a sale past 1,000,000 SC gives the player
+        // an achievement, and a client with no Steam crashes on that
+        var room = yard.GetFatBlocks<MyCargoContainer>()
+            .Sum(c => (double)(c.GetInventory().MaxVolume - c.GetInventory().CurrentVolume));
+        if (where == "over")
+            for (
+                var i = 0;
+                i < room / (421.875 * MySession.Static.BlocksInventorySizeMultiplier) + 1;
+                i++
+            )
+                grid.CubeBlocks.Add(
+                    Block<MyObjectBuilder_CargoContainer>(
+                        "LargeBlockLargeContainer",
+                        new Vector3I(3, 0, i * 3),
+                        0
+                    )
+                );
+        var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
+        var containers = entity.GetFatBlocks<MyCargoContainer>().ToList();
+        var stone = new MyDefinitionId(typeof(MyObjectBuilder_Ore), "Stone");
+        var left = (MyFixedPoint)(
+            (room + 5) / MyDefinitionManager.Static.GetPhysicalItemDefinition(stone).Volume
+        );
+        foreach (
+            var large in containers.Where(c =>
+                c.BlockDefinition.Id.SubtypeName == "LargeBlockLargeContainer"
+            )
+        )
+        {
+            var amount = MyFixedPoint.Min(left, large.GetInventory().ComputeAmountThatFits(stone));
+            large.GetInventory().AddItems(amount, MyObjectBuilderSerializer.CreateNewObject(stone));
+            left -= amount;
+        }
+        var cargo = containers
+            .First(c => c.BlockDefinition.Id.SubtypeName == "LargeBlockSmallContainer")
+            .GetInventory();
+        foreach (var pair in items.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f = pair.Split('=');
+            if (!MyDefinitionId.TryParse("MyObjectBuilder_" + f[0], out var id))
+                return $"BADITEM {f[0]}";
+            cargo.AddItems(
+                (MyFixedPoint)decimal.Parse(f[1], CultureInfo.InvariantCulture),
+                MyObjectBuilderSerializer.CreateNewObject(id)
+            );
+        }
+        return $"WRECK {entity.EntityId}";
+    }
+
+    [Command(
+        "yardtow",
+        "A wreck of an NPC faction by the shipyard, held by a tug of the caller's as by a connector, and the PCU limit a tow is judged by",
+        "!kprobe yardtow <station> <pcu limit>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardTow(string station, int limit)
+    {
+        var answer = YardWreck(station);
+        if (!answer.StartsWith("WRECK ", StringComparison.Ordinal))
+            return answer;
+        var grid = (MyCubeGrid)MyEntities.GetEntityById(long.Parse(answer.Substring(6)));
+        var npc = MySession
+            .Static.Factions.Select(f => f.Value)
+            .Where(f => f.Tag != "OCT" && f.Tag != "WRECKS" && f.IsEveryoneNpc())
+            .SelectMany(f => f.Members.Keys)
+            .First();
+        grid.ChangeGridOwnership(npc, MyOwnershipShareModeEnum.None);
+        var tug = (MyCubeGrid)
+            MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(
+                new MyObjectBuilder_CubeGrid
+                {
+                    EntityId = 0,
+                    GridSizeEnum = MyCubeSize.Large,
+                    IsStatic = false,
+                    PersistentFlags = MyPersistentEntityFlags2.InScene,
+                    DisplayName = "Tug",
+                    PositionAndOrientation = new MyPositionAndOrientation(
+                        grid.PositionComp.GetPosition() + grid.WorldMatrix.Left * 30,
+                        (Vector3)grid.WorldMatrix.Forward,
+                        (Vector3)grid.WorldMatrix.Up
+                    ),
+                    CubeBlocks =
+                    [
+                        Block<MyObjectBuilder_CargoContainer>(
+                            "LargeBlockSmallContainer",
+                            Vector3I.Zero,
+                            0
+                        ),
+                    ],
+                }
+            );
+        tug.ChangeGridOwnership(Context.Caller.IdentityId, MyOwnershipShareModeEnum.Faction);
+        MyCubeGrid.CreateGridGroupLink(GridLinkTypeEnum.Physical, tug.EntityId, tug, grid);
+        AppDomain
+            .CurrentDomain.GetAssemblies()
+            .Select(a => a.GetType("ServerPlugin.Contracts"))
+            .First(t => t != null)
+            .GetField("PcuLimitForTests", BindingFlags.NonPublic | BindingFlags.Static)
+            .SetValue(null, limit);
+        return answer;
+    }
+
+    [Command(
+        "yardtarget",
+        "Builds a ship to repair in the middle of the station's shipyard: a projector, a battery, an armor block at 30% and two more, or the given number, only in the projection: TARGET grid-id",
+        "!kprobe yardtarget <station> [projected blocks]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardTarget(string station, int projected = 2)
     {
         var yard = Yard(station);
         var beams = Beams(yard).ToList();
@@ -292,10 +652,14 @@ public sealed class ProbeCommands : CommandModule
                 (MyObjectBuilder_CubeBlock)projector.Clone(),
                 (MyObjectBuilder_CubeBlock)battery.Clone(),
                 Armor(2, 1),
-                Armor(3, 1),
-                Armor(4, 1),
             ],
         };
+        for (var i = 0; i < projected; i++)
+        {
+            var armor = Armor(3 + i / 8, 1);
+            armor.Min = new Vector3I(i % 8, 0, 3 + i / 8);
+            plan.CubeBlocks.Add(armor);
+        }
         foreach (var block in plan.CubeBlocks)
             block.EntityId = MyEntityIdentifier.AllocateId();
         projector.ProjectedGrids = [plan];
@@ -345,6 +709,9 @@ public sealed class ProbeCommands : CommandModule
         var beams = Beams(yard).ToList();
         var reactors = yard.GetFatBlocks<MyReactor>().Cast<MyCubeBlock>().ToList();
         var batteries = yard.GetFatBlocks<MyBatteryBlock>().Cast<MyCubeBlock>().ToList();
+        var refills = yard.GetFatBlocks<MyCubeBlock>()
+            .Where(b => b.BlockDefinition.Id.SubtypeName == "InsetRefillStation")
+            .ToList();
         var uranium = new MyDefinitionId(typeof(MyObjectBuilder_Ingot), "Uranium");
         var text =
             $"YARD {yard.EntityId} cargo={Summary(cargo)} welders={Summary(beams)} connectors={Summary(connectors)} "
@@ -352,8 +719,14 @@ public sealed class ProbeCommands : CommandModule
             + $"bigowner={string.Join(";", yard.BigOwners.Select(o => MySession.Static.Players.TryGetIdentity(o)?.DisplayName?.Replace(' ', '_')))} "
             + $"uranium={Count(reactors, i => (double)i.GetItemAmount(uranium))} "
             + $"elsewhere={Count(cargo.Concat(beams), i => (double)i.GetItemAmount(uranium))} "
-            + $"items={Count(cargo.Concat(beams), i => (double)i.GetItems().Sum(x => (double)x.Amount))} "
+            + $"items={Count(cargo.Concat(beams).Concat(connectors), i => (double)i.GetItems().Sum(x => (double)x.Amount))} "
             + $"connected={connectors.Count(c => c.Connected)} trading={connectors.Count(c => c.TradingEnabled)} "
+            + $"disabled={connectors.Count(c => !c.Enabled)} "
+            + $"connectorson={connectors.Count(c => c.Enabled)} "
+            + $"welderson={beams.Count(b => ((MyFunctionalBlock)b).Enabled)} "
+            + $"reactorson={reactors.Count(b => b.IsWorking)}/{reactors.Count} "
+            + $"batterieson={batteries.Count(b => b.IsWorking)}/{batteries.Count} "
+            + $"refill={refills.Count(b => b.IsWorking)}/{refills.Count} "
             + $"cell={cargo[0].Position.X},{cargo[0].Position.Y},{cargo[0].Position.Z} "
             + $"reactorcell={reactors[0].Position.X},{reactors[0].Position.Y},{reactors[0].Position.Z}";
         if (player != null)
@@ -365,7 +738,8 @@ public sealed class ProbeCommands : CommandModule
             bool All(IEnumerable<MyCubeBlock> blocks) =>
                 blocks.All(b => ((MyTerminalBlock)b).HasPlayerAccess(who));
             text +=
-                $" access cargo={All(cargo)} welders={All(beams)} connectors={All(connectors)} reactors={All(reactors)}";
+                $" access cargo={All(cargo)} welders={All(beams)} connectors={All(connectors)} reactors={All(reactors)} "
+                + $"refill={refills.All(b => b.GetUserRelationToOwner(who).IsFriendly())}";
         }
         return text;
     }
@@ -389,7 +763,7 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "info",
-        "A grid's blocks, complete blocks and the steel plates in its cargo: INFO id blocks full plates",
+        "A grid's blocks, complete blocks, steel plates in its cargo and owners: INFO id blocks full plates owners",
         "!kprobe info <grid id|grid name>"
     )]
     [Permission(MyPromoteLevel.Admin)]
@@ -406,7 +780,8 @@ public sealed class ProbeCommands : CommandModule
             .GetFatBlocks<MyCargoContainer>()
             .Sum(c => (double)c.GetInventory().GetItemAmount(plate));
         return $"INFO {found.EntityId} blocks={found.BlocksCount} "
-            + $"full={found.GetBlocks().Count(b => b.IsFullIntegrity)} plates={plates}";
+            + $"full={found.GetBlocks().Count(b => b.IsFullIntegrity)} plates={plates} "
+            + $"owners={string.Join(";", found.BigOwners)}";
     }
 
     [Command(
@@ -421,6 +796,30 @@ public sealed class ProbeCommands : CommandModule
             MyBankingSystem.ChangeBalance(Context.Caller.IdentityId, add);
         MyBankingSystem.Static.TryGetAccountInfo(Context.Caller.IdentityId, out var account);
         return $"BALANCE {account.Balance}";
+    }
+
+    [Command(
+        "air",
+        "Fills the suit oxygen and battery of everyone online, for a test longer than they last: AIR count",
+        "!sprobe air"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Air()
+    {
+        var count = 0;
+        foreach (var player in MySession.Static.Players.GetOnlinePlayers())
+        {
+            var character = player.Character;
+            if (character?.OxygenComponent == null)
+                continue;
+            character.OxygenComponent.SuitOxygenAmount = character.OxygenComponent.OxygenCapacity;
+            character.SuitBattery.ResourceSource.SetRemainingCapacityByType(
+                MyResourceDistributorComponent.ElectricityId,
+                MyEnergyConstants.BATTERY_MAX_CAPACITY
+            );
+            count++;
+        }
+        return $"AIR {count}";
     }
 
     [Command(
@@ -574,25 +973,6 @@ public sealed class ProbeCommands : CommandModule
         if (rank == "member" && faction.IsLeader(me))
             factions.DemoteMember(faction.FactionId, me);
         return "FACTION " + tag + " " + rank;
-    }
-
-    // A client on the test's transport owns them all, for the server; without any, as a Steam
-    // player without them. It lasts until the client joins again.
-    [Command("nodlc", "The caller owns no DLC", "!sprobe nodlc")]
-    [Permission(MyPromoteLevel.Admin)]
-    public string NoDlc()
-    {
-        var owned =
-            (Dictionary<ulong, HashSet<uint>>)
-                typeof(MySessionComponentDLC)
-                    .GetField(
-                        "m_clientAvailableDLCs",
-                        BindingFlags.Instance | BindingFlags.NonPublic
-                    )
-                    .GetValue(MySession.Static.GetComponent<MySessionComponentDLC>());
-        var steamId = MySession.Static.Players.TryGetSteamId(Context.Caller.IdentityId);
-        owned[steamId] = [];
-        return $"NODLC {steamId}";
     }
 
     [Command("whoami", "The caller's faction and rank: ME tag rank", "!sprobe whoami")]

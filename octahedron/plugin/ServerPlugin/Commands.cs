@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using PluginSdk.Commands;
+using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.World;
 using VRage.Game.ModAPI;
@@ -83,6 +84,45 @@ public sealed class Commands : CommandModule
             Context.Caller.IdentityId,
             table.Length == 0 ? null : string.Join(" ", table)
         );
+
+    [Command(
+        "shipyard done",
+        "Ends your turn at a shipyard now: what is left in its containers is sold to the station for you",
+        "!oct shipyard done: your turn would otherwise end by itself at its deadline, or once the containers are empty. "
+            + "A build must have ended first."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public string ShipyardDone() => ShipyardOrders.Done(Context.Caller.IdentityId);
+
+    [Command(
+        "shipyard tow",
+        "Breaks down a grid for you at a station's shipyard, as a tow over your limits does, for tests",
+        "!oct shipyard tow <station> <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ShipyardTow(string station, long grid)
+    {
+        if (!Stations.Find(ref station, out string error))
+            return error;
+        if (!MyEntities.TryGetEntityById(grid, out MyCubeGrid found) || found.MarkedForClose)
+            return $"No grid {grid} on this node.";
+        ShipyardOrders.Tow(station, Context.Caller.IdentityId, found);
+        return "The shipyard answers in chat.";
+    }
+
+    [Command(
+        "shipyard given",
+        "Gives you a grid as a tow does: a warning, and Sweep leaves it alone for a while, for tests",
+        "!oct shipyard given <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ShipyardGiven(long grid)
+    {
+        if (!MyEntities.TryGetEntityById(grid, out MyCubeGrid found) || found.MarkedForClose)
+            return $"No grid {grid} on this node.";
+        ShipyardOrders.GivenByTow(found, Context.Caller.IdentityId);
+        return "Done.";
+    }
 
     [Command("shipyards", "Lists the shipyards, their arm rotors and the builds running in them")]
     [Permission(MyPromoteLevel.Admin)]

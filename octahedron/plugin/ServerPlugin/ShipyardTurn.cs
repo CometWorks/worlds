@@ -11,10 +11,15 @@ namespace ServerPlugin;
 // with their faction, so they can dock a ship and the welders take components from it. Everything
 // else stays OCT's, the reactors most of all, whose uranium conveyors can't take out either. OCT
 // keeps most of the shipyard's blocks, so the grid stays its big owner and a shipyard.
+//
+// Without a turn the connectors and welders are off, and a free build turns on only the welders.
+// Cargo containers and terminals have no switch: OCT's ownership is what locks them, and with the
+// connectors off no conveyor reaches them either. Reactors, batteries and refill stations are
+// never touched here.
 internal static class ShipyardTurn
 {
-    // As the world has them between turns (SHIPYARD_SHARED in build_world.py)
-    private const MyOwnershipShareModeEnum IdleShare = MyOwnershipShareModeEnum.All;
+    // As the world has them between turns: OCT's faction only (SHIPYARD_SHARED in build_world.py)
+    private const MyOwnershipShareModeEnum IdleShare = MyOwnershipShareModeEnum.Faction;
 
     private static IEnumerable<MyCubeBlock> Blocks(MyCubeGrid shipyard) =>
         shipyard
@@ -22,17 +27,22 @@ internal static class ShipyardTurn
             .Where(b => b is MyCargoContainer or MyShipConnector)
             .Concat(ShipyardOrders.Beams(shipyard));
 
+    /// <summary>Hands the blocks to the player, shared with their faction and on. Connectors don't trade.</summary>
     public static void Give(MyCubeGrid shipyard, long player)
     {
+        ShipyardOrders.WakeBeams(shipyard);
         foreach (var block in Blocks(shipyard))
         {
             SetOwner(block, player, MyOwnershipShareModeEnum.Faction);
+            if (block is MyFunctionalBlock functional)
+                functional.Enabled = true;
             if (block is MyShipConnector connector)
-                connector.Enabled = true;
+                connector.TradingEnabled.Value = false;
         }
     }
 
-    // Every connector unlocks: a ship still docked floats free. Returns the grids that were docked.
+    // Every connector unlocks, a ship still docked floats free, and the blocks are OCT's and off.
+    // Returns the grids that were docked.
     public static List<MyCubeGrid> Take(MyCubeGrid shipyard)
     {
         var npc = Npc(shipyard);
@@ -47,6 +57,8 @@ internal static class ShipyardTurn
                 connector.TradingEnabled.Value = false;
             }
             SetOwner(block, npc, IdleShare);
+            if (block is MyFunctionalBlock functional)
+                functional.Enabled = false;
         }
         return docked;
     }

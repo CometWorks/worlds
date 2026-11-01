@@ -25,12 +25,12 @@ so the world's Trade Lane Computers would count.
 - A node restart keeps the contracts, and so does a graceful cluster stop and warm start, with the player's
   ownership and the memory of the given grid.
 
-- A derelict refused while the player is more than 10% over their limit: the contract stays open, then
-  finishes once they are back within it.
-- An NPC ship held by a player's tug at the shipyard, with no contract: refused over a ship's PCU limit
-  and more than 10% over the player's, with a chat message and the owner unchanged; then 5% over, the
-  player's with a warning, unpaid. The test's probe gives the tug and joins the grids as a connector would,
-  and sets the player's limit.
+- A derelict more than 10% over the player's limit at the shipyard: the contract pays and the grid is broken
+  down at once.
+- NPC ships held by a player's tug at the shipyard, with no contract: over a ship's PCU limit, with the turn from
+  that derelict still running, one is sold at once; more than 10% over the player's, with the shipyard free,
+  one is broken down; 5% over, the third is the player's with a warning, unpaid. The test's probe gives the
+  tug and joins the grids as a connector would, and sets the player's limit.
 
 Grinding down, repairing a wreck and the seated and claimed rules are checked in
 tests/contracts/ContractTests.
@@ -86,6 +86,9 @@ GRIDS = {
     "Player Tug": LARGE_ID + 14,
     "Towed Pirate": LARGE_ID + 15,
     "Zone Wreck": LARGE_ID + 16,
+    "Scrap Derelict": LARGE_ID + 30,
+    "Big Pirate": LARGE_ID + 31,
+    "Over Pirate": LARGE_ID + 32,
 }
 NEAR = (
     "Bounty Target",
@@ -94,6 +97,9 @@ NEAR = (
     "Derelict Arm",
     "Player Tug",
     "Towed Pirate",
+    "Scrap Derelict",
+    "Big Pirate",
+    "Over Pirate",
 )
 FAR = [name for name in GRIDS if name not in NEAR]
 STATOR, ROTOR = LARGE_ID + 12, LARGE_ID + 13
@@ -225,6 +231,27 @@ def add_grids() -> None:
             GRIDS["Towed Pirate"],
             rig.small_ship_blocks(SPRT_MEMBER),
             position=(sx + 200, sy - 400, sz),
+        ),
+        rig.grid(
+            "Big Pirate",
+            GRIDS["Big Pirate"],
+            rig.small_ship_blocks(SPRT_MEMBER),
+            position=(sx + 200, sy - 400, sz + 100),
+        ),
+        rig.grid(
+            "Over Pirate",
+            GRIDS["Over Pirate"],
+            rig.small_ship_blocks(SPRT_MEMBER),
+            position=(sx + 200, sy - 400, sz - 100),
+        ),
+        rig.grid(
+            "Scrap Derelict",
+            GRIDS["Scrap Derelict"],
+            [
+                rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 1, 0)),
+                *armor(30),
+            ],
+            position=(sx, sy - 2000, sz),
         ),
         rig.grid(
             "Yard Derelict",
@@ -440,7 +467,7 @@ def run(bench) -> None:
     # Three minutes on two nodes: 3 full reports each, one more at the edges of the window
     idle = reports_in(180)
     check("no target anywhere: only the full reports", idle <= 8, idle)
-    reconfigure(ContractBountiesPerStation=3, ContractSalvagePerStation=2)
+    reconfigure(ContractBountiesPerStation=5, ContractSalvagePerStation=2)
     found = post()
     bounty = named(found, "Bounty Target", "bounty")
     salvage = named(found, "Test Derelict", "salvage")
@@ -563,6 +590,7 @@ def run(bench) -> None:
     bench.wait_spawned(CLIENT_ID)
     identity = api.get_faction()["identityId"]
     check("the client has an identity", identity, identity)
+    Path(f"{wa.lc.PLAN}.air").touch()
 
     # Beside the derelict, so its partition is awake
     shipyard = position("Alpha Station Shipyard", sector)
@@ -578,20 +606,8 @@ def run(bench) -> None:
         balances(api) == before and not grid_owner("Test Derelict"),
         f"{balances(api)} owner {grid_owner('Test Derelict')}",
     )
-    # The radius grows instead of the grid moving: it is in reach now, but too much for the player
-    set_pcu_limit(1)
-    reconfigure(ContractSalvageRadius=3000)
-    over = chat('"Test Derelict" stays as it is: with its', 150)
-    check(
-        "more than 10% over the player's limit: refused, in chat, the contract open",
-        over
-        and named(contracts()[0], "Test Derelict", "salvage")[0][2] == "Active"
-        and balances(api) == before
-        and not grid_owner("Test Derelict"),
-        over,
-    )
-    # Back within the limit it goes on by itself
-    set_pcu_limit(1_000_000)
+    # The radius grows instead of the grid moving
+    reconfigure(ContractSalvageRadius=1500)
     now = paid(api, before, salvage[0][3])
     still_paid("salvage at the shipyard", before, now, salvage[0][3])
     holder = owner("Test Derelict")
@@ -612,6 +628,32 @@ def run(bench) -> None:
         not named(found, "Test Derelict"),
         found.get("Alpha Station"),
     )
+
+    # The same, too much for the player: the contract pays and the shipyard breaks the grid down
+    scrap = named(found, "Scrap Derelict", "salvage")
+    check(
+        "a salvage contract on the second derelict", scrap, found.get("Alpha Station")
+    )
+    api.character_teleport(shipyard[0], shipyard[1] - 1900, shipyard[2])
+    wait_until(lambda: owner("Scrap Derelict"), 180, "the second derelict awake")
+    before = balances(api)
+    reply = " ".join(command(f"!oct contract accept {scrap[0][0]} {identity}"))
+    check("take the second salvage contract", "Success" in reply, reply)
+    set_pcu_limit(1)
+    reconfigure(ContractSalvageRadius=2500)
+    over = chat('"Scrap Derelict" is too big to keep: with its', 150)
+    check("more than 10% over the player's limit: in chat", over, over)
+    still_paid(
+        "salvage broken down", before, paid(api, before, scrap[0][3]), scrap[0][3]
+    )
+    done = chat("'Scrap Derelict'", 90)
+    check(
+        "the shipyard breaks it down at once, the player's turn starts",
+        done and wait_until(lambda: not owner("Scrap Derelict"), 90, "the grid gone"),
+        done,
+    )
+    set_pcu_limit(1_000_000)
+    api.character_teleport(shipyard[0], shipyard[1] - 900, shipyard[2])
 
     # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
     reconfigure(ContractSalvageRadius=500)
@@ -647,40 +689,53 @@ def run(bench) -> None:
     check("complete the bounty", "finished" in reply, reply)
     still_paid("bounty", before, paid(api, before, bounty[0][3]), bounty[0][3])
 
-    # --- an NPC ship towed in, no contract, against the PCU limits ---
+    # --- NPC ships towed in, no contract, against the PCU limits ---
     # The limits come first: the first report with the tug in place decides
     reconfigure(GroupPcuLimit=1)
     bench.wait_spawned(CLIENT_ID)
     api.character_teleport(shipyard[0] + 100, shipyard[1] - 470, shipyard[2])
     wait_until(lambda: owner("Towed Pirate"), 180, "the pirate awake")
-    pirate = grid_owner("Towed Pirate")
-    before = balances(api)
-    Path(f"{wa.lc.PLAN}.tow").write_text(
-        f"{GRIDS['Player Tug']} {GRIDS['Towed Pirate']} {identity}\n"
-    )
+
+    def tow(name: str) -> None:
+        with Path(f"{wa.lc.PLAN}.tow").open("a") as plan:
+            plan.write(f"{GRIDS['Player Tug']} {GRIDS[name]} {identity}\n")
+
+    # The shipyard is still in the player's turn from the second derelict
+    tow("Big Pirate")
     check(
-        "the tug is the player's and holds the pirate",
+        "the tug is the player's and holds the ship",
         wait_until(lambda: grid_owner("Player Tug") == identity, 60, "the tug"),
         grid_owner("Player Tug"),
     )
-    too_big = chat("a ship may have at most", 150)
+    too_big = chat('"Big Pirate" is too big to keep: it has', 150)
+    sold = chat("'Big Pirate' was too big for you to keep", 90)
     check(
-        "over a ship's limit: refused, in chat",
-        too_big and grid_owner("Towed Pirate") == pirate,
-        too_big,
+        "over a ship's limit, the shipyard busy: all sold at once, in chat",
+        too_big
+        and "is busy" in sold
+        and wait_until(lambda: not owner("Big Pirate"), 90, "the grid gone"),
+        f"{too_big} {sold}",
     )
-    set_pcu_limit(1)
     reconfigure(GroupPcuLimit=60000)
-    # A refusal is repeated only every 5 minutes
-    over = chat('"Towed Pirate" stays as it is: with its', 400)
+    reply = " ".join(rig.chat(api, "!oct shipyard done", 10))
+    check("the turn ends by command", "Success" in reply or "turn" in reply, reply)
+    set_pcu_limit(1)
+    tow("Over Pirate")
+    over = chat('"Over Pirate" is too big to keep: with its', 150)
+    done = chat("'Over Pirate'", 90)
     check(
-        "more than 10% over the player's limit: refused, in chat",
-        over and grid_owner("Towed Pirate") == pirate,
-        over,
+        "more than 10% over the player's limit, the shipyard free: broken down at once",
+        over
+        and done
+        and wait_until(lambda: not owner("Over Pirate"), 90, "the grid gone"),
+        f"{over} {done}",
     )
-    # What they would have comes from that refusal: all the ledger and the game count
+    rig.chat(api, "!oct shipyard done", 10)
+    # What they would have comes from that message: all the ledger and the game count
     would_have = number(re.search(r"you would have ([\d,]+)", over)[1]) if over else 0
     set_pcu_limit(int(would_have / 1.05))
+    before = balances(api)
+    tow("Towed Pirate")
     warned = chat("you can't build blocks until", 150)
     check(
         "5% over: the player's, with a warning",
@@ -688,6 +743,8 @@ def run(bench) -> None:
         and warned,
         warned,
     )
+    moved = chat("out of the shipyard within", 60)
+    check("a warning to move it", moved, moved)
     check(
         "towed in without a contract: not paid", balances(api) == before, balances(api)
     )

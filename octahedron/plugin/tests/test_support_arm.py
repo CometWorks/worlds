@@ -7,7 +7,7 @@ table's button for an admin) and follows the build with !oct shipyards:
 
 - "dock" at Alpha Station: "ArmDock", a large grid ship with a connector at its back, an
   H2 tank and a battery, a paid build, its components and the ice for its hydrogen bought from
-  the Store's stock. The arm is placed as frames on a large arm rotor's head, with a connector; the
+  the Store's stock at the player's turn. The arm is placed as frames on a large arm rotor's head, with a connector; the
   projector is switched off until the welders complete it. The server restarts while the
   arm is built and picks the order up. When the ship is complete it docks to the arm's
   connector: the tank gets its 500,000 L, the battery is charged.
@@ -39,6 +39,7 @@ tests/arm/ArmTests, cover it), a cluster.
 from __future__ import annotations
 
 import math
+import functools
 import os
 import re
 import sys
@@ -208,9 +209,10 @@ def heavy(name: str, entity: int, count: int) -> tuple[str, int]:
     )
 
 
-# 2 of 33 plain blocks missing is delivered, 4 (over 10%) is not
+# 2 of 33 plain blocks missing is delivered, over 10% is not. The welders may finish a few
+# before the item is taken out, so 8 leaves more than 3 missing
 PARTIAL, PARTIAL_BLOCKS = heavy("ArmPartial", 777000693000400, 2)
-HEAVY, HEAVY_BLOCKS = heavy("ArmArmor", 777000693000600, 4)
+HEAVY, HEAVY_BLOCKS = heavy("ArmArmor", 777000693000600, 8)
 SCRAP, SCRAP_BLOCKS = large("ArmScrap", 777000693000500, False)
 # Ordered by an admin who ignores PCU limits: free although it is over the PCU cap and
 # has a blocked block, and still free and welded with the flag off once it started, as
@@ -238,7 +240,7 @@ STALLS = {
 # For the paid builds: OCT's stock of the components, and of the ice for 500,000 L of hydrogen
 BUILD_MONEY = 800_000
 STOCK = {
-    "Component/SteelPlate": 1500,
+    "Component/SteelPlate": 2500,
     "Component/Construction": 300,
     "Component/InteriorPlate": 200,
     "Component/LargeTube": 60,
@@ -247,7 +249,7 @@ STOCK = {
     "Component/Computer": 200,
     "Component/Display": 30,
     "Component/PowerCell": 120,
-    "Component/MetalGrid": 300,
+    "Component/MetalGrid": 400,
     "Component/BulletproofGlass": 30,
     "Component/Thrust": 200,
     "Ore/Ice": 25000,
@@ -279,6 +281,7 @@ def admin(remote, text: str, wait: float = 4.0) -> str:
     return reply
 
 
+@functools.cache
 def station_tables() -> dict[str, tuple[float, float, float]]:
     """Each station's hologram table, in the world: station name prefix -> position"""
     root = ET.parse(rig.WORLD / "SANDBOX_0_0_0_.sbs").getroot()
@@ -421,6 +424,7 @@ def order(remote, case: str) -> tuple:
         FreeBuildPcuLimit=0 if paid or exempt else 10000,
         ShipyardLaborFeePer100Pcu=LABOR_FEE,
         ShipyardTableMinutes=600,
+        ShipyardTopUpMinutes=0,
         ShipyardRepasteShips=(
             "false" if os.environ.get("OCT_REPASTE") == "0" else "true"
         ),
@@ -447,9 +451,14 @@ def order(remote, case: str) -> tuple:
             check("a free build" in reply, f"{case}: free with the flag: {reply}")
         reply = admin(remote, "!oct order", 8)
     check("is in the queue" in reply, f"{case}: ordered: {reply}")
+    if paid:
+        told = wait_chat(remote, "It is your turn", 60, mark)
+        check(told is not None, f"{case}: the player's turn: {told}")
+        admin(remote, "!oct order", 8)
     if case in ("scrap", "armor"):
+        bought = wait_chat(remote, "for what was missing", 60, mark)
         cost = re.search(
-            r"([\d,]+) SC for the components(?: and ([\d,]+) SC labor)? paid", reply
+            r"([\d,]+) SC for what was missing(?: and ([\d,]+) SC labor)? paid", bought
         )
         components = int(cost[1].replace(",", ""))
         fee = int((cost[2] or "0").replace(",", ""))
@@ -523,7 +532,7 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
             line is not None and ("docked" in line) == connector,
             f"{case}: the ship {'docks at the arm' if connector else 'gets the admin fill'}: {line}",
         )
-        line = wait_log(rf"'{ship}' of .* ended", 60)
+        line = wait_log(rf"'{ship}' of .* (ended|built or broken down)", 60)
         ready = line if line and f"'{ship}' is ready" in line else None
     else:
         line = watch_build(remote, case)
@@ -551,14 +560,20 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
             ready is not None and "left over" not in ready,
             f"{case}: a finished ship leaves nothing to sell: {ready}",
         )
+        end_turn(remote)
     lines = arms_gone(remote, case)
     check(
         not any(f"'{ship}'" in line for line in lines[1:]),
         f"{case}: no build left in the shipyard: {lines}",
     )
     if case == "exempt":
-        line = wait_log(rf"ignores PCU limits, no cool-down after '{ship}'", 10)
+        line = wait_log(rf"ignores PCU limits, no cool-down after '{ship}'", 60)
         check(line is not None, f"{case}: no cool-down with the flag off: {line}")
+
+
+def end_turn(remote) -> None:
+    """What a paid build leaves is sold now, and its shipyard is free"""
+    log(admin(remote, "!oct shipyard done", 8))
 
 
 def stall(remote, case: str, mark: int) -> None:
@@ -577,15 +592,19 @@ def stall(remote, case: str, mark: int) -> None:
         seen_by_client(remote, case)
     if case in ("scrap", "armor"):
         check(
-            ended is not None and "is paid back" in ended,
-            f"{case}: the build cost is paid back: {ended}",
+            ended is not None and "components are in the containers" in ended,
+            f"{case}: what was bought stays in the containers: {ended}",
         )
-        before, _ = BEFORE[case]
+        before, components = BEFORE[case]
         now = money(remote)
+        # The ice for the hydrogen was among what was bought; the ship never took it
+        ice = re.search(r"didn't take was sold for ([\d,]+) SC", ended or "")
+        spent = components - (int(ice[1].replace(",", "")) if ice else 0)
         check(
-            now["You"] == before["You"] and now["OCT"] == before["OCT"],
-            f"{case}: all of it is back from OCT: {before} -> {now}",
+            now["You"] == before["You"] - spent and now["OCT"] == before["OCT"] + spent,
+            f"{case}: the fee is back from OCT: {before} -> {now}",
         )
+    end_turn(remote)
     lines = arms_gone(remote, case)
     check(
         not any(f"'{ship}'" in line for line in lines[1:]),
@@ -691,13 +710,8 @@ def watch_build(remote, case: str) -> str | None:
     a client turned them off, SE-441). Returns the !oct shipyards line."""
     station, ship = CASES[case][:2]
     yard = shipyard_id(remote, station)
-    shooting = []
 
-    def projecting(line: str) -> bool:
-        shooting.append(shoots(remote, yard))
-        return "projector on" in line
-
-    line = follow(remote, case, projecting)
+    line = follow(remote, case, lambda line: "projector on" in line)
     if line is not None:
         arm = re.search(r"arm (\d+)/(\d+)", line)
         if "projector on" in line:
@@ -706,12 +720,11 @@ def watch_build(remote, case: str) -> str | None:
                 arm is not None and arm[1] == arm[2],
                 f"{case}: the arm is complete when the projector turns on: {line.strip()}",
             )
-            shooting.append(shoots(remote, yard))
-            seen = [x for x in shooting if x is not None]
-            check(
-                len(seen) > 0 and all(seen),
-                f"{case}: the client sees the shipyard's welders shoot: {shooting}",
-            )
+            # A free build turns the welders on first, and their switch a check of the build later
+            deadline = time.monotonic() + 25
+            while not (seen := shoots(remote, yard)) and time.monotonic() < deadline:
+                time.sleep(1)
+            check(seen, f"{case}: the client sees the shipyard's welders shoot: {seen}")
             return line
     check(False, f"{case}: the arm's projector turns on: {line}")
     return None
