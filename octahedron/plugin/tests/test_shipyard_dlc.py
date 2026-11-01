@@ -25,7 +25,7 @@ import test_shipyard_order as so  # noqa: E402
 NAME = "Dlc Test"
 DLC = [
     ("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlockWarfare2", (0, 1, 2)),
-    ("MyObjectBuilder_ButtonPanel", "LargeSciFiButtonPanel", (0, 1, 4)),
+    ("MyObjectBuilder_Reactor", "LargeBlockSmallGeneratorWarfare2", (0, 1, 4)),
 ]
 BLUEPRINT = rig.grid(
     NAME,
