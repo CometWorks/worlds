@@ -83,6 +83,7 @@ public class Plugin : IPlugin
             Builds.Update();
             HangarFee.Bind();
             Contracts.Update();
+            OfflineCharacters.Update();
         }
         catch (Exception e)
         {

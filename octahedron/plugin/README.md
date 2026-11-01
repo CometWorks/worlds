@@ -555,6 +555,48 @@ the state. `!oct payday` (admin) makes the hour's payout at once, `!oct taxday`
 collects the day's tax and closes the day at once. On a cluster node they answer that
 the rules run on the World Authority.
 
+### Offline characters
+
+A character left alive at a station with its player offline would keep its space
+credits out of reach of the wealth tax. After `OfflineCharacterMinutes` (15) offline,
+a player's character inside the bounding sphere of a trade station's grid is removed
+from the world. Standing or seated makes no difference, in a seat of the station or of a
+ship, a cryo chamber included, and the seat is left free. It is the character's own
+position that counts: outside the sphere it stays, even in a ship reaching into it, and
+so does a dead character. Coming back in time changes nothing and starts the time over.
+
+The space credits in its inventory go to the player's bank account without any tax, as
+they are the player's own money, and they are not kept as items. The rest of the
+inventory is kept in the world variable `Octahedron.OfflineCharacters`. The player's
+next character gets it on top of what it spawns with, past the inventory's limit if it
+has to, and a chat message says so. Only the inventory is kept: health, oxygen and
+hydrogen start as on any spawn.
+
+On a cluster the World Authority keeps the times and the inventories and pays the
+bank, and the node holding a body asks it what to do every 30 seconds. So it survives
+restarts and a player can come back on any node.
+
+- The node removes a body only once a recoverable global save holds its inventory and
+  deposit: the gateway names the newest one, as for the cluster's own durable commands,
+  and the plugin reads which save comes next from the cluster's insides, as a plugin's
+  global command doesn't wait for a save by itself. If those insides change, the World
+  Authority logs an error at its start and bodies stay. A body a dead node brings back is known by
+  its entity id: it goes without a second deposit. A player who gets into such a body
+  first finds it emptied within seconds and gets the kept inventory instead.
+- A new character gets a kept inventory only once a save knows it is on its way, so a
+  World Authority restored from an older save doesn't hand it out twice. Like every
+  other inventory change, what a node hasn't saved yet is lost if the node dies in the
+  minute after that.
+- A body usually goes offline with its partition 3 minutes after the player left, well
+  before its time is up. The World Authority then asks the gateway to load the
+  partition, a few a minute, for players it saw within 200 m of a station's position when
+  they left; the node goes by the sphere and leaves a body outside it where it is. Bodies
+  already there when this first runs have no such record: they wait for their partition
+  to load for another reason, or for their player.
+
+`!oct offline` (admin) shows on the server or the World Authority who was last online
+when, and every kept inventory.
+
 ### Station market
 
 With `MarketEnabled` on, each OCT station's Store block is its market: the game's
@@ -1208,6 +1250,12 @@ players' factions and no NPC ones ranked, a faction's cash, a docked ship's valu
 PCU against the game's block definitions and OCT's prices at every station, the station panels and their refresh, and how long a count of the
 world takes. `tests/leaderboard/leaderboard_cluster.py` checks it on a local test
 cluster with the World Authority and a node.
+`tests/offline-characters/ParkingTests` checks the bookkeeping of offline characters
+alone (`dotnet run -c Release --project tests/offline-characters/ParkingTests`).
+`tests/test_offline_characters.py` checks them with the client and the character probe
+in `tests/offline-characters/probe`, `tests/offline_characters_cluster.py` on a local
+test cluster: a partition load, a warm start, and a node or the World Authority killed
+right after the inventory is kept.
 `tests/test_hologram.py` takes screenshots of fitted holograms, a blueprint with
 a cockpit and one without, from the side, the front and above, on a bench of two
 tables in open space; it needs a rendering client.
