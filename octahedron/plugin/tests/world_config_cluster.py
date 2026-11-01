@@ -64,6 +64,8 @@ BINOCULARS_MODS = {2754014019: "Scope Framework", 2777644246: "Binoculars"}
 SOURCE = PLUGIN.parent / "config/octahedron.cfg"
 # Seconds from the nodes' start
 LOOT_LIMIT = 540
+# The Free Tools rule tops up every minute
+REFILL_LIMIT = 150
 
 
 def store_trade(api, probe, check) -> None:
@@ -200,10 +202,13 @@ def run(bench) -> None:
 
     # The Free Tools rule tops up every minute, and a client sees a container's inventory when near it
     api.character_teleport(*station)
-    time.sleep(90)
-    containers = api.find_nearby_blocks(
-        block_type="CargoContainer", max_distance=400, limit=100
-    )
+
+    def nearby_containers() -> list[dict]:
+        return api.find_nearby_blocks(
+            block_type="CargoContainer", max_distance=400, limit=100
+        )
+
+    containers = nearby_containers()
 
     def stock(name: str) -> tuple[int, dict[str, float]]:
         named = [
@@ -222,7 +227,24 @@ def run(bench) -> None:
         print(f"{name}: {len(named)} blocks, {items}", flush=True)
         return len(named), items
 
+    def topped_up(count: int, items: dict[str, float]) -> bool:
+        return (
+            count
+            and SUPPLIES <= set(items)
+            and items.get(BINOCULARS) == count
+            and all(
+                sum(items.get(f"{tool}{tier}Item", 0) for tier in ("", "2", "3", "4"))
+                == 3 * count
+                for tool in TOOLS
+            )
+        )
+
+    end = time.time() + REFILL_LIMIT
     count, items = stock("Free Tools")
+    while not topped_up(count, items) and time.time() < end:
+        time.sleep(5)
+        containers = nearby_containers()
+        count, items = stock("Free Tools")
     check(
         "refill: Free Tools has the supplies",
         count
@@ -268,11 +290,18 @@ def run(bench) -> None:
         binoculars(source)[0]["itemId"],
         1_000_000,
     )
-    time.sleep(90)
-    amounts = [
-        sum(item["amountRaw"] for item in binoculars(b)) // 1_000_000
-        for b in (source, target)
-    ]
+
+    def binocular_counts() -> list[int]:
+        return [
+            sum(item["amountRaw"] for item in binoculars(b)) // 1_000_000
+            for b in (source, target)
+        ]
+
+    end = time.time() + REFILL_LIMIT
+    amounts = binocular_counts()
+    while amounts != [1, 2] and time.time() < end:
+        time.sleep(5)
+        amounts = binocular_counts()
     check(
         "refill: taken binoculars come back, spare ones stay",
         amounts == [1, 2],
