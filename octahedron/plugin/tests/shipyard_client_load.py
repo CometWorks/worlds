@@ -113,19 +113,7 @@ def main() -> int:
         block = remote.get_block(ship, tuple(cockpit["min"]))
         xml = remote.get_object_builder(block["entityId"])
         refs = set(re.findall(r"<BlockEntityId>(\d+)", xml))
-        ids = set()
-        offset = 0
-        while True:
-            page = remote.list_blocks(ship, offset=offset, limit=50)
-            for item in page["blocks"]:
-                ids.add(str(remote.get_block(ship, tuple(item["min"]))["entityId"]))
-            offset += 50
-            if offset >= page["total"]:
-                break
-        check(
-            refs and refs <= ids,
-            f"cockpit {block['entityId']}: slots on {sorted(refs)}, off the ship: {sorted(refs - ids)}",
-        )
+        cockpit_id = block["entityId"]
         groups = remote.list_block_groups(ship)
         check(groups, f"groups: { {k: len(v) for k, v in groups.items()} }")
         print(
@@ -134,6 +122,13 @@ def main() -> int:
     finally:
         rig.stop_client()
         rig.stop_server()
+    # Slots may be on any of the ship's grids
+    sector, _ = so.saved()
+    ids = {e.text for e in sector.findall("./SectorObjects/*/CubeBlocks/*/EntityId")}
+    check(
+        refs and refs <= ids,
+        f"cockpit {cockpit_id}: slots on {sorted(refs)}, off the ship: {sorted(refs - ids)}",
+    )
     print("FAILED" if failed else "OK", flush=True)
     return 1 if failed else 0
 
