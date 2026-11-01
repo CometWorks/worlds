@@ -509,7 +509,7 @@ def wait_log(pattern: str, timeout: float) -> str | None:
                 return line.split("] ")[-1]
         if time.monotonic() > deadline:
             return None
-        time.sleep(10)
+        time.sleep(2)
 
 
 def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
