@@ -117,7 +117,7 @@ def without_limits() -> int:
     """Returns the player's identity id"""
     so.prepare(so.SMALL, 60)
     remote = fl.start()
-    tc.with_config(remote, FreeBuildPcuLimit=0)
+    tc.with_config(remote, FreeBuildPcuLimit=0, ShipyardTableMinutes=600)
 
     ignore_pcu(remote, False)
     paid_quote(remote, PCU_LIMIT)
@@ -133,7 +133,7 @@ def without_limits() -> int:
     ignore_pcu(remote, False)
     assert "ready in" in tc.ship_reply(remote), "the starter ship's cool-down"
     paid_quote(remote, PCU_LIMIT)
-    tc.with_config(remote)
+    tc.with_config(remote, ShipyardTableMinutes=600)
     free_quote(remote)
     fl.stop()
 

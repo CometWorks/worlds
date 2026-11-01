@@ -181,6 +181,10 @@ Dashboard, **Create Cluster**, **Create and deploy**:
    needs. The Octahedron plugin takes the values in `config/octahedron.cfg`:
    Deploy Octahedron stages them before the first start (`--wipe`), by hand
    the same editor does.
+   The Performance plugin takes `config/performance.cfg`, which runs programmable
+   block scripts on worker threads: Deploy Octahedron stages it on every update,
+   and its smoke check fails on a node that doesn't report the per-thread
+   instruction counter.
 5. **Start.** Watch the nodes come up on the cluster page.
 
 Then, once every node runs cluster 0.1.8 or later, raise the Gateway's

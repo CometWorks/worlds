@@ -251,7 +251,7 @@ def run(remote) -> None:
 
     # Zone chips: Moon only, a fixed price, topped up
     stand(remote, "Moon")
-    chip = row(remote, CHIP)
+    chip = shown(remote, CHIP, "OFFER", lambda r: r == (100, 1000))
     check(chip == (100, 1000), f"Moon sells chips: {chip}")
     check(row(remote, CHIP, "ORDER") is None, "and doesn't buy them")
     check("BUY Success" in trade(remote, "buy", CHIP, 2), "chips bought")

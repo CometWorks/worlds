@@ -544,6 +544,15 @@ def api() -> RemoteAPI:
     )
 
 
+def session_gone() -> bool:
+    """A client that quits doesn't tell the server, which notices by a timeout up to some
+    20 s later. One that joins before that gets kicked along with its old session"""
+    log = SERVER_LOG.read_text(errors="replace")
+    return log.rfind(f"World request received: {CLIENT_NAME}") <= log.rfind(
+        f"User left {CLIENT_NAME}"
+    )
+
+
 def start_client(
     timeout: float = 2400.0, render: bool = False, extra_dev_folders=(), connect=True
 ) -> RemoteAPI:
@@ -554,6 +563,8 @@ def start_client(
     if client_pid():
         raise RuntimeError("The test client is already running")
     prepare_client(extra_dev_folders)
+    if connect and server_pid():
+        wait_until(session_gone, 60, "the server to drop the client's last session")
     _start(
         [
             str(LAUNCHER),
@@ -639,26 +650,36 @@ def stop_client() -> None:
 
 
 def chat(remote: RemoteAPI, text: str, wait: float = 5.0) -> list[str]:
-    """Sends a chat line and returns the lines that came back: chat messages and,
-    for replies sent as scripted chat, new HUD chat lines"""
+    """Sends a chat line and returns the lines that came back: chat messages and, for
+    replies sent as scripted chat, new HUD chat lines. Returns a second after the last new
+    line, or after wait seconds if nothing came"""
     before = remote.get_chat_messages()
     seen = {
         (h.get("sender"), h.get("text"), h.get("timestamp"))
         for h in before.get("hud", [])
     }
     remote.send_chat(text)
-    time.sleep(wait)
-    after = remote.get_chat_messages(after=before.get("latest", 0))
-    lines = [
-        m.get("Text", "") for m in after.get("messages", []) if m.get("Text") != text
-    ]
-    lines += [
-        h.get("text", "")
-        for h in after.get("hud", [])
-        if (h.get("sender"), h.get("text"), h.get("timestamp")) not in seen
-        and h.get("text") != text
-    ]
-    return lines
+    deadline = time.monotonic() + wait
+    lines: list[str] = []
+    changed = 0.0
+    while True:
+        time.sleep(0.2)
+        after = remote.get_chat_messages(after=before.get("latest", 0))
+        got = [
+            m.get("Text", "")
+            for m in after.get("messages", [])
+            if m.get("Text") != text
+        ] + [
+            h.get("text", "")
+            for h in after.get("hud", [])
+            if (h.get("sender"), h.get("text"), h.get("timestamp")) not in seen
+            and h.get("text") != text
+        ]
+        now = time.monotonic()
+        if got != lines:
+            lines, changed = got, now
+        if now > deadline or (lines and now - changed >= 1):
+            return lines
 
 
 if __name__ == "__main__":
