@@ -62,7 +62,7 @@ CHARACTER_AT = (104_000, -300_000, 20)
 FALLER = ("GD Faller", BASE + 7, (20_000, 13_000, 72_000))
 
 
-def ship(name: str, entity_id: int, position, drive) -> str:
+def ship(name: str, entity_id, position, drive, **kwargs) -> str:
     return rig.grid(
         name,
         entity_id,
@@ -78,6 +78,7 @@ def ship(name: str, entity_id: int, position, drive) -> str:
             rig.block(drive[0], drive[1], (0, 0, 3), drive[2]),
         ],
         position,
+        **kwargs,
     )
 
 
@@ -308,11 +309,13 @@ def main() -> int:
     log(f"{FALLER[0]}: {falling:.2f} m/s")
     check(falling > MOVING, "a grid with artificial mass falls in natural gravity")
 
-    rig.stop_client()
-    rig.stop_server()
     log("PASS" if not failures else f"FAIL {len(failures)}: {failures}")
     return 1 if failures else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    finally:
+        rig.stop_client()
+        rig.stop_server()
