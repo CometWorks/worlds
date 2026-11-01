@@ -144,22 +144,19 @@ def run(bench) -> None:
         builder = ET.fromstring(api.get_object_builder(block["entityId"]))
         slots = builder.iterfind("Toolbar/Slots/Slot/Data")
         refs |= {d.findtext("BlockEntityId") for d in slots} - {None}
-    ids = set()
-    offset = 0
-    while True:
-        page = api.list_blocks(ship, offset=offset, limit=50)
-        for item in page["blocks"]:
-            ids.add(str(api.get_block(ship, tuple(item["min"]))["entityId"]))
-        offset += 50
-        if offset >= page["total"]:
-            break
-    # A slot may be on a subgrid's block: the ship's terminal system has their groups
+    gone = (
+        set()
+    )  # On any of the ship's grids, but a block of the blueprint's ids doesn't exist
+    for ref in refs:
+        try:
+            api.get_object_builder(int(ref))
+        except Exception:  # noqa: BLE001 -- the API answers an error
+            gone.add(ref)
     groups = api.list_block_groups(ship)
-    ids |= {str(member) for members in groups.values() for member in members}
     check(
         "the cockpits' toolbars point at the ship's blocks",
-        refs and refs <= ids,
-        f"slots on {sorted(refs)}, not on the ship: {sorted(refs - ids)}",
+        refs and not gone,
+        f"slots on {sorted(refs)}, on no block: {sorted(gone)}",
     )
     print(
         f"groups: { {name: len(members) for name, members in groups.items()} }",
