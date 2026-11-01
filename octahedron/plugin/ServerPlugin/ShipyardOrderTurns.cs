@@ -36,6 +36,9 @@ internal static partial class ShipyardOrders
     // Grids a tow just gave a player, and until when Sweep leaves them alone
     private static readonly Dictionary<long, DateTime> towGiven = new();
 
+    // The shipyards with something in their queue at its last answer
+    private static readonly HashSet<long> queued = [];
+
     // The orders to break a grid down repeat until the grid is gone: one at a time
     private static readonly HashSet<long> towing = [];
 
@@ -377,15 +380,7 @@ internal static partial class ShipyardOrders
     {
         if (!endingTurns.Add(order.Id))
             return;
-        foreach (var ship in ShipyardTurn.Take(shipyard).Distinct())
-        {
-            var owner = ship.BigOwners.FirstOrDefault();
-            var text =
-                $"'{ship.DisplayName}' floats free: the turn at {shipyard.DisplayName} is over and its connectors let go.";
-            Tell(order.Player, text);
-            if (owner != order.Player && owner != 0)
-                Tell(owner, text);
-        }
+        FloatFree(shipyard, order.Player);
         var taken = new List<(MyObjectBuilder_PhysicalObject Content, MyFixedPoint Amount)>();
         var left = new Dictionary<string, long>();
         foreach (var inventory in TurnInventories(shipyard))
@@ -428,6 +423,21 @@ internal static partial class ShipyardOrders
                 Refresh(order.Station);
             }
         );
+    }
+
+    // The blocks go back to OCT and off; the player and the owner of a ship still docked are told
+    private static void FloatFree(MyCubeGrid shipyard, long player)
+    {
+        foreach (var ship in ShipyardTurn.Take(shipyard).Distinct())
+        {
+            var owner = ship.BigOwners.FirstOrDefault();
+            var text =
+                $"'{ship.DisplayName}' floats free: the turn at {shipyard.DisplayName} is over and its connectors let go.";
+            if (player != 0)
+                Tell(player, text);
+            if (owner != player && owner != 0)
+                Tell(owner, text);
+        }
     }
 
     // Puts the items into the containers; returns what did not fit
