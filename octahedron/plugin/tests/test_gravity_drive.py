@@ -138,7 +138,7 @@ def world_grids() -> list[str]:
                     (0, 0, 1),
                     "<CurrentStoredPower>3</CurrentStoredPower>",
                 ),
-                rig.block(MASS[0], MASS[1], (0, 0, 3), MASS[2]),
+                rig.block(MASS[0], MASS[1], (0, 0, 2), MASS[2]),
             ],
             FALLER[2],
             velocity=(0, 0, -1),
@@ -236,10 +236,11 @@ def main() -> int:
     rig.ensure_character(remote)
     rig.wait_until(lambda: PULL[0] in server(), 60, "the probe's first lines")
 
-    logs = rig.server_game_log() + (rig.SERVER_CONFIG / "info.log").read_text(
-        errors="replace"
-    )
-    lines = [line for line in logs.splitlines() if "Gravity drive patch" in line]
+    lines = [
+        line
+        for line in rig.server_game_log().splitlines()
+        if "Gravity drive patch" in line
+    ]
     log(f"gate: {lines}")
     wanted = "not applied" if moving else "applied on"
     check(len(lines) == 1 and wanted in lines[0], f"the log says once: {wanted}")

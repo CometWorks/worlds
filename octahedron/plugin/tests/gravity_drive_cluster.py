@@ -71,10 +71,9 @@ def run(bench) -> None:
     cluster.wait_ready(nodes=list(PROCESSES))
 
     for process in PROCESSES:
-        logs = [
-            *(bench.run_root / f"{process}-magnetar").glob("info.log"),
-            *(bench.run_root / f"{process}-data").glob("SpaceEngineersDedicated_*.log"),
-        ]
+        logs = (bench.run_root / f"{process}-data").glob(
+            "SpaceEngineersDedicated_*.log"
+        )
         lines = [
             line
             for log in logs
@@ -104,9 +103,7 @@ def run(bench) -> None:
     for name, at, drive in SHIPS:
         path = wa.ROOT / f"{name.replace(' ', '')}.sbc"
         path.write_text(
-            tn.bp_document(
-                gd.ship(name, None, (0, 0, 0), drive, tag="CubeGrid")
-            ),
+            tn.bp_document(gd.ship(name, None, (0, 0, 0), drive, tag="CubeGrid")),
             encoding="utf-8",
         )
         query = urllib.parse.urlencode(
