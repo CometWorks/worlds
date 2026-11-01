@@ -1,7 +1,6 @@
-"""Gravity drives on the test server with the headless client (SE-881). Ships with a battery, a gravity
-generator (saved off) and either artificial mass or a space ball wait in empty space. Each is left alone,
-or piloted by the client, while its generator is turned on. Server speeds come from the probe
-(tests/gravity-probe), the client's own view from Remote.
+"""Gravity drives on the test server with the headless client (SE-881). The client pilots ships with a battery,
+a gravity generator (saved off) and either artificial mass or a space ball, in empty space, and turns the
+generator on. Server speeds come from the probe (tests/gravity-probe), the client's own view from Remote.
 
 - Stopped, the default: no ship gains speed on the server, and the log says the patch is on. This fails on
   main, whose plugin has no patch. A ship with thrusters and the drive on flies and stops on the server as
@@ -12,8 +11,8 @@ or piloted by the client, while its generator is turned on. Server speeds come f
 Either way a character and a loose object in a generator's field get pulled, and a grid with artificial
 mass falls in a planet's natural gravity.
 
-A resting artificial mass doesn't notice a generator turned on around it until something wakes it, in the
-game's own code too. So for the ships left alone the drive block goes off and on again after the generator.
+Ships nobody sits in aren't tested: a parked ship doesn't move when a client turns its generator on from
+outside, not on main either (2026-11-01), so such a test can't tell the patch from the game.
 
     OCT_TASK=SE-881 uv run --no-project --with httpx python tests/test_gravity_drive.py [--game-version 1.211.0]
 """
@@ -53,10 +52,6 @@ BALL = (
     "SpaceBallLarge",
     "<VirtualMass>20000</VirtualMass>",
 )
-LOOSE = {
-    "GD Loose Mass": (BASE + 1, (100_000, -300_000, 0), MASS),
-    "GD Loose Ball": (BASE + 2, (101_000, -300_000, 0), BALL),
-}
 PILOTED = {
     "GD Pilot Mass": (BASE + 3, (102_000, -300_000, 0), MASS),
     "GD Pilot Ball": (BASE + 4, (103_000, -300_000, 0), BALL),
@@ -153,7 +148,7 @@ def loose_object(entity_id: int, position) -> str:
 
 
 def world_grids() -> list[str]:
-    grids = [ship(n, i, p, d) for n, (i, p, d) in {**LOOSE, **PILOTED}.items()]
+    grids = [ship(n, i, p, d) for n, (i, p, d) in PILOTED.items()]
     grids.append(thrust_ship())
     grids.append(
         rig.grid(
@@ -224,7 +219,7 @@ def wait_on_client(remote, entity_id: int) -> None:
     rig.wait_until(there, 120, f"grid {entity_id} on the client")
 
 
-def watch(name: str, sample=None) -> dict:
+def watch(name: str, sample) -> dict:
     """Watches a ship with its drive on, until it clearly moves or the window ends"""
     start = server()[name][1]
     fastest = 0.0
@@ -233,8 +228,7 @@ def watch(name: str, sample=None) -> dict:
     while (elapsed := time.monotonic() - began) < WINDOW:
         speed, position = server()[name]
         fastest = max(fastest, speed)
-        if sample:
-            views.append((elapsed, position, sample()))
+        views.append((elapsed, position, sample()))
         if fastest > MOVING and elapsed > 3:
             break
         time.sleep(0.2)
@@ -353,14 +347,6 @@ def main() -> int:
             check(seen["fastest"] > MOVING, f"{name} flies on its drive")
         else:
             check(seen["fastest"] < STILL, f"{name} stays still on the server")
-
-    for name, (entity_id, position, _) in LOOSE.items():
-        remote.character_teleport(position[0] + 200, position[1], position[2])
-        wait_on_client(remote, entity_id)
-        remote.set_enabled(entity_id, GENERATOR, True)
-        remote.set_enabled(entity_id, DRIVE, False)
-        remote.set_enabled(entity_id, DRIVE, True)
-        judge(name, watch(name))
 
     for name, (entity_id, position, _) in PILOTED.items():
         remote.character_teleport(position[0], position[1] + 30, position[2])
