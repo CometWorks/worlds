@@ -1,10 +1,10 @@
 """The shipyard builds only the blocks of the DLCs the ordering player owns (SE-805). The shipyard's
 welders are the station's, which own no DLC.
 
-- A player without DLCs gets the ship without its DLC blocks, told so, and it is finished: no
-  component goes to a block it can't place.
-- A player owning them (!sprobe owndlc, as the server sees a Steam client that owns them) gets all
-  of the ship, welded by the same welders.
+- A player owning them, as the server sees this rig's client, gets all of the ship, welded by those
+  welders.
+- A player without them (!sprobe nodlc) gets the ship without its DLC blocks, told so, and it is
+  finished: no component goes to a block it can't place.
 
     uv run --no-project --with httpx python tests/test_shipyard_dlc.py
 """
@@ -69,9 +69,9 @@ def run(owned: bool) -> None:
     try:
         table = min(tc.tables(remote), key=lambda b: b["distance"])
         tc.stand_by(remote, table)
-        if owned:
-            reply = st.probe(remote, "owndlc")
-            check("OWNDLC" in reply, f"owns every DLC: {reply}")
+        if not owned:
+            reply = st.probe(remote, "nodlc")
+            check("NODLC" in reply, f"owns no DLC: {reply}")
         quote = tc.ship_reply(remote, "!oct order")
         check("Your quote for" in quote, f"quote: {quote}")
         check(
@@ -103,8 +103,8 @@ def run(owned: bool) -> None:
 if __name__ == "__main__":
     started = time.monotonic()
     try:
-        run(owned=False)
         run(owned=True)
+        run(owned=False)
     finally:
         rig.stop_client()
         rig.stop_server()

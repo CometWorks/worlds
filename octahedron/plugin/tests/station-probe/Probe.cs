@@ -576,18 +576,23 @@ public sealed class ProbeCommands : CommandModule
         return "FACTION " + tag + " " + rank;
     }
 
-    // As the game's own check sees a Steam player who owns them, without Steam
-    [Command("owndlc", "The caller owns every DLC from now on", "!sprobe owndlc")]
+    // A client on the test's transport owns them all, for the server; without any, as a Steam
+    // player without them. It lasts until the client joins again.
+    [Command("nodlc", "The caller owns no DLC", "!sprobe nodlc")]
     [Permission(MyPromoteLevel.Admin)]
-    public string OwnDlc()
+    public string NoDlc()
     {
-        var owned = (Dictionary<ulong, HashSet<uint>>)
-            typeof(MySessionComponentDLC)
-                .GetField("m_clientAvailableDLCs", BindingFlags.Instance | BindingFlags.NonPublic)
-                .GetValue(MySession.Static.GetComponent<MySessionComponentDLC>());
+        var owned =
+            (Dictionary<ulong, HashSet<uint>>)
+                typeof(MySessionComponentDLC)
+                    .GetField(
+                        "m_clientAvailableDLCs",
+                        BindingFlags.Instance | BindingFlags.NonPublic
+                    )
+                    .GetValue(MySession.Static.GetComponent<MySessionComponentDLC>());
         var steamId = MySession.Static.Players.TryGetSteamId(Context.Caller.IdentityId);
-        owned[steamId] = new HashSet<uint>(MyDLCs.DLCs.Keys);
-        return $"OWNDLC {steamId} {owned[steamId].Count}";
+        owned[steamId] = [];
+        return $"NODLC {steamId}";
     }
 
     [Command("whoami", "The caller's faction and rank: ME tag rank", "!sprobe whoami")]
