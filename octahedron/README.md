@@ -11,7 +11,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
-| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Performance plugin's options that differ from its defaults (`performance.cfg`) |
+| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Hangar plugin's options (`hangar.cfg`); the Performance plugin's options that differ from its defaults (`performance.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
 | `ORES.md` | ore statistics of `server/` |

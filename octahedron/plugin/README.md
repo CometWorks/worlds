@@ -758,6 +758,10 @@ after the game's economy tick).
 
 ### Hangar fee
 
+The cluster runs Hangar with `config/hangar.cfg`: a ship comes back only where it was saved, or at the nearest spot clear of the other
+grids' bounding spheres, so it counts as the same station and there is no fee. A ship the
+shipyard's deadline stored comes back outside the station.
+
 With Hangar 1.1.0 or later on the server, set to `AdminSafeZonesOnly`, players store
 and retrieve their ships only inside a station's safe zone, the world's only admin
 safe zones, and Hangar records the zone on each stored ship. A ship comes back free at
@@ -1320,6 +1324,9 @@ with the slot taken, a free ship just removed, a ship that left and came back mo
 grid, the same with Hangar off, and restarts in the wait and after a refund.
 `tests/shipyard_deadline_cluster.py` does it on a cluster: the node stores, another node loads,
 the World Authority refunds, over node restarts in the wait and a graceful stop.
+`tests/hangar_where_saved_cluster.py` checks `config/hangar.cfg` on a cluster: back at the
+saved spot from another node, at the nearest clear spot with another grid's sphere there on
+another node, and a ship from the deadline clear of the station.
 `tests/test_hangar_fee.py` checks the Hangar fee with the client and a Hangar working
 copy (`OCT_HANGAR_REPO`) on the server holding ships stored at the stations: a load
 outside the safe zones refused, the same station free, another station 100 SC for

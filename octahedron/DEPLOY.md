@@ -175,12 +175,13 @@ Dashboard, **Create Cluster**, **Create and deploy**:
 3. Quasar installs DS and Magnetar, stages the latest cluster release whose
    PluginSdk pin matches Magnetar, converts a copy of the world with
    MagnetarWorld, and leaves the cluster stopped.
-4. In the cluster's plugin configuration editor, set the plugin configs: Hangar
-   with `AdminSafeZonesOnly` on (ships are stored and retrieved only at the stations),
+4. In the cluster's plugin configuration editor, set the plugin configs:
    Multigrid Projector as its defaults suit, Essentials as the cluster
    needs. The Octahedron plugin takes the values in `config/octahedron.cfg`:
    Deploy Octahedron stages them before the first start (`--wipe`), by hand
    the same editor does.
+   Hangar takes `config/hangar.cfg`, which brings ships back only where they were
+   saved: Deploy Octahedron stages it on every update.
    The Performance plugin takes `config/performance.cfg`, which runs programmable
    block scripts on worker threads: Deploy Octahedron stages it on every update,
    and its smoke check fails on a node that doesn't report the per-thread
