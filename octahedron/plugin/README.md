@@ -669,6 +669,7 @@ Every minute the plugin fills each station up again:
   the partition has been online again. A row can't tell a seat in use, a safe zone or who
   built the grid: the node's report tells once the partition wakes, and the contract is
   withdrawn or, if it is the hunter's own disowned ship, fails.
+  A wreck from a row pays by the mass of its blocks, without cargo or tank fill.
   A static wreck pays by the mass of its blocks. It is done like a ship: ground
   down, or cut free of the voxels, converted to a ship and towed; only its big owner can
   convert a grid, so a static wreck that still has an owner needs that first.

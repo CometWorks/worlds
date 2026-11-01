@@ -7,7 +7,7 @@ The contracts are off while the far grids go offline at rest and everything else
 no report names any of them. They are on after the warm start, with only Alpha's shipyard woken. So these
 partitions went offline before the plugin ran and never woke since.
 
-- The rows: at rest and on a drain offer, the mass of movable and static grids, the group of a grid on a
+- The rows: at rest and on a drain offer, the blocks' mass of movable and static grids, the group of a grid on a
   rotor. A row read back from a Final save has only what a save can tell.
 - The armor wrecks at once. The hulls without power, and the group on a rotor as one contract, at 7.01 days.
   Rewards by the rows' mass. Never the live hull, a lane computer, a station or the row from a Final.
@@ -283,7 +283,7 @@ def run(bench) -> None:
         big, live, static = have["Wreck Big"], have["Live Hull"], have["Static Hull"]
         check(
             "at rest: an armor wreck's facts",
-            big["m"] > 0
+            big["m"] == 60 * 500
             and big["g"] == big["id"]
             and big["o"] == []
             and big["f"] is False
@@ -293,9 +293,9 @@ def run(bench) -> None:
         )
         check("a charged battery: powered", live["p"] is True, live)
         check(
-            "a static grid has its blocks' mass",
-            static["s"] and static["m"] > 0,
-            static,
+            "the same blocks, the same mass, movable or static",
+            live["m"] == static["m"] > 0 and live["s"] != static["s"],
+            (live["m"], static["m"]),
         )
         check(
             "a grid on a rotor: one physical group",
@@ -335,7 +335,7 @@ def run(bench) -> None:
             for n in ("Bounty Target", "Test Derelict", "Derelict Arm", SHIPYARD)
         }
         check(
-            "on a drain offer: the mass of movable and static grids",
+            "on a drain offer: the blocks' mass of movable and static grids",
             all(r and r["m"] > 0 for r in drained.values()),
             drained,
         )
