@@ -201,7 +201,11 @@ says at load which way it went. [SE-882](https://tasks.cometworks.se/tasks/1769)
 it and turns the world setting on.
 
 It runs on the server, which decides where a ship is. A client doesn't have the patch and
-predicts the drive's push for a ship it pilots until the server's state corrects it.
+still applies the drive to its own copy of a ship it pilots. While the server's grid
+sleeps, it sends nothing that corrects this, so a pilot sitting in a parked ship with the
+drive on sees it creep away, at about 8 to 15 m/s and without limit. Thrust wakes the grid
+and the view is back within a second; so does leaving the seat, which puts the character
+where the server has the ship.
 
 ### PCU per ship or station
 
@@ -1053,7 +1057,9 @@ Multigrid Projector and on without it, and the PCU cap per ship stopping it.
 `tests/test_group_pcu.py` runs the server alone too: a ship welder welding
 blocks to their functional level, two grids merging and a rotor attaching a
 head, each stopped by the cap, next to a copy built by nobody that isn't.
-`tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
+`tests/test_gravity_drive.py` pilots ships with a gravity drive, and
+`tests/gravity_drive_cluster.py` does on a cluster node, with the gate's other side
+behind `--game-version`. `tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
 with the client, welding them through shipyard orders, with the rule off too, and a
 test mod's turret whose definition has it on. It buys ships at a store block and
 respawns in one, through the tests/neutrals-probe plugin, and spawns one for an NPC,
