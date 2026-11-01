@@ -172,11 +172,12 @@ def to_edge(remote, offset: float) -> tuple[float, float]:
     center, radius, _ = sphere(remote)
     x = center[0] + radius + offset
     teleport(remote, x, center[1], center[2])
-    distance = rig.wait_until(
-        lambda: (d := sphere(remote)[2]) if abs(d - radius - offset) < 1 else None,
-        60,
-        "the body at the sphere's edge",
-    )
+
+    def there() -> float | None:
+        distance = sphere(remote)[2]
+        return distance if abs(distance - radius - offset) < 1 else None
+
+    distance = rig.wait_until(there, 60, "the body at the sphere's edge")
     return distance, radius
 
 
