@@ -664,7 +664,16 @@ Every minute the plugin fills each station up again:
   starts that time anew. No power means no battery with charge, no reactor or engine
   with fuel, and no working solar panel or wind turbine. That includes a player's ship
   or base, static or not. Stations, OCT's grids, Trade Lane Computers and a grid someone
-  sits in are never wrecks. A static wreck pays by the mass of its blocks. It is done like a ship: ground
+  sits in are never wrecks.
+  The plugin knows them from what nodes reported and, for a partition that went offline
+  without a report, from the rows the gateway keeps of it, by physical group, as they
+  were at the freeze (a cluster newer than 0.1.25; an older one has only the reports). A
+  row read back from a partition's save has too little to tell, so it is no wreck until
+  the partition has been online again. A row can't tell a seat in use, a safe zone or who
+  built the grid: the node's report tells once the partition wakes, and the contract is
+  withdrawn or, if it is the hunter's own disowned ship, fails.
+  A wreck from a row pays by the mass of its blocks, without cargo or tank fill.
+  A static wreck pays by the mass of its blocks. It is done like a ship: ground
   down, or cut free of the voxels, converted to a ship and towed; only its big owner can
   convert a grid, so a static wreck that still has an owner needs that first.
   Done when towed to the shipyard as above, which also gives the player the grid, or
