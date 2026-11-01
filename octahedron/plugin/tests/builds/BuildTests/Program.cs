@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using ServerPlugin;
 
 // Checks of the shipyard queues (ServerPlugin/Builds/BuildBook.cs) against a fake world with the
@@ -462,6 +463,95 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(old, "saved format: the ledgers' format is refused");
 }
 
+// A blueprint over a plugin message's 64 KiB goes up and down in parts, as Builds does (SE-805)
+{
+    const int MaxPayload = 64 * 1024;
+    var (w, m, market, b) = Setup();
+    // The size of the ship "Polaris Mk2 RC8 Recolored", and one ending on a part's boundary
+    foreach (int size in new[] { 212_920, 2 * BuildBook.BlueprintPartSize })
+    {
+        var blueprint = new string('Q', size - 1) + "z";
+        var parts = BuildBook.BlueprintParts(blueprint);
+        Check(string.Concat(parts) == blueprint, $"parts of {size}: all of it");
+        string id = "up" + size;
+        bool fit = true;
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var upload = new BuildRequest
+            {
+                Verb = BuildVerb.Upload,
+                Id = id,
+                Part = i,
+                Blueprint = parts[i],
+            };
+            fit &= Encoding.UTF8.GetByteCount(upload.Encode()) <= MaxPayload;
+            string uploaded = BuildRequest.Decode(upload.Encode()).Run(b, w, market, s);
+            Check(uploaded == "1", $"parts of {size}: part {i} kept");
+        }
+        var order = new BuildRequest
+        {
+            Verb = BuildVerb.Order,
+            Station = A,
+            Player = size,
+            Ship = "Big",
+            Id = id,
+            Part = parts.Count,
+        };
+        fit &= Encoding.UTF8.GetByteCount(order.Encode()) <= MaxPayload;
+        string answer = BuildRequest.Decode(order.Encode()).Run(b, w, market, s);
+        Check(answer.StartsWith("1\t"), $"parts of {size}: ordered: " + answer);
+        string orderId = b.Orders.First(o => o.Player == size).Id;
+        var got = new StringBuilder();
+        for (int i = 0; ; i++)
+        {
+            string down = new BuildRequest
+            {
+                Verb = BuildVerb.Download,
+                Id = orderId,
+                Part = i,
+            }.Run(b, w, market, s);
+            fit &= Encoding.UTF8.GetByteCount(down) <= MaxPayload;
+            Check(down.StartsWith("1\t"), $"parts of {size}: part {i} read");
+            got.Append(down, 2, down.Length - 2);
+            if (down.Length - 2 < BuildBook.BlueprintPartSize)
+                break;
+        }
+        Check(got.ToString() == blueprint, $"parts of {size}: the order has the blueprint");
+        Check(fit, $"parts of {size}: every message fits");
+        Check(
+            BuildBook.Deserialize(b.Serialize()).Get(orderId).Blueprint == blueprint,
+            $"parts of {size}: the blueprint is saved"
+        );
+    }
+    Check(BuildBook.BlueprintParts("").Single() == "", "parts: an empty blueprint is one part");
+    Check(
+        new BuildRequest { Verb = BuildVerb.Download, Id = "nothing" }.Run(b, w, market, s) == "0",
+        "parts: no blueprint without the order"
+    );
+    Check(!b.Upload(w.Now, "gap", 1, "x"), "parts: a part after a gap refused");
+    Check(b.Upload(w.Now, "short", 0, "x"), "parts: a first part kept");
+    string missing = new BuildRequest
+    {
+        Verb = BuildVerb.Order,
+        Station = B,
+        Player = 9,
+        Id = "short",
+        Part = 2,
+    }.Run(b, w, market, s);
+    Check(
+        missing.StartsWith("0\t") && !b.Orders.Any(o => o.Player == 9),
+        "parts: no order from an unfinished upload: " + missing
+    );
+    b.Upload(w.Now, "again", 0, "x");
+    b.Upload(w.Now, "again", 0, "y");
+    b.Upload(w.Now, "again", 1, "z");
+    Check(b.TakeUpload("again", 2) == "yz", "parts: a repeated part replaces itself");
+    Check(b.TakeUpload("again", 2) == null, "parts: an upload is taken once");
+    b.Upload(w.Now, "old", 0, "x");
+    b.Upload(w.Now + 601, "new", 0, "x");
+    Check(b.TakeUpload("old", 1) == null, "parts: an abandoned upload is dropped");
+}
+
 // The requests a node sends, and the book answering them
 {
     var (w, m, market, b) = Setup();
@@ -492,7 +582,16 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     string queue = new BuildRequest { Verb = BuildVerb.Queue, Station = A }.Run(b, w, market, s);
     Check(BuildBook.DecodeOrder(queue).Blueprint == "", "request: the queue without blueprints");
     string next = new BuildRequest { Verb = BuildVerb.Next, Station = A }.Run(b, w, market, s);
-    Check(BuildBook.DecodeOrder(next).Blueprint == "QUJD", "request: next with its blueprint");
+    Check(BuildBook.DecodeOrder(next).Blueprint == "", "request: next without its blueprint");
+    Check(
+        new BuildRequest { Verb = BuildVerb.Download, Id = BuildBook.DecodeOrder(next).Id }.Run(
+            b,
+            w,
+            market,
+            s
+        ) == "1\tQUJD",
+        "request: the blueprint of next"
+    );
     var exempt = new BuildRequest
     {
         Verb = BuildVerb.Order,
