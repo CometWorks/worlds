@@ -19,18 +19,18 @@ internal static class ShipyardAway
 {
     private const string TellTopic = "shipyard/tell";
 
-    private static bool patched;
+    private static bool kept;
     private static IDisposable teller;
 
     // The players with a running job here who aren't connected to this node
     private static readonly HashSet<ulong> away = [];
 
-    // The cluster's plugin may load after this one, so this waits for the first update
+    // The cluster's plugin may load after this one, so this waits for its services
     public static void Update()
     {
-        if (!patched)
+        if (!kept && Plugin.Cluster != null && PluginCluster.Current != null)
         {
-            patched = true;
+            kept = true;
             StayOnline();
         }
         if (
@@ -47,26 +47,37 @@ internal static class ShipyardAway
     // A cluster takes a partition offline once no player is within 8 km and its grids are at rest,
     // and a shipyard and the ship on it are static. Nothing runs there until someone comes back, so
     // a build would stop when its player leaves, and run out of its time. A shipyard with something
-    // in its queue is a reason to stay online, next to the cluster's own. The SDK has no way to say
-    // so, hence the name.
+    // in its queue is a reason to stay online, next to the cluster's own.
     private static void StayOnline()
     {
-        if (Plugin.Cluster == null)
+        // PluginSdk contract 1.1 with a cluster built on it. By name, because this has to compile
+        // on an older Magnetar too, where the fallback below is what keeps a job going.
+        var register = typeof(PluginClusterClient).GetMethod(
+            "RegisterOfflineBlocker",
+            [typeof(Func<long, string>)]
+        );
+        Func<long, string> blocker = id => ShipyardOrders.Busy(id) ? "shipyard" : null;
+        if (register?.Invoke(Plugin.Cluster, [blocker]) != null)
+        {
+            Plugin.Log.Info("Shipyard jobs keep their partition online with an offline blocker");
             return;
-        var blocker = AccessTools
+        }
+
+        var method = AccessTools
             .TypeByName("ClusterPlugin.PartitionPersistence")
             ?.GetMethod("OfflineMemberBlocker", BindingFlags.Static | BindingFlags.NonPublic);
-        if (blocker == null)
+        if (method == null)
         {
             Plugin.Log.Warning(
-                "No OfflineMemberBlocker in the cluster's plugin: shipyard jobs stop when their partition goes offline"
+                "No offline blocker in this cluster: shipyard jobs stop when their partition goes offline"
             );
             return;
         }
         new Harmony(Plugin.Name + ".ShipyardAway").Patch(
-            blocker,
+            method,
             postfix: new HarmonyMethod(typeof(ShipyardAway), nameof(Blocker))
         );
+        Plugin.Log.Info("Shipyard jobs keep their partition online with a patch of this older cluster");
     }
 
     private static void Blocker(MyEntity entity, ref string __result)
