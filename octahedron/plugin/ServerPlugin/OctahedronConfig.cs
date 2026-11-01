@@ -15,6 +15,7 @@ namespace ServerPlugin;
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
+[Section("offlineCharacters", caption: "Offline Characters")]
 [Section("hangar", caption: "Hangar")]
 [Section("drops", caption: "Container Drops")]
 [Section("encounters", caption: "Encounters")]
@@ -353,6 +354,19 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 5;
+
+    [IntOption(
+        0,
+        description: "Minutes a player's character may stay alive at a station with the player offline. Then its inventory is kept in the world, "
+            + "on a cluster on the World Authority, its space credits go to the player's bank account, it is removed, and the player's next character gets the "
+            + "inventory. 0 leaves them there.",
+        Parent = "offlineCharacters"
+    )]
+    public int OfflineCharacterMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 15;
 
     [IntOption(
         0,

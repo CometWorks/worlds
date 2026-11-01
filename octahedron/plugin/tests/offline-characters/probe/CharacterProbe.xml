@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<PluginData
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="GitHubPlugin"
+>
+  <!-- Test-only server plugin of the offline characters test. Never published to a hub. -->
+  <Id>7A2D4E10-8F36-4C51-B7A9-1D3E5F1736AA</Id>
+  <RepoId>CometWorks/worlds</RepoId>
+  <FriendlyName>Character Probe</FriendlyName>
+  <Author>CometWorks</Author>
+  <Tooltip>Admin commands that fill, read and seat a character, for the offline characters test</Tooltip>
+  <Commit>TODO Git commit hash</Commit>
+</PluginData>
