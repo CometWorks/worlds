@@ -87,13 +87,22 @@ def blocked(a, blueprint: str = tu.NEXT) -> tuple[str | None, tuple]:
     return tp.wait_chat(a, "blocks the next order", 40, mark), mark
 
 
-def next_goes_on(a, mark) -> None:
-    """The order behind it gets its turn, which ends here"""
-    told = tp.wait_chat(a, "It is your turn", 60, mark)
-    check(told is not None, f"the waiting order goes on: {told}")
-    rig.chat(a, "!oct shipyard done", 4)
-    tu.free_at_end(a, "the waiting order")
+def end_waiting(a, what: str) -> None:
+    """The order behind the ship gets its turn, the next check after a start at the latest, which ends here"""
+    ended = tu.wait_for(
+        lambda: "Your turn ends now" in " ".join(rig.chat(a, "!oct shipyard done", 4)),
+        90,
+        5,
+    )
+    check(ended, f"{what}: the waiting order goes on")
+    tu.free_at_end(a, what)
     tr.remove(a)
+
+
+def next_goes_on(a, mark) -> None:
+    told = tp.wait_chat(a, "It is your turn", 60, mark)
+    check(told is not None, f"the waiting order is told: {told}")
+    end_waiting(a, "the waiting order")
 
 
 def into_hangar(a) -> None:
@@ -239,9 +248,7 @@ def restart_in_wait(a):
     check(tu.wait_for(lambda: not ship_here(a), 15, 1), "the ship is gone")
     check(hangar(a).count(SHIP) == 1, "one entry")
     check(tu.money(a) == balance, f"nothing of the {paid} SC is paid")
-    rig.chat(a, "!oct shipyard done", 4)
-    tu.free_at_end(a, "after the restart")
-    tr.remove(a)
+    end_waiting(a, "after the restart")
 
     paid = leave_paid(a)
     balance = tu.money(a)
@@ -254,9 +261,7 @@ def restart_in_wait(a):
     )
     check(tu.wait_for(lambda: not ship_here(a), 15, 1), "the ship is gone")
     check(hangar(a).count(SHIP) == 1, "the Hangar is as it was")
-    rig.chat(a, "!oct shipyard done", 4)
-    tu.free_at_end(a, "after the refund")
-    tr.remove(a)
+    end_waiting(a, "after the refund")
     a = sa.restart(a)
     sa.at_table(a, STATION)
     check(

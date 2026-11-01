@@ -852,7 +852,7 @@ internal static partial class ShipyardOrders
                     $"Shipyard {shipyard.DisplayName}: '{name}' can't go into a Hangar, moving it out: {error}"
                 );
                 blockers.Remove(shipyard.EntityId);
-                MoveOut(shipyard, obstacle);
+                MoveOut(shipyard, obstacle, ship.Player);
                 return;
             }
             refunds[ship.Grid] = Guid.NewGuid();
@@ -902,7 +902,8 @@ internal static partial class ShipyardOrders
         );
     }
 
-    private static void MoveOut(MyCubeGrid shipyard, MyCubeGrid obstacle)
+    // orderer: who ordered the grid, told as well as its owner
+    private static void MoveOut(MyCubeGrid shipyard, MyCubeGrid obstacle, long orderer = 0)
     {
         var box = BoundingBoxD.CreateInvalid();
         foreach (var node in MyCubeGridGroups.Static.Physical.GetGroup(obstacle).Nodes)
@@ -928,10 +929,11 @@ internal static partial class ShipyardOrders
         Plugin.Log.Info(
             $"Shipyard {shipyard.DisplayName}: '{obstacle.DisplayName}' moved out of the build space, to {target.Value}"
         );
-        if (obstacle.BigOwners.FirstOrDefault() is var owner and not 0)
-            Tell(
-                owner,
-                $"'{obstacle.DisplayName}' was moved out of {shipyard.DisplayName}: the next order was waiting."
-            );
+        var text =
+            $"'{obstacle.DisplayName}' was moved out of {shipyard.DisplayName}: the next order was waiting.";
+        if (orderer != 0)
+            Tell(orderer, text);
+        if (obstacle.BigOwners.FirstOrDefault() is var owner and not 0 && owner != orderer)
+            Tell(owner, text);
     }
 }

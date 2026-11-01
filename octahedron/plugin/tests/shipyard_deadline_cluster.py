@@ -292,6 +292,9 @@ def run(bench) -> None:
     home = wait_until(where, 120, "the client's partition")
     away = NODES[1 - NODES.index(home)]
 
+    # A reused run folder keeps the shared storage
+    until(lambda: "empty" in hangar(api, "remove 1"), 30, 1)
+
     # --- stored by the node, over a node restart in the wait, counted once ---
     paid = leave_ship(api)
     owned = until(lambda: pcu(api))
