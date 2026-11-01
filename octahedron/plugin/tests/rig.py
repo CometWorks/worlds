@@ -447,7 +447,7 @@ def start_server(timeout: float = 2400.0, env: dict | None = None) -> None:
     deadline = time.monotonic() + timeout
     while "Game ready" not in SERVER_LOG.read_text(errors="replace"):
         time.sleep(2)
-        # Twice: during an exec of run-test.sh's chain the process has no command line to read
+        # Twice: a read during an exec in run-test.sh's chain may find no command line
         if server_pid() is None:
             time.sleep(1)
             if server_pid() is None:
