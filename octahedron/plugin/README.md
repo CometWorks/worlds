@@ -1313,6 +1313,13 @@ from the World Authority in parts; `tests/mech_blueprint.py bp.sbc big` writes a
 that needs them and still builds fast.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
+`tests/test_shipyard_deadline.py` checks a ship left in the build space past
+`ShipyardClearMinutes`, with a Hangar working copy (`OCT_HANGAR_REPO`) on the server: stored
+for its orderer and counted once in their PCU, free to load at the station, removed and refunded
+with the slot taken, a free ship just removed, a ship that left and came back moved out as any
+grid, the same with Hangar off, and restarts in the wait and after a refund.
+`tests/shipyard_deadline_cluster.py` does it on a cluster: the node stores, another node loads,
+the World Authority refunds, over node restarts in the wait and a graceful stop.
 `tests/test_hangar_fee.py` checks the Hangar fee with the client and a Hangar working
 copy (`OCT_HANGAR_REPO`) on the server holding ships stored at the stations: a load
 outside the safe zones refused, the same station free, another station 100 SC for

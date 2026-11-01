@@ -312,7 +312,11 @@ def run(bench) -> None:
         told,
     )
     api = restart_here(api)
-    check("the ship is still there after the restart", until(lambda: here(api), 60))
+    # The client can take longer to come back than the wait that starts over on the node
+    check(
+        "the ship isn't lost in the restart",
+        until(lambda: here(api) or SHIP in hangar(api), 60),
+    )
     check("stored by the node", until(lambda: SHIP in hangar(api), CLEAR * 60 + 120, 5))
     check("gone from the world", until(lambda: not here(api), 30))
     check("one entry", hangar(api).count(SHIP) == 1)
