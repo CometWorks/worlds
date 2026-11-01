@@ -141,6 +141,9 @@ def run(bench) -> None:
         bench.record(name, result)
         check(f"{name} stays still on the nodes", fastest_node < gd.STILL, result)
         gd.leave(api)
+        # The nodes report the fastest of a partition: a ship flying on doesn't blur the next one
+        api.close_grid(grid)
+        wait_until(lambda: node_speed(bench) < gd.STILL, 60, f"{name} gone")
 
 
 def main() -> int:
