@@ -43,8 +43,8 @@ def check(ok, what):
 prepare_client = rig.prepare_client
 
 
-def client_with_mgp():
-    prepare_client()
+def client_with_mgp(extra_dev_folders=()):
+    prepare_client(extra_dev_folders)
     legacy = rig.PULSAR / "Legacy"
     if MODE == "mgp":
         (legacy / "Profiles" / "Current.xml").write_text(
@@ -79,6 +79,9 @@ def main() -> int:
     remote = rig.start_client()
     try:
         rig.ensure_character(remote)
+        # An admin ignoring PCU limits orders any ship as a free build
+        remote.set_admin_flag("ignorePcu", True)
+        time.sleep(3)  # the server gets the flag with the admin menu's event
         tc.with_config(remote, FreeBuildPcuLimit=100000, ShipyardRepasteShips="true")
         arm.at_table(remote, "Gamma")
         load(remote)
@@ -89,14 +92,21 @@ def main() -> int:
             if "is in the queue" in reply:
                 break
         check("is in the queue" in reply, f"ordered: {reply}")
+        if "is in the queue" not in reply:
+            return 1
         deadline = time.time() + 1500
         line = None
-        while time.time() < deadline and not line:
-            line = re.search(
-                r".*off the arm, pasted anew as (\d+).*", rig.server_game_log()
-            )
+        ended = None
+        while time.time() < deadline and not line and not ended:
+            log = rig.server_game_log()
+            line = re.search(r".*off the arm, pasted anew as (\d+).*", log)
+            ended = re.search(r".*Shipyard order \S+ .* ended: .*", log)
             time.sleep(10)
-        check(line, f"re-pasted: {line and line[0]}")
+        for stalled in re.findall(r".*Shipyard order \S+ stalled:.*", log):
+            print(stalled, flush=True)
+        check(line, f"re-pasted: {line and line[0]} {ended and ended[0]}")
+        if not line:
+            return 1
         ship = int(line[1])
         time.sleep(20)
         cockpit = ap.find_cockpit(remote, ship)

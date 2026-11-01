@@ -927,7 +927,7 @@ internal static class ShipyardOrders
             if (liters > 0)
                 request.Provided[Hydrogen] = IceFor(liters, up: false);
         }
-        Builds.Execute(
+        Builds.Order(
             Guid.NewGuid(),
             request,
             (ok, message) =>
@@ -1597,62 +1597,74 @@ internal static class ShipyardOrders
                     return;
                 }
                 var next = BuildBook.DecodeOrder(text);
-                var blueprint = DecodeBlueprint(next.Blueprint);
-                ShipyardArm.Layout layout = null;
-                var pending = false;
-                var error =
-                    blueprint == null || blueprint.Count == 0
-                        ? "its blueprint could not be read"
-                        : Fits(shipyard, blueprint, next.Exempt, out layout, out pending);
-                if (pending)
+                Builds.ReadBlueprint(
+                    next.Id,
+                    encoded =>
+                    {
+                        // Still in the queue if only the read failed: the next update tries again
+                        if (encoded == null || shipyard.MarkedForClose)
+                            starting.Remove(shipyard.EntityId);
+                        else
+                            StartOrder(shipyard, station, next, encoded);
+                    }
+                );
+            }
+        );
+    }
+
+    private static void StartOrder(
+        MyCubeGrid shipyard,
+        string station,
+        BuildOrder next,
+        string encoded
+    )
+    {
+        var blueprint = DecodeBlueprint(encoded);
+        ShipyardArm.Layout layout = null;
+        var pending = false;
+        var error =
+            blueprint == null || blueprint.Count == 0
+                ? "its blueprint could not be read"
+                : Fits(shipyard, blueprint, next.Exempt, out layout, out pending);
+        if (pending)
+        {
+            // Nothing has started yet: the next check starts it, once the plan is done
+            starting.Remove(shipyard.EntityId);
+            ShipyardArm.WhenDone(() => Refresh(station));
+            return;
+        }
+        if (error != null)
+        {
+            // Not started: nothing left the order
+            Finish(next, Taken(next), 0, refund: true, $"'{next.Ship}' can't be built: {error}");
+            starting.Remove(shipyard.EntityId);
+            return;
+        }
+        Builds.Execute(
+            Guid.NewGuid(),
+            new BuildRequest
+            {
+                Verb = BuildVerb.Start,
+                Id = next.Id,
+                Station = station,
+            },
+            (ok, message) =>
+            {
+                starting.Remove(shipyard.EntityId);
+                if (!ok)
                 {
-                    // Nothing has started yet: the next check starts it, once the plan is done
-                    starting.Remove(shipyard.EntityId);
-                    ShipyardArm.WhenDone(() => Refresh(station));
+                    Plugin.Log.Warning($"Shipyard order {next.Id} did not start: {message}");
                     return;
                 }
+                error = Create(shipyard, next, blueprint, layout);
                 if (error != null)
-                {
-                    // Not started: nothing left the order
                     Finish(
                         next,
-                        new Dictionary<string, long>(),
+                        Taken(next),
                         0,
                         refund: true,
                         $"'{next.Ship}' can't be built: {error}"
                     );
-                    starting.Remove(shipyard.EntityId);
-                    return;
-                }
-                Builds.Execute(
-                    Guid.NewGuid(),
-                    new BuildRequest
-                    {
-                        Verb = BuildVerb.Start,
-                        Id = next.Id,
-                        Station = station,
-                    },
-                    (ok, message) =>
-                    {
-                        starting.Remove(shipyard.EntityId);
-                        if (!ok)
-                        {
-                            Plugin.Log.Warning(
-                                $"Shipyard order {next.Id} did not start: {message}"
-                            );
-                            return;
-                        }
-                        error = Create(shipyard, next, blueprint, layout);
-                        if (error != null)
-                            Finish(
-                                next,
-                                Taken(next),
-                                0,
-                                refund: true,
-                                $"'{next.Ship}' can't be built: {error}"
-                            );
-                    }
-                );
             }
         );
     }
@@ -2334,9 +2346,78 @@ internal static class ShipyardOrders
             $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
                 + $"missing {order.Missing}: {(order.Refund ? "removed and refunded" : "delivered")}"
         );
+        LogStall(shipyard, order, blocks, parts);
         if (order.Refund)
             Scrap(shipyard, order);
         End(shipyard, order, "stalled");
+    }
+
+    // What the welders had when they stopped, for finding out why
+    private static void LogStall(
+        MyCubeGrid shipyard,
+        Order order,
+        List<MySlimBlock> blocks,
+        Dictionary<string, int> parts
+    )
+    {
+        try
+        {
+            var prefix = $"Shipyard order {order.Id} stalled:";
+            Plugin.Log.Info(
+                $"{prefix} built so far "
+                    + string.Join(
+                        ", ",
+                        Grids(order.Projector.CubeGrid)
+                            .Select(g =>
+                                $"{g.DisplayName} {g.GetBlocks().Count(b => b.IsFullIntegrity)}/{g.BlocksCount}"
+                            )
+                    )
+            );
+            var stock = new Dictionary<string, double>();
+            foreach (var item in Containers(shipyard).SelectMany(i => i.GetItems()))
+                stock[item.Content.SubtypeName] =
+                    (stock.TryGetValue(item.Content.SubtypeName, out var had) ? had : 0)
+                    + (double)item.Amount;
+            Plugin.Log.Info(
+                $"{prefix} needs {string.Join(", ", parts.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}"))}"
+            );
+            Plugin.Log.Info(
+                $"{prefix} containers hold {string.Join(", ", stock.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value:0}"))}"
+            );
+            var beams = Beams(shipyard).ToList();
+            Plugin.Log.Info(
+                $"{prefix} {beams.Count} welders, {beams.Count(b => b.Enabled)} on, {beams.Count(b => b.IsWorking)} working"
+            );
+            var held = new Dictionary<string, double>();
+            foreach (var item in beams.SelectMany(b => b.GetInventory().GetItems()))
+                held[item.Content.SubtypeName] =
+                    (held.TryGetValue(item.Content.SubtypeName, out var had) ? had : 0)
+                    + (double)item.Amount;
+            Plugin.Log.Info(
+                $"{prefix} welders hold {string.Join(", ", held.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value:0}"))}, "
+                    + $"{beams.Sum(b => (double)b.GetInventory().CurrentVolume):0.##} of {beams.Sum(b => (double)b.GetInventory().MaxVolume):0.##} m³"
+            );
+            foreach (var block in blocks.Where(b => !b.IsFullIntegrity).Take(20))
+            {
+                var needs = new Dictionary<string, int>();
+                block.GetMissingComponents(needs);
+                var at = block.CubeGrid.GridIntegerToWorld(block.Position);
+                var nearest =
+                    beams.Count == 0
+                        ? -1
+                        : beams.Min(b => Vector3D.Distance(b.PositionComp.GetPosition(), at));
+                Plugin.Log.Info(
+                    $"{prefix} {block.BlockDefinition.Id.SubtypeName} on {block.CubeGrid.DisplayName}, "
+                        + $"integrity {block.Integrity:0}/{block.MaxIntegrity:0}, "
+                        + $"missing {string.Join(" ", needs.Select(n => $"{n.Key} {n.Value}"))}, "
+                        + $"{nearest:0} m from the nearest welder"
+                );
+            }
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Error("Logging a stalled order failed", e);
+        }
     }
 
     // A ship missing more than this share of its plain blocks is not delivered
