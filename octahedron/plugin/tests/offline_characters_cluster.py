@@ -14,8 +14,11 @@ reads the client's character on its node, the console probe on the WA runs !oct 
   partition and is removed without a second deposit.
 - The WA killed right after it kept the inventory: nothing is removed before a save holds it, so the save and
   the world agree. In the end one deposit and one inventory.
+- Saves held before their registration (SE-865): kept but not removed; removed once they land. The WA killed in
+  that hold: the body stays, and goes the way it would have, with one deposit and one inventory. Saves refused
+  for good: the body stays.
 
-Takes about 40 minutes.
+Takes about 55 minutes. OCT_SAVES_ONLY=1 runs only the SE-865 part, about 20 minutes.
 """
 
 from __future__ import annotations
@@ -252,6 +255,100 @@ def run(bench) -> None:
     cluster.wait_ready(nodes=processes)
     api = join()
 
+    # A killed client lingers up to 140 s and its time starts then, so a limit of 1 minute means
+    # about 4 minutes from the kill to the removal, more with a save to wait for
+    away = 420
+
+    def hold_saves() -> None:
+        cluster.node("wa-1", "/global-save-register-hold?ms=600000", "POST")
+
+    def not_removed(body: int, label: str) -> None:
+        """Kept and waiting: the node asks every 5 s, and the WA knows it isn't saved"""
+        check(
+            f"{label}: the WA says not saved yet",
+            any("not saved yet" in r for r in wa_command("!oct offline")),
+        )
+        end = time.monotonic() + 45
+        while time.monotonic() < end:
+            gone = removed_on(body)
+            if gone:
+                break
+            time.sleep(1)
+        check(f"{label}: the body stays", not gone, gone)
+
+    # --- saves held before their registration: no removal, then one ---
+    minutes(1)
+    body, carried, bank = stock(api, 16_000)
+    hold_saves()
+    bench.kill_client(CLIENT_ID)
+    wait_kept(body, away)
+    hold_saves()
+    not_removed(body, "saves held")
+    cluster.node("wa-1", "/global-save-register-hold?ms=1", "POST")
+    wait_removed(body, 120)
+    check(
+        "saves held: the save holds the inventory at the removal",
+        re.search(
+            rf"P \d+ {body} 16000 ", wa.global_save(bench.run_root / "wa-1-data")
+        ),
+    )
+    api = join()
+    came_back(api, "after a held save", body, bank, 16_000)
+    # A WA restored from a save before that hands them out again: SE-908
+    wait_until(
+        lambda: not re.search(
+            rf"P \d+ {body} 16000 ", wa.global_save(bench.run_root / "wa-1-data")
+        ),
+        180,
+        "a save without what was handed out",
+    )
+
+    # --- the WA killed in that hold: the body stays, and nothing is lost ---
+    minutes(1)
+    body, carried, bank = stock(api, 32_000)
+    hold_saves()
+    bench.kill_client(CLIENT_ID)
+    wait_kept(body, away)
+    hold_saves()
+    not_removed(body, "WA kill in a held save")
+    reset_probe()
+    cluster.restart_node("wa-1")
+    cluster.wait_ready(nodes=["wa-1"])
+    check("WA killed in a held save: not removed yet", not removed_on(body))
+    wait_removed(body, away)
+    api = join()
+    came_back(api, "after a WA kill in a held save", body, bank, 32_000)
+
+    def refused_saves(api) -> None:
+        """Last: a catalogue row ahead of the WA names no file, the cluster is done after it"""
+        minutes(1)
+        body, carried, bank = stock(api, 64_000)
+        rows = cluster.get("/registry/global-saves")
+        authority = next(
+            row for row in cluster.get("/registry/nodes") if row["Node"] == "wa-1"
+        )
+        generation = max(row["SaveId"]["Generation"] for row in rows)
+
+        def row_ahead(sequence: int) -> None:
+            cluster.post(
+                f"/registry/global-saves?node=wa-1&epoch={authority['Epoch']}&generation={generation}"
+                f"&sequence={sequence}&kind=Periodic&size=1&checksum=forced&clusterTime=0&location=forced-ahead"
+            )
+
+        try:
+            row_ahead(1_000_000)
+        except ClusterError as error:
+            # A cluster before SE-819 takes only the next sequence, and the WA is left refused all the same
+            row_ahead(int(re.search(r"expected (\d+)", str(error)).group(1)))
+        bench.kill_client(CLIENT_ID)
+        wait_kept(body, away)
+        not_removed(body, "saves refused")
+        bench.kill_client(CLIENT_ID)
+
+    if os.environ.get("OCT_SAVES_ONLY"):
+        refused_saves(api)
+        return
+
     # --- back in time ---
     body, carried, bank = stock(api, 1_000)
     minutes(30)
@@ -357,10 +454,6 @@ def run(bench) -> None:
     check("outside the sphere: nothing taken", items_again == items, items_again)
     check("outside the sphere: the bank as it was", balance(api) == bank)
 
-    # A killed client lingers up to 140 s and its time starts then, so a limit of 1 minute means
-    # about 4 minutes from the kill to the removal, more with a save to wait for
-    away = 420
-
     # --- kept through a graceful stop and warm start ---
     minutes(1)
     body, carried, bank = stock(api, 2_000)
@@ -414,7 +507,7 @@ def run(bench) -> None:
     api = join()
     came_back(api, "after a WA kill", body, bank, 8_000)
 
-    bench.kill_client(CLIENT_ID)
+    refused_saves(api)
 
 
 run.administrators = [CLIENT_ID]
