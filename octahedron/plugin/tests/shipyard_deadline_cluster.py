@@ -286,6 +286,12 @@ def run(bench) -> None:
     processes = ["wa-1", *NODES]
     for process in processes:
         wa.link_mods(bench.run_root / f"{process}-data" / "Mods")
+        # As on the live cluster; the rest is Hangar's defaults
+        (bench.run_root / f"{process}-data" / "Hangar.cfg").write_text(
+            '<?xml version="1.0" encoding="utf-8"?><PluginConfig>'
+            "<AdminSafeZonesOnly>true</AdminSafeZonesOnly></PluginConfig>",
+            encoding="utf-8",
+        )
     cluster.start(processes)
     cluster.wait_ready(nodes=processes)
     api = join()
@@ -333,7 +339,10 @@ def run(bench) -> None:
         until(lambda: pcu(api) == owned, 60, 5),
         f"{owned} -> {pcu(api)}",
     )
-    reply = hangar(api, f"save {SHIP}")
+    print(probe(api, f"removegrid {SHIP.replace(' ', '_')}"), flush=True)
+    # A ship of bare armor can't be saved by hand: a grid with a cockpit
+    print(probe(api, f"yardblocker {STATION}"), flush=True)
+    reply = hangar(api, "save Blocker")
     check("no cool-down was started", "Saved" in reply, reply)
 
     # --- the second slot, while the player's own cool-down runs ---
@@ -342,7 +351,7 @@ def run(bench) -> None:
     check("told again", told, told)
     check(
         "into the second slot",
-        until(lambda: hangar(api).count(SHIP) == SLOTS, CLEAR * 60 + 60, 5),
+        until(lambda: SHIP in hangar(api), CLEAR * 60 + 60, 5),
     )
     next_ends(api)
 
@@ -358,7 +367,7 @@ def run(bench) -> None:
         f"{balance} + {paid} = {money(api)}",
     )
     check("the ship is gone", until(lambda: not here(api), 30))
-    check("the Hangar is as it was", hangar(api).count(SHIP) == SLOTS)
+    check("the Hangar is as it was", len(hangar(api).split("[")) - 1 == SLOTS)
     next_ends(api)
 
     # --- a graceful stop: all of it stays as it is ---
@@ -371,7 +380,7 @@ def run(bench) -> None:
     api = join()
     check("no second refund", until(lambda: money(api) == balance, 60, 5), money(api))
     check("no ship back", not here(api))
-    check("both entries kept", hangar(api).count(SHIP) == SLOTS)
+    check("both entries kept", len(hangar(api).split("[")) - 1 == SLOTS)
     check(
         "the PCU is the same",
         until(lambda: pcu(api) == owned, 90, 5),
