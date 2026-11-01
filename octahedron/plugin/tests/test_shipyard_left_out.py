@@ -9,6 +9,13 @@
 - docked: a paid ship with a grid no welder can place, like one docked by a connector, is delivered
   without it. The chat names the grid, and that grid's components stay in the containers for the
   player to take, or to sell at the end of the turn.
+- subgrid-free, subgrid-paid: an unfinished subgrid doesn't remove the ship (SE-928). It has a block
+  whose hitbox intersects the main grid, and a battery left without power cells, so the containers
+  are short and the left-out check doesn't apply. The ship is delivered, its main grid complete: a
+  free build counts, what is left of a paid build stays in the containers and sells.
+- main-short: the same battery on the main grid still removes the ship and refunds it.
+- blueprint: with OCT_BLUEPRINT, the bp.sbc of a real ship with subgrids, like "Polaris Mk2 RC8", is
+  ordered free. It takes minutes, so it only runs when named.
 
     uv run --no-project --with httpx python tests/test_shipyard_left_out.py [case ...]
 """
@@ -80,6 +87,53 @@ WITH_DOCKED = rig.grid(
     tag="MyObjectBuilder_CubeGrid",
 )
 
+STATOR, ROTOR = 777000928000101, 777000928000102
+BATTERY = rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (0, 1, 2))
+STATOR_BLOCK = rig.block(
+    "MyObjectBuilder_MotorStator",
+    "LargeStator",
+    (0, 1, 3),
+    f"<EntityId>{STATOR}</EntityId><TopBlockId>{ROTOR}</TopBlockId>",
+)
+# The rotor head sits on the stator. Armor on top of it runs along the hull to z = 0 and comes down,
+# where the last block's hitbox intersects the remote control, which the welders place long before
+# they get there. The battery sits on the armor.
+HEAD = rig.grid(
+    "Head Part",
+    777000928000200,
+    [
+        rig.block(
+            "MyObjectBuilder_MotorRotor",
+            "LargeRotor",
+            (0, 0, 0),
+            f"<EntityId>{ROTOR}</EntityId>",
+        ),
+        rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (1, 1, 0)),
+        *(
+            rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", position)
+            for position in [(0, 1, -z) for z in range(4)] + [(0, 0, -3)]
+        ),
+    ],
+    position=(0, 2.5 + 0.421, 7.5),
+    tag="MyObjectBuilder_CubeGrid",
+)
+WITH_HEAD = (
+    rig.grid(
+        NAME,
+        777000928000100,
+        HULL + [STATOR_BLOCK],
+        tag="MyObjectBuilder_CubeGrid",
+    )
+    + HEAD
+)
+MAIN_SHORT = rig.grid(
+    NAME,
+    777000928000300,
+    HULL + [BATTERY],
+    tag="MyObjectBuilder_CubeGrid",
+)
+CELLS = "Component/PowerCell"
+
 
 def ship_subtypes() -> list[str]:
     sector, _ = so.saved()
@@ -132,13 +186,14 @@ def dlc(owned: bool) -> None:
     no_plugin_errors(stalled=False)
 
 
-def paid_order(remote, loaded: dict | None = None) -> None:
+def paid_order(remote, loaded: dict | None = None, **config) -> None:
     """A paid order up to the press at the player's turn, with what is loaded before it"""
     tc.with_config(
         remote,
         FreeBuildPcuLimit=0,
         ShipyardLaborFeePer100Pcu=0,
         ShipyardTableMinutes=600,
+        **config,
     )
     for item, count in pb.STOCK.items():
         st.admin(remote, f"!oct market set Alpha {item} {count}")
@@ -211,12 +266,171 @@ def docked() -> None:
     no_plugin_errors(stalled=True)
 
 
+def free_order(remote) -> None:
+    """A free order, waited for until its components are loaded"""
+    pb.at_table(remote)
+    quote = tc.ship_reply(remote, "!oct order")
+    check("Your quote for" in quote, f"quote: {quote}")
+    reply = tc.ship_reply(remote, "!oct order")
+    check("is in the queue" in reply, f"ordered: {reply}")
+    pattern = rf"Shipyard order \S+ '{re.escape(NAME)}' \(.*free\) for "
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline and not re.search(pattern, rig.server_game_log()):
+        time.sleep(0.5)
+    check(re.search(pattern, rig.server_game_log()), "the free build started")
+
+
+def strip_cells(remote) -> None:
+    st.admin(remote, f"!oct shipyard strip Alpha {CELLS}")
+
+
+def partial_battery() -> bool:
+    """The saved world has a battery that the welders left unfinished"""
+    sector, _ = so.saved()
+    return any(
+        b.findtext("SubtypeName") == "LargeBlockBatteryBlock"
+        and float(b.findtext("BuildPercent") or 1) < 1
+        for o in sector.find("SectorObjects")
+        if o.find("CubeBlocks") is not None
+        for b in o.find("CubeBlocks")
+    )
+
+
+def subgrid_free() -> None:
+    so.prepare(WITH_HEAD, 60)
+    rig.start_server()
+    remote = rig.start_client()
+    try:
+        free_order(remote)
+        strip_cells(remote)
+        line = so.wait_chat(remote, "stopped building", 300)
+        check("The ship is yours without" in str(line), f"delivered: {line}")
+        check("Battery" in str(line), f"the chat names the battery: {line}")
+        check("removed" not in str(line), f"not removed: {line}")
+        left = st.probe(remote, "yardstock Alpha")
+        check("Component/" not in left, f"its leftovers are removed: {left}")
+        pb.load(remote)
+        reply = tc.ship_reply(remote, "!oct order")
+        # A paid quote, or a paid order if the screen showed its quote already: the free one is used
+        check(
+            "next free ship is in" in reply or "At its turn you load" in reply,
+            f"the build counts: {reply}",
+        )
+    finally:
+        rig.stop_client()
+        rig.stop_server()
+    so.check_ship(NAME, len(HULL) + 1, complete=True)
+    check(partial_battery(), "the subgrid's battery stays unfinished")
+    no_plugin_errors(stalled=True)
+
+
+def subgrid_paid() -> None:
+    so.prepare(WITH_HEAD, 60)
+    rig.start_server()
+    remote = rig.start_client()
+    try:
+        paid_order(remote, {CELLS: 80}, ShipyardTopUpMinutes=0)
+        strip_cells(remote)
+        line = so.wait_chat(remote, "stopped building", 300)
+        check("The ship is yours without" in str(line), f"delivered: {line}")
+        check("Battery" in str(line), f"the chat names the battery: {line}")
+        check("removed" not in str(line), f"not removed: {line}")
+        left = st.probe(remote, "yardstock Alpha")
+        plates = re.search(r"Component/SteelPlate=(\d+)", left)
+        check(
+            plates is not None and int(plates[1]) >= 25,
+            f"the colliding block's plates stay in the containers: {left}",
+        )
+        money = pb.balance(remote)
+        st.admin(remote, "!oct shipyard done")
+        check(pb.balance(remote) > money, "and sell at the end of the turn")
+    finally:
+        rig.stop_client()
+        rig.stop_server()
+    so.check_ship(NAME, len(HULL) + 1, complete=True)
+    check(partial_battery(), "the subgrid's battery stays unfinished")
+    no_plugin_errors(stalled=True)
+
+
+def main_short() -> None:
+    so.prepare(MAIN_SHORT, 60)
+    rig.start_server()
+    remote = rig.start_client()
+    try:
+        free_order(remote)
+        strip_cells(remote)
+        line = so.wait_chat(remote, "stopped building", 300)
+        check("The ship was removed" in str(line), f"removed: {line}")
+        check("doesn't count" in str(line), f"the free build doesn't count: {line}")
+    finally:
+        rig.stop_client()
+        rig.stop_server()
+    sector, _ = so.saved()
+    check(
+        not any(
+            o.findtext("DisplayName") == NAME for o in sector.find("SectorObjects")
+        ),
+        "no ship in the save",
+    )
+    no_plugin_errors(stalled=True)
+
+
+def blueprint() -> None:
+    """A real ship: whatever its welders can't finish on its subgrids, it is delivered"""
+    global NAME
+    text = open(os.environ["OCT_BLUEPRINT"], encoding="utf-8").read()
+    grids = re.findall(r"<CubeGrid>.*?</CubeGrid>", text, flags=re.S)
+    check(len(grids) > 1, f"a blueprint with subgrids: {len(grids)} grids")
+    NAME = re.search(r"<DisplayName>([^<]*)", grids[0])[1]
+    cubes = len(re.findall(r"<MyObjectBuilder_CubeBlock", grids[0]))
+    so.prepare(
+        "".join(
+            g.replace("<CubeGrid>", "<MyObjectBuilder_CubeGrid>").replace(
+                "</CubeGrid>", "</MyObjectBuilder_CubeGrid>"
+            )
+            for g in grids
+        ),
+        60,
+    )
+    rig.start_server()
+    remote = rig.start_client()
+    try:
+        tc.with_config(
+            remote,
+            FreeBuildPcuLimit=1_000_000,
+            GroupPcuLimit=1_000_000,
+            FreeBuildBlockedBlocks="",
+            ShipyardTableMinutes=600,
+        )
+        free_order(remote)
+        ended = None
+        deadline = time.monotonic() + 1500
+        while time.monotonic() < deadline and ended is None:
+            lines, _ = so.chat_lines(remote, 0)
+            ended = next(
+                (l for l in lines if "stopped building" in l or " is ready in " in l),
+                None,
+            )
+            time.sleep(5)
+        check(ended is not None, f"the build ended: {ended}")
+        check("removed" not in str(ended), f"not removed: {ended}")
+    finally:
+        rig.stop_client()
+        rig.stop_server()
+    so.check_ship(NAME, cubes, complete=True)
+    no_plugin_errors(stalled=" no progress " in rig.server_game_log())
+
+
 CASES = {
     "owned": lambda: dlc(owned=True),
     "no-dlc": lambda: dlc(owned=False),
     "paid-offline": paid_offline,
     "docked": docked,
+    "subgrid-free": subgrid_free,
+    "subgrid-paid": subgrid_paid,
+    "main-short": main_short,
 }
+NAMED_ONLY = {"blueprint": blueprint}
 
 
 def main() -> int:
@@ -224,7 +438,7 @@ def main() -> int:
         print(f"--- {case}", flush=True)
         rig.stop_client()
         rig.stop_server()
-        CASES[case]()
+        (CASES | NAMED_ONLY)[case]()
     return st.summary("left out")
 
 
