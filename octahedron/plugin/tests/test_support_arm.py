@@ -709,13 +709,8 @@ def watch_build(remote, case: str) -> str | None:
     a client turned them off, SE-441). Returns the !oct shipyards line."""
     station, ship = CASES[case][:2]
     yard = shipyard_id(remote, station)
-    shooting = []
 
-    def projecting(line: str) -> bool:
-        shooting.append(shoots(remote, yard))
-        return "projector on" in line
-
-    line = follow(remote, case, projecting)
+    line = follow(remote, case, lambda line: "projector on" in line)
     if line is not None:
         arm = re.search(r"arm (\d+)/(\d+)", line)
         if "projector on" in line:
@@ -724,12 +719,11 @@ def watch_build(remote, case: str) -> str | None:
                 arm is not None and arm[1] == arm[2],
                 f"{case}: the arm is complete when the projector turns on: {line.strip()}",
             )
-            shooting.append(shoots(remote, yard))
-            seen = [x for x in shooting if x is not None]
-            check(
-                len(seen) > 0 and all(seen),
-                f"{case}: the client sees the shipyard's welders shoot: {shooting}",
-            )
+            # A free build turns the welders on first, and their switch a check of the build later
+            deadline = time.monotonic() + 25
+            while not (seen := shoots(remote, yard)) and time.monotonic() < deadline:
+                time.sleep(1)
+            check(seen, f"{case}: the client sees the shipyard's welders shoot: {seen}")
             return line
     check(False, f"{case}: the arm's projector turns on: {line}")
     return None
