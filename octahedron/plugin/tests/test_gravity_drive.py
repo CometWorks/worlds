@@ -12,8 +12,8 @@ or piloted by the client, while its generator is turned on. Server speeds come f
 Either way a character and a loose object in a generator's field get pulled, and a grid with artificial
 mass falls in a planet's natural gravity.
 
-The ships left alone drift at 1 m/s: a sleeping grid doesn't notice a generator turned on around it, in the
-game's own code too, as a resting artificial mass doesn't reach the generator's field until something wakes it.
+A resting artificial mass doesn't notice a generator turned on around it until something wakes it, in the
+game's own code too. So for the ships left alone the drive block goes off and on again after the generator.
 
     OCT_TASK=SE-881 uv run --no-project --with httpx python tests/test_gravity_drive.py [--game-version 1.211.0]
 """
@@ -38,11 +38,11 @@ PROBE = (
     "gravity-probe",
 )
 GENERATOR = (0, 0, 2)
+DRIVE = (0, 0, 3)
 FIELD = 100
-# A working drive passes this within a few seconds. The drifting ships go at 1 m/s
+# A working drive passes this within a few seconds
 MOVING = 5.0
-STILL = 1.5
-DRIFT = (0, 0, 1)
+STILL = 1.0
 WINDOW = 25.0
 PULLED = 1.0
 BASE = 777000881000000
@@ -83,7 +83,7 @@ def ship(name: str, entity_id, position, drive, **kwargs) -> str:
                 "<CurrentStoredPower>3</CurrentStoredPower>",
             ),
             generator(),
-            rig.block(drive[0], drive[1], (0, 0, 3), drive[2]),
+            rig.block(drive[0], drive[1], DRIVE, drive[2]),
         ],
         position,
         **kwargs,
@@ -113,7 +113,7 @@ def thrust_ship() -> str:
                 "<CurrentStoredPower>3</CurrentStoredPower>",
             ),
             generator(),
-            rig.block(MASS[0], MASS[1], (0, 0, 3), MASS[2]),
+            rig.block(MASS[0], MASS[1], DRIVE, MASS[2]),
             rig.block("MyObjectBuilder_Gyro", "LargeBlockGyro", (1, 0, 0)),
             thruster((1, 0, 1), "Forward", "Up"),
             thruster((-1, 0, 1), "Backward", "Up"),
@@ -153,8 +153,7 @@ def loose_object(entity_id: int, position) -> str:
 
 
 def world_grids() -> list[str]:
-    grids = [ship(n, i, p, d, velocity=DRIFT) for n, (i, p, d) in LOOSE.items()]
-    grids += [ship(n, i, p, d) for n, (i, p, d) in PILOTED.items()]
+    grids = [ship(n, i, p, d) for n, (i, p, d) in {**LOOSE, **PILOTED}.items()]
     grids.append(thrust_ship())
     grids.append(
         rig.grid(
@@ -261,15 +260,15 @@ def fly_with_thrusters(remote, check) -> None:
     def apart() -> float:
         return math.dist(remote.get_grid(entity_id)["position"], server()[name][1])
 
-    strayed = rig.wait_until(
-        lambda: (distance := apart()) > JOINED * 2 and distance,
-        30,
-        "the client's view straying",
-        interval=0.5,
-    )
-    log(f"{name}: the client's view strays {strayed:.0f} m from a parked ship")
-    remote.set_input_state(keys=["W"])
     try:
+        strayed = rig.wait_until(
+            lambda: (distance := apart()) > JOINED * 2 and distance,
+            30,
+            "the client's view straying",
+            interval=0.5,
+        )
+        log(f"{name}: the client's view strays {strayed:.0f} m from a parked ship")
+        remote.set_input_state(keys=["W"])
         rig.wait_until(
             lambda: server()[name][0] > MOVING, 20, "thrust on the server", interval=0.2
         )
@@ -279,17 +278,17 @@ def fly_with_thrusters(remote, check) -> None:
         check(
             True, f"{name} flies on thrust and the client's view rejoins the server's"
         )
-    except TimeoutError as error:
-        check(False, str(error))
-    remote.clear_input_state()
-    try:
+        remote.clear_input_state()
         rig.wait_until(
             lambda: server()[name][0] < 0.5, 60, "the dampeners stopping it", interval=1
         )
+        # The grid sleeps then, the drive would have to wake it: not a moment's reading
         time.sleep(3)
         check(server()[name][0] < 0.5, f"{name} stays stopped on the server, drive on")
     except TimeoutError as error:
         check(False, str(error))
+    finally:
+        remote.clear_input_state()
     leave(remote)
 
 
@@ -355,11 +354,12 @@ def main() -> int:
         else:
             check(seen["fastest"] < STILL, f"{name} stays still on the server")
 
-    for name, (entity_id, _, _) in LOOSE.items():
-        position = server()[name][1]
+    for name, (entity_id, position, _) in LOOSE.items():
         remote.character_teleport(position[0] + 200, position[1], position[2])
         wait_on_client(remote, entity_id)
         remote.set_enabled(entity_id, GENERATOR, True)
+        remote.set_enabled(entity_id, DRIVE, False)
+        remote.set_enabled(entity_id, DRIVE, True)
         judge(name, watch(name))
 
     for name, (entity_id, position, _) in PILOTED.items():
