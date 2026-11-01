@@ -263,7 +263,20 @@ def run(bench) -> None:
         rig.chat(api, "!oct table remove", 5)
 
     def restart_here(api):
+        """A restart of the node simulating the shipyard, the ship in its partition's save"""
         node = where()
+        partition = wa._client_partition(wa._partitions(bench, node))
+
+        def newest():
+            rows = cluster.get(f"/registry/saves?partition={partition}") or []
+            return max(
+                ((r["SaveId"]["Generation"], r["SaveId"]["Sequence"]) for r in rows),
+                default=None,
+            )
+
+        before = newest()
+        cluster.node(node, f"/save-capture?partition={partition}", "POST")
+        wait_until(lambda: newest() != before or None, 180, "a fresh save")
         cluster.restart_node(node)
         cluster.wait_ready(nodes=[node])
         return back(api)

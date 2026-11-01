@@ -123,12 +123,15 @@ def into_hangar(a) -> None:
     check(f"Loaded {SHIP}" in reply, f"it comes back: {reply}")
     check(tu.money(a) == balance, "free at this station")
     check(pcu(a) == owned, f"still counted once: {pcu(a)}")
-    reply = hangar(a, f"save {SHIP}")
+    tu.ship_gone(a)
+    # A ship of bare armor can't be saved by hand: a grid with a cockpit takes the slot
+    tu.probe(a, f"yardblocker {STATION}")
+    reply = hangar(a, "save Blocker")
     check("Saved" in reply, f"no cool-down was started: {reply}")
 
 
 def no_slot_paid(a) -> None:
-    check(SHIP in hangar(a), "the slot is taken")
+    check("Blocker" in hangar(a), "the slot is taken")
     paid = leave_paid(a)
     owned = pcu(a)
     balance = tu.money(a)
@@ -140,7 +143,7 @@ def no_slot_paid(a) -> None:
     check(tu.wait_for(lambda: not ship_here(a), 15, 1), "the ship is gone")
     check(tu.money(a) == balance + paid, f"refunded: {balance} -> {tu.money(a)}")
     check(oct_money(a) == oct_balance - paid, "by OCT")
-    check(hangar(a).count(SHIP) == 1, "the Hangar is as it was")
+    check(SHIP not in hangar(a), "the Hangar is as it was")
     check(pcu(a) < owned, f"its PCU is free: {owned} -> {pcu(a)}")
     next_goes_on(a, mark)
 
@@ -179,9 +182,16 @@ def ship_outs() -> int:
 
 def left_and_back(a) -> None:
     """A ship with a cockpit: without an entry in the book a bare one would be swept as a wreck"""
-    hangar(a, f"remove {SHIP}")
+    hangar(a, "remove Blocker")
     name = "Order_Test"
-    paid = leave_paid(a, so.SMALL)
+    with_config(a, **tr.CONFIG, ShipyardClearMinutes=CLEAR)
+    tu.probe(a, "air")
+    mark = tp.latest(a)
+    tr.load(a)
+    tr.settled(a, "table", "Press the button")
+    check("is in the queue" in tr.press(a), "a free order")
+    check(tp.wait_chat(a, "is ready", 400, mark) is not None, "the ship is built")
+    tr.remove(a)
     before = ship_outs()
     tu.probe(a, f"movegrid {name} 2000")
     check(
@@ -189,6 +199,7 @@ def left_and_back(a) -> None:
         "the book forgets a ship that left",
     )
     tu.probe(a, f"movegrid {name} -2000")
+    with_config(a, **PAY)
     balance = tu.money(a)
     told, mark = blocked(a)
     check(told is not None and "moved out" in told, f"it counts as parked: {told}")
@@ -196,7 +207,7 @@ def left_and_back(a) -> None:
     check(moved is not None, f"and is moved out: {moved}")
     check(ship_here(a, "Order Test"), "it is still there")
     check("empty" in hangar(a), "not in the Hangar")
-    check(tu.money(a) == balance, f"nothing of the {paid} SC comes back")
+    check(tu.money(a) == balance, "nothing comes back")
     next_goes_on(a, mark)
     tu.ship_gone(a, "Order Test")
 
