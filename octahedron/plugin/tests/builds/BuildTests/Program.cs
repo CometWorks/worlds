@@ -263,10 +263,7 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     var q = BuildBook.Quote(w, market, A, P1, lacking, 100);
     Check(q.Total == 5_100 + 204 + 500 + 100, $"start quote {q.Total}");
     var r = Ok(w, "start", () => b.Begin(w, market, s, order.Id, P1, lacking, none));
-    Check(
-        r.Message.EndsWith("starts: 5,804 SC for what was missing and 100 SC labor paid."),
-        r.Message
-    );
+    Check(r.Message.EndsWith("starts: 5,804 SC for what was missing and 100 SC labor paid."), r.Message);
     Check(order.Started && order.Phase == BuildPhase.Building, "start: building");
     Check(b.Next(A) == null, "start: nothing next");
     Check(w.Balances[P1] == 25_000 - q.Total, "start: the payer paid " + w.Balances[P1]);
@@ -473,10 +470,7 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(m.Stock(A, Ice) == 99_960 * U, "stock only for what was bought");
     long paid = w.Balances[P1];
     Ok(w, "after", () => b.After(w, market, s, order.Id, 70 * U, false, none));
-    Check(
-        w.Balances[P1] == paid + 29,
-        "the 30 not taken are sold at 0.98: " + (w.Balances[P1] - paid)
-    );
+    Check(w.Balances[P1] == paid + 29, "the 30 not taken are sold at 0.98: " + (w.Balances[P1] - paid));
 }
 
 // Too little ice for sale: the build goes ahead with the ice there is
@@ -556,7 +550,10 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(Ok(w, "tow twice", () => b.Tow(w, Tow(777))).Order == tow, "tow: once in the queue");
     Check(b.Queue(A).Count(o => o.Grid == 777) == 1, "tow: one entry");
     Refused(w, b, m, "a tow can't be canceled", () => b.Cancel(A, 1), "can't be canceled");
-    Check(BuildBook.DecodeOrder(BuildBook.EncodeOrder(tow, false)).Grid == 777, "tow: on the wire");
+    Check(
+        BuildBook.DecodeOrder(BuildBook.EncodeOrder(tow, false)).Grid == 777,
+        "tow: on the wire"
+    );
     long bal = w.Balances[P1];
     var after = Ok(
         w,
@@ -630,9 +627,17 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
         "one entry at a time"
     );
     w.Now += 10;
-    Ok(w, "p2 queues", () => b.Order(w, s, Paid(P2, player: 2), Needs((Plate, 1 * U))));
+    Ok(
+        w,
+        "p2 queues",
+        () => b.Order(w, s, Paid(P2, player: 2), Needs((Plate, 1 * U)))
+    );
     w.Now += 10;
-    Ok(w, "p3 queues", () => b.Order(w, s, new BuildOrder { Station = A, Player = 3 }, none));
+    Ok(
+        w,
+        "p3 queues",
+        () => b.Order(w, s, new BuildOrder { Station = A, Player = 3 }, none)
+    );
     Refused(
         w,
         b,
@@ -660,7 +665,10 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(loaded.Serialize() == saved, "saved format: round trip");
     var o2 = loaded.Queue(A)[0];
     Check(
-        o2.Payer == P2 && o2.Fee == 100 && o2.Items[Plate] == U && o2.Blueprint == "QUJD",
+        o2.Payer == P2
+            && o2.Fee == 100
+            && o2.Items[Plate] == U
+            && o2.Blueprint == "QUJD",
         "saved format: an order"
     );
     var wire = BuildBook.DecodeOrder(BuildBook.EncodeOrder(o2, blueprint: false));
@@ -911,9 +919,7 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     );
     Check(
         !BuildBook
-            .DecodeOrder(
-                BuildBook.EncodeOrder(new BuildOrder { Phase = BuildPhase.Building }, false)
-            )
+            .DecodeOrder(BuildBook.EncodeOrder(new BuildOrder { Phase = BuildPhase.Building }, false))
             .Exempt,
         "wire format: started, not exempt"
     );

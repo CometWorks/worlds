@@ -649,7 +649,8 @@ internal static partial class ShipyardOrders
                 var mine = Mine(DecodeQueue(text), identityId);
                 var holder = Holder(table);
                 var hasBlueprint =
-                    TableHologram.Blueprint(table) != null && (holder == 0 || holder == identityId);
+                    TableHologram.Blueprint(table) != null
+                    && (holder == 0 || holder == identityId);
                 if (mine != null && mine.Phase is BuildPhase.Waiting or BuildPhase.Building)
                     Cancel(mine, station, shipyard, tell);
                 else if (hasBlueprint)
@@ -966,11 +967,11 @@ internal static partial class ShipyardOrders
                     mine?.Phase == BuildPhase.After && !plan.Free ? null
                     : mine != null
                         ? mine.Active
-                                ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
+                            ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
                             : $"'{mine.Ship}' is in the queue for you. Press the button to cancel it first."
-                    : queue.Count >= Config.ShipyardQueueMax
-                        ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
-                    : null;
+                        : queue.Count >= Config.ShipyardQueueMax
+                            ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
+                            : null;
                 if (plan.Free)
                 {
                     ShowQuote(plan, null);
@@ -1047,7 +1048,9 @@ internal static partial class ShipyardOrders
             if (plan.Blocker != null)
                 text.AppendLine(plan.Blocker);
             else if (quote?.Short(Hydrogen) != null)
-                text.AppendLine("Not everything is for sale here: bring the rest at your turn.");
+                text.AppendLine(
+                    "Not everything is for sale here: bring the rest at your turn."
+                );
             else
                 text.AppendLine("Press the button to confirm the build.");
         }
@@ -1984,10 +1987,11 @@ internal static partial class ShipyardOrders
             NoteFreeEnd(order, name);
         var stalled =
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
-        var message = order.Canceled
-            ? missing != null
-                ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
-                : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
+        var message =
+            order.Canceled
+                ? missing != null
+                    ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
+                    : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
             : order.Refund
                 ? $"{stalled}, with {order.Missing} missing. The ship was removed, "
                     + (
@@ -1995,16 +1999,15 @@ internal static partial class ShipyardOrders
                             ? "and the free build doesn't count."
                             : "its components are in the containers."
                     )
-                : order.Missing != null && !gone
-                    ? $"{stalled}. The ship is yours without {order.Missing}."
-                    : missing == "unbuilt"
-                        ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
-                        : gone
-                            ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
-                            : why == null
-                                ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
-                                : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
-                                    + "The unfinished ship is yours.";
+            : order.Missing != null && !gone
+                ? $"{stalled}. The ship is yours without {order.Missing}."
+            : missing == "unbuilt"
+                ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
+            : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
+            : why == null
+                ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
+            : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
+                + "The unfinished ship is yours.";
         if (!order.Free)
         {
             if (order.Hydrogen > 0 && !gone)
