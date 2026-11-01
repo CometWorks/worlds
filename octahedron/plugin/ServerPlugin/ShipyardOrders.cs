@@ -51,10 +51,10 @@ namespace ServerPlugin;
 // station to another node picks it up from there.
 //
 // A ship is a free build for a player under FreeBuildPcuLimit, once FreeBuildCooldownMinutes
-// passed since their last free build ended (FreePrints), without the blocks in
-// FreeBuildBlockedBlocks. An admin with "Ignore PCU limits" on (FreePrints.Exempt) gets every
-// ship as a free build: no PCU limit, cool-down or blocked blocks, and no per-ship cap of
-// GroupPcuLimit. The order keeps that, for the node that builds it. Any other ship is a paid build
+// passed since their last free build ended (FreePrints), without a block that needs a component in
+// FreeBuildExcludedComponents or is in FreeBuildBlockedBlocks. An admin with "Ignore PCU limits" on
+// (FreePrints.Exempt) gets every ship as a free build: no PCU limit, cool-down or blocked blocks,
+// and no per-ship cap of GroupPcuLimit. The order keeps that, for the node that builds it. Any other ship is a paid build
 // on the player's turn at the shipyard (ShipyardOrderTurns.cs): they load the components into its
 // containers, and pressing the button buys what is missing and the ice for the hydrogen to fill its
 // H2 tanks to ShipyardHydrogenFillPercent at the station's Store from the player's account, plus
@@ -204,8 +204,7 @@ internal static partial class ShipyardOrders
 
     private static int ticks;
 
-    private static string blockedPatterns;
-    private static Regex blockedRegex;
+    private static readonly Dictionary<string, Regex> patternRegexes = new();
 
     private static OctahedronConfig Config => Plugin.Config;
 
@@ -296,7 +295,7 @@ internal static partial class ShipyardOrders
 
         // Free, or why not
         var playerPcu = StarterShip.PlayerPcu(identity);
-        var blocked = Blocked(blueprint, Config.FreeBuildBlockedBlocks);
+        var blocked = Blocked(blueprint);
         var wait = FreePrints.Wait(identityId);
         if (!plan.Exempt && playerPcu >= Config.FreeBuildPcuLimit)
             (plan.PaidRule, plan.Paid) = (
@@ -3461,44 +3460,56 @@ internal static partial class ShipyardOrders
         return start != null;
     }
 
-    // The blueprint's blocks matching FreeBuildBlockedBlocks, counted by name: "2 Jump Drive"
-    private static List<string> Blocked(List<MyObjectBuilder_CubeGrid> grids, string patterns)
+    // The blueprint's blocks that a free build can't have, counted by name: "2 Prototech Battery"
+    private static List<string> Blocked(List<MyObjectBuilder_CubeGrid> grids)
     {
-        if (blockedPatterns != patterns)
-        {
-            blockedPatterns = patterns;
-            var globs = patterns
-                .Split(',')
-                .Select(p => p.Trim())
-                .Where(p => p.Length > 0)
-                .Select(p => Regex.Escape(p).Replace(@"\*", ".*"))
-                .ToList();
-            blockedRegex =
-                globs.Count == 0
-                    ? null
-                    : new Regex(
-                        $"^(?:{string.Join("|", globs)})$",
-                        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase
-                    );
-        }
-        if (blockedRegex == null)
-            return [];
+        var blocks = PatternRegex(Config.FreeBuildBlockedBlocks);
+        var components = PatternRegex(Config.FreeBuildExcludedComponents);
         return grids
             .SelectMany(g => g.CubeBlocks)
-            .Select(b => b.GetId())
-            .Where(id =>
-                blockedRegex.IsMatch(
-                    $"{id.TypeId.ToString().Replace("MyObjectBuilder_", "")}/{id.SubtypeName}"
+            .GroupBy(b => b.GetId())
+            .Select(g =>
+            {
+                MyDefinitionManager.Static.TryGetCubeBlockDefinition(g.Key, out var definition);
+                return (Id: g.Key, Definition: definition, Count: g.Count());
+            })
+            .Where(b =>
+                blocks?.IsMatch(
+                    $"{b.Id.TypeId.ToString().Replace("MyObjectBuilder_", "")}/{b.Id.SubtypeName}"
+                ) == true
+                || (
+                    components != null
+                    && b.Definition?.Components?.Any(c =>
+                        components.IsMatch(c.Definition.Id.SubtypeName)
+                    ) == true
                 )
             )
-            .GroupBy(id =>
-                MyDefinitionManager.Static.TryGetCubeBlockDefinition(id, out var definition)
-                    ? definition.DisplayNameText
-                    : id.SubtypeName
-            )
-            .OrderByDescending(g => g.Count())
-            .Select(g => $"{g.Count()} {g.Key}")
+            .GroupBy(b => b.Definition?.DisplayNameText ?? b.Id.SubtypeName, b => b.Count)
+            .Select(g => (Count: g.Sum(), Name: g.Key))
+            .OrderByDescending(g => g.Count)
+            .Select(g => $"{g.Count} {g.Name}")
             .ToList();
+    }
+
+    // A comma separated list of names where * matches any text, null when it is empty
+    private static Regex PatternRegex(string patterns)
+    {
+        if (patternRegexes.TryGetValue(patterns, out var regex))
+            return regex;
+        var globs = patterns
+            .Split(',')
+            .Select(p => p.Trim())
+            .Where(p => p.Length > 0)
+            .Select(p => Regex.Escape(p).Replace(@"\*", ".*"))
+            .ToList();
+        regex =
+            globs.Count == 0
+                ? null
+                : new Regex(
+                    $"^(?:{string.Join("|", globs)})$",
+                    RegexOptions.CultureInvariant | RegexOptions.IgnoreCase
+                );
+        return patternRegexes[patterns] = regex;
     }
 
     private static MyObjectBuilder_Projector Projector(
