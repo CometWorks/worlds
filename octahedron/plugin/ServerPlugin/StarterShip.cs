@@ -6,6 +6,7 @@ using HarmonyLib;
 using PluginSdk.Commands;
 using Sandbox;
 using Sandbox.Common.ObjectBuilders;
+using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Character;
@@ -239,6 +240,7 @@ internal static class StarterShip
     internal static (Vector3D Forward, Vector3D Up) CockpitFrame(MyObjectBuilder_CubeGrid grid)
     {
         MyObjectBuilder_CubeBlock found = null;
+        var flies = false;
         foreach (var block in grid.CubeBlocks)
         {
             if (block is MyObjectBuilder_ShipController { IsMainCockpit: true })
@@ -246,8 +248,15 @@ internal static class StarterShip
                 found = block;
                 break;
             }
-            if (found == null && block is MyObjectBuilder_ShipController)
-                found = block;
+            if (block is not MyObjectBuilder_ShipController)
+                continue;
+            // A bed or a couch is a ship controller too, facing anywhere, so it counts only on a
+            // grid without anything that flies the ship
+            var control =
+                MyDefinitionManager.Static.TryGetCubeBlockDefinition(block.GetId(), out var d)
+                && d is MyShipControllerDefinition { EnableShipControl: true };
+            if (found == null || (control && !flies))
+                (found, flies) = (block, control);
         }
         if (found == null)
             return (Vector3D.Forward, Vector3D.Up);

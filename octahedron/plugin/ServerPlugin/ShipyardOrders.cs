@@ -345,9 +345,9 @@ internal static class ShipyardOrders
         var outward = Vector3I.Zero;
         if (!arms && !FindStart(main, out start, out outward))
             return "The blueprint's main grid needs a 1x1x1 block on its outside to start from.";
-        var size = Size(blueprint, start, outward, out _);
         var space = FreeSpace(shipyard);
         var room = space.HalfExtent * 2;
+        var size = Size(blueprint, start, outward, room, out _, out var turn);
         if (size.X > room.X || size.Y > room.Y || size.Z > room.Z)
             return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}.";
         var needed = Components(blueprint, skipFirst: !arms)
@@ -360,7 +360,7 @@ internal static class ShipyardOrders
             layout = ShipyardArm.Plan(
                 shipyard,
                 ShipCenter(shipyard, space, size.Z),
-                ShipRotation(shipyard, main),
+                turn * shipyard.WorldMatrix.GetOrientation(),
                 blueprint,
                 out var error,
                 out pending
@@ -370,13 +370,16 @@ internal static class ShipyardOrders
         return null;
     }
 
-    // The ship's size along the shipyard, turned so its cockpit points along it, the scaffold on
-    // the start block included
+    // The ship's size along the shipyard, the scaffold on the start block included, and the turn
+    // of its main grid that gives it: its cockpit along the shipyard if it fits that way, else by
+    // right angles from there until it fits the room
     private static Vector3D Size(
         List<MyObjectBuilder_CubeGrid> blueprint,
         MyObjectBuilder_CubeBlock start,
         Vector3I outward,
-        out BoundingBoxD bounds
+        Vector3D room,
+        out BoundingBoxD bounds,
+        out MatrixD turn
     )
     {
         var main = blueprint[0];
@@ -390,19 +393,22 @@ internal static class ShipyardOrders
                     new BoundingBoxD(((Vector3D)cell - 0.5) * cube, ((Vector3D)cell + 0.5) * cube)
                 );
         }
-        return Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, CockpitTurn(main)));
-    }
-
-    // Turns the main grid so its cockpit points along the shipyard, up its up
-    private static MatrixD CockpitTurn(MyObjectBuilder_CubeGrid main)
-    {
         var (forward, up) = StarterShip.CockpitFrame(main);
-        return MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
+        var cockpit = MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
+        var size = Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, cockpit));
+        var axes = ShipyardPlacement.Align([size.X, size.Y, size.Z], [room.X, room.Y, room.Z]);
+        var align = MatrixD.Identity;
+        for (var i = 0; i < 3; i++)
+        {
+            align[i, i] = 0;
+            align[axes[i], i] = 1;
+        }
+        // Swapping two axes alone would mirror the ship
+        if (align.Determinant() < 0)
+            align[axes[0], 0] = -1;
+        turn = cockpit * align;
+        return Vector3D.Abs(Vector3D.TransformNormal(bounds.Size, turn));
     }
-
-    // The ship's main grid's orientation in the world when built
-    private static MatrixD ShipRotation(MyCubeGrid shipyard, MyObjectBuilder_CubeGrid main) =>
-        CockpitTurn(main) * shipyard.WorldMatrix.GetOrientation();
 
     // --- the button ---
 
@@ -1684,9 +1690,14 @@ internal static class ShipyardOrders
         main.CubeBlocks.Insert(0, start);
         Vector3I startCell = start.Min;
         var scaffold = new[] { startCell + outward, startCell + 2 * outward };
-        var size = Size(blueprint, start, outward, out var bounds);
-        var (forward, up) = StarterShip.CockpitFrame(main);
-        var turn = MatrixD.Transpose(MatrixD.CreateWorld(Vector3D.Zero, forward, up));
+        var size = Size(
+            blueprint,
+            start,
+            outward,
+            space.HalfExtent * 2,
+            out var bounds,
+            out var turn
+        );
 
         var components = Components(blueprint, skipFirst: true);
         var containers = Containers(shipyard).ToList();
