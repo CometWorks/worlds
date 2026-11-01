@@ -186,6 +186,21 @@ It happens once. A player who turns the setting back on keeps it: a grid loaded 
 save or moved to another cluster node isn't built, so it isn't cleared again. Grids
 already in a world keep what they have.
 
+### No gravity drives
+
+With `NoGravityDrivesEnabled` on (the default), artificial mass and space ball blocks
+don't react to gravity generators, so a gravity drive doesn't move its ship. Characters,
+loose objects and natural gravity on grids work as before, and these blocks still add
+their mass to a grid.
+
+The game's Warfare 3 update brings this as a world setting. Until then the rule applies
+on game version 1.210.* only; on any other version the patch isn't applied, and the log
+says at load which way it went. [SE-882](https://tasks.cometworks.se/tasks/1769) removes
+it and turns the world setting on.
+
+It runs on the server, which decides where a ship is. A client doesn't have the patch and
+predicts the drive's push for a ship it pilots until the server's state corrects it.
+
 ### PCU per ship or station
 
 A ship or station may have at most `GroupPcuLimit` (60,000) PCU: all grids
