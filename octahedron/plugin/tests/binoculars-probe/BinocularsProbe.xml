@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>binoculars-probe</Id>
+    <GroupId>binoculars-probe</GroupId>
+    <RepoId>local/binoculars-probe</RepoId>
+
+    <FriendlyName>Binoculars Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: what a client's gun says about shooting</Tooltip>
+    <Description>Test only. On the server, gives players binoculars and a rifle. On the client,
+        writes what the held gun answers to binoculars-probe.txt in the game's user data folder.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>

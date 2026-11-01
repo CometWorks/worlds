@@ -311,6 +311,9 @@ game update that changes the planet or voxel material definitions or maps.
   Binoculars mod, which has no tiers), 3 full oxygen and 3 full
   hydrogen bottles, and 3 suit battery packs (Powerkit). "Station Loot" is the blueprint's tools,
   bottles and ammo container.
+- Binoculars work in a safe zone that forbids shooting, though the game counts them as a
+  rifle. Clients have no plugin, so the plugin's `BinocularsInZones` tells them the zone
+  doesn't hold a character holding binoculars. The server's own check doesn't change.
 - The asteroid ore settings are vanilla's (DepositsCountCoefficient 2,
   DepositSizeDenominator 30, HarvestRatioMultiplier 1), not the Star System
   scenario's sparser 1, 60 and 0.8. See `ORES.md`.
