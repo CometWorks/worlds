@@ -446,11 +446,14 @@ def start_server(timeout: float = 2400.0, env: dict | None = None) -> None:
     )  # fmt: skip
     deadline = time.monotonic() + timeout
     while "Game ready" not in SERVER_LOG.read_text(errors="replace"):
+        time.sleep(2)
+        # Twice: during an exec of run-test.sh's chain the process has no command line to read
         if server_pid() is None:
-            raise RuntimeError(f"The server exited, see {SERVER_LOG}")
+            time.sleep(1)
+            if server_pid() is None:
+                raise RuntimeError(f"The server exited, see {SERVER_LOG}")
         if time.monotonic() > deadline:
             raise TimeoutError(f"The server did not get ready, see {SERVER_LOG}")
-        time.sleep(2)
     # A plugin whose Init throws leaves the server running with only some of its patches
     magnetar_log = SERVER_CONFIG / "info.log"
     if "Failed to initialize" in magnetar_log.read_text(errors="replace"):
