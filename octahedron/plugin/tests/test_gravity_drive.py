@@ -28,6 +28,8 @@ import os
 import sys
 import time
 
+import httpx
+
 os.environ.setdefault("OCT_TASK", "SE-881")
 import rig  # noqa: E402
 from se_autopilot import enter_cockpit  # noqa: E402
@@ -271,6 +273,22 @@ def watch(name: str, sample) -> dict:
     }
 
 
+def sit(remote, entity_id: int) -> None:
+    """enter_cockpit, again if Remote answers with an error right after a teleport"""
+
+    def seated() -> bool:
+        try:
+            return enter_cockpit(remote, entity_id).get("state") == "sitting"
+        except httpx.HTTPStatusError as error:
+            log(
+                f"entering {entity_id}: {error.response.status_code} {error.response.text[:200]}"
+            )
+            rig.ensure_character(remote)
+            return False
+
+    rig.wait_until(seated, 120, f"the client in the cockpit of {entity_id}")
+
+
 def enabled(remote, entity_id: int, position) -> bool:
     return remote.get_block(entity_id, position)["enabled"]
 
@@ -314,7 +332,7 @@ def fly_with_thrusters(remote, check) -> None:
     name, entity_id, position = THRUST
     remote.character_teleport(position[0], position[1] + 30, position[2])
     wait_on_client(remote, entity_id)
-    enter_cockpit(remote, entity_id)
+    sit(remote, entity_id)
     check(remote.get_character().get("state") == "sitting", f"pilot in {name}")
     remote.set_enabled(entity_id, GENERATOR, True)
     farthest = [0.0]
@@ -440,7 +458,7 @@ def main() -> int:
     for name, (entity_id, position, _) in PILOTED.items():
         remote.character_teleport(position[0], position[1] + 30, position[2])
         wait_on_client(remote, entity_id)
-        enter_cockpit(remote, entity_id)
+        sit(remote, entity_id)
         check(remote.get_character().get("state") == "sitting", f"pilot in {name}")
         check(
             drives_on(remote, entity_id) == [True, True], f"{name}: blocks on at first"
