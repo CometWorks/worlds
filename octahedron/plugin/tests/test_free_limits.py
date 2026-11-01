@@ -1,7 +1,7 @@
 """Checks the limits on free shipyard builds with the headless client, on the
 shipyard test server of tests/test_shipyard_order.py: the cool-down between free
-builds (FreeBuildCooldownMinutes, 10) and the blocks a free build can't have
-(FreeBuildBlockedBlocks).
+builds (FreeBuildCooldownMinutes, 10) and the components a free build can't need
+(FreeBuildExcludedComponents).
 
 Three server starts on one world copy, the tables loaded with another blueprint
 before each:
@@ -9,7 +9,7 @@ before each:
   for the 10 minute cool-down.
 - "Free Limits Blocked" (a jump drive, a large ion thruster and a prototech
   battery): the quote is still paid for the cool-down, the world kept it over the
-  restart. With the cool-down at 0 it is paid for the three blocks.
+  restart. With the cool-down at 0 it is paid for the prototech battery alone.
 - "Order Big" (1,536 blocks), the cool-down at 0: pressing again while it builds
   doesn't cancel it.
 
@@ -151,7 +151,7 @@ def completed_ship() -> None:
     """A completed order starts the cool-down"""
     so.prepare(so.SMALL, 60)
     config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
-    assert "FreeBuild" not in config, "the world's config sets no free-build option"
+    assert "FreeBuildCooldownMinutes" not in config, "the cool-down is at its default"
     remote = start()
     so.place(remote, "Order Test")
     wait_chat_count(remote, "is ready", 1, 900)
@@ -177,8 +177,9 @@ def blocked_blocks() -> None:
     sa.at_table(remote, max(sa.station_tables()))
     reply = order(remote)
     assert "paid build (a free ship can't have" in reply, reply
-    for name in ("Jump Drive", "Ion Thruster", "Prototech Battery"):
-        assert name in reply, (name, reply)
+    assert "Prototech Battery" in reply, reply
+    for name in ("Jump Drive", "Ion Thruster"):
+        assert name not in reply, (name, reply)
     stop()
 
 

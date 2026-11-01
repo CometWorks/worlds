@@ -1,6 +1,6 @@
 Welcome to Octahedron! The server is in beta testing.
 
-Free ship: at a station's shipyard, load a blueprint into the hologram table, check the parts list on the billboard and press the button next to it. A ship is free while you have less than 10,000 PCU, one every 10 minutes.
+Free ship: at a station's shipyard, load a blueprint into the hologram table, check the parts list on the billboard and press the button next to it. A ship is free while you have less than 60,000 PCU, one every 10 minutes.
 
 Trade lanes: stop just in front of a tunnel's entrance ring and turn off your dampeners (Z). The gate takes your ship to the far end. Dampeners back on cancels the trip.
 

@@ -248,9 +248,8 @@ def forced_limit(remote):
     (rig.WORLD / "SANDBOX_0_0_0_.sbsB5").unlink(missing_ok=True)
     config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
     rig.write_plugin_config(
-        config.replace(
+        re.sub(r"<FreeBuildPcuLimit>\d+<", "<FreeBuildPcuLimit>0<", config).replace(
             "</OctahedronConfig>",
-            "<FreeBuildPcuLimit>0</FreeBuildPcuLimit>"
             "<ShipyardArmPlanSeconds>0</ShipyardArmPlanSeconds></OctahedronConfig>",
         )
     )
