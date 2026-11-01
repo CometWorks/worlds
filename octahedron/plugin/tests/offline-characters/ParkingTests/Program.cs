@@ -171,8 +171,12 @@ Check(book.Wakes(1000 + Limit, Limit, 5).Count == 0, "once");
 book.Observe([(Me, true)], 2000);
 book.Observe([], 2010);
 Check(book.Wakes(2000 + Limit, Limit, 5).Contains(Me), "again after the next time online");
-book.Parked.Add(new() { Identity = Me });
-Check(!book.Wakes(2000 + Limit, Limit, 5).Contains(Me), "a kept one needs no wake");
+book.Players[Me].Woken = true;
+Check(book.Park(Me, 5, 0, "x", 2000 + Limit, Limit, 1) == ParkOutcome.Added, "kept");
+Check(
+    book.Wakes(2000 + Limit, Limit, 5).Contains(Me),
+    "kept: woken again, its partition may go offline before the removal"
+);
 book = new ParkingBook();
 foreach (var i in Enumerable.Range(1, 8))
     book.Observe([(i, true)], i);

@@ -165,6 +165,9 @@ internal sealed class ParkingBook
                 Order = order,
             }
         );
+        // The partition may go offline before the body is removed, then it needs waking again
+        if (Players.TryGetValue(identity, out var seen))
+            seen.Woken = false;
         return ParkOutcome.Added;
     }
 
@@ -211,7 +214,6 @@ internal sealed class ParkingBook
                 && !p.Value.Woken
                 && !online.Contains(p.Key)
                 && now - p.Value.Seconds >= limit
-                && !Parked.Any(c => c.Identity == p.Key)
             )
             .OrderBy(p => p.Value.Seconds)
             .Take(count)
