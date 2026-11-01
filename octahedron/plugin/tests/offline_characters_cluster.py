@@ -357,11 +357,15 @@ def run(bench) -> None:
     check("outside the sphere: nothing taken", items_again == items, items_again)
     check("outside the sphere: the bank as it was", balance(api) == bank)
 
+    # A killed client lingers up to 140 s and its time starts then, so a limit of 1 minute means
+    # about 4 minutes from the kill to the removal, more with a save to wait for
+    away = 420
+
     # --- kept through a graceful stop and warm start ---
     minutes(1)
     body, carried, bank = stock(api, 2_000)
     bench.kill_client(CLIENT_ID)
-    wait_removed(body, 240)
+    wait_removed(body, away)
     # A save holds it: the removal waited for that
     check("graceful stop", cluster.stop(grace=240))
     saved = wa.global_save(bench.run_root / "wa-1-data")
@@ -380,7 +384,7 @@ def run(bench) -> None:
     body, carried, bank = stock(api, 4_000)
     holder = where()
     bench.kill_client(CLIENT_ID)
-    wait_kept(body, 240)
+    wait_kept(body, away)
     gone_early = removed_on(body)
     cluster.kill(holder)
     print(f"killed {holder}; removed already: {gone_early}", flush=True)
@@ -388,7 +392,7 @@ def run(bench) -> None:
     cluster.wait_ready(nodes=[holder])
     if not gone_early:
         # On the restarted node, or on the other one if it took the partition first
-        print(f"removed on {wait_removed(body, 300)}", flush=True)
+        print(f"removed on {wait_removed(body, away)}", flush=True)
     check(
         "the WA kept it once",
         count(kept_line(body), "wa-1") == before["wa-1"] + 1,
@@ -401,12 +405,12 @@ def run(bench) -> None:
     minutes(1)
     body, carried, bank = stock(api, 8_000)
     bench.kill_client(CLIENT_ID)
-    wait_kept(body, 240)
+    wait_kept(body, away)
     reset_probe()
     cluster.restart_node("wa-1")
     cluster.wait_ready(nodes=["wa-1"])
     # The save held it or it did not: the body goes in both, the deposit once
-    wait_removed(body, 300)
+    wait_removed(body, away)
     api = join()
     came_back(api, "after a WA kill", body, bank, 8_000)
 
