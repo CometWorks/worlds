@@ -1157,6 +1157,10 @@ shipyard's mods: the quote and the order, the hydrogen from a docked ship's tank
 the new ship's, the payment and OCT's stock, a press while it builds, an order queued
 behind the finished ship and canceled after a restart, and a free order canceled with
 the button itself.
+`tests/test_shipyard_left_out.py` checks what a ship is built without: a player gets
+only the blocks of the DLCs they own, built by the station's welders, and a paid ship
+with a grid no welder can place is delivered without it, the grid named and its
+components refunded.
 `tests/test_table_rules.py` runs two players at one table on a world built by
 `build_world.py`: the screens, one press to order and one to cancel, the loader's
 sole access, removing another player's blueprint, a full queue and an owner who

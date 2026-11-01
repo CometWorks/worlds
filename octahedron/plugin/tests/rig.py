@@ -289,6 +289,11 @@ def _alive(pid_file: Path, marker: str) -> int | None:
     try:
         pid = int(pid_file.read_text().strip())
         cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+        if (
+            not cmdline
+        ):  # Empty for a moment during an exec, like run-test.sh's env to bash
+            time.sleep(0.2)
+            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
     except (OSError, ValueError):
         return None
     return pid if marker.encode() in cmdline else None
@@ -652,32 +657,35 @@ def stop_client() -> None:
     _stop(CLIENT_PID, str(LAUNCHER), 60)
 
 
-def chat(remote: RemoteAPI, text: str, wait: float = 5.0) -> list[str]:
-    """Sends a chat line and returns the lines that came back: chat messages and, for
-    replies sent as scripted chat, new HUD chat lines. Returns a second after the last new
-    line, or after wait seconds if nothing came"""
-    before = remote.get_chat_messages()
+def new_chat_lines(remote: RemoteAPI, before: dict, text: str) -> list[str]:
+    """The lines since before, a get_chat_messages result, without text: chat messages and,
+    for replies sent as scripted chat, new HUD chat lines"""
     seen = {
         (h.get("sender"), h.get("text"), h.get("timestamp"))
         for h in before.get("hud", [])
     }
+    after = remote.get_chat_messages(after=before.get("latest", 0))
+    return [
+        m.get("Text", "") for m in after.get("messages", []) if m.get("Text") != text
+    ] + [
+        h.get("text", "")
+        for h in after.get("hud", [])
+        if (h.get("sender"), h.get("text"), h.get("timestamp")) not in seen
+        and h.get("text") != text
+    ]
+
+
+def chat(remote: RemoteAPI, text: str, wait: float = 5.0) -> list[str]:
+    """Sends a chat line and returns the lines that came back. Returns a second after the
+    last new line, or after wait seconds if nothing came"""
+    before = remote.get_chat_messages()
     remote.send_chat(text)
     deadline = time.monotonic() + wait
     lines: list[str] = []
     changed = 0.0
     while True:
         time.sleep(0.2)
-        after = remote.get_chat_messages(after=before.get("latest", 0))
-        got = [
-            m.get("Text", "")
-            for m in after.get("messages", [])
-            if m.get("Text") != text
-        ] + [
-            h.get("text", "")
-            for h in after.get("hud", [])
-            if (h.get("sender"), h.get("text"), h.get("timestamp")) not in seen
-            and h.get("text") != text
-        ]
+        got = new_chat_lines(remote, before, text)
         now = time.monotonic()
         if got != lines:
             lines, changed = got, now
