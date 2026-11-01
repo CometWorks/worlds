@@ -448,7 +448,9 @@ A job doesn't need its player. They can log off or move to another node, in a bu
 or a repair slot. The welders stay theirs, and for a player who isn't connected the
 game's DLC question, which only Steam could answer, counts as yes. On a cluster a
 shipyard with something in its queue keeps its partition online, which would otherwise go
-offline with nobody within 8 km, and may go offline again once it is free. The shipyard's
+offline with nobody within 8 km, and may go offline again once it is free. A cluster stop
+leaves such a partition out of what it takes offline, so the job goes on after the start with
+nobody there; a cluster that can't, from before SE-904, needs a visit first. The shipyard's
 chat messages find the player on any node. One who is logged off misses them.
 
 - At the queue's front the player gets the shipyard's cargo containers, welders and
@@ -1223,7 +1225,8 @@ sale, overflow, a ship in the way, a tow reaching the shipyard, restarts;
 partition. `tests/test_shipyard_off.py` checks that a shipyard is off without a job and on only
 for the slot's player and faction, and a build and a repair slot going on after the player left;
 `tests/shipyard_off_cluster.py` does that with the player on another node and the station's
-partition free to go offline. `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
+partition free to go offline, and `tests/shipyard_stop_cluster.py` with a cluster stop and start
+in the middle of a build, with nobody connected. `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
 the shipyard's mods: the quote and the order, the hydrogen from a docked ship's tank into
 the new ship's, the payment and OCT's stock, a press while it builds, an order queued
 behind the finished ship and canceled after a restart, and a free order canceled with
