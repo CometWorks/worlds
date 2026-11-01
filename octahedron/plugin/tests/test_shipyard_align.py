@@ -9,6 +9,12 @@ build_world.py. The checks read the delivered ship from the saved world.
   up, its length along the shipyard.
 - "short" at Beta Station: 25 m long, its only cockpit facing right: fits as it is, so its cockpit
   still points along the shipyard.
+- "seats" at South Station: short, a cryo chamber, a passenger seat and a bed facing right come
+  first in the blueprint, then the cockpit: its cockpit points along the shipyard (SE-880).
+- "flagged" at Delta Station: short, a bed facing right flagged as the main cockpit, then the
+  cockpit: its cockpit points along the shipyard (SE-880).
+- "nocontrol" at Moon Station: short, only those three facing right, nothing that flies it: the
+  grid's forward points along the shipyard, so its cryo chamber points across (SE-880).
 - "file" at Gamma Station, with OCT_ALIGN_BP=<bp.sbc>: a real blueprint whose cockpit points along
   its length, ordered with Ignore PCU limits on. Workshop item 3344819653 is the example.
   Its DLC blocks stall the build unless the NPC-owned welders may place them (SE-805).
@@ -52,6 +58,22 @@ def ship(name: str, entity: int, length: int, bed: bool) -> tuple[str, int]:
     return rig.grid(name, entity, blocks, tag="MyObjectBuilder_CubeGrid"), len(blocks)
 
 
+def seats(name: str, entity: int, cockpit: bool, main: str = "") -> tuple[str, int]:
+    """Short armor with ship controllers on top that don't fly it, all facing right, then a cockpit
+    pointing along the ship. Not the DLC cryo room or bed: their DLC stalls the build (SE-805).
+    """
+    sideways = dict(forward="Right")
+    blocks = [
+        rig.block("MyObjectBuilder_CryoChamber", "LargeBlockCryoChamber", (0, 2, 0), **sideways),
+        rig.block("MyObjectBuilder_Cockpit", "PassengerSeatLarge", (0, 2, 2), **sideways),
+        rig.block("MyObjectBuilder_CryoChamber", "LargeBlockBedFree", (0, 2, 4), main, **sideways),
+    ]  # fmt: skip
+    if cockpit:
+        blocks.append(rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 2, 6), f"<EntityId>{entity + 1}</EntityId>"))  # fmt: skip
+    blocks += sa.hull({}, (1, 2, 10), "LargeBlockArmorBlock")
+    return rig.grid(name, entity, blocks, tag="MyObjectBuilder_CubeGrid"), len(blocks)
+
+
 def from_file(path: str) -> tuple[str, int]:
     grids = hc.blueprint_grids(Path(path))
     return grids, grids.count("<MyObjectBuilder_CubeBlock ")
@@ -62,6 +84,9 @@ SHIPS = {
     "bed": ("North", "AlignBed", ship("AlignBed", 777000867000100, 60, True)),
     "sideways": ("Alpha", "AlignSideways", ship("AlignSideways", 777000867000200, 60, False)),
     "short": ("Beta", "AlignShort", ship("AlignShort", 777000867000300, 10, False)),
+    "seats": ("South", "AlignSeats", seats("AlignSeats", 777000880000100, True)),
+    "flagged": ("Delta", "AlignFlagged", seats("AlignFlagged", 777000880000200, True, "<IsMainCockpit>true</IsMainCockpit>")),
+    "nocontrol": ("Moon", "AlignNoControl", seats("AlignNoControl", 777000880000300, False)),
 }  # fmt: skip
 BP = os.environ.get("OCT_ALIGN_BP")
 if BP:
@@ -70,9 +95,11 @@ if BP:
 # The tables in the world's order. No order is placed at the ones without a case.
 STATIONS = ["North", "South", "Alpha", "Beta", "Gamma", "Delta", "Moon"]
 # Whether the cockpit ends up pointing along the shipyard; the ones that don't are turned
-COCKPIT_ALONG = {"bed": True, "sideways": False, "short": True, "file": True}
+COCKPIT_ALONG = {"bed": True, "sideways": False, "short": True, "file": True, "seats": True, "flagged": True, "nocontrol": False}  # fmt: skip
 CENTERED = ("bed", "sideways", "file")
 COCKPITS = ("LargeBlockCockpit", "LargeBlockStandingCockpit")
+# The block whose direction is checked where the ship has no cockpit
+LOOKS = {"nocontrol": ("LargeBlockCryoChamber",)}
 
 
 def check_turn(root: ET.Element, case: str) -> None:
@@ -97,8 +124,9 @@ def check_turn(root: ET.Element, case: str) -> None:
         "Up": up,
         "Down": neg(up),
     }
+    looks = LOOKS.get(case, COCKPITS)
     cockpit = next(
-        b for b in built.find("CubeBlocks") if b.findtext("SubtypeName") in COCKPITS
+        b for b in built.find("CubeBlocks") if b.findtext("SubtypeName") in looks
     )
     orientation = cockpit.find("BlockOrientation")
     attrib = {} if orientation is None else orientation.attrib
