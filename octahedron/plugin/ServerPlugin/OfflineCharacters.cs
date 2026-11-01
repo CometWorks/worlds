@@ -52,6 +52,10 @@ internal static class OfflineCharacters
     private const string ParkCommand = "offline-character-park";
     private const string TakeCommand = "offline-character-take";
     private const string ConsumeCommand = "offline-character-consume";
+
+    // Answers once a recoverable global save holds what the WA did before it. Up to cluster 0.1.25
+    // nothing does, Unsupported.
+    private const string GlobalSaveCommand = "cluster.global-save";
     private const string Credit = "SpaceCredit";
     private const int Attempts = 4;
     private const int WakesPerPass = 5;
@@ -61,6 +65,9 @@ internal static class OfflineCharacters
     // the positions; a wake too many costs one load of a partition.
     private const double WakeRange = 200;
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
+
+    // The most a request may wait, and a save can take longer: the operation id keeps its place
+    private static readonly TimeSpan SaveTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ObserveInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan WakeInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan SaveCheckInterval = TimeSpan.FromSeconds(2);
@@ -124,11 +131,23 @@ internal static class OfflineCharacters
     private static Type RuntimeType =>
         runtimeType ??= AccessTools.TypeByName("ClusterPlugin.ClusterRuntime");
 
-    // A plugin's global command doesn't wait for a save, so this looks at the saves. Their place in
-    // the order: the generation, then the sequence. Only without saves at all is everything saved.
+    // Does this cluster have GlobalSaveCommand? Null until it answered, and commands wait for that.
+    private static bool? askSaves;
+
+    // With it a change's order is its number here, and the command's answer covers those made before
+    // it was sent. Numbers start again after a load, where Order is zero: it came from a save.
+    private static long changes;
+    private static long saveCovers;
+    private static Guid saveOperation;
+    private static bool saveAsked;
+
+    // Without it, up to cluster 0.1.25, a plugin's global command doesn't wait for a save, so this
+    // looks at the saves. Their place in the order: the generation, then the sequence. Only without
+    // saves at all is everything saved. Goes once no cluster without the command is left.
     private static long SaveMark(long generation, long sequence) => (generation << 32) + sequence;
 
-    // The newest global save a replacement WA could restore, as the gateway says
+    // What a replacement WA could restore: the last order the command covered, or else the newest
+    // global save as the gateway says
     private static long recoverable;
 
     // The first save that can hold a change made now: one runs at a time, and it may have been
@@ -140,6 +159,8 @@ internal static class OfflineCharacters
         {
             if (!PluginCluster.IsClusterProcess)
                 return 0;
+            if (askSaves == true)
+                return ++changes;
             var persistence = AccessTools
                 .Field(RuntimeType, "m_worldAuthorityPersistence")
                 ?.GetValue(null);
@@ -162,6 +183,8 @@ internal static class OfflineCharacters
         {
             if (!PluginCluster.IsClusterProcess)
                 return long.MaxValue;
+            if (askSaves == true)
+                return recoverable;
             var persists = AccessTools
                 .PropertyGetter(RuntimeType, "GlobalSavesPersist")
                 ?.Invoke(null, null);
@@ -171,7 +194,8 @@ internal static class OfflineCharacters
 
     private static void RequestSave()
     {
-        if (RuntimeType != null)
+        // GlobalSaveCommand asks for the save itself
+        if (askSaves != true && RuntimeType != null)
             AccessTools.Method(RuntimeType, "RequestGlobalSave")?.Invoke(null, null);
     }
 
@@ -228,7 +252,10 @@ internal static class OfflineCharacters
         if (PluginCluster.IsClusterProcess && unsaved && utc >= nextSaveCheck)
         {
             nextSaveCheck = utc + SaveCheckInterval;
-            _ = Task.Run(CheckSaves);
+            if (askSaves == true)
+                _ = AskSave();
+            else
+                _ = Task.Run(CheckSaves);
         }
 #endif
     }
@@ -241,6 +268,11 @@ internal static class OfflineCharacters
             return true;
         if (registrationFailed || PluginCluster.Current == null)
             return false;
+        if (askSaves == null)
+        {
+            _ = AskSave();
+            return false;
+        }
         if (NextSave == long.MaxValue)
             Plugin.Log.Error(
                 "The cluster's saves can't be followed: no kept inventory counts as saved, so offline characters stay in the world"
@@ -414,6 +446,42 @@ internal static class OfflineCharacters
                 Plugin.Log.Error("Saving the offline characters failed", e);
             }
         }
+    }
+
+    private static async Task AskSave()
+    {
+        if (saveAsked)
+            return;
+        saveAsked = true;
+        if (saveOperation == Guid.Empty)
+        {
+            saveOperation = Guid.NewGuid();
+            saveCovers = changes;
+        }
+        var code = PluginResultCode.Unavailable;
+        try
+        {
+            code = (
+                await Cluster
+                    .ExecuteGlobalAsync(GlobalSaveCommand, null, saveOperation, SaveTimeout)
+                    .ConfigureAwait(false)
+            ).Code;
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Warning($"Offline characters: no answer on the saves: {e.Message}");
+        }
+        OnGameThread(() =>
+        {
+            saveAsked = false;
+            if (code == PluginResultCode.Unsupported)
+                askSaves ??= false;
+            if (code != PluginResultCode.Success)
+                return;
+            askSaves = true;
+            recoverable = Math.Max(recoverable, saveCovers);
+            saveOperation = Guid.Empty;
+        });
     }
 
 #if NETCOREAPP
