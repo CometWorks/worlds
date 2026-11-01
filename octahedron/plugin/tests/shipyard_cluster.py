@@ -144,9 +144,8 @@ def run(bench) -> None:
         builder = ET.fromstring(api.get_object_builder(block["entityId"]))
         slots = builder.iterfind("Toolbar/Slots/Slot/Data")
         refs |= {d.findtext("BlockEntityId") for d in slots} - {None}
-    gone = (
-        set()
-    )  # On any of the ship's grids, but a block of the blueprint's ids doesn't exist
+    # On any of the ship's grids, but a slot still on a blueprint id finds no block
+    gone = set()
     for ref in refs:
         try:
             api.get_object_builder(int(ref))
