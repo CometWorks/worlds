@@ -63,7 +63,7 @@ var loaded = ParkingBook.Deserialize(book.Serialize());
 Check(loaded.Parked.Count == 1 && loaded.Parked[0].Order == 0, "a load has no order");
 Check(Offline(loaded, now, durable: 0) == ParkingVerdict.Remove, "a save holds what it loaded");
 Check(loaded.Parked[0].Items == "items" && loaded.Parked[0].Credits == 5, "the row comes back");
-Check(loaded.Players[Me].AtStation, "the seen row comes back");
+Check(loaded.Players[Me].NearStation, "the seen row comes back");
 
 // Taking: the new body waits for a save knowing it is on its way, and gets it once
 Check(book.Status(Me, Next, true, now, Limit, Saved) == ParkingVerdict.Take, "a new body takes");
@@ -157,12 +157,15 @@ take = book.Take(Me, Next, 1, Saved);
 Check(take.Parked.Select(p => p.Items).SequenceEqual(["a", "b"]), "both kept bodies");
 Check(book.Consume(Me, Next) == 2 && book.Parked.Single().Items == "c", "the other's stays");
 
-// Whose partition to load: at a station, offline, the time up, once
+// Whose partition to load: near a station, offline, the time up, once
 book = new ParkingBook();
 book.Observe([(Me, true), (Me + 1, false), (Me + 2, true)], 1000);
 book.Observe([(Me + 2, true)], 1010);
 Check(book.Wakes(1000 + Limit - 1, Limit, 5).Count == 0, "nobody's time is up");
-Check(book.Wakes(1000 + Limit, Limit, 5).SequenceEqual([Me]), "only the one at a station, offline");
+Check(
+    book.Wakes(1000 + Limit, Limit, 5).SequenceEqual([Me]),
+    "only the one near a station, offline"
+);
 book.Players[Me].Woken = true;
 Check(book.Wakes(1000 + Limit, Limit, 5).Count == 0, "once");
 book.Observe([(Me, true)], 2000);

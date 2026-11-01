@@ -35,6 +35,7 @@ from test_offline_characters import (
     inventory,
     probe as cprobe,
     teleport,
+    to_edge,
     wait_inventory,
 )
 from wa_economy_cluster import (
@@ -165,6 +166,8 @@ def run(bench) -> None:
     def stock(api, credits: int) -> tuple[int, dict[str, float], int]:
         """To the station, with known items and space credits"""
         teleport(api, alpha[0] + 150, alpha[1], alpha[2])
+        distance, radius = to_edge(api, -3)
+        check(f"inside the sphere: {distance:.1f} of {radius:.1f} m", distance < radius)
         cprobe(api, "clear", "CLEAR")
         for item, amount in CARRIED.items():
             cprobe(api, f"give {item} {amount:.0f}", "GIVE True")
@@ -317,6 +320,42 @@ def run(bench) -> None:
     came_back(api, "after a partition load", body, bank, 1_000, same=True)
     cluster.restart_node(remover)
     cluster.wait_ready(nodes=[remover])
+
+    # --- just outside the sphere: the WA can't tell and loads the partition, the body stays ---
+    teleport(api, alpha[0] + 150, alpha[1], alpha[2])
+    distance, radius = to_edge(api, 3)
+    check(f"outside the sphere: {distance:.1f} of {radius:.1f} m", distance > radius)
+    body, items = inventory(api)
+    bank = balance(api)
+    before.clear()
+    before.update({n: count(removed_line(body), n) for n in NODES})
+    before["wa-1"] = count(kept_line(body), "wa-1")
+    bench.kill_client(CLIENT_ID)
+    load = re.compile(rf"load of partition \d+ for body {body}")
+    wait_until(lambda: load.search(log("wa-1")), 600, "the WA's load of the partition")
+
+    def online_again() -> bool:
+        return not offline_with_body()
+
+    wait_until(online_again, 180, "the partition back online")
+    # Two scans of the node holding it, and an answer to each
+    quiet_until = time.monotonic() + 70
+    while (
+        time.monotonic() < quiet_until
+        and not removed_on(body)
+        and count(kept_line(body), "wa-1") == before["wa-1"]
+    ):
+        time.sleep(2)
+    check(
+        "outside the sphere: the WA kept nothing",
+        count(kept_line(body), "wa-1") == before["wa-1"],
+    )
+    check("outside the sphere: the body stays", not removed_on(body))
+    api = join()
+    again, items_again = inventory(api)
+    check("outside the sphere: the same body", again == body, f"{again} after {body}")
+    check("outside the sphere: nothing taken", items_again == items, items_again)
+    check("outside the sphere: the bank as it was", balance(api) == bank)
 
     # --- kept through a graceful stop and warm start ---
     minutes(1)

@@ -4,11 +4,13 @@ takes minutes, not hours.
 
 - Away for less than the time (30 minutes here, as a client takes minutes to start): the
   same body, nothing taken.
-- Away longer at a station: the body goes, its space credits are in the bank once, and the
+- Away longer on a station, inside the bounding sphere of its grid: the body goes, its space credits are in the bank once, and the
   rest is in the saved world and back in the next body after a server restart. A second
   spawn gets nothing more.
 - A full inventory comes back whole on top of the new body's gear, past the limit.
-- Seated at a station: the same, and the seat is free.
+- Seated in the station: the same, and the seat is free.
+- Just inside the sphere, standing or seated in a ship: the body goes.
+- Just outside it, standing or seated in a ship reaching into it: the body stays.
 - Away far from a station: the body stays.
 - Dead when the player left: nothing is kept.
 
@@ -51,6 +53,10 @@ REMOVED = re.compile(r"Offline character of (\d+): body (\d+) removed")
 AWAY = 240
 # How long nothing must happen: a body has asked after 5 s, an offline one has gone after 100 s
 QUIET = 15
+# How far from the sphere's edge "just inside" and "just outside" are
+EDGE = 3
+# For the client to have a ship just spawned before its player is seated in it
+SHIP_REPLICATION = 5
 QUIET_AWAY = 100
 CONFIG = {
     "OfflineCharacterMinutes": 1,
@@ -150,6 +156,30 @@ def position(at) -> tuple[float, float, float]:
     return (at["x"], at["y"], at["z"]) if isinstance(at, dict) else tuple(at)
 
 
+def sphere(remote) -> tuple[tuple[float, float, float], float, float]:
+    """The nearest station's bounding sphere and how far the body is from its center"""
+    found = probe(remote, "sphere", r"SPHERE (\S+) (\S+) (\S+) (\S+) (\S+)")
+    return (
+        (float(found[1]), float(found[2]), float(found[3])),
+        float(found[4]),
+        float(found[5]),
+    )
+
+
+def to_edge(remote, offset: float) -> tuple[float, float]:
+    """Into open space that far from the sphere's edge, on its +X side, and at rest there. The
+    body's distance from the center and the radius."""
+    center, radius, _ = sphere(remote)
+    x = center[0] + radius + offset
+    teleport(remote, x, center[1], center[2])
+    distance = rig.wait_until(
+        lambda: (d := sphere(remote)[2]) if abs(d - radius - offset) < 1 else None,
+        60,
+        "the body at the sphere's edge",
+    )
+    return distance, radius
+
+
 def next_body(remote, body: int, timeout: float = 240) -> None:
     """Killed: through the respawn screen to a new body"""
     deadline = time.monotonic() + timeout
@@ -221,6 +251,7 @@ def run() -> None:
     alpha = at["Alpha Station"]
     remote = spawned()
     teleport(remote, alpha[0] + 150, alpha[1], alpha[2])
+    to_edge(remote, -EDGE)
     probe(remote, "clear", "CLEAR")
     for item, amount in CARRIED.items():
         probe(remote, f"give {item} {amount:.0f}", "GIVE True")
@@ -278,6 +309,7 @@ def run() -> None:
 
     # --- a full inventory comes back whole, past the limit ---
     teleport(remote, alpha[0] + 150, alpha[1], alpha[2])
+    to_edge(remote, -EDGE)
     probe(remote, "fill", "FILL")
     body, full = inventory(remote)
     check(full.get("Ore/Stone", 0) > 0, f"full of stone: {full}")
@@ -311,6 +343,78 @@ def run() -> None:
     else:
         check(False, "a seat near the station")
 
+    # --- just inside the sphere ---
+    teleport(remote, alpha[0] + 150, alpha[1], alpha[2])
+    distance, radius = to_edge(remote, -EDGE)
+    check(distance < radius, f"just inside: {distance:.1f} of {radius:.1f} m")
+    probe(remote, "clear", "CLEAR")
+    probe(remote, "give Ingot/Gold 3", "GIVE True")
+    body, _ = inventory(remote)
+    removed = leave_and_wait(REMOVED)
+    check(removed is not None and removed[2] == str(body), "just inside: the body goes")
+    remote = spawned()
+    _, items = wait_inventory(remote, {"Ingot/Gold": 3})
+    check(items.get("Ingot/Gold") == 3, f"just inside: its items: {items}")
+
+    # --- just outside the sphere ---
+    teleport(remote, alpha[0] + 150, alpha[1], alpha[2])
+    distance, radius = to_edge(remote, EDGE)
+    check(distance > radius, f"just outside: {distance:.1f} of {radius:.1f} m")
+    body, items = inventory(remote)
+    bank = balance(remote)
+    stayed = leave_and_wait(REMOVED, QUIET_AWAY)
+    check(stayed is None, f"just outside: the body stays: {stayed}")
+    remote = spawned()
+    again, items_again = inventory(remote)
+    check(
+        again == body and items_again == items, f"just outside: the same body: {again}"
+    )
+    check(balance(remote) == bank, "just outside: the bank as it was")
+    distance = sphere(remote)[2]
+    check(distance > radius, f"just outside: still there: {distance:.1f} m")
+
+    # --- seated in a ship with the seat just inside: the body goes, the ship stays ---
+    seat = probe(remote, "ship inside", r"SHIP (\d+)")[1]
+    time.sleep(SHIP_REPLICATION)
+    probe(remote, f"seatin {seat}", "SEAT")
+    probe(remote, "clear", "CLEAR")
+    probe(remote, "give Ingot/Gold 4", "GIVE True")
+    _, radius, distance = sphere(remote)
+    check(distance < radius, f"in a ship, inside: {distance:.1f} of {radius:.1f} m")
+    body, _ = inventory(remote)
+    removed = leave_and_wait(REMOVED)
+    check(
+        removed is not None and removed[2] == str(body),
+        "in a ship, inside: the body goes",
+    )
+    remote = spawned()
+    _, items = wait_inventory(remote, {"Ingot/Gold": 4})
+    check(items.get("Ingot/Gold") == 4, f"in a ship, inside: its items: {items}")
+    pilot = probe(remote, f"pilot {seat}", r"PILOT (\S+)")
+    check(
+        pilot[1] == "0",
+        f"in a ship, inside: the ship is there, the seat free: {pilot[0]}",
+    )
+
+    # --- seated in a ship reaching into the sphere with the seat just outside: it stays ---
+    teleport(remote, alpha[0] + 150, alpha[1], alpha[2])
+    seat = probe(remote, "ship outside", r"SHIP (\d+)")[1]
+    time.sleep(SHIP_REPLICATION)
+    probe(remote, f"seatin {seat}", "SEAT")
+    _, radius, distance = sphere(remote)
+    check(distance > radius, f"in a ship, outside: {distance:.1f} of {radius:.1f} m")
+    body, items = inventory(remote)
+    stayed = leave_and_wait(REMOVED, QUIET_AWAY)
+    check(stayed is None, f"in a ship, outside: the body stays: {stayed}")
+    remote = spawned()
+    again, items_again = inventory(remote)
+    check(
+        again == body and items_again == items,
+        f"in a ship, outside: the same body: {again}",
+    )
+    probe(remote, "kill", "KILLED")
+    next_body(remote, body)
+
     # --- far from a station ---
     teleport(remote, alpha[0] + 5_000, alpha[1], alpha[2])
     body, items = inventory(remote)
@@ -324,6 +428,7 @@ def run() -> None:
 
     # --- dead when the player left ---
     teleport(remote, alpha[0] + 150, alpha[1], alpha[2])
+    to_edge(remote, -EDGE)
     probe(remote, "give Ingot/Silver 9", "GIVE True")
     probe(remote, "kill", "KILLED")
     gone = leave_and_wait(REMOVED, QUIET_AWAY)

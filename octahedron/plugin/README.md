@@ -532,10 +532,11 @@ the rules run on the World Authority.
 
 A character left alive at a station with its player offline would keep its space
 credits out of reach of the wealth tax. After `OfflineCharacterMinutes` (15) offline,
-a player's character within `OfflineCharacterStationRadius` (440 m) of a trade
-station's position is removed from the world. Standing or seated makes no difference,
-a cryo chamber included, and the seat is left free. A character farther out stays, and
-so does a dead one. Coming back in time changes nothing and starts the time over.
+a player's character inside the bounding sphere of a trade station's grid is removed
+from the world. Standing or seated makes no difference, in a seat of the station or of a
+ship, a cryo chamber included, and the seat is left free. It is the character's own
+position that counts: outside the sphere it stays, even in a ship reaching into it, and
+so does a dead character. Coming back in time changes nothing and starts the time over.
 
 The space credits in its inventory go to the player's bank account without any tax, as
 they are the player's own money, and they are not kept as items. The rest of the
@@ -561,7 +562,8 @@ restarts and a player can come back on any node.
   minute after that.
 - A body usually goes offline with its partition 3 minutes after the player left, well
   before its time is up. The World Authority then asks the gateway to load the
-  partition, a few a minute, for players it saw at a station when they left. Bodies
+  partition, a few a minute, for players it saw within 200 m of a station's position when
+  they left; the node goes by the sphere and leaves a body outside it where it is. Bodies
   already there when this first runs have no such record: they wait for their partition
   to load for another reason, or for their player.
 

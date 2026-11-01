@@ -81,8 +81,8 @@ internal sealed class ParkingBook
     {
         public long Seconds;
 
-        // On a station when last seen, so its partition is worth loading once the time is up
-        public bool AtStation;
+        // Near a station when last seen, so its partition is worth loading once the time is up
+        public bool NearStation;
 
         // Its partition was asked to load since the player left
         public bool Woken;
@@ -94,14 +94,14 @@ internal sealed class ParkingBook
     public readonly List<ParkedCharacter> Parked = [];
     private HashSet<long> online = [];
 
-    // The players online right now, the ones at a station told apart
-    public void Observe(IEnumerable<(long Identity, bool AtStation)> players, long now)
+    // The players online right now, the ones near a station told apart
+    public void Observe(IEnumerable<(long Identity, bool NearStation)> players, long now)
     {
         online = [];
-        foreach (var (identity, atStation) in players)
+        foreach (var (identity, nearStation) in players)
         {
             online.Add(identity);
-            Players[identity] = new Seen { Seconds = now, AtStation = atStation };
+            Players[identity] = new Seen { Seconds = now, NearStation = nearStation };
         }
         foreach (var gone in Players.Where(p => now - p.Value.Seconds > ForgetSeconds).ToList())
             Players.Remove(gone.Key);
@@ -203,11 +203,11 @@ internal sealed class ParkingBook
     public int Consume(long identity, long body) =>
         Parked.RemoveAll(p => p.Identity == identity && p.Taker == body && p.Delivered);
 
-    // Offline players whose time is up on a station, whose partition may be offline with the body
+    // Offline players whose time is up near a station, whose partition may be offline with the body
     public List<long> Wakes(long now, long limit, int count) =>
         Players
             .Where(p =>
-                p.Value.AtStation
+                p.Value.NearStation
                 && !p.Value.Woken
                 && !online.Contains(p.Key)
                 && now - p.Value.Seconds >= limit
@@ -222,13 +222,13 @@ internal sealed class ParkingBook
 
     private static long Number(string text) => long.Parse(text, CultureInfo.InvariantCulture);
 
-    // One line each: S identity seconds atStation woken, P identity body credits taker delivered items
+    // One line each: S identity seconds nearStation woken, P identity body credits taker delivered items
     public string Serialize() =>
         string.Join(
             "\n",
             Players
                 .Select(p =>
-                    $"S {N(p.Key)} {N(p.Value.Seconds)} {(p.Value.AtStation ? 1 : 0)} {(p.Value.Woken ? 1 : 0)}"
+                    $"S {N(p.Key)} {N(p.Value.Seconds)} {(p.Value.NearStation ? 1 : 0)} {(p.Value.Woken ? 1 : 0)}"
                 )
                 .Concat(
                     Parked.Select(p =>
@@ -247,7 +247,7 @@ internal sealed class ParkingBook
                 book.Players[Number(f[1])] = new Seen
                 {
                     Seconds = Number(f[2]),
-                    AtStation = f[3] == "1",
+                    NearStation = f[3] == "1",
                     Woken = f[4] == "1",
                 };
             else if (f[0] == "P" && f.Length == 7)

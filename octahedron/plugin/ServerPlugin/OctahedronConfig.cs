@@ -368,19 +368,6 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 15;
 
-    [DoubleOption(
-        1,
-        10000,
-        "A character within this distance of a trade station's position counts as at the station (m). 440 covers a station's whole safe zone: the zone's "
-            + "radius is 250 m and the station stands up to 188 m from its center.",
-        Parent = "offlineCharacters"
-    )]
-    public double OfflineCharacterStationRadius
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 440;
-
     [IntOption(
         0,
         description: "Minutes a player waits between two free shipyard builds, to slow abuse down a little. It starts when a free build ends with the ship "

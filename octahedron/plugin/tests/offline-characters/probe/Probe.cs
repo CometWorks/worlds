@@ -1,7 +1,9 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using PluginSdk.Commands;
+using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
@@ -14,6 +16,7 @@ using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Plugins;
+using VRageMath;
 
 namespace CharacterProbe;
 
@@ -124,13 +127,92 @@ public sealed class ProbeCommands : CommandModule
             .OfType<MyCubeGrid>()
             .SelectMany(g => g.GetFatBlocks<MyCockpit>())
             .Where(c => c.Pilot == null)
-            .OrderBy(c => VRageMath.Vector3D.DistanceSquared(c.PositionComp.GetPosition(), at))
+            .OrderBy(c => Vector3D.DistanceSquared(c.PositionComp.GetPosition(), at))
             .FirstOrDefault();
-        if (seat == null || VRageMath.Vector3D.Distance(seat.PositionComp.GetPosition(), at) > 500)
+        if (seat == null || Vector3D.Distance(seat.PositionComp.GetPosition(), at) > 500)
             return "SEAT none";
         seat.AttachPilot(body, 0);
         MySession.Static.Players.SetControlledEntity(Context.Caller.SteamId, seat);
         return $"SEAT {seat.EntityId} {seat.DisplayNameText}";
+    }
+
+    // The nearest station's bounding sphere, as the plugin takes it
+    private BoundingSphereD NearestSphere()
+    {
+        var at = Body.PositionComp.GetPosition();
+        return MySession
+            .Static.Factions.SelectMany(f => f.Value.Stations)
+            .Select(s => MyEntities.GetEntityById(s.StationEntityId))
+            .OfType<MyCubeGrid>()
+            .Select(g => g.PositionComp.WorldVolume)
+            .OrderBy(s => Vector3D.DistanceSquared(s.Center, at))
+            .First();
+    }
+
+    [Command("sphere", "The nearest station's bounding sphere", "!cprobe sphere")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Sphere()
+    {
+        var sphere = NearestSphere();
+        var distance = Vector3D.Distance(sphere.Center, Body.PositionComp.GetPosition());
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"SPHERE {sphere.Center.X} {sphere.Center.Y} {sphere.Center.Z} {sphere.Radius} {distance}"
+        );
+    }
+
+    // A ship across the sphere's edge on its +X side: the seat 4 m on the given side of the edge,
+    // the hull through it to the other side
+    [Command("ship", "A ship across the sphere's edge", "!cprobe ship <inside|outside>")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Ship(string side)
+    {
+        var sphere = NearestSphere();
+        var outside = side == "outside";
+        var owner = Context.Caller.IdentityId;
+        var grid = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = false,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = "Probe ship",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                sphere.Center + Vector3D.UnitX * (sphere.Radius + (outside ? 4 : -4)),
+                outside ? -Vector3.UnitX : Vector3.UnitX,
+                Vector3.UnitY
+            ),
+        };
+        grid.CubeBlocks.Add(
+            new MyObjectBuilder_Cockpit
+            {
+                SubtypeName = "LargeBlockCockpit",
+                Min = Vector3I.Zero,
+                Owner = owner,
+                BuiltBy = owner,
+            }
+        );
+        for (var z = 1; z <= 6; z++)
+            grid.CubeBlocks.Add(
+                new MyObjectBuilder_CubeBlock
+                {
+                    SubtypeName = "LargeBlockArmorBlock",
+                    Min = new Vector3I(0, 0, -z),
+                    BuiltBy = owner,
+                }
+            );
+        var ship = (MyCubeGrid)MyEntities.CreateFromObjectBuilderAndAdd(grid, true);
+        return $"SHIP {ship.GetFatBlocks<MyCockpit>().First().EntityId}";
+    }
+
+    [Command("seatin", "Seats the character in a given seat", "!cprobe seatin <entity id>")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string SeatIn(long seat)
+    {
+        var cockpit = (MyCockpit)MyEntities.GetEntityById(seat);
+        cockpit.AttachPilot(Body, 0);
+        MySession.Static.Players.SetControlledEntity(Context.Caller.SteamId, cockpit);
+        return $"SEAT {seat}";
     }
 
     [Command("pilot", "Who sits in a seat", "!cprobe pilot <entity id>")]

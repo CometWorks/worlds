@@ -19,6 +19,7 @@ using Sandbox.ModAPI;
 using VRage;
 using VRage.Game;
 using VRage.Game.Entity;
+using VRage.Game.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.ObjectBuilders.Private;
 using VRageMath;
@@ -31,7 +32,8 @@ using System.Text.Json;
 namespace ServerPlugin;
 
 // A player's character left alive on a station with the player offline holds its space credits out
-// of the wealth tax's reach. After OfflineCharacterMinutes it goes: its inventory is kept by the
+// of the wealth tax's reach. On a station is inside the bounding sphere of the station's grid, seated
+// or not. After OfflineCharacterMinutes it goes: its inventory is kept by the
 // bank's keeper, a plain server or the World Authority (WA), its space credits move to the bank,
 // and the player's next body gets the rest of the inventory.
 //
@@ -53,6 +55,11 @@ internal static class OfflineCharacters
     private const string Credit = "SpaceCredit";
     private const int Attempts = 4;
     private const int WakesPerPass = 5;
+
+    // The WA holds no grids, so it wakes the partition of a player last seen this close to a
+    // station's position and the node decides by the sphere. The world's spheres reach 74 m from
+    // the positions; a wake too many costs one load of a partition.
+    private const double WakeRange = 200;
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan ObserveInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan WakeInterval = TimeSpan.FromSeconds(60);
@@ -271,7 +278,7 @@ internal static class OfflineCharacters
 
     private static void Observe()
     {
-        var at = Stations().ToList();
+        var at = StationPositions().ToList();
         if (Cluster != null)
         {
             var positions = Cluster.PlayerPositions();
@@ -282,7 +289,7 @@ internal static class OfflineCharacters
                 online.Select(p =>
                 {
                     var position = positions?.FirstOrDefault(x => x.IdentityId == p.IdentityId);
-                    return (p.IdentityId, position != null && AtStation(position.Position, at));
+                    return (p.IdentityId, position != null && NearStation(position.Position, at));
                 }),
                 Now
             );
@@ -296,7 +303,7 @@ internal static class OfflineCharacters
                         (
                             p.Identity.IdentityId,
                             p.Character != null
-                                && AtStation(p.Character.PositionComp.GetPosition(), at)
+                                && NearStation(p.Character.PositionComp.GetPosition(), at)
                         )
                     ),
                 Now
@@ -625,29 +632,36 @@ internal static class OfflineCharacters
         }
     }
 
-    private static IEnumerable<Vector3D> Stations() =>
-        MySession
-            .Static.Factions.Select(f => f.Value)
-            .SelectMany(f => f.Stations)
-            .Select(s => s.Position);
+    private static IEnumerable<IMyFactionStation> Stations() =>
+        MySession.Static.Factions.Select(f => f.Value).SelectMany(f => f.Stations);
 
-    private static bool AtStation(Vector3D position, List<Vector3D> stations)
+    private static IEnumerable<Vector3D> StationPositions() => Stations().Select(s => s.Position);
+
+    private static bool NearStation(Vector3D position, List<Vector3D> stations) =>
+        stations.Any(s => Vector3D.DistanceSquared(s, position) <= WakeRange * WakeRange);
+
+    // The stations loaded here. Partitions merge within kilometers, so a body inside a sphere has
+    // the station's grid on its node.
+    private static List<BoundingSphereD> StationSpheres()
     {
-        var radius = Config.OfflineCharacterStationRadius;
-        return stations.Any(s => Vector3D.DistanceSquared(s, position) <= radius * radius);
+        var spheres = new List<BoundingSphereD>();
+        foreach (var station in Stations())
+            if (MyEntities.TryGetEntityById(station.StationEntityId, out MyCubeGrid grid))
+                spheres.Add(grid.PositionComp.WorldVolume);
+        return spheres;
     }
 
-    // The bodies at the stations this node simulates whose players are online nowhere, seated or not
+    // The bodies on the stations loaded here whose players are online nowhere, seated or not
     private static List<(MyCharacter Body, long Identity)> OfflineBodies()
     {
         var found = new Dictionary<long, (MyCharacter, long)>();
         var entities = new List<MyEntity>();
-        var stations = Stations().ToList();
+        var spheres = StationSpheres();
         var online = Cluster?.OnlinePlayers()?.Select(p => p.IdentityId).ToHashSet();
-        foreach (var station in stations)
+        foreach (var station in spheres)
         {
             entities.Clear();
-            var sphere = new BoundingSphereD(station, Config.OfflineCharacterStationRadius);
+            var sphere = station;
             MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref sphere, entities);
             foreach (var entity in entities)
             {
@@ -663,8 +677,10 @@ internal static class OfflineCharacters
 
         void Consider(MyCharacter body)
         {
+            // A ship reaching into a sphere doesn't bring the pilot in: the body itself must be inside
+            var position = body.PositionComp.GetPosition();
             if (
-                AtStation(body.PositionComp.GetPosition(), stations)
+                spheres.Any(s => s.Contains(position) != ContainmentType.Disjoint)
                 && IsOffline(body, online, out var identity)
             )
                 found[body.EntityId] = (body, identity);
@@ -985,7 +1001,7 @@ internal static class OfflineCharacters
                 + (parked.Taker != 0 ? $", handed to {parked.Taker}" : "");
         foreach (var player in Book.Players.OrderBy(p => p.Key))
             yield return $"{player.Key}: seen {now - player.Value.Seconds} s ago"
-                + (player.Value.AtStation ? " at a station" : "")
+                + (player.Value.NearStation ? " near a station" : "")
                 + (player.Value.Woken ? ", its partition asked to load" : "");
     }
 }
