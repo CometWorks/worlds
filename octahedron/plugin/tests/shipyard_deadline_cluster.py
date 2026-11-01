@@ -298,8 +298,6 @@ def run(bench) -> None:
     cluster.start(processes)
     cluster.wait_ready(nodes=processes)
     api = join()
-    home = wait_until(where, 120, "the client's partition")
-    away = NODES[1 - NODES.index(home)]
 
     # --- stored by the node, over a node restart in the wait, counted once ---
     paid = leave_ship(api)
@@ -333,7 +331,14 @@ def run(bench) -> None:
     next_ends(api)
 
     # --- loaded from another node, free ---
-    to_node(away)
+    # A restart can move the partition: from where the ship was stored, not where the test began
+    stored_on = wait_until(where, 120, "the client's partition")
+    to_node(NODES[1 - NODES.index(stored_on)])
+    check(
+        "the client is on the other node",
+        where() != stored_on,
+        f"stored on {stored_on}",
+    )
     reply = hangar(api, f"load {SHIP}")
     check("another node loads it", f"Loaded {SHIP}" in reply, reply)
     check("it is back", until(lambda: here(api), 30))
