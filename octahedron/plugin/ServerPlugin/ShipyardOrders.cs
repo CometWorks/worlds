@@ -2378,10 +2378,10 @@ internal static partial class ShipyardOrders
                 .Where(b => !(b.FatBlock is MyTerminalBlock t && IsScaffold(t)));
 
     // The welders stopped. A paid build short of components waits for them. A ship missing only
-    // blocks no welder can place is delivered without them. A free ship missing only armor and
-    // other plain blocks, at most MaxMissingPlain of them, is delivered too; one missing a
-    // functional block or more of the plain ones is removed and doesn't count. A paid build the
-    // welders stopped on with the components there is delivered as it is.
+    // blocks no welder can place is delivered without them. Else its main grid decides: missing
+    // only armor and other plain blocks, at most MaxMissingPlain of them, the ship is delivered;
+    // missing a functional block or more of the plain ones, it is removed and refunded. What a
+    // subgrid misses never removes a ship: its hitboxes may just intersect the ship's blocks.
     private static void Stall(MyCubeGrid shipyard, Order order)
     {
         var projected = (
@@ -2390,7 +2390,6 @@ internal static partial class ShipyardOrders
         var unbuilt = new Dictionary<MyDefinitionId, int>();
         foreach (var block in projected?.SelectMany(g => g.CubeBlocks) ?? [])
             unbuilt[block.GetId()] = (unbuilt.TryGetValue(block.GetId(), out var n) ? n : 0) + 1;
-        var plain = unbuilt.Where(u => !Functional(u.Key)).Sum(u => u.Value);
         var blocks = ShipSoFar(shipyard, order).ToList();
         foreach (var block in blocks)
             if (unbuilt.TryGetValue(block.BlockDefinition.Id, out var n))
@@ -2437,13 +2436,7 @@ internal static partial class ShipyardOrders
         );
         if (leftOut != null)
             order.Missing += $", left out on {leftOut}, where no welder can place them";
-        order.Refund =
-            leftOut == null
-            && (
-                missing.Keys.Any(d => Functional(d.Id))
-                || missing.Where(m => !Functional(m.Key.Id)).Sum(m => m.Value)
-                    > MaxMissingPlain * plain
-            );
+        order.Refund = leftOut == null && MainGridFails(order, projected?.FirstOrDefault(), blocks);
         Plugin.Log.Info(
             $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
                 + $"missing {order.Missing}: {(order.Refund ? "removed and refunded" : "delivered")}"
@@ -2456,6 +2449,26 @@ internal static partial class ShipyardOrders
             Scrap(shipyard, order);
         }
         End(shipyard, order, "stalled");
+    }
+
+    // The main grid, the blueprint's first, is built on the projector's grid: true if it misses
+    // a functional block or more than MaxMissingPlain of its plain ones
+    private static bool MainGridFails(
+        Order order,
+        MyObjectBuilder_CubeGrid main,
+        List<MySlimBlock> blocks
+    )
+    {
+        var unbuilt = (main?.CubeBlocks ?? [])
+            .GroupBy(b => b.GetId())
+            .ToDictionary(g => g.Key, g => g.Count());
+        var plain = unbuilt.Where(u => !Functional(u.Key)).Sum(u => u.Value);
+        foreach (var block in blocks.Where(b => b.CubeGrid == order.Projector.CubeGrid))
+            if (block.IsFullIntegrity && unbuilt.TryGetValue(block.BlockDefinition.Id, out var n))
+                unbuilt[block.BlockDefinition.Id] = n - 1;
+        var missing = unbuilt.Where(u => u.Value > 0).ToList();
+        return missing.Any(u => Functional(u.Key))
+            || missing.Where(u => !Functional(u.Key)).Sum(u => u.Value) > MaxMissingPlain * plain;
     }
 
     // The grids with blocks that can't be placed as the ship stands, like a grid docked by a
