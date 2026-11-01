@@ -638,6 +638,71 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "spotship",
+        "Builds a powered ship of the caller's with a cockpit at a point: SPOTSHIP entity id",
+        "!kprobe spotship <name with _ for spaces> <x> <y> <z>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string SpotShip(string name, double x, double y, double z)
+    {
+        long me = Context.Caller.IdentityId;
+        var battery = Block<MyObjectBuilder_BatteryBlock>(
+            "LargeBlockBatteryBlock",
+            new Vector3I(0, 0, 1),
+            me
+        );
+        battery.CurrentStoredPower = 3;
+        var grid = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = false,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = name.Replace('_', ' '),
+            PositionAndOrientation = new MyPositionAndOrientation(
+                new Vector3D(x, y, z),
+                Vector3.Forward,
+                Vector3.Up
+            ),
+            CubeBlocks =
+            [
+                Block<MyObjectBuilder_Cockpit>("LargeBlockCockpit", Vector3I.Zero, me),
+                battery,
+            ],
+        };
+        var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
+        return $"SPOTSHIP {entity.EntityId}";
+    }
+
+    [Command(
+        "sphere",
+        "The bounding sphere of a grid on this node and the grids whose spheres meet it: "
+            + "SPHERE x y z radius meets=a,b, or NOGRID",
+        "!kprobe sphere <name with _ for spaces>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Sphere(string name)
+    {
+        name = name.Replace('_', ' ');
+        var grids = MyEntities.GetEntities().OfType<MyCubeGrid>().ToList();
+        var grid = grids.FirstOrDefault(g => g.DisplayName == name);
+        if (grid == null)
+            return "NOGRID";
+        var sphere = grid.PositionComp.WorldVolume;
+        var meets = grids.Where(g => g != grid && g.PositionComp.WorldVolume.Intersects(sphere));
+        var culture = CultureInfo.InvariantCulture;
+        return string.Format(
+            culture,
+            "SPHERE {0:F2} {1:F2} {2:F2} {3:F2} meets={4}",
+            sphere.Center.X,
+            sphere.Center.Y,
+            sphere.Center.Z,
+            sphere.Radius,
+            string.Join(",", meets.Select(g => g.DisplayName))
+        );
+    }
+
+    [Command(
         "yardwreck",
         "Builds a wreck by the shipyard: 3 armor blocks, one at half its build, and a cargo container with the items: WRECK grid-id",
         "!kprobe yardwreck <station> [Type/Subtype=amount,...] [in: in the build space | over: with more stone than the shipyard's containers hold | whole: no half block]"
