@@ -304,6 +304,11 @@ game update that changes the planet or voxel material definitions or maps.
   without the plugin, like the design world, has the game's refill. The
   server reads the file as `Octahedron.cfg` from its instance folder; the
   options it leaves out keep their defaults.
+- The stations' 8 connectors trade and are shared with OCT's faction only, so a
+  docked ship gets no power, hydrogen or conveyor access from the station and
+  no player can turn trading off. Trading needs no access to them. On the
+  server the Octahedron plugin keeps them that way (`StationConnectorsTrade`),
+  in a world from before the rule too.
 - Every station has 4 "Free Tools" cargo terminals (the blueprint's hidden
   toolboxes by its "Free tools!" signs, renamed and shown in inventory screens)
   shared with all players. On the server, the Octahedron plugin's

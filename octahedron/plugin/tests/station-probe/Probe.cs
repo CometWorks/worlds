@@ -190,13 +190,32 @@ public sealed class ProbeCommands : CommandModule
                 ownerId
             );
             tank.FilledRatio = float.Parse(h2.Substring(3), CultureInfo.InvariantCulture);
+            // Stockpiling, it takes hydrogen from any tank or generator it reaches too
+            tank.IsStockpiling = items.Contains("STOCKPILE");
             grid.CubeBlocks.Add(tank);
+        }
+        // BAT=<MWh>: a battery holding that much, the ship's only power
+        var bat = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("BAT="));
+        if (bat != null)
+        {
+            var battery = Block<MyObjectBuilder_BatteryBlock>(
+                "LargeBlockBatteryBlock",
+                new Vector3I(0, 0, 3),
+                ownerId
+            );
+            battery.CurrentStoredPower = float.Parse(
+                bat.Substring(4),
+                CultureInfo.InvariantCulture
+            );
+            grid.CubeBlocks.Add(battery);
         }
         var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
         var cargo = entity.GetFatBlocks<MyCargoContainer>().First();
         foreach (var pair in items.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
-            if (pair.StartsWith("H2="))
+            if (pair.StartsWith("H2=") || pair.StartsWith("BAT=") || pair == "STOCKPILE")
                 continue;
             var f = pair.Split('=');
             if (!MyDefinitionId.TryParse("MyObjectBuilder_" + f[0], out var id))
@@ -1094,6 +1113,95 @@ public sealed class ProbeCommands : CommandModule
         var c = grid.GetFatBlocks<MyShipConnector>().First();
         var status = ((Sandbox.ModAPI.Ingame.IMyShipConnector)c).Status;
         return $"DOCKED {gridId} {(c.Connected ? "yes" : "no")} status {status} at {V(c.PositionComp.GetPosition())}";
+    }
+
+    [Command(
+        "connectors",
+        "The station's connectors: CONNECTOR grid-id x,y,z trading=yes|no share=mode connected=yes|no, one per connector",
+        "!sprobe connectors <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Connectors(string station) =>
+        string.Join(
+            " ",
+            StationGrids(station)
+                .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
+                .Select(c =>
+                    $"CONNECTOR {c.CubeGrid.EntityId} {c.Min.X},{c.Min.Y},{c.Min.Z} "
+                    + $"trading={((bool)c.TradingEnabled ? "yes" : "no")} share={c.IDModule?.ShareMode} "
+                    + $"connected={(c.Connected ? "yes" : "no")}"
+                )
+        );
+
+    [Command(
+        "ice",
+        "Puts ice into the station's gas generators: ICE station count",
+        "!sprobe ice <station> <kg>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Ice(string station, int kg)
+    {
+        var generators = StationGrids(station)
+            .SelectMany(g => g.GetFatBlocks<MyGasGenerator>())
+            .ToList();
+        foreach (var generator in generators)
+            generator
+                .GetInventory()
+                .AddItems(
+                    kg,
+                    MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_Ore>("Ice")
+                );
+        return $"ICE {station} {generators.Count}";
+    }
+
+    [Command(
+        "trading",
+        "Turns trading on or off at the station's connectors that are free: TRADING station on|off count",
+        "!sprobe trading <station> <on|off>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Trading(string station, string state)
+    {
+        var free = StationGrids(station)
+            .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
+            .Where(c => !c.Connected && c.Other == null)
+            .ToList();
+        foreach (var c in free)
+            c.TradingEnabled.Value = state == "on";
+        return $"TRADING {station} {state} {free.Count}";
+    }
+
+    [Command(
+        "link",
+        "What a docked ship's connection carries: LINK grid-id trading=ship,station power=yes|no logical=yes|no electrical=yes|no stored=MWh",
+        "!sprobe link <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Link(string gridId)
+    {
+        if (
+            !long.TryParse(gridId, out long id)
+            || !MyEntities.TryGetEntityById(id, out MyCubeGrid grid)
+        )
+            return $"LINK {gridId} gone";
+        var c = grid.GetFatBlocks<MyShipConnector>().First();
+        var other = c.Other;
+        if (other == null)
+            return $"LINK {gridId} none";
+        string YesNo(bool b) => b ? "yes" : "no";
+        bool Same(GridLinkTypeEnum type) =>
+            MyCubeGridGroups.Static.GetGroups(type).HasSameGroup(grid, other.CubeGrid);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "LINK {0} trading={1},{2} power={3} logical={4} electrical={5} stored={6:0.000}",
+            gridId,
+            YesNo(c.TradingEnabled),
+            YesNo(other.TradingEnabled),
+            YesNo(c.IsTransferingElectricityCurrently || other.IsTransferingElectricityCurrently),
+            YesNo(Same(GridLinkTypeEnum.Logical)),
+            YesNo(Same(GridLinkTypeEnum.Electrical)),
+            grid.GetFatBlocks<MyBatteryBlock>().Sum(b => b.CurrentStoredPower)
+        );
     }
 
     [Command(

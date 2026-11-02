@@ -102,6 +102,17 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = true;
 
+    [BoolOption(
+        "Keep the stations' connectors trading and shared with the station owner's faction only: a docked ship gets no power, gas or conveyor access, "
+            + "and players can't turn trading off. A ship docked to one that didn't trade is let go.",
+        Parent = "stations"
+    )]
+    public bool StationConnectorsTrade
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
     [BoolOption("Fill the turrets with ammo.", Parent = "stations")]
     public bool StationReloadTurrets
     {
