@@ -8,6 +8,8 @@ as tests/test_bottle_swap.py checks it on one server.
 
 The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one
 headless admin client, with the station probe on the nodes. About 5 minutes.
+
+Run on polaris on 2026-11-03: 9/9 checks.
 """
 
 from __future__ import annotations

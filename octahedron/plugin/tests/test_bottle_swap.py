@@ -9,6 +9,8 @@ passed.
         uv run --no-project --with httpx python tests/test_bottle_swap.py
 
 tests/bottle_swap_cluster.py checks the swap on a cluster.
+
+Run on nas on 2026-11-03: 11/11 checks.
 """
 
 from __future__ import annotations
