@@ -666,12 +666,12 @@ bank, and the node holding a body asks it what to do every 30 seconds. So it sur
 restarts and a player can come back on any node.
 
 - The node removes a body only once a recoverable global save holds its inventory and
-  deposit: the gateway names the newest one, as for the cluster's own durable commands,
-  and the plugin reads which save comes next from the cluster's insides, as a plugin's
-  global command doesn't wait for a save by itself. If those insides change, the World
-  Authority logs an error at its start and bodies stay. A body a dead node brings back is known by
-  its entity id: it goes without a second deposit. A player who gets into such a body
-  first finds it emptied within seconds and gets the kept inventory instead.
+  deposit: the World Authority asks the cluster's `cluster.global-save` command, which
+  answers once such a save holds what was done before it. A cluster older than 0.2 has
+  no such command: the World Authority logs an error at its start and bodies stay. A
+  body a dead node brings back is known by its entity id: it goes without a second
+  deposit. A player who gets into such a body first finds it emptied within seconds and
+  gets the kept inventory instead.
 - A new character gets a kept inventory only once a save knows it is on its way, so a
   World Authority restored from an older save doesn't hand it out twice. Like every
   other inventory change, what a node hasn't saved yet is lost if the node dies in the
