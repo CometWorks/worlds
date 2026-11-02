@@ -50,8 +50,10 @@ Items are written as `Type/Subtype`, for example the Elite tools
 `PhysicalGunObject/HandDrill4Item`, the bottles `OxygenContainerObject/OxygenBottle`
 and `GasContainerObject/HydrogenBottle`, or the suit battery pack
 `ConsumableItem/Powerkit`. An unknown item is logged once and skipped. Bottles
-are added full, and bottles of a rule's item that aren't full are removed from
-the container at each refill.
+are added full. Each refill first removes every oxygen and hydrogen bottle that
+isn't full from the block, whatever its rule lists, then tops it up. A player
+can leave an empty or partly used bottle in the Free Tools box and take a full
+one.
 
 An item can name several ids separated by commas, like
 `PhysicalGunObject/Welder2Item,PhysicalGunObject/Welder3Item`. Their amounts count
@@ -1256,7 +1258,9 @@ for the slot's player and faction, and a build and a repair slot going on after 
 partition free to go offline, and `tests/shipyard_stop_cluster.py` with a cluster stop and start
 in the middle of a build, with nobody connected. `tests/test_shipyard_hydrogen.py` checks where a
 new ship's hydrogen comes from, on free and paid builds, and
-`tests/shipyard_hydrogen_cluster.py` does that on a cluster. `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
+`tests/shipyard_hydrogen_cluster.py` does that on a cluster. `tests/test_bottle_swap.py` leaves a half full and an empty bottle in Alpha's
+Free Tools box for full ones and checks the next refill takes them out and tops the box up, also with a rule that
+lists no hydrogen bottles; `tests/bottle_swap_cluster.py` does that on a cluster. `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
 the shipyard's mods: the quote and the order, the hydrogen from a docked ship's tank into
 the new ship's, the payment and OCT's stock, a press while it builds, an order queued
 behind the finished ship and canceled after a restart, and a free order canceled with

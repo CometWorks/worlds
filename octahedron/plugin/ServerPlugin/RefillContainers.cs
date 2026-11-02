@@ -88,6 +88,7 @@ internal sealed class RefillContainers
         if (rule.Items == null || block.InventoryCount == 0)
             return;
         var inventory = block.GetInventory();
+        RemoveUsedBottles(inventory);
         foreach (var item in rule.Items)
         {
             if (item.MinimumAmount <= 0)
@@ -97,10 +98,7 @@ internal sealed class RefillContainers
                 continue;
             MyFixedPoint missing = item.MinimumAmount;
             foreach (var id in ids)
-            {
-                RemoveUsedBottles(inventory, id);
                 missing -= inventory.GetItemAmount(id);
-            }
             if (missing <= 0)
                 continue;
             if (ids.Count == 1)
@@ -120,16 +118,16 @@ internal sealed class RefillContainers
         inventory.AddItems(amount, content);
     }
 
-    // Empty or partly used bottles of a rule's item are taken out, so they neither pile up
-    // nor count toward the minimum
-    private static void RemoveUsedBottles(MyInventory inventory, MyDefinitionId id)
+    // Every oxygen or hydrogen bottle that isn't full is taken out before the top-up, so a player
+    // can leave a used one and take a full one, and used ones neither pile up nor count toward
+    // the minimum
+    private static void RemoveUsedBottles(MyInventory inventory)
     {
         var items = inventory.GetItems();
         for (var i = items.Count - 1; i >= 0; i--)
         {
             if (
                 items[i].Content is MyObjectBuilder_GasContainerObject bottle
-                && bottle.GetObjectId() == id
                 && bottle.GasLevel < FullGasLevel
             )
                 inventory.RemoveItemsAt(i);
