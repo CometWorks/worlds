@@ -30,8 +30,9 @@ internal static partial class ShipyardOrders
     private static readonly HashSet<string> beginning = [];
     private static readonly HashSet<string> endingTurns = [];
 
-    // The grid in a shipyard's build space that was told to leave, and when
-    private static readonly Dictionary<long, (long Grid, DateTime At)> blockers = new();
+    // The grid in a shipyard's build space that was told to leave, when, and whether an order waited
+    private static readonly Dictionary<long, (long Grid, DateTime At, bool Waiting)> blockers =
+        new();
 
     // Grids a tow just gave a player, and until when Sweep leaves them alone
     private static readonly Dictionary<long, DateTime> towGiven = new();
@@ -733,22 +734,38 @@ internal static partial class ShipyardOrders
 
     // --- a ship in the way ---
 
-    // The next order waits for the grid in the shipyard's build space. Its owner is told; after
-    // ShipyardClearMinutes a ship an order built leaves for its orderer's Hangar, or is removed and
-    // refunded without a free slot there, and any other grid is moved out of the way. A restart
-    // starts the wait over.
-    private static void ClearWay(string station, MyCubeGrid shipyard, MyCubeGrid obstacle)
+    // The next order waits for the grid in the shipyard's build space, or a ship an order built is
+    // still there with no order waiting (waiting false). Its owner is told, again when an order
+    // comes to wait for it, the clock going on. After ShipyardClearMinutes a ship an order built
+    // leaves for its orderer's Hangar, or is removed and refunded without a free slot there, and
+    // any other grid is moved out of the way. A restart starts the wait over.
+    private static void ClearWay(
+        string station,
+        MyCubeGrid shipyard,
+        MyCubeGrid obstacle,
+        bool waiting = true
+    )
     {
         var id = shipyard.EntityId;
         var ship = BuiltShipOf(shipyard, obstacle);
-        if (!blockers.TryGetValue(id, out var blocker) || blocker.Grid != obstacle.EntityId)
+        var known = blockers.TryGetValue(id, out var blocker) && blocker.Grid == obstacle.EntityId;
+        if (!known || waiting && !blocker.Waiting)
         {
-            blockers[id] = (obstacle.EntityId, DateTime.UtcNow);
+            var at = known ? blocker.At : DateTime.UtcNow;
+            blockers[id] = (obstacle.EntityId, at, waiting);
+            var left = Math.Max(
+                1,
+                (int)Math.Ceiling(Config.ShipyardClearMinutes - (DateTime.UtcNow - at).TotalMinutes)
+            );
             void Warn(long player, string hangar) =>
                 Tell(
                     player,
-                    $"'{obstacle.DisplayName}' blocks the next order at {shipyard.DisplayName}. "
-                        + $"Fly it out within {Config.ShipyardClearMinutes} min, or "
+                    (
+                        waiting
+                            ? $"'{obstacle.DisplayName}' blocks the next order at {shipyard.DisplayName}. "
+                            : $"'{obstacle.DisplayName}' is still in {shipyard.DisplayName}'s build space. "
+                    )
+                        + $"Fly it out within {left} min, or "
                         + (
                             ship == null
                                 ? "it is moved out."
