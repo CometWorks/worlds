@@ -1208,7 +1208,8 @@ public sealed class ProbeCommands : CommandModule
             if (full < 0)
                 return $"NOFULL {subtype}";
             var used = (MyObjectBuilder_GasContainerObject)items[full].Content.Clone();
-            inventory.RemoveItemsAt(full);
+            // One bottle of the stack, as a player takes one
+            inventory.RemoveItems(items[full].ItemId, 1);
             used.GasLevel = level;
             inventory.AddItems(1, used);
         }
@@ -1224,15 +1225,21 @@ public sealed class ProbeCommands : CommandModule
     public string Bottles(string station)
     {
         var boxes = FreeTools(station).ToList();
+        // A stack of bottles is one item with an amount
         var bottles = boxes
             .SelectMany(b => b.GetInventory().GetItems())
             .Where(i => i.Content is MyObjectBuilder_GasContainerObject)
-            .Select(i => (MyObjectBuilder_GasContainerObject)i.Content);
+            .Select(i => ((MyObjectBuilder_GasContainerObject)i.Content, (int)i.Amount))
+            .ToList();
+        int Count(string subtype, bool full) =>
+            bottles
+                .Where(b => b.Item1.SubtypeName == subtype && b.Item1.GasLevel >= 0.999f == full)
+                .Sum(b => b.Item2);
         return $"BOTTLES boxes={boxes.Count} "
             + string.Join(
                 " ",
                 new[] { "OxygenBottle", "HydrogenBottle" }.Select(subtype =>
-                    $"{subtype} full={bottles.Count(b => b.SubtypeName == subtype && b.GasLevel >= 0.999f)} used={bottles.Count(b => b.SubtypeName == subtype && b.GasLevel < 0.999f)}"
+                    $"{subtype} full={Count(subtype, true)} used={Count(subtype, false)}"
                 )
             );
     }
