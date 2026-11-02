@@ -90,6 +90,10 @@ internal static partial class ShipyardOrders
     private const int TableColumns = 26;
     private const int PaidColumns = 38;
     private const int FreeColumns = 25;
+
+    // The queue panel's 512x307 screen fits 6 entries of two lines each at font size 0.57
+    private const int QueueColumns = 46;
+    private const int QueueEntryLines = 2;
     private const string TableIdle = "Project,\nthen press\nButton!";
     private const string DetailsIdle = "Ordered ship details...";
 
@@ -652,8 +656,7 @@ internal static partial class ShipyardOrders
                 var mine = Mine(DecodeQueue(text), identityId);
                 var holder = Holder(table);
                 var hasBlueprint =
-                    TableHologram.Blueprint(table) != null
-                    && (holder == 0 || holder == identityId);
+                    TableHologram.Blueprint(table) != null && (holder == 0 || holder == identityId);
                 if (mine != null && mine.Phase is BuildPhase.Waiting or BuildPhase.Building)
                     Cancel(mine, station, shipyard, tell);
                 else if (hasBlueprint)
@@ -970,11 +973,11 @@ internal static partial class ShipyardOrders
                     mine?.Phase == BuildPhase.After && !plan.Free ? null
                     : mine != null
                         ? mine.Active
-                            ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
+                                ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
                             : $"'{mine.Ship}' is in the queue for you. Press the button to cancel it first."
-                        : queue.Count >= Config.ShipyardQueueMax
-                            ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
-                            : null;
+                    : queue.Count >= Config.ShipyardQueueMax
+                        ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
+                    : null;
                 if (plan.Free)
                 {
                     ShowQuote(plan, null);
@@ -1051,9 +1054,7 @@ internal static partial class ShipyardOrders
             if (plan.Blocker != null)
                 text.AppendLine(plan.Blocker);
             else if (quote?.Short(Hydrogen) != null)
-                text.AppendLine(
-                    "Not everything is for sale here: bring the rest at your turn."
-                );
+                text.AppendLine("Not everything is for sale here: bring the rest at your turn.");
             else
                 text.AppendLine("Press the button to confirm the build.");
         }
@@ -1067,7 +1068,7 @@ internal static partial class ShipyardOrders
             Write(
                 plan.Table,
                 Config.ShipyardQuoteSurface,
-                $"{Wrap(text.ToString(), TableColumns)}\n\n{Wrap(parts ?? "", PaidColumns)}",
+                $"{PanelText.Wrap(text.ToString(), TableColumns)}\n\n{PanelText.Wrap(parts ?? "", PaidColumns)}",
                 2f
             );
     }
@@ -1136,34 +1137,13 @@ internal static partial class ShipyardOrders
         var shown = ((MyTextPanelComponent)provider.GetSurface(0)).Text;
         var first = (shown ?? "").Split('\n')[0].TrimEnd();
         // Not wrapped: the first line has to stay one for the next write to find it
-        Write(provider, 0, $"{first}\n\n{Wrap(text, columns)}", 0.7f);
+        Write(provider, 0, $"{first}\n\n{PanelText.Wrap(text, columns)}", 0.7f);
         return true;
     }
 
     private static void WriteTable(MyProjectorBase table, string text) =>
-        Write(table, Config.ShipyardQuoteSurface, Wrap(text, TableColumns), 2f);
+        Write(table, Config.ShipyardQuoteSurface, PanelText.Wrap(text, TableColumns), 2f);
 
-    private static string Wrap(string text, int columns)
-    {
-        var lines = new List<string>();
-        foreach (var line in text.TrimEnd().Split('\n').Select(l => l.TrimEnd('\r', ' ')))
-        {
-            var rest = line;
-            while (rest.Length > columns)
-            {
-                var cut = rest.LastIndexOf(' ', columns);
-                if (cut <= 0)
-                    cut = columns;
-                lines.Add(rest.Substring(0, cut).TrimEnd());
-                rest = rest.Substring(cut).TrimStart();
-            }
-            lines.Add(rest);
-        }
-        return string.Join("\n", lines);
-    }
-
-    // The largest font up to maxSize that fits the text. At size 1 on a 512 pixel texture a Monospace
-    // character takes 24 x 37 pixels in its font file, times the game's text scale of 0.778.
     private static void Write(
         IMyTextSurfaceProvider provider,
         int index,
@@ -1174,16 +1154,15 @@ internal static partial class ShipyardOrders
         if (index < 0 || index >= provider.SurfaceCount)
             return;
         var surface = provider.GetSurface(index);
-        var lines = text.TrimEnd().Split('\n');
-        var padded = surface.SurfaceSize * 0.96f;
-        var scale = Math.Min(surface.TextureSize.X, surface.TextureSize.Y) / 512f;
-        var size = Math.Min(
-            padded.X / (Math.Max(1, lines.Max(l => l.Length)) * 18.7f * scale),
-            padded.Y / (lines.Length * 28.8f * scale)
-        );
         surface.ContentType = ContentType.TEXT_AND_IMAGE;
         surface.Font = "Monospace";
-        surface.FontSize = Math.Max(0.2f, Math.Min(maxSize, size));
+        surface.FontSize = PanelText.FontSize(
+            text,
+            surface.SurfaceSize.X,
+            surface.SurfaceSize.Y,
+            Math.Min(surface.TextureSize.X, surface.TextureSize.Y),
+            maxSize
+        );
         surface.TextPadding = 2;
         if (surface.GetText() != text)
             surface.WriteText(text);
@@ -1591,7 +1570,9 @@ internal static partial class ShipyardOrders
     {
         if (string.IsNullOrWhiteSpace(Config.ShipyardQueuePanelName))
             return;
-        var text = new StringBuilder($"{shipyard.DisplayName} queue\n\n");
+        var text = new StringBuilder(
+            $"{PanelText.Clip($"{shipyard.DisplayName} queue", QueueColumns, 1)}\n\n"
+        );
         if (queue.Count == 0)
             text.AppendLine("No ships in the queue.");
         orders.TryGetValue(shipyard.EntityId, out var running);
@@ -1601,7 +1582,12 @@ internal static partial class ShipyardOrders
             if (o.Repair)
             {
                 text.AppendLine(
-                    $"{place++}. {RepairName} for {Name(o.Player)}: {(o.Started ? "repairing" : o.Active ? "taking parts" : "waiting")}"
+                    PanelText.Item(
+                        $"{place++}. ",
+                        $"{RepairName} for {Name(o.Player)}: {(o.Started ? "repairing" : o.Active ? "taking parts" : "waiting")}",
+                        QueueColumns,
+                        QueueEntryLines
+                    )
                 );
                 continue;
             }
@@ -1617,14 +1603,25 @@ internal static partial class ShipyardOrders
                 _ => "waiting, paid",
             };
             text.AppendLine(
-                $"{place++}. '{o.Ship}' ({o.Pcu:N0} PCU) for {Name(o.Player)}: {state}"
+                PanelText.Item(
+                    $"{place++}. ",
+                    $"'{o.Ship}' ({o.Pcu:N0} PCU) for {Name(o.Player)}: {state}",
+                    QueueColumns,
+                    QueueEntryLines
+                )
             );
         }
         var obstacle =
             running == null && queue.FirstOrDefault()?.Repair != true ? Obstacle(shipyard) : null;
         if (obstacle != null && queue.Count > 0)
             text.AppendLine()
-                .AppendLine($"Waiting for '{obstacle.DisplayName}' to leave the shipyard.");
+                .AppendLine(
+                    PanelText.Clip(
+                        $"Waiting for '{obstacle.DisplayName}' to leave the shipyard.",
+                        QueueColumns,
+                        QueueEntryLines
+                    )
+                );
         foreach (var panel in grids.SelectMany(g => g.GetFatBlocks<MyTextPanel>()))
             if (
                 string.Equals(
@@ -1989,11 +1986,10 @@ internal static partial class ShipyardOrders
             NoteFreeEnd(order, name);
         var stalled =
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
-        var message =
-            order.Canceled
-                ? missing != null
-                    ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
-                    : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
+        var message = order.Canceled
+            ? missing != null
+                ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
+                : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
             : order.Refund
                 ? $"{stalled}, with {order.Missing} missing. The ship was removed, "
                     + (
@@ -2001,15 +1997,16 @@ internal static partial class ShipyardOrders
                             ? "and the free build doesn't count."
                             : "its components are in the containers."
                     )
-            : order.Missing != null && !gone
-                ? $"{stalled}. The ship is yours without {order.Missing}."
-            : missing == "unbuilt"
-                ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
-            : gone ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
-            : why == null
-                ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
-            : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
-                + "The unfinished ship is yours.";
+                : order.Missing != null && !gone
+                    ? $"{stalled}. The ship is yours without {order.Missing}."
+                    : missing == "unbuilt"
+                        ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
+                        : gone
+                            ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
+                            : why == null
+                                ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
+                                : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
+                                    + "The unfinished ship is yours.";
         if (!order.Free)
         {
             if (order.Hydrogen > 0 && !gone)
