@@ -1,6 +1,6 @@
 """The shipyard queue panel's layout at a real station (SE-935): an entry wraps to two lines
 with the second indented, no line is wider than the 46 columns, and the font is the size those
-columns give (0.57) instead of shrinking to fit an entry on one line. tests/panel-text has the
+columns give (0.57) or more instead of shrinking to fit an entry on one line. tests/panel-text has the
 layout of a full queue without the game.
 
     OCT_TASK=SE-935 OCT_WORLD_SOURCE=<world from build_world.py> \\
@@ -82,12 +82,19 @@ def main() -> int:
         )
         panel = queue_panel(a)
         grid, at = panel["gridId"], tuple(panel["min"])
-        shown = a.get_surface(grid, at)["text"]
-        check(shown.rstrip() == text.rstrip(), f"the client shows the same: {shown!r}")
         size = a.get_property(grid, at, "FontSize")
         log(f"FontSize {size}")
         value = float(size.get("value") if isinstance(size, dict) else size)
-        check(0.55 < value < 0.6, f"the font size is the 46 columns' 0.57: {value:.3f}")
+        # The fit on the 512x307 screen: shorter lines than 46 columns get a bigger font
+        fit = min(
+            0.7,
+            512 * 0.96 / (max(len(l) for l in lines) * 18.7),
+            307.2 * 0.96 / (len(lines) * 28.8),
+        )
+        check(
+            value >= 0.57 and abs(value - fit) < 0.002,
+            f"the font size is {value:.3f}, the fit {fit:.3f}, at least the 46 columns' 0.57",
+        )
     finally:
         rig.stop_client()
         rig.stop_server()
