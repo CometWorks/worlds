@@ -336,12 +336,17 @@ internal static partial class ShipyardOrders
         return lines.Count == 0 ? null : string.Join(", ", lines);
     }
 
-    // A paid build whose ship is removed: the components in what is built so far go back into the
-    // containers, and what doesn't fit is sold, as for a breakdown
-    private static void KeepParts(MyCubeGrid shipyard, Order order)
+    // A paid build whose ship is removed: the components in what is built so far, and in parts
+    // that broke off, go back into the containers, and what doesn't fit is sold, as for a breakdown
+    private static void KeepParts(
+        MyCubeGrid shipyard,
+        Order order,
+        IEnumerable<MySlimBlock> brokenOff = null
+    )
     {
         var parts = new Dictionary<MyDefinitionId, MyFixedPoint>();
         Add(parts, ShipSoFar(shipyard, order));
+        Add(parts, brokenOff ?? []);
         var containers = Containers(shipyard).ToList();
         foreach (var (id, amount) in parts.Select(p => (p.Key, p.Value)))
         {

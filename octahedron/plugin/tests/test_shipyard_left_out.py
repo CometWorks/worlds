@@ -9,13 +9,20 @@
 - docked: a paid ship with a grid no welder can place, like one docked by a connector, is delivered
   without it. The chat names the grid, and that grid's components stay in the containers for the
   player to take, or to sell at the end of the turn.
-- subgrid-free, subgrid-paid: an unfinished subgrid doesn't remove the ship (SE-928). It has a block
-  whose hitbox intersects the main grid, and a battery left without power cells, so the containers
-  are short and the left-out check doesn't apply. The ship is delivered, its main grid complete: a
-  free build counts, what is left of a paid build stays in the containers and sells.
+- subgrid-free, subgrid-paid: an unfinished subgrid doesn't remove the ship (SE-928). It has a
+  battery left without power cells, so the containers are short and the left-out check doesn't
+  apply. The ship is delivered, its main grid complete: a free build counts, what is left of a paid
+  build stays in the containers and sells.
+- clang, clang-paid: the subgrid has an armor block deep in the main grid's remote control, which no
+  welder places. The shipyard places it itself (SE-940), the subgrid shakes and the ship is removed:
+  a free build doesn't count, a paid one's components are in the containers, those of a part that
+  broke off included.
 - main-short: the same battery on the main grid still removes the ship and refunds it.
 - blueprint: with OCT_BLUEPRINT, the bp.sbc of a real ship with subgrids, like "Polaris Mk2 RC8", is
-  ordered free. It takes minutes, so it only runs when named.
+  ordered free. Blocks only a collision keeps the welders from are placed by force, and unless the
+  ship shakes the build goes on (SE-940): Polaris is built but for its two drones docked by
+  connectors. It takes minutes, so it only runs when named; OCT_BLUEPRINT_SECONDS for a bigger
+  ship.
 
     uv run --no-project --with httpx python tests/test_shipyard_left_out.py [case ...]
 """
@@ -26,6 +33,7 @@ import os
 import re
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 os.environ.setdefault("OCT_TASK", "SE-805")
 import rig  # noqa: E402
@@ -95,37 +103,45 @@ STATOR_BLOCK = rig.block(
     (0, 1, 3),
     f"<EntityId>{STATOR}</EntityId><TopBlockId>{ROTOR}</TopBlockId>",
 )
-# The rotor head sits on the stator. Armor on top of it runs along the hull to z = 0 and comes down,
-# where the last block's hitbox intersects the remote control, which the welders place long before
-# they get there. The battery sits on the armor.
-HEAD = rig.grid(
-    "Head Part",
-    777000928000200,
-    [
-        rig.block(
-            "MyObjectBuilder_MotorRotor",
-            "LargeRotor",
-            (0, 0, 0),
-            f"<EntityId>{ROTOR}</EntityId>",
-        ),
-        rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (1, 1, 0)),
-        *(
-            rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", position)
-            for position in [(0, 1, -z) for z in range(4)] + [(0, 0, -3)]
-        ),
-    ],
-    position=(0, 2.5 + 0.421, 7.5),
-    tag="MyObjectBuilder_CubeGrid",
-)
-WITH_HEAD = (
-    rig.grid(
-        NAME,
-        777000928000100,
-        HULL + [STATOR_BLOCK],
+
+
+# The rotor head sits on the stator. Armor on top of it runs along the hull to z = 0, the battery
+# sits on the armor.
+def head(*more: str) -> str:
+    return rig.grid(
+        "Head Part",
+        777000928000200,
+        [
+            rig.block(
+                "MyObjectBuilder_MotorRotor",
+                "LargeRotor",
+                (0, 0, 0),
+                f"<EntityId>{ROTOR}</EntityId>",
+            ),
+            rig.block(
+                "MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (1, 1, 0)
+            ),
+            *(
+                rig.block(
+                    "MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 1, -z)
+                )
+                for z in range(4)
+            ),
+            *more,
+        ],
+        position=(0, 2.5 + 0.421, 7.5),
         tag="MyObjectBuilder_CubeGrid",
     )
-    + HEAD
+
+
+# Armor under the last block is in the remote control, which the welders place long before they
+# get there
+ARMOR = rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, -3))
+MAIN = rig.grid(
+    NAME, 777000928000100, HULL + [STATOR_BLOCK], tag="MyObjectBuilder_CubeGrid"
 )
+WITH_HEAD = MAIN + head()
+CLANGS = MAIN + head(ARMOR)
 MAIN_SHORT = rig.grid(
     NAME,
     777000928000300,
@@ -266,18 +282,21 @@ def docked() -> None:
     no_plugin_errors(stalled=True)
 
 
-def free_order(remote) -> None:
-    """A free order, waited for until its components are loaded"""
+def free_order(remote) -> str:
+    """A free order, waited for until its components are loaded; the ship's name"""
     pb.at_table(remote)
     quote = tc.ship_reply(remote, "!oct order")
     check("Your quote for" in quote, f"quote: {quote}")
+    name = re.search(r"Your quote for '(.*?)' is", quote)[1]
     reply = tc.ship_reply(remote, "!oct order")
     check("is in the queue" in reply, f"ordered: {reply}")
-    pattern = rf"Shipyard order \S+ '{re.escape(NAME)}' \(.*free\) for "
-    deadline = time.monotonic() + 120
+    pattern = rf"Shipyard order \S+ '{re.escape(name)}' \(.*free\) for "
+    # The server log is buffered, and a big ship's arm takes a while
+    deadline = time.monotonic() + 300
     while time.monotonic() < deadline and not re.search(pattern, rig.server_game_log()):
         time.sleep(0.5)
     check(re.search(pattern, rig.server_game_log()), "the free build started")
+    return name
 
 
 def strip_cells(remote) -> None:
@@ -336,10 +355,9 @@ def subgrid_paid() -> None:
         check("Battery" in str(line), f"the chat names the battery: {line}")
         check("removed" not in str(line), f"not removed: {line}")
         left = st.probe(remote, "yardstock Alpha")
-        plates = re.search(r"Component/SteelPlate=(\d+)", left)
         check(
-            plates is not None and int(plates[1]) >= 25,
-            f"the colliding block's plates stay in the containers: {left}",
+            "Component/" in left,
+            f"the battery's other parts stay in the containers: {left}",
         )
         money = pb.balance(remote)
         st.admin(remote, "!oct shipyard done")
@@ -350,6 +368,54 @@ def subgrid_paid() -> None:
     so.check_ship(NAME, len(HULL) + 1, complete=True)
     check(partial_battery(), "the subgrid's battery stays unfinished")
     no_plugin_errors(stalled=True)
+
+
+def placed_by_force() -> None:
+    log = rig.server_game_log()
+    check(
+        re.search(r"placed 1 Light Armor Block the welders couldn't", log),
+        "the shipyard placed the block itself",
+    )
+    check(
+        "clang, the ship is removed" in log,
+        f"the ship shook: {re.findall(r'ticks: physics steps .*', log)}",
+    )
+
+
+def clang(paid: bool) -> None:
+    so.prepare(CLANGS, 60)
+    rig.start_server()
+    remote = rig.start_client()
+    try:
+        if paid:
+            paid_order(remote, {CELLS: 80}, ShipyardTopUpMinutes=0)
+        else:
+            free_order(remote)
+        line = str(so.wait_chat(remote, "stopped building", 420))
+        check("made it shake. The ship was removed" in line, f"removed: {line}")
+        if paid:
+            check("its components are in the containers" in line, f"refunded: {line}")
+            left = st.probe(remote, "yardstock Alpha")
+            plates = re.search(r"Component/SteelPlate=(\d+)", left)
+            check(
+                plates is not None and int(plates[1]) >= 8 * 25,
+                f"the hull's plates are in the containers: {left}",
+            )
+        else:
+            check("doesn't count" in line, f"the free build doesn't count: {line}")
+    finally:
+        rig.stop_client()
+        rig.stop_server()
+    sector, _ = so.saved()
+    check(
+        not any(
+            o.findtext("DisplayName") in (NAME, "Head Part")
+            for o in sector.find("SectorObjects")
+        ),
+        "no ship in the save",
+    )
+    placed_by_force()
+    no_plugin_errors(stalled=False)
 
 
 def main_short() -> None:
@@ -378,33 +444,36 @@ def main_short() -> None:
 def blueprint() -> None:
     """A real ship: whatever its welders can't finish on its subgrids, it is delivered"""
     global NAME
-    text = open(os.environ["OCT_BLUEPRINT"], encoding="utf-8").read()
-    grids = re.findall(r"<CubeGrid>.*?</CubeGrid>", text, flags=re.S)
-    check(len(grids) > 1, f"a blueprint with subgrids: {len(grids)} grids")
-    NAME = re.search(r"<DisplayName>([^<]*)", grids[0])[1]
-    cubes = len(re.findall(r"<MyObjectBuilder_CubeBlock", grids[0]))
-    so.prepare(
-        "".join(
-            g.replace("<CubeGrid>", "<MyObjectBuilder_CubeGrid>").replace(
-                "</CubeGrid>", "</MyObjectBuilder_CubeGrid>"
-            )
-            for g in grids
-        ),
-        60,
-    )
+    # The top grids only: a projector's blueprint has grids of its own
+    ET.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
+    top = ET.parse(os.environ["OCT_BLUEPRINT"]).find(".//ShipBlueprint/CubeGrids")
+    check(len(top) > 1, f"a blueprint with subgrids: {len(top)} grids")
+    for grid in top:
+        grid.tag = "MyObjectBuilder_CubeGrid"
+    so.prepare("".join(ET.tostring(g, encoding="unicode") for g in top), 60)
+    seconds = float(os.environ.get("OCT_BLUEPRINT_SECONDS", 1500))
     rig.start_server()
     remote = rig.start_client()
     try:
         tc.with_config(
             remote,
+            ShipyardOrderMinutes=max(60, int(seconds / 60)),
             FreeBuildPcuLimit=1_000_000,
             GroupPcuLimit=1_000_000,
             FreeBuildBlockedBlocks="",
             ShipyardTableMinutes=600,
         )
-        free_order(remote)
+        NAME = free_order(remote)
+        cubes = next(
+            (
+                len(g.find("CubeBlocks"))
+                for g in top
+                if g.findtext("DisplayName") == NAME
+            ),
+            None,
+        )
         ended = None
-        deadline = time.monotonic() + 1500
+        deadline = time.monotonic() + seconds
         while time.monotonic() < deadline and ended is None:
             lines, _ = so.chat_lines(remote, 0)
             ended = next(
@@ -429,6 +498,8 @@ CASES = {
     "subgrid-free": subgrid_free,
     "subgrid-paid": subgrid_paid,
     "main-short": main_short,
+    "clang": lambda: clang(paid=False),
+    "clang-paid": lambda: clang(paid=True),
 }
 NAMED_ONLY = {"blueprint": blueprint}
 
