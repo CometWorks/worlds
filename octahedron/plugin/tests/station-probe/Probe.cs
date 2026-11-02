@@ -190,8 +190,16 @@ public sealed class ProbeCommands : CommandModule
                 ownerId
             );
             tank.FilledRatio = float.Parse(h2.Substring(3), CultureInfo.InvariantCulture);
-            // Stockpiling, it takes hydrogen from any tank or generator it reaches too
-            tank.IsStockpiling = items.Contains("STOCKPILE");
+            // Stockpiling, it takes hydrogen from any tank or generator it reaches too. Laid along
+            // the ship, its port at its base faces the container, so conveyors reach it.
+            if (items.Contains("STOCKPILE"))
+            {
+                tank.IsStockpiling = true;
+                tank.BlockOrientation = new SerializableBlockOrientation(
+                    Base6Directions.Direction.Up,
+                    Base6Directions.Direction.Backward
+                );
+            }
             grid.CubeBlocks.Add(tank);
         }
         // BAT=<MWh>: a battery holding that much, the ship's only power
@@ -202,7 +210,7 @@ public sealed class ProbeCommands : CommandModule
         {
             var battery = Block<MyObjectBuilder_BatteryBlock>(
                 "LargeBlockBatteryBlock",
-                new Vector3I(0, 0, 3),
+                new Vector3I(1, 0, 1),
                 ownerId
             );
             battery.CurrentStoredPower = float.Parse(
@@ -1154,6 +1162,20 @@ public sealed class ProbeCommands : CommandModule
         return $"ICE {station} {generators.Count}";
     }
 
+    // Whether conveyors lead from a gas generator of the station to a tank of the ship
+    private static bool Reach(MyCubeGrid ship, MyCubeGrid station) =>
+        station
+            .GetFatBlocks<MyGasGenerator>()
+            .Any(g =>
+                ship.GetFatBlocks<MyGasTank>()
+                    .Any(t =>
+                        Sandbox.Game.GameSystems.MyGridConveyorSystem.Reachable(
+                            g.ConveyorEndpoint,
+                            t.ConveyorEndpoint
+                        )
+                    )
+            );
+
     [Command(
         "trading",
         "Turns trading on or off at the station's connectors that are free: TRADING station on|off count",
@@ -1193,14 +1215,15 @@ public sealed class ProbeCommands : CommandModule
             MyCubeGridGroups.Static.GetGroups(type).HasSameGroup(grid, other.CubeGrid);
         return string.Format(
             CultureInfo.InvariantCulture,
-            "LINK {0} trading={1},{2} power={3} logical={4} electrical={5} stored={6:0.000}",
+            "LINK {0} trading={1},{2} power={3} logical={4} electrical={5} stored={6:0.000} reach={7}",
             gridId,
             YesNo(c.TradingEnabled),
             YesNo(other.TradingEnabled),
             YesNo(c.IsTransferingElectricityCurrently || other.IsTransferingElectricityCurrently),
             YesNo(Same(GridLinkTypeEnum.Logical)),
             YesNo(Same(GridLinkTypeEnum.Electrical)),
-            grid.GetFatBlocks<MyBatteryBlock>().Sum(b => b.CurrentStoredPower)
+            grid.GetFatBlocks<MyBatteryBlock>().Sum(b => b.CurrentStoredPower),
+            YesNo(Reach(grid, other.CubeGrid))
         );
     }
 

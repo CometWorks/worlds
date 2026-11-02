@@ -116,7 +116,10 @@ def trading(a) -> None:
         gas, stored, link = readings(a, ship)
     check(gas == 0, f"no hydrogen from the station in {WATCH} s: {gas:.0f} L")
     check(stored == 0, f"no power from the station in {WATCH} s: {stored:.3f} MWh")
-    check("logical=no" in link, f"no conveyor link to the station: {link}")
+    check(
+        "logical=no" in link and "reach=no" in link,
+        f"no conveyor link to the station: {link}",
+    )
     log(probe(a, "undock"))
 
 
@@ -126,8 +129,10 @@ def control(a) -> None:
     log(probe(a, f"trading {STATION} off"))
     ship = docked(a)
     filled = st.wait_until(lambda: (r := readings(a, ship))[0] > 0 and r[1] > 0, 90, 3)
-    gas, stored, _ = readings(a, ship)
-    check(bool(filled), f"control, not trading: {gas:.0f} L and {stored:.3f} MWh")
+    gas, stored, link = readings(a, ship)
+    check(
+        bool(filled), f"control, not trading: {gas:.0f} L and {stored:.3f} MWh: {link}"
+    )
     with_config(a)
     check(
         bool(
