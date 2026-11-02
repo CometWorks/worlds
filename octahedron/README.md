@@ -65,20 +65,19 @@ station and shipyard blueprints are in `blueprints/`.
   Moon Station stays where it was before the turn, between the directions to
   where Delta and Alpha Station were then. The 6
   Earth stations are placed with EarthLike's north as up and their front toward
-  its axis, each with its shipyard. The 4 equatorial ones are then turned
-  together with their shipyards about the safe zone's center, so the deck lies
-  parallel to the asteroid ring (up along the ring's axis, its north side, 25
-  degrees from north) and the front faces EarthLike in the ring's plane, with
-  the shipyard behind, out in space. Otherwise the sun shines sideways through
-  the deck all day: bad shadows and unreadable LCDs. North and South Station
+  its axis. The 4 equatorial ones are then turned so the deck lies parallel to
+  the asteroid ring (up along the ring's axis, its north side, 25 degrees from
+  north) and the front faces EarthLike in the ring's plane. Otherwise the sun
+  shines sideways through the deck all day: bad shadows and unreadable LCDs.
+  North and South Station
   stay level with the equator, both with their up toward EarthLike: North
   Station is upside down, so its lobby looks down on the ring. The
   lanes don't turn. Moon Station's up is square to the line between EarthLike and the
   Moon, the one such direction nearest to where Delta Station was before the
-  turn. Its shipyard is placed as if it faced away from the Moon, then the
-  station alone is turned 180 degrees about its up: it faces the Moon, its
-  lobby toward EarthLike. Delta Station, whose up leaned 25 degrees away from
-  EarthLike, is turned 50 degrees further with its shipyard, so its up leans
+  turn, and it is turned 180 degrees about its up and upside down: it faces the
+  Moon, its lobby toward EarthLike, and its shipyard lies above it (see below).
+  Delta Station, whose up leaned 25 degrees away from EarthLike, is turned 50
+  degrees further, so its up leans
   25 degrees toward it, like Beta Station's: the lobby sees the planet, and the
   deck is still tilted against the Sun. Each station sits in a 250 m admin safe zone, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
@@ -91,34 +90,25 @@ station and shipyard blueprints are in `blueprints/`.
   (SE1-0121).
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
-  lobby, its pressurized back half: straight behind the equatorial stations,
-  away from EarthLike, and on the Moon side of Moon Station. The lanes leave
-  the stations the other way and still start from the zone's center.
-  - The shipyard's side faces the lobby, rolled 30 degrees about its long axis
-    with its top toward the station, lifted 50 m along the station's up and
-    turned 17.5 degrees about it, so more of the build volume shows past its
-    near wall and the wall's middle beam doesn't hide its center. Gamma
-    Station's shipyard is turned the other way (`SHIPYARD_YAW_REVERSED`): its
-    turn for the Sun, below, went against the 17.5 degrees and put the beam
-    back in front of the center.
-  - The station and its shipyard are centered on the safe zone together and
-    spread apart as far as their block bounds stay 10 m inside the zone's edge:
-    100 m between them, the farthest block 227 m from the zone's center.
-  - Then the shipyard is raised (`SHIPYARD_RAISE`) along its own up, the side
-    with its cargo containers: 30 m at the equatorial stations; Moon Station's
-    125 m along the station's up. Each is then pulled straight toward its
-    station by as little as keeps its block bounds 10 m inside the zone's edge
-    again. Their farthest blocks end up 211 to 221 m from the zone's center,
-    and 92 m or more from the station's blocks.
-  - The pole stations' shipyards follow Viktor's placement at South Station in
-    game (`POLE_SHIPYARD`, in the station's own axes): off the side of the
-    lobby with the ship build holo table, above its floor and on EarthLike's
-    side, turned so the windows look down into the middle of the shipyard.
-    North Station, upside down, sits like South Station, so its shipyard takes
-    the same place. Along that direction the pair is centered on the zone and
-    spread apart as far as it fits 10 m inside the edge: 257 m between their
-    centers, the farthest block 224 m from the zone's center, the shipyard's
-    nearest block 140 m from the station's.
+  lobby, its pressurized back half
+  ([SE-945](https://tasks.cometworks.se/tasks/1832)).
+  - Every shipyard starts where Viktor put Gamma Station's on the live cluster
+    (`SHIPYARD_PLACE`, in the station's own axes): 180 m from the station, 140 m
+    along its up and 112 m behind it, turned the same way against it.
+  - Then it moves along the Sun's axis, away from the station, until its block
+    bounds are 15 m out of the slab of the Sun's rays through the station's
+    bounding sphere, so the Sun never goes behind it as seen from the station
+    (see "The Sun" below). That takes 12 to 58 m at the Earth stations, ending
+    189 to 222 m from them, and 164 m at Moon Station, 248 m from it: Moon
+    Station's front, toward the Moon, is steep against the Sun's path, which
+    stands the shipyard on end there.
+  - The station and its shipyard are centered on the safe zone together. Where a
+    gate would still shade the station's hangar deck or lobby, the pair moves
+    together by as little as clears them with both block bounds 10 m inside the
+    zone's edge. Only Moon Station moves, 57 m: a Moon lane's end gate covers
+    its zone from 130 m below the center upward, so the station sits low and
+    its shipyard above it. A gate may shade the engineering rooms under the
+    hangar deck. The farthest blocks end up 176 to 222 m from the zone's center.
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries. Those start with 10 uranium ingots each and full charge, and on
     the server the Octahedron plugin tops them back up every 10 minutes
@@ -131,11 +121,6 @@ station and shipyard blueprints are in `blueprints/`.
     color, at 70 % brightness. North red, South blue, Beta green and Delta
     orange painted metal; Alpha black and Gamma cyan carbon fiber; Moon purple
     concrete.
-  - The Sun never goes behind a station's own shipyard: see "The Sun" below.
-    For that the line between Alpha, Gamma, North and South Station and their
-    shipyards is turned 33, 33, 12 and 12 degrees about the zone's center
-    (`SHIPYARD_SUN_TURN`), both keeping their orientation, and Moon Station and
-    its shipyard turn 22 degrees as one unit (`MOON_SUN_TURN_DEGREES`).
 - Makes the stations the NPC faction's trade stations: the faction is a Trader
   with a bank account, and each station grid has a station entry, so the
   economy stocks its store and contract blocks. The game's own trade factions
@@ -222,17 +207,20 @@ Lanes gate or the station's own shipyard
 The Sun circles about the world's Y axis, EarthLike's north (`sun_axis`), with
 its rays always level. So over a day the rays to a station stay inside a flat
 slab through it, and what stays out of that slab can't shade it at any time.
-The lanes are moved by as little as keeps every gate's bounding sphere out of the
-slab of every station's bounding sphere (`EQUATOR_LANE_NORTH`,
-`NORTH_MOON_LANE_NORTH`). `build_world.py` fails when a shipyard's blocks reach
-into the slab of its station's bounding sphere.
+Some lanes were moved north to keep their gates out of the stations' slabs
+(`EQUATOR_LANE_NORTH`, `NORTH_MOON_LANE_NORTH`); they stay where they are, and
+the stations are placed so no gate's bounding sphere reaches into the slab of a
+station's hangar deck and lobby, block by block. Each shipyard's block bounds
+stay out of the slab of its station's bounding sphere.
 
 ```bash
 uv run check_sun_clearance.py <world folder>
 ```
 
 sweeps a built world independently of those rules: 7,200 Sun positions over the
-day, every gate and shipyard block against each station. It prints the
+day, every gate against each station's hangar deck and lobby and every shipyard
+block against each station. It also checks the shipyard's block bounds against
+the slab of the station's bounding sphere ("box"). It prints the
 smallest clearance in meters and degrees per station, how many of 26 lobby spots
 see the shipyard's center and its corners past the blocks, and how far the
 farthest block is from the zone's center. It exits with 1 when the Sun can reach

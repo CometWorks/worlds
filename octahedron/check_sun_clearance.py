@@ -9,11 +9,15 @@
 
 Light strobes when the Sun passes behind something with gaps: a Trade Lanes gate or the
 station's own shipyard (SE-809, SE-720). For each station and Sun position this takes the ray
-from the Sun through every such object and measures how far it passes from the station's
-bounding sphere, with the object as its bounding sphere too: gates and, for the shipyard, each
-of its blocks. A clearance above 0 m means no ray that touches the object can reach any point
-of the station. The angle is how far the Sun stays from the object's edge seen from the
-station's lobby and from its hangar deck.
+from the Sun through every such object and measures how far it passes from the station, with
+the object as its bounding sphere too: gates and, for the shipyard, each of its blocks. A
+clearance above 0 m means no ray that touches the object can reach the station. For the
+shipyard that is the station's bounding sphere; for gates only its decks, the hangar deck and
+the lobby above it (build_world.STATION_DECKS_BOTTOM), block by block: a gate may shade the
+engineering rooms below (SE-945). The angle is how far the Sun stays from the object's edge
+seen from the station's lobby and from its hangar deck. "box" is how far the shipyard's block
+bounds stay out of the slab of the Sun's rays through the station's bounding sphere, along
+the Sun's axis: above 0 m the Sun never goes behind them.
 
 Prints a line per station and exits with 1 if any clearance is 0 or less.
 """
@@ -141,6 +145,52 @@ def sweep(sun, center, radius, viewpoints, points, radii):
     return meters, degrees
 
 
+def clearances(sun, center, radius, points, radii):
+    """Per point, the smallest clearance over the day between the Sun's ray through it and the
+    sphere (center, radius)."""
+    offset = points - center
+    result = np.full(len(points), np.inf)
+    for chunk in np.array_split(sun, max(1, len(sun) // 256)):
+        along = offset @ chunk.T
+        off_ray = np.sqrt(np.maximum((offset**2).sum(axis=1)[:, None] - along**2, 0))
+        off_ray[along <= 0] = np.inf
+        result = np.minimum(result, off_ray.min(axis=1))
+    return result - radii - radius
+
+
+def decks_clearance(sun, grid, gates):
+    """The smallest clearance of the gates from the station's decks: first against the decks'
+    bounding sphere, then block by block for the gates that come within its radius of it.
+    """
+    cells = block_cells(grid)
+    blocks = to_world(grid, cells[cells[:, 1] >= world.STATION_DECKS_BOTTOM])
+    center = (blocks.min(axis=0) + blocks.max(axis=0)) / 2
+    radius = np.linalg.norm(blocks - center, axis=1).max() + world.BLOCK_RADIUS
+    near = clearances(sun, center, radius, gates, world.GATE_RADIUS)
+    close = near <= radius
+    meters = near[~close].min(initial=np.inf)
+    for gate in gates[close]:
+        # Seen from the block: the gate shades it when it lies toward the Sun
+        shade = clearances(-sun, gate, world.GATE_RADIUS, blocks, world.BLOCK_RADIUS)
+        meters = min(meters, shade.min())
+    return meters
+
+
+def box_clearance(axis, center, radius, yard):
+    """How far the shipyard's block bounds stay out of the slab of the Sun's rays through the
+    sphere (center, radius), along the Sun's axis; 0 or less when the Sun can go behind them.
+    """
+    lo, hi = world.grid_bounds(yard)
+    corners = [
+        [x, y, z]
+        for x in (lo[0] - 0.5, hi[0] + 0.5)
+        for y in (lo[1] - 0.5, hi[1] + 0.5)
+        for z in (lo[2] - 0.5, hi[2] + 0.5)
+    ]
+    heights = (to_world(yard, np.array(corners)) - center) @ axis
+    return max(heights.min(), -heights.max()) - radius
+
+
 def is_window(block):
     return "Window" in (block.findtext("SubtypeName") or "")
 
@@ -220,6 +270,7 @@ def main():
         " (clearance m / degrees from lobby and hangar)"
     )
     failed = False
+    stations = 0
     for name, grid in by_name.items():
         if not name.endswith(" Station") or name.startswith("TL "):
             continue
@@ -233,9 +284,14 @@ def main():
             ("shipyard", yard_blocks, np.full(len(yard_blocks), world.BLOCK_RADIUS)),
         ):
             meters, degrees = sweep(sun, center, radius, views, points, radii)
+            if label == "gates":
+                meters = decks_clearance(sun, grid, gates)
             failed |= meters <= 0
             state = "ok  " if meters > 0 else "FAIL"
             cells.append(f"{label} {state} {meters:8.0f} m {degrees:6.2f} deg")
+        box = box_clearance(axis, center, radius, yard)
+        failed |= box <= 0
+        cells.append(f"box {'ok  ' if box > 0 else 'FAIL'} {box:5.0f} m")
         center_clear, corners_seen, spots = sight(grid, yard)
         cells.append(
             f"sight center {center_clear}/{spots} corners {corners_seen:.0f}/{spots}"
@@ -254,6 +310,8 @@ def main():
         failed |= not inside
         cells.append(f"zone {'ok' if inside else 'FAIL'} {farthest:.0f} m")
         print(f"{name:14s} {'  '.join(cells)}")
+        stations += 1
+    failed |= stations == 0
     print("FAIL: the Sun can strobe on a station" if failed else "PASS")
     sys.exit(1 if failed else 0)
 
