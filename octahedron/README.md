@@ -69,17 +69,16 @@ station and shipyard blueprints are in `blueprints/`.
   the asteroid ring (up along the ring's axis, its north side, 25 degrees from
   north) and the front faces EarthLike in the ring's plane. Otherwise the sun
   shines sideways through the deck all day: bad shadows and unreadable LCDs.
-  North and South Station
-  stay level with the equator, both with their up toward EarthLike: North
-  Station is upside down, so its lobby looks down on the ring. The
-  lanes don't turn. Moon Station's up is square to the line between EarthLike and the
-  Moon, the one such direction nearest to where Delta Station was before the
-  turn, and it is turned 180 degrees about its up and upside down: it faces the
-  Moon, its lobby toward EarthLike, and its shipyard lies above it (see below).
-  Delta Station, whose up leaned 25 degrees away from EarthLike, is turned 50
-  degrees further, so its up leans
-  25 degrees toward it, like Beta Station's: the lobby sees the planet, and the
-  deck is still tilted against the Sun. Each station sits in a 250 m admin safe zone, owned by the
+  North and South Station stay level with the equator, both with their up
+  toward EarthLike: North Station is upside down, so its lobby looks down on
+  the ring. The lanes don't turn. Moon Station's up is square to the line
+  between EarthLike and the Moon, the one such direction nearest to where Delta
+  Station was before the turn, and it is turned 180 degrees about its up and
+  upside down: it faces the Moon, its lobby toward EarthLike, and its shipyard
+  lies above it (see below). Delta Station, whose up leaned 25 degrees away
+  from EarthLike, is turned 50 degrees further, so its up leans 25 degrees
+  toward it, like Beta Station's: the lobby sees the planet, and the deck is
+  still tilted against the Sun. Each station sits in a 250 m admin safe zone, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
   zone allows only drilling and landing gear locks: no welding, grinding or
   block placing, also not by the shipyard's welders until the Octahedron plugin
