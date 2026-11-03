@@ -144,7 +144,8 @@ station and shipyard blueprints are in `blueprints/`.
   by an NPC of its name, so it never empties and players who join it are plain
   members. The game makes an admin leader when they join while only the NPC is
   in it: Viktor joins Sheep and Owen Wolves first, after a wipe. No bank
-  account, since only a leader could take money out.
+  account, since only a leader could take money out. Sheep is green with the
+  shield and gear logo, Wolves orange with the flaming skull.
 - Places 11 Trade Lanes: one along each edge of the equatorial square
   (Alpha-Beta-Gamma-Delta), from Beta and Delta Station to both North and South
   Station, and from Moon Station to the three stations of the face toward the

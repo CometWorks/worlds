@@ -1,6 +1,6 @@
 """Checks the starting factions of a world built by build_world.py (OCT_WORLD_SOURCE) on the
 test server with the headless client: the client joins Sheep without anyone accepting it, and
-after the save it is a member of SHP next to the NPC founder. An admin who joins first becomes a
+after the save it is a member of SHP next to the NPC founder, and SHP keeps its logo. An admin who joins first becomes a
 leader; with --not-admin the client is no admin and stays a plain member.
 
     OCT_WORLD_SOURCE=<built world> uv run --no-project --with httpx python \\
@@ -64,6 +64,10 @@ def main() -> None:
     print("saved SHP members (identity: leader):", members)
     assert len(members) == 2 and me in members, "the NPC founder and the client"
     assert members[me] == admin, f"client leader {members[me]}, expected {admin}"
+    print("saved SHP logo:", sheep.findtext("FactionIcon"))
+    assert sheep.findtext("FactionIcon").endswith(
+        "BuilderIcon_5.dds"
+    ), "the logo stayed"
     print("PASS", "admin" if admin else "not admin")
 
 

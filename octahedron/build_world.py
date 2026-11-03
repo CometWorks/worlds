@@ -111,20 +111,25 @@ NPC_NAME = "Octahedron Authority"
 # a station needs nothing from its cargo.
 NPC_BALANCE = 1_000_000_000
 NPC_TAG = "OCT"
-# Factions anyone can join (tag, name, description). Players relate to each other only through
-# factions, so a player without one is everyone's enemy (SE-975). These two start as enemies of
-# each other and accept peace from any faction.
+# Factions anyone can join (tag, name, description, logo, background color as HSV). Players
+# relate to each other only through factions, so a player without one is everyone's enemy
+# (SE-975). These two start as enemies of each other and accept peace from any faction. Their
+# logos are white on the background color.
 STARTING_FACTIONS = (
     (
         "SHP",
         "Sheep",
         "We prefer peaceful gameplay and defense. We want to socialize and build together.",
+        r"Textures\FactionLogo\Builders\BuilderIcon_5.dds",
+        (0.3333, 0.75, 0.6),
     ),
     (
         "WOL",
         "Wolves",
         "We are warriors and great hunters. We want to train, hunt, salvage and occasionally"
         " play with the sheep.",
+        r"Textures\FactionLogo\Others\OtherIcon_3.dds",
+        (0.07, 0.9, 0.95),
     ),
 )
 # Blocks players use on a station; everything else stays with the owner's faction. Whoever a block
@@ -1374,8 +1379,17 @@ def add_starting_factions(checkpoint, ids):
     auto-joins becomes a member, not a leader. Only an admin who joins while every member is an
     NPC is promoted to leader: Viktor joins Sheep and Owen Wolves first. No bank account: only a
     leader could take money out of it."""
-    for tag, name, description in STARTING_FACTIONS:
-        npc_faction(checkpoint, ids, tag, name, description, "PlayerMade")
+    for tag, name, description, logo, color in STARTING_FACTIONS:
+        _, faction = npc_faction(checkpoint, ids, tag, name, description, "PlayerMade")
+        vector(faction, "CustomColor", hsv_offset(color))
+        vector(faction, "IconColor", hsv_offset((0, 0, 1)))
+        el(faction, "FactionIcon", logo)
+
+
+def hsv_offset(hsv):
+    """A faction color as the game saves it (MyColorPickerConstants.HSVToHSVOffset)"""
+    h, s, v = hsv
+    return h, round(s - 0.8, 4), round(v - 0.55 + 0.1, 4)
 
 
 def npc_faction(checkpoint, ids, tag, name, description, faction_type):
