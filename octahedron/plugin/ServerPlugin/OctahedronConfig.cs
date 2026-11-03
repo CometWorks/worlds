@@ -344,7 +344,8 @@ public class OctahedronConfig : PluginConfig
     [IntOption(
         0,
         description: "Players order the blueprint loaded into a station's hologram table with the button next to it, and the "
-            + "station's shipyard builds it for at most this many minutes. 0: no orders.",
+            + "station's shipyard builds it for at most this many minutes, at a shipyard of the Omni Arc Beam Shipyard's size. "
+            + "A shipyard with more welders or a larger free build space gets longer in proportion, up to 5 hours. 0: no orders.",
         Parent = "shipyard"
     )]
     public int ShipyardOrderMinutes

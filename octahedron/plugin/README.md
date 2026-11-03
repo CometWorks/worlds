@@ -326,7 +326,9 @@ presses it, whoever holds the table:
 A queued order stays when its owner leaves: a free build is built and handed over as
 usual, a paid one gets its turn and leaves the queue if nobody presses, and the owner
 can cancel it when back.
-`ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
+`ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most at the Omni
+Arc Beam Shipyard. A shipyard with more welders or a larger free build space gets that much
+longer, in proportion to both, up to 5 hours, which the double helix shipyard gets.
 
 A repair slot is an entry "Repair" in the shipyard's queue, without a blueprint or a
 payment. It takes a place in the queue, and a player has one entry at a time at any

@@ -67,7 +67,7 @@ namespace ServerPlugin;
 // (the scaffold) next to that block projecting the whole blueprint. The shipyard's cargo
 // containers get the components of the remaining blocks for a free build, and its OmniArc welders
 // (ToolCore) are switched on. Projected blocks welded onto the ship are the player's, owner and
-// BuiltBy. The order ends when every block is complete or after ShipyardOrderMinutes: the welders
+// BuiltBy. The order ends when every block is complete or after OrderMinutes: the welders
 // go off, the scaffold is removed, a free build's leftover components are removed (a paid build's
 // stay the player's for the rest of their turn), a paid build's H2 tanks are filled, and the ship,
 // finished or not, becomes the player's dynamic ship.
@@ -1798,7 +1798,7 @@ internal static partial class ShipyardOrders
             return $"the components take {needed:N0} m³, the containers have room for {free:N0} m³";
 
         var npc = ShipyardTurn.Npc(shipyard);
-        var ends = DateTime.UtcNow.AddMinutes(Config.ShipyardOrderMinutes);
+        var ends = DateTime.UtcNow.AddMinutes(OrderMinutes(shipyard));
         var world = turn * shipyard.WorldMatrix.GetOrientation();
         var ship = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_CubeGrid>();
         ship.GridSizeEnum = main.GridSizeEnum;
@@ -1861,7 +1861,7 @@ internal static partial class ShipyardOrders
         );
         Tell(
             next.Player,
-            $"{shipyard.DisplayName} builds '{grid.DisplayName}' for you now, in {Config.ShipyardOrderMinutes} min at most."
+            $"{shipyard.DisplayName} builds '{grid.DisplayName}' for you now, in {OrderMinutes(shipyard)} min at most."
         );
         return null;
     }
@@ -2035,12 +2035,12 @@ internal static partial class ShipyardOrders
                 : order.Missing != null && !gone
                     ? $"{stalled}. The ship is yours without {order.Missing}."
                     : missing == "unbuilt"
-                        ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
+                        ? $"{shipyard.DisplayName} stopped after {OrderMinutes(shipyard)} min with {why} of '{name}', no ship was built."
                         : gone
                             ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
                             : why == null
                                 ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
-                                : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
+                                : $"{shipyard.DisplayName} stopped after {OrderMinutes(shipyard)} min with {why} of '{name}'. "
                                     + "The unfinished ship is yours.";
         if (!order.Free)
         {
@@ -2193,7 +2193,7 @@ internal static partial class ShipyardOrders
             return $"the components take {needed:N0} m³, the containers have room for {free:N0} m³";
 
         var npc = ShipyardTurn.Npc(shipyard);
-        var ends = DateTime.UtcNow.AddMinutes(Config.ShipyardOrderMinutes);
+        var ends = DateTime.UtcNow.AddMinutes(OrderMinutes(shipyard));
         var hydrogen = BuildHydrogen(next, blueprint);
         var arm = layout
             .Plan.Blocks.Select(b => new Vector3I(b.Cell.X, b.Cell.Y, b.Cell.Z))
@@ -2263,7 +2263,7 @@ internal static partial class ShipyardOrders
         );
         Tell(
             next.Player,
-            $"{shipyard.DisplayName} builds '{order.Name}' for you now, in {Config.ShipyardOrderMinutes} min at most."
+            $"{shipyard.DisplayName} builds '{order.Name}' for you now, in {OrderMinutes(shipyard)} min at most."
                 + (
                     layout.GivenUp != null
                         ? $" The arm's projector takes the place of one {Definition(layout.GivenUp)}: build it yourself after."
@@ -3356,6 +3356,24 @@ internal static partial class ShipyardOrders
 
     // The turret turns all the way around the block's Up and tilts 45 degrees out of that plane
     private static readonly double WelderTilt = Math.Sin(MathHelper.ToRadians(45));
+
+    // The Omni Arc Beam Shipyard's welders and free build space (m³), which ShipyardOrderMinutes
+    // is for
+    private const int ReferenceWelders = 24;
+    private const double ReferenceVolume = 72.5 * 75 * 282.5;
+    private const int MaxOrderMinutes = 5 * 60;
+
+    // How long an order runs at most at this shipyard: ShipyardOrderMinutes in proportion to its
+    // welders and to the volume of its free build space, which sets how big the ships it builds
+    // are, against the Omni Arc Beam Shipyard's. Never less, and at most 5 hours (SE-959).
+    internal static int OrderMinutes(MyCubeGrid shipyard)
+    {
+        var minutes = Config.ShipyardOrderMinutes;
+        var size = FreeSpace(shipyard).HalfExtent * 2;
+        var scale =
+            Beams(shipyard).Count() / (double)ReferenceWelders * size.Volume / ReferenceVolume;
+        return Math.Max(minutes, Math.Min(MaxOrderMinutes, (int)Math.Round(minutes * scale)));
+    }
 
     // The largest box free of the shipyard's blocks and in its welders' reach, grown from the
     // middle of its welders one layer at a time and kept within its grid's bounds, in world
