@@ -301,10 +301,11 @@ game update that changes the planet or voxel material definitions or maps.
   server reads the file as `Octahedron.cfg` from its instance folder; the
   options it leaves out keep their defaults.
 - The stations' 8 connectors trade and are shared with OCT's faction only, so a
-  docked ship gets no power, hydrogen or conveyor access from the station and
-  no player can turn trading off. Trading needs no access to them. On the
-  server the Octahedron plugin keeps them that way (`StationConnectorsTrade`),
-  in a world from before the rule too.
+  docked ship gets no hydrogen or conveyor access from the station and no
+  player can turn trading off. Trading needs no access to them. On the server
+  the Octahedron plugin keeps them that way (`StationConnectorsTrade`), in a
+  world from before the rule too, and charges a docked ship's batteries from
+  the station (`StationDockCharging`).
 - A station's store, ATM, vending machine, contract block, doors and button
   panel stay with OCT's faction, with the game's "Anyone can use" on: every
   player uses them, nobody outside the faction can change them. A door the
