@@ -1515,6 +1515,66 @@ public sealed class ProbeCommands : CommandModule
     private static string Kind(MyCubeBlock block) =>
         $"{block.BlockDefinition.Id.TypeId.ToString().Replace("MyObjectBuilder_", "")}/{block.BlockDefinition.Id.SubtypeName}";
 
+    // The game's "Anyone can use": every player uses the block without access to it
+    private static bool Anyone(MyTerminalBlock block) =>
+        block switch
+        {
+            MyStoreBlock b => b.AnyoneCanUse,
+            MyContractBlock b => b.AnyoneCanUse,
+            MyDoorBase b => b.AnyoneCanUse,
+            SpaceEngineers.Game.Entities.Blocks.MyButtonPanel b => b.AnyoneCanUse,
+            _ => false,
+        };
+
+    [Command(
+        "uses",
+        "The NPC's blocks of the station that anyone can use: one USE line each, then USES count",
+        "!sprobe uses <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Uses(string station)
+    {
+        long me = Context.Caller.IdentityId;
+        var lines = NpcBlocks(station)
+            .Where(Anyone)
+            .Select(b =>
+                $"USE {b.EntityId} {b.CubeGrid.EntityId} {b.Min.X},{b.Min.Y},{b.Min.Z} {Kind(b)} "
+                + $"share={b.IDModule.ShareMode} access={(b.HasPlayerAccess(me) ? "yes" : "no")} name={b.CustomName}"
+            )
+            .ToList();
+        lines.Add($"USES {lines.Count}");
+        return string.Join("\n", lines);
+    }
+
+    [Command(
+        "doors",
+        "The station's doors: DOOR id grid x,y,z kind enabled=yes|no open=yes|no working=yes|no powered=yes|no anyone=yes|no share=mode access=yes|no name=name",
+        "!sprobe doors <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Doors(string station)
+    {
+        long me = Context.Caller.IdentityId;
+        string Yes(bool b) => b ? "yes" : "no";
+        return string.Join(
+            "\n",
+            StationGrids(station)
+                .SelectMany(g => g.GetFatBlocks<MyDoorBase>())
+                .Select(d =>
+                    $"DOOR {d.EntityId} {d.CubeGrid.EntityId} {d.Min.X},{d.Min.Y},{d.Min.Z} {Kind(d)} enabled={Yes(d.Enabled)} "
+                    + $"open={Yes(d.Open)} working={Yes(d.IsWorking)} powered={Yes(d.ResourceSink?.IsPoweredByType(MyResourceDistributorComponent.ElectricityId) == true)} anyone={Yes(d.AnyoneCanUse)} share={d.IDModule.ShareMode} "
+                    + $"access={Yes(d.HasPlayerAccess(me))} name={d.CustomName}"
+                )
+        );
+    }
+
+    [Command("open", "Whether a door is open: OPEN id yes|no", "!sprobe open <entity id>")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Open(long entityId) =>
+        MyEntities.TryGetEntityById(entityId, out MyDoorBase door)
+            ? $"OPEN {entityId} {(door.Open ? "yes" : "no")}"
+            : $"NODOOR {entityId}";
+
     [Command(
         "access",
         "The NPC's blocks of the station and its shipyard that the caller's terminal can work: one BLOCK line each, then ACCESS count NOACCESS count",
@@ -1575,14 +1635,14 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "settings",
-        "save keeps the settings of the NPC's blocks the caller has access to; diff lists what changed since: CHANGED id kind path old -> new, then SAME count CHANGED count",
+        "save keeps the settings of the NPC's blocks the caller has access to or anyone can use; diff lists what changed since: CHANGED id kind path old -> new, then SAME count CHANGED count",
         "!sprobe settings <station> <save|diff>"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string SettingsCommand(string station, string what)
     {
         long me = Context.Caller.IdentityId;
-        var blocks = NpcBlocks(station).Where(b => b.HasPlayerAccess(me)).ToList();
+        var blocks = NpcBlocks(station).Where(b => b.HasPlayerAccess(me) || Anyone(b)).ToList();
         if (what == "save")
         {
             saved.Clear();
@@ -1720,6 +1780,29 @@ public sealed class ProbeCommands : CommandModule
             : MySession.Static.Players.IdentityIsNpc(block.OwnerId) ? "npc"
             : "other";
         return $"OWNER {entityId} {who} {block.IDModule?.ShareMode}";
+    }
+
+    [Command(
+        "where",
+        "Where a block is and its use detectors: WHERE id x y z FORWARD x y z UP x y z, then DETECTOR name x y z",
+        "!sprobe where <entity id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Where(long entityId)
+    {
+        if (!MyEntities.TryGetEntityById(entityId, out MyCubeBlock block))
+            return $"NOBLOCK {entityId}";
+        var m = block.WorldMatrix;
+        var lines = new List<string>
+        {
+            $"WHERE {entityId} {V(m.Translation)} FORWARD {V(m.Forward)} UP {V(m.Up)}",
+        };
+        foreach (var dummy in block.Model.Dummies)
+            if (dummy.Key.StartsWith("detector", StringComparison.OrdinalIgnoreCase))
+                lines.Add(
+                    $"DETECTOR {dummy.Key} {V(Vector3D.Transform(dummy.Value.Matrix.Translation, m))}"
+                );
+        return string.Join("\n", lines);
     }
 
     [Command(

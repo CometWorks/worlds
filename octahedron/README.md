@@ -305,10 +305,15 @@ game update that changes the planet or voxel material definitions or maps.
   no player can turn trading off. Trading needs no access to them. On the
   server the Octahedron plugin keeps them that way (`StationConnectorsTrade`),
   in a world from before the rule too.
-- Players use the blocks a station shares with everyone (medical room, store,
-  contracts, hologram table, doors, buttons, seats, Free Tools) but on the server
-  the Octahedron plugin refuses their changes to them (`NpcBlocksLocked`): no
-  settings, names, texts or toolbars.
+- A station's store, ATM, vending machine, contract block, doors and button
+  panel stay with OCT's faction, with the game's "Anyone can use" on: every
+  player uses them, nobody outside the faction can change them. A door the
+  blueprint has off, like the engineering section's airlocks, stays off and shut
+  to players. The medical
+  room, hologram table, seats and Free Tools boxes have no such option, so they
+  are shared with everyone, and on the server the Octahedron plugin refuses
+  players' changes to them (`NpcBlocksLocked`): no settings, names, texts or
+  toolbars.
 - Every station has 4 "Free Tools" cargo terminals (the blueprint's hidden
   toolboxes by its "Free tools!" signs, renamed and shown in inventory screens)
   shared with all players. On the server, the Octahedron plugin's

@@ -1,17 +1,23 @@
-"""A player uses a station's shared blocks but can't change them (SE-936). As a player outside
-OCT's faction, without the admin "Use terminals": the terminal reaches only the blocks the station
-shares with everyone, and the player's changes to every one of them, its name, custom data, on/off
-and every switch and slider, don't hold on the server. The hologram table still switches on and
-off and takes a blueprint, a Free Tools box gives an item, and the medical room charges the suit
-and fills its O2 and H2. The control, NpcBlocksLocked off: the same changes hold. On a world built by
-build_world.py.
+"""A player uses a station's blocks but can't change them (SE-936). As a player outside OCT's
+faction, without the admin "Use terminals": the terminal reaches only the blocks the station
+shares with everyone (medical rooms, hologram table, seats, Free Tools, the shipyard's lights).
+The store, ATM, vending machine, contracts, airlocks and button panel are the faction's, with
+the game's "Anyone can use" on, but for the doors that are off. The player's changes to all of them,
+name, custom data, on/off and every switch and slider, don't hold on the server. The engineering
+section's doors are off and stay off and shut. A door opens for the player, the hologram table
+still switches on and off and takes a blueprint, a Free Tools box gives an item, and the medical
+room charges the suit and fills its O2 and H2. The control, NpcBlocksLocked off: the changes to
+a shared block hold. On a world built by build_world.py.
 
     OCT_TASK=SE-936 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_npc_blocks.py
 
+Needs the Workshop copy of Rotary Airlock, as OCT_WORKSHOP says.
 Prints one line per check and a pass/fail summary; exit code 0 = all passed. About 10 minutes.
 Not covered: toolbars, LCD texts and block groups, which the player's client can't be driven to
-change here; the server refuses them by the same rule.
+change here; the server refuses them by the same rule. Pressing the button panel: the headless
+client's use doesn't hit it (tests/test_paid_builds.py). Buying: tests/test_store.py buys through
+the Store block's own requests.
 """
 
 from __future__ import annotations
@@ -25,17 +31,25 @@ import time
 os.environ.setdefault("OCT_TASK", "SE-936")
 import rig  # noqa: E402
 import station_tests as st  # noqa: E402
+import test_projection_limits as pl  # noqa: E402
 import test_support_arm as sa  # noqa: E402
 from se_remote import CallOp  # noqa: E402
 from station_tests import check, probe  # noqa: E402
 from test_client import log, with_config  # noqa: E402
 
 STATION = "Alpha"
+# The station's airlocks, the engineering section's among them
+MODS = {1359954841: "Rotary Airlock"}
 # What build_world.py shares with everyone on a station and its shipyard
-SHARED = {
-    "MedicalRoom", "Projector", "StoreBlock", "ContractBlock", "VendingMachine", "Door",
-    "AirtightSlideDoor", "ButtonPanel", "Cockpit", "ReflectorLight",
-}  # fmt: skip
+SHARED = {"MedicalRoom", "Projector", "Cockpit", "ReflectorLight"}
+# What it keeps with the faction, with "Anyone can use" on
+ANYONE = {
+    "StoreBlock",
+    "ContractBlock",
+    "VendingMachine",
+    "AdvancedDoor",
+    "ButtonPanel",
+}
 FREE_TOOLS = "Free Tools"
 # Uses, not settings: a door's Open opens it
 USES = {"Open"}
@@ -84,8 +98,39 @@ def reached(a) -> list[dict]:
         f"the 4 Free Tools boxes, shown in inventory screens: {len(tools)}",
     )
     check(
-        {"MedicalRoom", "Projector", "StoreBlock", "ContractBlock"} <= kinds,
-        f"the medical room, hologram table, store and contracts among them: {sorted(kinds)}",
+        {"MedicalRoom", "Projector"} <= kinds,
+        f"the medical room and hologram table among them: {sorted(kinds)}",
+    )
+    return found
+
+
+def usable(a) -> list[dict]:
+    """The blocks anyone can use, none of them shared"""
+    found = [
+        {
+            "id": int(m[1]),
+            "grid": int(m[2]),
+            "min": tuple(int(c) for c in m[3].split(",")),
+            "kind": m[4],
+            "share": m[5],
+            "access": m[6],
+            "name": m[7],
+        }
+        for m in re.finditer(
+            r"USE (\d+) (\d+) (\S+) (\S+) share=(\S+) access=(\S+) name=([^\n]*?)(?= USE|\n|$| USES)",
+            probe(a, f"uses {STATION}"),
+        )
+    ]
+    for b in found:
+        log(f"  {b['kind']} '{b['name']}' share={b['share']} access={b['access']}")
+    kinds = {b["kind"].split("/")[0] for b in found}
+    check(
+        ANYONE <= kinds,
+        f"the store, ATM, vending machine, contracts, airlocks and button panel are for anyone to use: {sorted(kinds)}",
+    )
+    check(
+        all(b["share"] == "Faction" and b["access"] == "no" for b in found),
+        f"none of them shared with the player: {[b for b in found if b['share'] != 'Faction' or b['access'] != 'no'][:3]}",
     )
     return found
 
@@ -140,13 +185,13 @@ def changed(a) -> tuple[int, int, str]:
     return (int(m[1]), int(m[2]), reply) if m else (-1, -1, reply)
 
 
-def locked(a, found: list[dict]) -> None:
+def locked(a, found: list[dict], uses: list[dict]) -> None:
     log(probe(a, f"settings {STATION} save"))
-    tried = tamper(a, found, skip_table=True)
+    tried = tamper(a, found + uses, skip_table=True)
     time.sleep(10)
     same, moved, reply = changed(a)
     check(
-        tried > 50 and moved == 0 and same == len(found),
+        tried > 50 and moved == 0 and same == len(found) + len(uses),
         f"none of the player's {tried} changes holds on the server: {reply}",
     )
     room = next(b for b in found if b["kind"].startswith("MedicalRoom/"))
@@ -236,48 +281,135 @@ def vec(text: str) -> tuple[float, float, float]:
     return tuple(float(c) for c in text.split())
 
 
-def medical(a, how: str = "") -> None:
-    """The medical room charges the suit"""
-    reply = probe(a, f"medical {STATION}")
+def placed(a, entity_id: int) -> tuple[list, tuple, tuple]:
+    """Where to aim at a block: its use detectors, else its center; its forward and up"""
+    reply = probe(a, f"where {entity_id}")
     m = re.search(
-        r"MEDICAL (\d+) (\S+ \S+ \S+) FORWARD (\S+ \S+ \S+) UP (\S+ \S+ \S+)", reply
+        r"WHERE \d+ (\S+ \S+ \S+) FORWARD (\S+ \S+ \S+) UP (\S+ \S+ \S+)", reply
     )
-    detectors = [vec(d) for d in re.findall(r"DETECTOR \S+ (\S+ \S+ \S+)", reply)]
-    check(
-        m is not None and bool(detectors),
-        f"the medical room and its use detectors: {reply}",
-    )
-    if m is None or not detectors:
-        return
-    forward, up = vec(m[3]), vec(m[4])
+    if m is None:
+        return [], (0, 0, 1), (0, 1, 0)
+    points = [vec(d) for d in re.findall(r"DETECTOR \S+ (\S+ \S+ \S+)", reply)]
+    return points or [vec(m[1])], vec(m[2]), vec(m[3])
+
+
+def use(a, entity_id: int, want: str) -> bool:
+    """Stands by the block, looks at it and uses it (F) until the use hits what is wanted"""
+    points, forward, up = placed(a, entity_id)
     right = tuple(
         forward[(i + 1) % 3] * up[(i + 2) % 3] - forward[(i + 2) % 3] * up[(i + 1) % 3]
         for i in range(3)
     )
-    target = None
-    for detector in detectors:
+    for point in points:
         for side in (
             forward,
             right,
             tuple(-c for c in forward),
             tuple(-c for c in right),
         ):
-            stand = tuple(detector[i] + side[i] * 1.3 - up[i] * 1.5 for i in range(3))
+            stand = tuple(point[i] + side[i] * 1.3 - up[i] * 1.5 for i in range(3))
             a.character_teleport(*stand)
             time.sleep(3)
-            a.character_look_at(*detector, tolerance=2)
+            a.character_look_at(*point, tolerance=2)
             time.sleep(1)
             used = a.character_use()
-            log(f"use from {side}: {used}")
-            if "LifeSupporting" in str(used.get("target")):
-                target = detector
-                break
-        if target:
-            break
-    check(target is not None, "the player reaches the medical room's panel")
-    if not target:
+            log(f"use {entity_id} from {side}: {used}")
+            if want in str(used.get("target")):
+                return True
+    return False
+
+
+def medical(a, how: str = "") -> None:
+    """The medical room charges the suit"""
+    room = re.search(r"MEDICAL (\d+)", probe(a, f"medical {STATION}"))
+    check(
+        room is not None and use(a, int(room[1]), "LifeSupporting"),
+        f"the player reaches the medical room's panel{how}",
+    )
+    if room is not None:
+        charge(a, how)
+
+
+def doors(a) -> list[dict]:
+    return [
+        {
+            "id": int(m[1]),
+            "grid": int(m[2]),
+            "min": tuple(int(c) for c in m[3].split(",")),
+            "kind": m[4],
+        }
+        | dict(re.findall(r"(\w+)=(\S+)", m[5]))
+        | {"name": m[6]}
+        for m in re.finditer(
+            r"DOOR (\d+) (\d+) (\S+) (\S+) (.*?) name=([^\n]*?)(?= DOOR|\n|$)",
+            probe(a, f"doors {STATION}"),
+        )
+    ]
+
+
+def door(a) -> None:
+    """A door that anyone can use opens for the player. The lounge's airlocks stand side by
+    side, so the use may hit the next one: any of them turning counts"""
+    before = {d["id"]: d for d in doors(a)}
+    for d in [
+        d for d in before.values() if d["enabled"] == "yes" and d["anyone"] == "yes"
+    ]:
+        if not use(a, d["id"], "Door"):
+            continue
+
+        def turned() -> list[str]:
+            return [
+                f"'{x['name']}' open={before[x['id']]['open']} -> {x['open']}"
+                for x in doors(a)
+                if x["anyone"] == "yes" and x["open"] != before[x["id"]]["open"]
+            ]
+
+        moved = st.wait_until(turned, 10, 1)
+        check(bool(moved), f"the player opens or closes an airlock: {moved}")
         return
-    charge(a, how)
+    check(False, "the player reaches a door anyone can use")
+
+
+def shut(a) -> None:
+    """The engineering section's doors are off and stay off and shut to players"""
+    engineering = [d for d in doors(a) if "Engineering" in d["name"]]
+    for d in engineering:
+        log(f"  {d}")
+    check(
+        len(engineering) == 2
+        and all(
+            d["enabled"] == "no"
+            and d["anyone"] == "no"
+            and d["share"] == "Faction"
+            and d["access"] == "no"
+            for d in engineering
+        ),
+        f"the engineering section's 2 doors are off, the faction's, and not for anyone to use: {len(engineering)}",
+    )
+    for d in engineering:
+        at = (d["grid"], d["min"])
+        for what, call in (
+            ("on", lambda: a.set_enabled(*at, True)),
+            ("anyone can use", lambda: a.set_property(*at, "AnyoneCanUse", True)),
+            ("open", lambda: a.set_property(*at, "Open", d["open"] != "yes")),
+        ):
+            try:
+                call()
+            except Exception as e:  # noqa: BLE001 -- the client refusing counts as held
+                log(f"  {d['name']} {what}: {e}")
+        use(a, d["id"], "Door")
+    time.sleep(10)
+    after = {d["id"]: d for d in doors(a)}
+    held = [
+        d["name"]
+        for d in engineering
+        if (after[d["id"]]["enabled"], after[d["id"]]["anyone"], after[d["id"]]["open"])
+        != ("no", "no", d["open"])
+    ]
+    check(
+        not held,
+        f"the player can't switch them on, open them or make them anyone's: {held}",
+    )
 
 
 def charge(a, how: str) -> None:
@@ -313,12 +445,34 @@ def control(a, found: list[dict]) -> None:
     with_config(a)
 
 
+def prepare() -> None:
+    """The world with the airlock mod, as tests/test_binoculars_zone.py loads its mods"""
+    rig.prepare_world()
+    items = "".join(
+        f'<ModItem FriendlyName="{name}"><Name>{id_}.sbm</Name><PublishedFileId>{id_}'
+        "</PublishedFileId><PublishedServiceName>Steam</PublishedServiceName></ModItem>"
+        for id_, name in MODS.items()
+    )
+    for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
+        path = rig.WORLD / name
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace("<Mods />", f"<Mods>{items}</Mods>", 1), encoding="utf-8"
+        )
+    for folder in (rig.SERVER_DATA / "Mods", rig.APPDATA / "Mods"):
+        folder.mkdir(parents=True, exist_ok=True)
+        for id_ in MODS:
+            link = folder / f"{id_}.sbm"
+            link.unlink(missing_ok=True)
+            link.symlink_to(pl.WORKSHOP / str(id_))
+    rig.write_plugin_config()
+    rig.prepare_server(extra_dev_folders=[pl.LOCAL_WORLD_MODS, st.PROBE])
+
+
 def main() -> int:
     rig.stop_client()
     rig.stop_server()
-    rig.prepare_world()
-    rig.prepare_server(extra_dev_folders=[st.PROBE])
-    rig.write_plugin_config()
+    prepare()
     try:
         rig.start_server()
         a = rig.start_client()
@@ -326,8 +480,13 @@ def main() -> int:
         sa.at_table(a, STATION)
         log(probe(a, "whoami"))
         found = reached(a)
-        locked(a, found)
+        uses = usable(a)
+        # Before the tampering: the game doesn't send a refused change of a block the player
+        # has no access to back, so the player's own client would keep "Anyone can use" off
+        door(a)
+        locked(a, found, uses)
         free_tools(a, found)
+        shut(a)
         medical(a)
         sa.at_table(a, STATION)
         table(a, found)

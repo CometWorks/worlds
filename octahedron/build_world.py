@@ -111,13 +111,18 @@ NPC_NAME = "Octahedron Authority"
 # a station needs nothing from its cargo.
 NPC_BALANCE = 1_000_000_000
 NPC_TAG = "OCT"
-# Blocks players use on a station, shared with everyone; everything else stays with the owner's faction.
-# Not the connectors: they trade, and anyone with access could turn that off and take the station's
-# power and hydrogen (SE-936). Docking needs no access.
-PUBLIC_BLOCKS = {
-    "MedicalRoom", "Projector", "StoreBlock", "ContractBlock", "VendingMachine", "Door",
-    "AirtightSlideDoor", "ButtonPanel", "Cockpit",
+# Blocks players use on a station; everything else stays with the owner's faction. Whoever a block
+# is shared with can also change its settings (SE-936), so these stay the faction's with the game's
+# "Anyone can use" on, which lets every player use them without a terminal.
+ANYONE_CAN_USE = {
+    "StoreBlock", "ContractBlock", "VendingMachine", "Door", "AirtightSlideDoor", "ButtonPanel",
 }  # fmt: skip
+# These have no "Anyone can use": the game lets only those it is shared with use them, so they are
+# shared with everyone, and the Octahedron plugin refuses players' changes to them
+# (NpcBlocksLocked). Not the connectors: they trade, and anyone with access could turn that off
+# and take the station's power and hydrogen. Docking needs no access.
+PUBLIC_BLOCKS = {"MedicalRoom", "Projector", "Cockpit"}
+DOORS = {"Door", "AdvancedDoor", "AirtightSlideDoor", "AirtightHangarDoor"}
 # The one container per station the economy's refill puts loot into, through the Octahedron
 # plugin's StationLootContainerName (config/octahedron.cfg). It stays with the faction on every
 # station, so the loot it gets each economy tick can't be farmed.
@@ -684,6 +689,12 @@ def station(template, ids, name, center, forward, up, owner):
         block.find("Owner").text = str(owner)
         kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
         block.find("ShareMode").text = "All" if kind in PUBLIC_BLOCKS else "Faction"
+        if kind in ANYONE_CAN_USE:
+            set_child(block, "AnyoneCanUse", "true")
+        if kind in DOORS and block.findtext("Enabled") == "false":
+            # Off in the blueprint, like the engineering section's airlocks: shut to players
+            block.find("ShareMode").text = "Faction"
+            set_child(block, "AnyoneCanUse", "false")
         if block.findtext("CustomName") == LOOT_CONTAINER_BLUEPRINT_NAME:
             loot = block
             set_child(block, "CustomName", LOOT_CONTAINER)
