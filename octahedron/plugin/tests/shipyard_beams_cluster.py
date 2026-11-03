@@ -1,7 +1,8 @@
 """The shipyard welders' beams on a local test cluster, through the cluster's scenario bench (CometWorks/cluster
 Test/), as tests/test_shipyard_beams.py checks them on one server (SE-782): the client orders a long build at a
 station, flies to another station on the other node and back, and all of the shipyard's welders must shoot on the
-client after that, and some must hit. The client runs the beam-probe test plugin.
+client after that, and some must hit. Then the probe switches the welders off on the client alone, and the plugin's
+switch, sent every 30 s, must turn them on again (SE-963). The client runs the beam-probe test plugin.
 
     OCT_TASK=SE-782 OCT_WORLD_SOURCE=<world from build_world.py> \\
         <Test>/.venv/bin/python tests/shipyard_beams_cluster.py <Test>     (from plugin/)
@@ -145,6 +146,20 @@ def run(bench) -> None:
     back = time.time()
     time.sleep(60)
     shooting("the welders shoot after the trip to the other node", back)
+
+    off = time.time()
+    (user_data / "beam-probe.off").touch()
+    time.sleep(beams.RESEND)
+    again = time.time()
+    time.sleep(30)
+    picked = state(off)
+    recovered = beams.recovered(picked)
+    check(
+        "the welders go off on the client and on again",
+        recovered.startswith("on again"),
+        recovered,
+    )
+    shooting("the welders shoot after they went off on the client", again)
     print(beams.samples(probe_log)[-1], flush=True)
 
 
