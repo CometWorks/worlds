@@ -204,6 +204,8 @@ def prepare_world(
             [table_blueprint] if isinstance(table_blueprint, str) else table_blueprint
         )
         tables = iter(range(1_000_000))
+        # Before the blueprints go in: a blueprint may have consoles of its own
+        consoles = text.count("<SubtypeName>LargeBlockConsole</SubtypeName>")
         text, count = re.subn(
             r'(<MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_Projector">\s*'
             r"<SubtypeName>LargeBlockConsole</SubtypeName>.*?)<Enabled>(?:true|false)</Enabled>",
@@ -212,9 +214,7 @@ def prepare_world(
             text,
             flags=re.S,
         )
-        assert (
-            0 < count == text.count("<SubtypeName>LargeBlockConsole</SubtypeName>")
-        ), count
+        assert 0 < count == consoles, count
     text = text.replace(
         "</SectorObjects>", "".join(extra_grids) + "</SectorObjects>", 1
     )
