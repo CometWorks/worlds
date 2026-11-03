@@ -272,7 +272,10 @@ def check_beams() -> None:
             f"{what}: {len(picked)} samples, {len(off)} with welders off, at most {hit} hitting",
         )
 
-    first = next((at for at, text in marks if "goes" in text or "leaves" in text), ends)
+    first = next(
+        (at for at, text in marks if "goes" in text or "leaves" in text or text == OFF),
+        ends,
+    )
     # The first blocks may come a moment before the switch, which comes after the welders are on
     begins = building[0]["t"] + 5 if building else 0
     shooting("before any step", [s for s in building if begins <= s["t"] < first])
