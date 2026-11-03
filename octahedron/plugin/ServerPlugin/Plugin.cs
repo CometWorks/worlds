@@ -87,6 +87,8 @@ public class Plugin : IPlugin
             Market.Update();
             Builds.Update();
             HangarFee.Bind();
+            OctFaction.Bind();
+            OctFaction.Update();
             Contracts.Update();
             OfflineCharacters.Update();
         }

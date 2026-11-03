@@ -78,15 +78,11 @@ internal static class NpcBlocks
         var session = MySession.Static;
         if (!session.Players.IdentityIsNpc(npc))
             return false;
-        if (
+        // Not the NPC's faction: every player is in OCT's (OctFaction)
+        return !(
             session.RemoteAdminSettings.TryGetValue(steamId, out var admin)
             && admin.HasFlag(AdminSettingsEnum.UseTerminals)
-        )
-            return false;
-        var faction = session.Factions.TryGetPlayerFaction(
-            session.Players.TryGetIdentityId(steamId)
         );
-        return faction == null || faction != session.Factions.TryGetPlayerFaction(npc);
     }
 
     private static void Refused(MyEntity entity, string what, ulong steamId)

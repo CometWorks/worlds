@@ -628,7 +628,10 @@ internal static class Contracts
         return ContractBook.OfflineGroups(
             ContractOffline.Rows,
             Config.ContractSalvageMinBlocks,
-            identity => factions.GetPlayerFaction(identity)?.FactionId == oct?.FactionId,
+            // OCT's NPCs: every player is in OCT too (OctFaction)
+            identity =>
+                MySession.Static.Players.IdentityIsNpc(identity)
+                && factions.GetPlayerFaction(identity)?.FactionId == oct?.FactionId,
             DateTime.UtcNow
         );
     }
@@ -775,14 +778,10 @@ internal static class Contracts
     // The player or their faction owned or built the target when it was posted
     private static bool Theirs(long identity, ContractTarget target)
     {
-        var factions = MySession.Static.Factions;
-        var faction = factions.GetPlayerFaction(identity);
+        var faction = OctFaction.Team(identity);
         bool Same(long other) =>
             other != 0
-            && (
-                other == identity
-                || (faction != null && factions.GetPlayerFaction(other) == faction)
-            );
+            && (other == identity || (faction != null && OctFaction.Team(other) == faction));
         return Same(target.Owner) || Same(target.Builder);
     }
 
