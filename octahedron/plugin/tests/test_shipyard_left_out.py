@@ -21,8 +21,10 @@
 - blueprint: with OCT_BLUEPRINT, the bp.sbc of a real ship with subgrids, like "Polaris Mk2 RC8", is
   ordered free. Blocks only a collision keeps the welders from are placed by force, and unless the
   ship shakes the build goes on (SE-940): Polaris is built but for its two drones docked by
-  connectors. It takes minutes, so it only runs when named; OCT_BLUEPRINT_SECONDS for a bigger
-  ship.
+  connectors. On a big ship the welders stall with blocks they could build: the shipyard
+  finishes them itself (SE-953). "IMDC Rhea v2.3" is then built but for its six drones docked by
+  connectors and two gyroscopes connected to nothing. It takes minutes, so it only runs when
+  named; OCT_BLUEPRINT_SECONDS for a bigger ship.
 
     uv run --no-project --with httpx python tests/test_shipyard_left_out.py [case ...]
 """
@@ -289,7 +291,8 @@ def free_order(remote) -> str:
     check("Your quote for" in quote, f"quote: {quote}")
     name = re.search(r"Your quote for '(.*?)' is", quote)[1]
     reply = tc.ship_reply(remote, "!oct order")
-    check("is in the queue" in reply, f"ordered: {reply}")
+    # A big ship's arm plan answers after the chat wait: the start below shows the order then
+    check(not reply or "is in the queue" in reply, f"ordered: {reply}")
     pattern = rf"Shipyard order \S+ '{re.escape(name)}' \(.*free\) for "
     # The server log is buffered, and a big ship's arm takes a while
     deadline = time.monotonic() + 300
@@ -486,7 +489,8 @@ def blueprint() -> None:
     finally:
         rig.stop_client()
         rig.stop_server()
-    so.check_ship(NAME, cubes, complete=True)
+    # A main grid block no welder can place, like one that connects to nothing, is left out
+    so.check_ship(NAME, cubes, complete=f"left out on {NAME} (" not in str(ended))
     no_plugin_errors(stalled=" no progress " in rig.server_game_log())
 
 
