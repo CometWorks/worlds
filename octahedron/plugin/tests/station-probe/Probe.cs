@@ -380,13 +380,16 @@ public sealed class ProbeCommands : CommandModule
     public string YardSpace(string station)
     {
         var yard = Yard(station);
-        var space = (MyOrientedBoundingBoxD)
-            AppDomain
-                .CurrentDomain.GetAssemblies()
-                .Select(a => a.GetType("ServerPlugin.ShipyardOrders"))
-                .First(t => t != null)
-                .GetMethod("FreeSpace", BindingFlags.NonPublic | BindingFlags.Static)
-                .Invoke(null, [yard]);
+        var found = AppDomain
+            .CurrentDomain.GetAssemblies()
+            .Select(a => a.GetType("ServerPlugin.ShipyardOrders"))
+            .First(t => t != null)
+            .GetMethod("FreeSpace", BindingFlags.NonPublic | BindingFlags.Static)
+            .Invoke(null, [yard]);
+        // A box, or the plugin's BuildSpace, which holds its box (SE-959)
+        var space =
+            found as MyOrientedBoundingBoxD?
+            ?? (MyOrientedBoundingBoxD)found.GetType().GetProperty("Box").GetValue(found);
         var connectors = yard.GetFatBlocks<MyShipConnector>().Cast<MyCubeBlock>().ToList();
         var conveyors = yard.GetFatBlocks<MyCubeBlock>()
             .Where(b => b is MyConveyor or MyConveyorConnector)

@@ -254,6 +254,11 @@ public class Probe : IPlugin
         return null;
     }
 
+    // A box, or the plugin's BuildSpace, which holds its box (SE-959)
+    private static MyOrientedBoundingBoxD Box(object space) =>
+        space as MyOrientedBoundingBoxD?
+        ?? (MyOrientedBoundingBoxD)space.GetType().GetProperty("Box").GetValue(space);
+
     // The Octahedron plugin's free build space of the shipyard, where it builds ships, or the
     // shipyard's bounds when the plugin isn't loaded
     private static MyOrientedBoundingBoxD FreeSpace(MyCubeGrid yard)
@@ -268,7 +273,7 @@ public class Probe : IPlugin
                 [typeof(MyCubeGrid)]
             );
         if (method != null)
-            return (MyOrientedBoundingBoxD)method.Invoke(null, [yard]);
+            return Box(method.Invoke(null, [yard]));
         MyLog.Default.WriteLineAndConsole(
             "SIGHT no ShipyardOrders.FreeSpace, using the shipyard's bounds"
         );
