@@ -3467,6 +3467,21 @@ internal static partial class ShipyardOrders
         return false;
     }
 
+    // Whether the grid's center is in the build space of a shipyard, which builds, moves and tows
+    // what is there
+    internal static bool InBuildSpace(MyCubeGrid grid)
+    {
+        var center = grid.PositionComp.WorldAABB.Center;
+        var sphere = new BoundingSphereD(center, 1000);
+        var entities = MyEntities.GetTopMostEntitiesInSphere(ref sphere);
+        var inside = entities
+            .OfType<MyCubeGrid>()
+            .Where(ShipyardZoneWelding.IsShipyard)
+            .Any(s => FreeSpace(s).Contains(ref center));
+        entities.Clear();
+        return inside;
+    }
+
     private static List<MyCubeGrid> GridsIn(MyOrientedBoundingBoxD box)
     {
         var entities = MyEntities.GetEntitiesInOBB(ref box);

@@ -13,6 +13,7 @@ namespace ServerPlugin;
 [Section("projections", caption: "Projections")]
 [Section("weapons", caption: "Weapons")]
 [Section("drives", caption: "Gravity Drives")]
+[Section("clang", caption: "Clang Drives")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
@@ -327,6 +328,51 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = true;
+
+    [BoolOption(
+        "Switch a ship off, as the Y key in its cockpit does, when its speed changes much faster than its thrusters can change it: "
+            + "a clang drive anywhere, or a ship braking by ramming in a safe zone. Collisions outside safe zones don't count.",
+        Parent = "clang"
+    )]
+    public bool ClangDrivesEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [DoubleOption(
+        1,
+        description: "How many times the ship's thrust may be exceeded: its strongest direction at full override, divided by its mass, plus gravity.",
+        Parent = "clang"
+    )]
+    public double ClangDriveFactor
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 2;
+
+    [DoubleOption(
+        0.5,
+        10,
+        "Game time the acceleration is averaged over (s, 60 simulation frames each). Each frame's acceleration is its speed change from the frame before over 1/60 s, so a single physics spike adds only its share and server lag changes nothing.",
+        Parent = "clang"
+    )]
+    public double ClangDriveWindowSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1;
+
+    [DoubleOption(
+        0,
+        description: "Acceleration that never counts, whatever the thrust (m/s²): a heavy ship bumping into a station while docking.",
+        Parent = "clang"
+    )]
+    public double ClangDriveMinAcceleration
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 3;
 
     [IntOption(
         0,
