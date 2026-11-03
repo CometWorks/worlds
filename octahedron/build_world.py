@@ -968,7 +968,8 @@ def lane_computer(ids, position, forward, up, lane_id, home, target, partner):
 
 
 def safe_zone(ids, center, radius, name):
-    """An admin safe zone: no damage, shooting, welding, grinding or block placing. The
+    """An admin safe zone that allows no action: no damage, shooting, welding, grinding,
+    block placing, drilling or landing gear and magnetic plate locks (SE-974). The
     shipyard's OmniArc welders obey it too; the Octahedron plugin is to let them weld
     (SE1-0204)."""
     zone = ET.Element(
@@ -986,11 +987,7 @@ def safe_zone(ids, center, radius, name):
     el(zone, "SafeZoneBlockId", 0)
     for kind in ("Players", "Factions", "Grids", "FloatingObjects"):
         el(zone, f"AccessType{kind}", "Blacklist")
-    el(
-        zone,
-        "AllowedActions",
-        "Drilling LandingGearLock",
-    )
+    el(zone, "AllowedActions", "")
     for tag in ("Factions", "Players", "Entities"):
         el(zone, tag)
     el(zone, "Shape", "Sphere")

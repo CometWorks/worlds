@@ -83,9 +83,11 @@ station and shipyard blueprints are in `blueprints/`.
   toward it, like Beta Station's: the lobby sees the planet, and the deck is
   still tilted against the Sun. Each station sits in a 250 m admin safe zone, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
-  zone allows only drilling and landing gear locks: no welding, grinding or
-  block placing, also not by the shipyard's welders until the Octahedron plugin
-  makes an exception for them (SE1-0204). The stations start empty, apart from
+  zone allows no action: no welding, grinding or block placing, also not by the
+  shipyard's welders until the Octahedron plugin makes an exception for them
+  (SE1-0204), and no drilling or landing gear and magnetic plate locks
+  ([SE-974](https://tasks.cometworks.se/tasks/1865)). A gear locked before the
+  zone forbade it stays locked until it is released. The stations start empty, apart from
   10,000 kg of uranium ingots in each large reactor, a full safe zone block (75
   zone chips) and the gas in the tanks. The station's programmable block is
   emptied and off: the blueprint's Automatic LCDs 2 script isn't needed

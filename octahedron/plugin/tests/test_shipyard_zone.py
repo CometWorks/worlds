@@ -1,5 +1,6 @@
-"""Checks welding in a station safe zone that allows only drilling and landing gear
-locking, the zones of the Octahedron world since 2026-10-14. Runs the test server, with
+"""Checks welding in a station safe zone that allows no action, the zones of the
+Octahedron world since SE-974 (drilling and landing gear locking from 2026-10-14 until
+then). Runs the test server, with
 OmniArc, ToolCore and Multigrid Projector as on the Octahedron servers, and the headless
 client.
 
@@ -33,7 +34,7 @@ os.environ.setdefault("OCT_TASK", "SE1-0204")
 import rig  # noqa: E402
 import test_projection_limits as pl  # noqa: E402
 
-ZONE_ACTIONS = "Drilling LandingGearLock"
+ZONE_ACTIONS = ""
 SHIPYARD = "Alpha Station Shipyard"
 PLAYER = pl.PLAYER
 OWNED = pl.OWNED

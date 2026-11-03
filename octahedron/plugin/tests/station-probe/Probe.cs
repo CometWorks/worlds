@@ -13,14 +13,18 @@ using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Character.Components;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
+using Sandbox.Game.GameSystems;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.SessionComponents;
+using Sandbox.Game.Weapons;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using SpaceEngineers.Game.Definitions.SafeZone;
+using SpaceEngineers.Game.Entities.Blocks;
 using VRage;
 using VRage.Game;
 using VRage.Game.ModAPI;
+using VRage.Game.ObjectBuilders.Components;
 using VRage.ObjectBuilders;
 using VRage.Plugins;
 using VRageMath;
@@ -1544,6 +1548,251 @@ public sealed class ProbeCommands : CommandModule
     }
 
     // Connectors lock once the new grid's physics is in
+    [Command(
+        "gear",
+        "A ship of one landing gear or magnetic plate with its lock face on a static armor block, 60% of the radius into the station's safe zone or 100 m out of it: GEAR grid-id inzone=yes|no gravity=m/s2",
+        "!sprobe gear <station> <in|out> <LargeBlockLandingGear|LargeBlockMagneticPlate> [auto]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Gear(string station, string where, string subtype, string auto = "")
+    {
+        var zone = StationZone(station);
+        if (zone == null)
+            return "NOZONE";
+        var center = zone.PositionComp.GetPosition();
+        var distance = where == "in" ? zone.Radius * 0.6 : zone.Radius + 100;
+        var spot = FreeSpot(center, distance, 25);
+        if (spot == null)
+            return "NOSPOT";
+        var owner = Context.Caller.IdentityId;
+        var ship = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = false,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = $"Gear {subtype}",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                spot.Value,
+                Vector3.Forward,
+                Vector3.Up
+            ),
+        };
+        var block = Block<MyObjectBuilder_LandingGear>(subtype, Vector3I.Zero, owner);
+        block.AutoLock = auto == "auto";
+        ship.CubeBlocks.Add(block);
+        var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(ship);
+        var gear = grid.GetFatBlocks<MyLandingGear>().First();
+        // The lock box: its Y axis is the face's normal, pointing away from the block
+        gear.GetBoxFromMatrix(gear.LockPositions[0], out var half, out var pivot, out var turn);
+        var normal = Vector3D.Transform(Vector3D.Up, turn);
+        if (Vector3D.Dot(normal, pivot - gear.PositionComp.WorldAABB.Center) < 0)
+            normal = -normal;
+        var pad = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = true,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = $"Gear Pad {grid.EntityId}",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                pivot + normal * (MyDefinitionManager.Static.GetCubeSize(MyCubeSize.Large) / 2),
+                (Vector3)normal,
+                (Vector3)Vector3D.CalculatePerpendicularVector(normal)
+            ),
+        };
+        pad.CubeBlocks.Add(
+            new MyObjectBuilder_CubeBlock
+            {
+                SubtypeName = "LargeBlockArmorBlock",
+                Min = Vector3I.Zero,
+                BlockOrientation = new SerializableBlockOrientation(
+                    Base6Directions.Direction.Forward,
+                    Base6Directions.Direction.Up
+                ),
+            }
+        );
+        MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(pad);
+        return $"GEAR {grid.EntityId} inzone={(zone.Contains(grid.PositionComp.WorldAABB.Center) ? "yes" : "no")} "
+            + $"gravity={MyGravityProviderSystem.CalculateNaturalGravityInPoint(spot.Value).Length():0.###} "
+            + $"half={V(half)}";
+    }
+
+    [Command(
+        "gearstate",
+        "The ship's landing gear: GEARSTATE grid-id mode=Unlocked|ReadyToLock|Locked auto=yes|no to=entity-id|none",
+        "!sprobe gearstate <grid-id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string GearState(long id)
+    {
+        var gear = ShipGear(id);
+        if (gear == null)
+            return $"NOGEAR {id}";
+        var to = ((SpaceEngineers.Game.ModAPI.IMyLandingGear)gear).GetAttachedEntity();
+        return $"GEARSTATE {id} mode={gear.LockMode} auto={(gear.AutoLock ? "yes" : "no")} "
+            + $"to={(to == null ? "none" : to.EntityId.ToString())}";
+    }
+
+    [Command(
+        "gearlock",
+        "Locks or unlocks the ship's landing gear, as its Lock and Unlock actions do",
+        "!sprobe gearlock <grid-id> <on|off>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string GearLock(long id, string state)
+    {
+        var gear = ShipGear(id);
+        if (gear == null)
+            return $"NOGEAR {id}";
+        var api = (SpaceEngineers.Game.ModAPI.Ingame.IMyLandingGear)gear;
+        if (state == "on")
+            api.Lock();
+        else
+            api.Unlock();
+        return $"GEARLOCK {id} {state}";
+    }
+
+    [Command(
+        "zone",
+        "Shows or sets the station's safe zone allowed actions, as the admin menu does: ZONE actions",
+        "!sprobe zone <station> [Drilling+LandingGearLock+...|None]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Zone(string station, string actions = "")
+    {
+        var zone = StationZone(station);
+        if (zone == null)
+            return "NOZONE";
+        if (actions != "")
+            zone.AllowedActions =
+                actions == "None" ? 0 : Enum.Parse<MySafeZoneAction>(actions.Replace('+', ','));
+        return zone.AllowedActions == 0
+            ? "ZONE None"
+            : $"ZONE {zone.AllowedActions.ToString().Replace(", ", "+")}";
+    }
+
+    // The first of 200 directions spread over a sphere around the center where no block of any
+    // grid is within the clearance
+    private static Vector3D? FreeSpot(Vector3D center, double distance, double clearance)
+    {
+        var blocks = new HashSet<MySlimBlock>();
+        for (int i = 0; i < 200; i++)
+        {
+            var y = 1 - (i + 0.5) / 100;
+            var r = Math.Sqrt(1 - y * y);
+            var a = i * Math.PI * (3 - Math.Sqrt(5));
+            var sphere = new BoundingSphereD(
+                center + new Vector3D(r * Math.Cos(a), y, r * Math.Sin(a)) * distance,
+                clearance
+            );
+            var clear = true;
+            foreach (
+                var g in MyEntities.GetTopMostEntitiesInSphere(ref sphere).OfType<MyCubeGrid>()
+            )
+            {
+                blocks.Clear();
+                g.GetBlocksInsideSphere(ref sphere, blocks);
+                clear &= blocks.Count == 0;
+            }
+            if (clear)
+                return sphere.Center;
+        }
+        return null;
+    }
+
+    [Command(
+        "drill",
+        "A static grid of a switched on ship drill and a battery inside a small asteroid, 60% of the radius into the station's safe zone or 100 m out of it: DRILL grid-id inzone=yes|no",
+        "!sprobe drill <station> <in|out>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Drill(string station, string where)
+    {
+        var zone = StationZone(station);
+        if (zone == null)
+            return "NOZONE";
+        var center = zone.PositionComp.GetPosition();
+        var spot = FreeSpot(center, where == "in" ? zone.Radius * 0.6 : zone.Radius + 100, 45);
+        if (spot == null)
+            return "NOSPOT";
+        MyWorldGenerator.AddAsteroidPrefabCentered(
+            "DeformedSphere1_64x64x64",
+            spot.Value,
+            $"Drill Rock {where}"
+        );
+        var owner = Context.Caller.IdentityId;
+        var ship = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = true,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = $"Drill {where}",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                spot.Value,
+                Vector3.Forward,
+                Vector3.Up
+            ),
+        };
+        var drill = Block<MyObjectBuilder_Drill>("LargeBlockDrill", Vector3I.Zero, owner);
+        drill.Enabled = true;
+        ship.CubeBlocks.Add(drill);
+        var size = MyDefinitionManager
+            .Static.GetCubeBlockDefinition(
+                new MyDefinitionId(typeof(MyObjectBuilder_Drill), "LargeBlockDrill")
+            )
+            .Size;
+        var battery = Block<MyObjectBuilder_BatteryBlock>(
+            "LargeBlockBatteryBlock",
+            new Vector3I(0, size.Y, 0),
+            owner
+        );
+        battery.CurrentStoredPower = 1;
+        ship.CubeBlocks.Add(battery);
+        var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(ship);
+        return $"DRILL {grid.EntityId} inzone={(zone.Contains(spot.Value) ? "yes" : "no")}";
+    }
+
+    [Command(
+        "drillstate",
+        "What the drill has dug: DRILLSTATE grid-id ore=kg on=yes|no",
+        "!sprobe drillstate <grid-id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string DrillState(long id)
+    {
+        if (!MyEntities.TryGetEntityById(id, out MyCubeGrid grid))
+            return $"NODRILL {id}";
+        var drill = grid.GetFatBlocks<MyShipDrill>().FirstOrDefault();
+        if (drill == null)
+            return $"NODRILL {id}";
+        var ore = drill.GetInventory().GetItems().Sum(i => (double)i.Amount);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "DRILLSTATE {0} ore={1:0.###} on={2}",
+            id,
+            ore,
+            drill.Enabled && drill.IsWorking ? "yes" : "no"
+        );
+    }
+
+    // The admin safe zone around the station
+    private static MySafeZone StationZone(string station)
+    {
+        var grid = StationGrids(station).FirstOrDefault();
+        return grid == null
+            ? null
+            : MySessionComponentSafeZones.SafeZones.FirstOrDefault(z =>
+                z.SafeZoneBlockId == 0 && z.Contains(grid.PositionComp.GetPosition())
+            );
+    }
+
+    private static MyLandingGear ShipGear(long id) =>
+        MyEntities.TryGetEntityById(id, out MyCubeGrid grid)
+            ? grid.GetFatBlocks<MyLandingGear>().FirstOrDefault()
+            : null;
+
     public static void Update()
     {
         for (int i = connecting.Count - 1; i >= 0; i--)
