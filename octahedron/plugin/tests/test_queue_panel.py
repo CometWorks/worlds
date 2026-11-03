@@ -1,7 +1,8 @@
 """The shipyard queue panel's layout at a real station (SE-935): an entry wraps to two lines
-with the second indented, no line is wider than the 46 columns, and the font is the size those
-columns give (0.57) or more instead of shrinking to fit an entry on one line. tests/panel-text has the
-layout of a full queue without the game.
+with the second indented, a build shows its minutes left with the UTC time (SE-962), no line
+is wider than the 46 columns, and the font is the size those columns give (0.57) or more
+instead of shrinking to fit an entry on one line. tests/panel-text has the layout of a full
+queue without the game.
 
     OCT_TASK=SE-935 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_queue_panel.py
@@ -12,7 +13,9 @@ Prints one line per check and a pass/fail summary; exit code 0 = all passed. Abo
 from __future__ import annotations
 
 import os
+import re
 import sys
+from datetime import datetime, timedelta, timezone
 
 os.environ.setdefault("OCT_TASK", "SE-935")
 import rig  # noqa: E402
@@ -75,6 +78,21 @@ def main() -> int:
             and lines[first + 1].startswith("   ")
             and "for OctTester" in " ".join(lines[first : first + 2]),
             "the entry wraps to a second, indented line",
+        )
+        # SE-962: a bare UTC time read like a local one, so the deadline shows the minutes left
+        text = settled(a, "queue", "done within")
+        lines = text.rstrip().split("\n")
+        found = re.search(
+            r"done within (\d+) min \(by (\d\d:\d\d) UTC\)", " ".join(text.split())
+        )
+        left = int(found.group(1)) if found else -1
+        by = datetime.now(timezone.utc) + timedelta(minutes=left)
+        check(
+            found is not None
+            and 58 <= left <= 60
+            and found.group(2)
+            in {(by + timedelta(minutes=d)).strftime("%H:%M") for d in (-1, 0, 1)},
+            f"the build shows the minutes left and its UTC time: {found and found.group(0)}",
         )
         check(
             all(len(l) <= COLUMNS for l in lines),

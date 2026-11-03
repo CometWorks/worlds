@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
@@ -45,8 +44,8 @@ internal static partial class ShipyardOrders
 
     private static long Now => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-    private static string Clock(long unix) =>
-        DateTimeOffset.FromUnixTimeSeconds(unix).ToString("HH:mm", CultureInfo.InvariantCulture);
+    private static string Left(long unix) =>
+        PanelText.Left(DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime, DateTime.UtcNow);
 
     // The player's running turn at the queue, else their order that isn't a tow
     private static BuildOrder Mine(List<BuildOrder> queue, long player) =>

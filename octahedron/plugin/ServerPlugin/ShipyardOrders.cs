@@ -684,7 +684,7 @@ internal static partial class ShipyardOrders
                     Begin(table, mine, tell);
                 else if (mine?.Phase == BuildPhase.After)
                     tell(
-                        $"Your turn at this shipyard ends at {Clock(mine.TurnEnds)} UTC. "
+                        $"Your turn at this shipyard ends in {Left(mine.TurnEnds)}. "
                             + "Load a blueprint and press to build with what is in the containers, or end the turn with !oct shipyard done."
                     );
                 else
@@ -1354,7 +1354,7 @@ internal static partial class ShipyardOrders
                 WriteTable(
                     table,
                     $"{Name(order.Player)}'s turn for '{order.Ship}'.\n\n"
-                        + $"Load the parts by {Clock(order.TurnEnds)} UTC, then press the button: it buys what is missing."
+                        + $"Load the parts within {Left(order.TurnEnds)}, then press the button: it buys what is missing."
                 );
             }
         );
@@ -1618,10 +1618,10 @@ internal static partial class ShipyardOrders
             var state = o.Phase switch
             {
                 BuildPhase.Building when running != null =>
-                    $"building, done by {running.Ends:HH:mm} UTC at the latest",
+                    $"building, done within {PanelText.Left(running.Ends, DateTime.UtcNow)}",
                 BuildPhase.Building => o.Grid != 0 ? "breaking down" : "building",
-                BuildPhase.Loading => $"loading parts until {Clock(o.TurnEnds)} UTC",
-                BuildPhase.After => $"taking what is left until {Clock(o.TurnEnds)} UTC",
+                BuildPhase.Loading => $"loading parts within {Left(o.TurnEnds)}",
+                BuildPhase.After => $"taking what is left within {Left(o.TurnEnds)}",
                 _ when o.Grid != 0 => "waiting, to break down",
                 _ when o.Free => "waiting, free",
                 _ => "waiting, paid",
@@ -2457,7 +2457,7 @@ internal static partial class ShipyardOrders
             if (!waited)
                 Tell(
                     order.Player,
-                    $"{shipyard.DisplayName} waits for {shortOf} for '{order.Name}', until {until:HH:mm} UTC. "
+                    $"{shipyard.DisplayName} waits for {shortOf} for '{order.Name}', up to {PanelText.Left(until, DateTime.UtcNow)}. "
                         + "You and your faction can load them into its containers."
                 );
             return;
