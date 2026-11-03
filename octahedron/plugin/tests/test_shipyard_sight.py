@@ -12,8 +12,8 @@ don't block. No client is needed.
 
 Prints a line per station and per gate, and with -v what each lobby spot sees and what
 blocks each ray. Passes when the center of each
-equatorial station's shipyard, straight behind it, is in sight of at least half of its lobby
-spots; exit code 0 = passed. The pole stations and Moon Station place their shipyards
+equatorial station's and Moon Station's shipyard, straight behind it, is in sight of at least
+half of its lobby spots; exit code 0 = passed. The pole stations place their shipyards
 another way (build_world.py), and are only printed.
 """
 
@@ -28,7 +28,13 @@ from pathlib import Path
 os.environ.setdefault("OCT_TASK", "SE-934")
 import rig  # noqa: E402
 
-EQUATOR = {"Alpha Station", "Beta Station", "Gamma Station", "Delta Station"}
+BEHIND = {
+    "Alpha Station",
+    "Beta Station",
+    "Gamma Station",
+    "Delta Station",
+    "Moon Station",
+}
 PROBE = (
     "sight-probe",
     Path(__file__).resolve().parent / "sight-probe",
@@ -65,7 +71,7 @@ def main() -> int:
         name, *counts = line.split("|")
         clear, spots = map(int, counts[0].split()[1].split("/"))
         ok = clear * 2 >= spots
-        if name in EQUATOR:
+        if name in BEHIND:
             passed &= ok
             state = "PASS" if ok else "FAIL"
         else:

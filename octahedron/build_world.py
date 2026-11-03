@@ -143,11 +143,11 @@ PLUGIN_BLOCKS = (
     "Text Panel - Station ShipyardQueue",
     "Billboard LCD Ship Build Details",
 )
-# Every station has a shipyard (OmniArc beam welders) in sight of its lobby, the station's
-# pressurized back half. Viktor's placement of Gamma Station's shipyard on the live cluster
-# (octahedron-test, 2026-11-02), in the station's (right, up, forward): from the station's block
-# bounds center to the shipyard's, and the shipyard's forward and up. Every station's shipyard
-# starts from it (SE-945).
+# Every station has a shipyard (OmniArc beam welders and deconstructors) in sight of its
+# lobby, the station's pressurized back half. Viktor's placement of Gamma Station's shipyard
+# on the live cluster (octahedron-test, 2026-11-02), in the station's (right, up, forward):
+# from the station's block bounds center to the shipyard's, and the shipyard's forward and
+# up. Every station's shipyard starts from it (SE-945).
 SHIPYARD_PLACE = (
     (17.06, 139.53, -112.09),
     (0.81629, -0.16284, 0.55422),
@@ -160,7 +160,8 @@ SAFE_ZONE_MARGIN = 10.0
 # SHIPYARD_REACTOR_URANIUM ingots and the batteries charged (RefillContainers in
 # config/octahedron.cfg).
 SHIPYARD_SHARED = {"MedicalRoom", "ReflectorLight"}
-# Off until someone's job turns them on: the connectors and the OmniArc welders
+# Off until someone's job turns them on: the connectors and the OmniArc welders. The OmniArc
+# deconstructors are conveyor sorters too, and nothing turns them on.
 SHIPYARD_OFF = {"ShipConnector", "ConveyorSorter"}
 # Delta Station turned so its up leans this far toward EarthLike from the ring's axis, which
 # leans 25 degrees away from it there: the lobby sees the planet and the deck is as tilted
@@ -1528,10 +1529,12 @@ def main():
             )
             forward, up = tilt(forward), tilt(up)
         if name == "Moon Station":
-            # Its front toward the Moon and the lobby toward EarthLike, upside down like North
-            # Station: its shipyard lies above it on the Sun's axis, so the station can sit low
-            # in the zone, its decks under the shadow of the Moon lanes' end gates
-            forward, up = mul(forward, -1), mul(up, -1)
+            # Upside down like North Station, its front toward EarthLike like the equatorial
+            # stations', so its shipyard sits behind the lobby as theirs do, the Sun clear of it
+            # and the gates in front (SE-983). The station sits low in the zone, its decks under
+            # the shadow of the Moon lanes' end gates.
+            up = mul(up, -1)
+            forward = norm(perpendicular_part(sub(earth.center, center), up))
         # The station and its shipyard share the safe zone around the station's place
         station_center, yard = station_and_shipyard(
             template, center, forward, up, sun, gates

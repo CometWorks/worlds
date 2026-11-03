@@ -76,9 +76,10 @@ station and shipyard blueprints are in `blueprints/`.
   60 degrees, so their shipyards don't hide the rings of their lanes to Beta
   Station from the lobby. The lanes don't turn. Moon Station's up is square to the line
   between EarthLike and the Moon, the one such direction nearest to where Delta
-  Station was before the turn, and it is turned 180 degrees about its up and
-  upside down: it faces the Moon, its lobby toward EarthLike, and its shipyard
-  lies above it (see below). Delta Station, whose up leaned 25 degrees away
+  Station was before the turn. It is upside down and its front faces EarthLike,
+  like the equatorial stations': its shipyard sits behind its lobby as theirs
+  do, the Moon lanes' gates are in front of it, and its lobby looks toward the
+  Moon ([SE-983](https://tasks.cometworks.se/tasks/1874)). Delta Station, whose up leaned 25 degrees away
   from EarthLike, is turned 50 degrees further, so its up leans 25 degrees
   toward it, like Beta Station's: the lobby sees the planet, and the deck is
   still tilted against the Sun. Each station sits in a 250 m admin safe zone, owned by the
@@ -93,7 +94,8 @@ station and shipyard blueprints are in `blueprints/`.
   emptied and off: the blueprint's Automatic LCDs 2 script isn't needed
   (SE1-0121).
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
-  24 OmniArc beam welders around an open frame), in view of the station's
+  24 OmniArc beam welders around an open frame, each with an OmniArc
+  deconstructor beside it), in view of the station's
   lobby, its pressurized back half
   ([SE-945](https://tasks.cometworks.se/tasks/1832)).
   - Every shipyard starts where Viktor put Gamma Station's on the live cluster
@@ -102,24 +104,24 @@ station and shipyard blueprints are in `blueprints/`.
   - Then it moves along the Sun's axis, away from the station, until its block
     bounds are 15 m out of the slab of the Sun's rays through the station's
     bounding sphere, so the Sun never goes behind it as seen from the station
-    (see "The Sun" below). That takes 12 to 58 m at the Earth stations, ending
-    189 to 222 m from them, and 164 m at Moon Station, 248 m from it: Moon
-    Station's front, toward the Moon, is steep against the Sun's path, which
-    stands the shipyard on end there.
+    (see "The Sun" below). That takes 4 to 58 m, ending 184 to 222 m from the
+    station.
   - The station and its shipyard are centered on the safe zone together. Where a
     gate would still shade the station's hangar deck or lobby, the pair moves
     together by as little as clears them with both block bounds 10 m inside the
-    zone's edge. Only Moon Station moves, 57 m: a Moon lane's end gate covers
-    its zone from 130 m below the center upward, so the station sits low and
-    its shipyard above it. A gate may shade the engineering rooms under the
-    hangar deck. The farthest blocks end up 176 to 222 m from the zone's center.
+    zone's edge. Only Moon Station moves, 22 m: a Moon lane's end gate covers
+    its zone from 130 m below the center upward, so the station sits low. A
+    gate may shade the engineering rooms under the hangar deck. The farthest
+    blocks end up 176 to 191 m from the zone's center.
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries. Those start with 10 uranium ingots each and full charge, and on
     the server the Octahedron plugin tops them back up every 10 minutes
     (`config/octahedron.cfg`). Only 10 ingots, since players get at the reactors
     while renting the shipyard.
-  - Its connectors and welders start off (`SHIPYARD_OFF`): the plugin turns them
-    on for a job. The reactors, batteries and refill stations stay on.
+  - Its connectors, welders and deconstructors start off (`SHIPYARD_OFF`): the
+    plugin turns the connectors and welders on for a job, never the
+    deconstructors, so they can't grind a ship being built or docked. The
+    reactors, batteries and refill stations stay on.
   - Each station has its own color (`STATION_COLORS`): the shipyard's red frame
     gets a skin and color, the station's purple walls and furniture only the
     color, at 70 % brightness. North red, South blue, Beta green and Delta

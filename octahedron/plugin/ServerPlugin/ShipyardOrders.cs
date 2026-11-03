@@ -3758,11 +3758,14 @@ internal static partial class ShipyardOrders
     private static IEnumerable<MyInventory> Containers(MyCubeGrid shipyard) =>
         shipyard.GetFatBlocks<MyCargoContainer>().Select(c => c.GetInventory());
 
-    // The shipyard's ToolCore tools, its OmniArc welders
+    // The shipyard's OmniArc welders. Not its other ToolCore tools: its OmniArc deconstructors
+    // stay OCT's and off, so nothing turns them on to grind a ship being built (SE-983).
     internal static IEnumerable<MyFunctionalBlock> Beams(MyCubeGrid shipyard) =>
         shipyard
             .GetFatBlocks<MyFunctionalBlock>()
-            .Where(b => ((IMyTerminalBlock)b).GetProperty(ShootProperty) != null);
+            .Where(b => b.BlockDefinition.Id.SubtypeName == WelderSubtype);
+
+    private const string WelderSubtype = "OmniArcBeam";
 
     // Through the tools' terminal switches, which ToolCore also sends to the clients. In a
     // no-welding zone the clients would turn the tools off again and show no beams (SE-441):
