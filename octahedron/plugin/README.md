@@ -410,7 +410,7 @@ usual, a paid one gets its turn and leaves the queue if nobody presses, and the 
 can cancel it when back.
 `ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most at the Omni
 Arc Beam Shipyard. A shipyard with more welders or a larger free build space gets that much
-longer, in proportion to both, up to 5 hours, which the double helix shipyard gets.
+longer, in proportion to both, up to 4 hours, which the double helix shipyard gets.
 
 A repair slot is an entry "Repair" in the shipyard's queue, without a blueprint or a
 payment. It takes a place in the queue, and a player has one entry at a time at any
@@ -478,13 +478,15 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   station's queue panels (`ShipyardQueuePanelName`, `Text Panel - Station
   ShipyardQueue`) show it, and which ship blocks the shipyard. Each entry wraps to
   two lines of 46 columns and is cut after that, so a full queue keeps font size 0.57.
-- The ship must fit the shipyard's free space, the largest box between its
-  welders free of its blocks whose every block is in some welder's reach: within
-  96 m of the welder block's center, ToolCore's 100 m less how far the turret's
-  emitter can be from it, and at most 45 degrees out of the plane its turret turns
-  in. That box is 72.5 x 75 x 282.5 m in the Omni Arc Beam Shipyard, all of its
-  frame, and 112.5 x 117.5 x 455 m in the double helix one: its round volume's
-  edges and ends are out of reach between the welders (SE-959). The ship is turned so that its main cockpit points along the
+- The ship must fit the shipyard's free space, free of its blocks and with every
+  block in some welder's reach: within ToolCore's 100 m of the welder block's
+  center, and at most 45 degrees out of the plane its turret turns in. At a
+  shipyard with an arm it is the largest box between its welders, 72.5 x 75 x
+  282.5 m in the Omni Arc Beam Shipyard, all of its frame. The double helix
+  shipyard has no arm and a round build volume: there it is the largest cylinder
+  along its axis between its end welders, 150 m across and 375 m long. A ship
+  fits it when its length fits and its width and height, corner to corner, fit
+  across (SE-959). The ship is turned so that its main cockpit points along the
   shipyard or, when it only fits another way, by right angles from there,
   its components the shipyard's containers, and it may have at most
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits

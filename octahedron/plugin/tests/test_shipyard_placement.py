@@ -10,7 +10,10 @@ to the 1/3 point nearer the station:
 - "small" at Delta Station: a small grid ship on a small arm rotor
 - "wide" at Moon Station: a thin small grid cross, 70 m wide and high, the largest search there is
 
-"quarter" at Beta Station, 72.5 m long, at least 1/4, stays in the middle.
+"quarter" at Beta Station, 72.5 m long, at least 1/4, stays in the middle, and so does "round"
+at Moon Station: a large grid cross 135 m wide and 150 m long, which fits the double helix
+shipyard's round build space, 150 m across, but no box in it. It runs only when named: "wide"
+takes Moon's shipyard until the final save.
 
 "limit" at South Station forces the support arm's time limit, ShipyardArmPlanSeconds 0:
 
@@ -44,8 +47,8 @@ PLATE = "Component/SteelPlate"
 # The free space along the shipyard: its grid's cells -57 to 57 along Z, across x 0, y -16.5
 LENGTH = 287.5
 # Shipyards of another model: the free space's middle in grid cells and its length in m.
-# Moon's double helix: cells 10 to 191 along its axis, the welders' reach (SE-959).
-SPACES = {"Moon": ((0, 0, 100.5), 455.0)}
+# Moon's double helix: cells 1 to 150 along its axis, between the end welders (SE-959).
+SPACES = {"Moon": ((0, 0, 75.5), 375.0)}
 CUBE = {"Large": 2.5, "Small": 0.5}
 
 
@@ -86,6 +89,19 @@ def wide_cross() -> tuple[str, int]:
     return small_grid(grid), len(blocks)
 
 
+def round_cross() -> tuple[str, int]:
+    cells = {(x, 0, 30) for x in range(54)} | {(27, 0, z) for z in range(60)}
+    battery = rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (27, 0, 30))  # fmt: skip
+    blocks = [battery] + [
+        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", c)
+        for c in sorted(cells - {(27, 0, 30)})
+    ]
+    grid = rig.grid(
+        "PlaceRound", 777000824000900, blocks, tag="MyObjectBuilder_CubeGrid"
+    )
+    return grid, len(blocks)
+
+
 # The tables in the world's order: North, South, Alpha, Beta, Gamma, Delta, Moon
 SHIPS = {
     "north": ("North", "PlaceNorth", hull("PlaceNorth", 777000824000100, (3, 3, 10))),
@@ -95,9 +111,10 @@ SHIPS = {
     "under": ("Gamma", "PlaceUnder", hull("PlaceUnder", 777000824000500, (2, 2, 28))),
     "small": ("Delta", "PlaceSmall", small_hull()),
     "wide": ("Moon", "PlaceWide", wide_cross()),
+    "round": ("Moon", "PlaceRound", round_cross()),
 }  # fmt: skip
 SIZES = {"small": "Small", "wide": "Small"}
-CENTERED = ("quarter",)
+CENTERED = ("quarter", "round")
 BLOCKER = 777000824000800
 
 
@@ -277,7 +294,7 @@ def forced_limit(remote):
 
 
 def main() -> int:
-    cases = sys.argv[1:] or list(SHIPS)
+    cases = sys.argv[1:] or [c for c in SHIPS if c != "round"]
     tables = [SHIPS[c][2][0] for c in SHIPS]
     for case, (station, ship, (_, blocks)) in SHIPS.items():
         sa.CASES[case] = (station, ship, blocks, False, False, SIZES.get(case, "Large"))

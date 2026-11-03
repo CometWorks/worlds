@@ -21,7 +21,9 @@ the Sun's axis: above 0 m the Sun never goes behind them. "zone" is the farthest
 the safe zone's center, of its radius; "gravity" how far the zone stays out of the nearest
 planet's gravity.
 
-Prints a line per station and exits with 1 if any clearance is 0 or less.
+Prints a line per station and exits with 1 if any clearance is 0 or less. At the stations with
+the double helix shipyard (build_world.HELIX_STATIONS), which Viktor laid out as they are, a
+clearance of 0 or less shows as "laid" and doesn't fail.
 """
 
 import argparse
@@ -282,6 +284,9 @@ def main():
         yard = by_name[f"{name} Shipyard"]
         yard_blocks = to_world(yard, block_cells(yard))
         cells = []
+        # Viktor laid out the stations with the double helix shipyard as they are: they show
+        # what the Sun does there, without failing (SE-959)
+        laid_out = name in world.HELIX_STATIONS
         for label, points, radii in (
             ("gates", gates, np.full(len(gates), world.GATE_RADIUS)),
             ("shipyard", yard_blocks, np.full(len(yard_blocks), world.BLOCK_RADIUS)),
@@ -289,12 +294,13 @@ def main():
             meters, degrees = sweep(sun, center, radius, views, points, radii)
             if label == "gates":
                 meters = decks_clearance(sun, grid, gates)
-            failed |= meters <= 0
-            state = "ok  " if meters > 0 else "FAIL"
+            failed |= meters <= 0 and not laid_out
+            state = "ok  " if meters > 0 else "laid" if laid_out else "FAIL"
             cells.append(f"{label} {state} {meters:8.0f} m {degrees:6.2f} deg")
         box = box_clearance(axis, center, radius, yard)
-        failed |= box <= 0
-        cells.append(f"box {'ok  ' if box > 0 else 'FAIL'} {box:5.0f} m")
+        failed |= box <= 0 and not laid_out
+        state = "ok  " if box > 0 else "laid" if laid_out else "FAIL"
+        cells.append(f"box {state} {box:5.0f} m")
         center_clear, corners_seen, spots = sight(grid, yard)
         cells.append(
             f"sight center {center_clear}/{spots} corners {corners_seen:.0f}/{spots}"

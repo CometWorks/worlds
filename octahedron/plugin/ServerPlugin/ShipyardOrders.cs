@@ -194,7 +194,7 @@ internal static partial class ShipyardOrders
     private static readonly Dictionary<long, int> lost = new();
 
     // The shipyard's free space around its welders, in its grid's cells
-    private static readonly Dictionary<long, BoundingBoxI> freeBoxes = new();
+    private static readonly Dictionary<long, (BoundingBoxI Box, bool Round)> freeBoxes = new();
 
     // The quote each hologram table shows, by table entity id
     private static readonly Dictionary<long, TableQuote> quotes = new();
@@ -375,12 +375,11 @@ internal static partial class ShipyardOrders
         if (!arms && !FindStart(main, out start, out outward))
             return "The blueprint's main grid needs a 1x1x1 block on its outside to start from.";
         var space = FreeSpace(shipyard);
-        var room = space.HalfExtent * 2;
-        var size = Size(blueprint, start, outward, room, out _, out var turn);
-        if (size.X > room.X || size.Y > room.Y || size.Z > room.Z)
+        var size = Size(blueprint, start, outward, space.Size, out _, out var turn);
+        if (!space.Fits(size))
             // A client without Multigrid Projector can send the subgrids out of place, and so can
             // an old blueprint; a new one made offline has them right
-            return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}."
+            return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {space}."
                 + (
                     blueprint.Count > 1
                         ? " Its subgrids may be off: load it with the Multigrid Projector plugin of Pulsar, or blueprint the ship again in an offline game."
@@ -1398,7 +1397,7 @@ internal static partial class ShipyardOrders
         var projector = ShipyardArm
             .Rotors(shipyard)
             .Select(r => r.TopGrid)
-            .Concat(GridsIn(FreeSpace(shipyard)))
+            .Concat(GridsIn(FreeSpace(shipyard).Box))
             .SelectMany(g => g.GetFatBlocks<MyProjectorBase>())
             .FirstOrDefault(IsScaffold);
         if (projector == null)
@@ -1777,14 +1776,7 @@ internal static partial class ShipyardOrders
         main.CubeBlocks.Insert(0, start);
         Vector3I startCell = start.Min;
         var scaffold = new[] { startCell + outward, startCell + 2 * outward };
-        var size = Size(
-            blueprint,
-            start,
-            outward,
-            space.HalfExtent * 2,
-            out var bounds,
-            out var turn
-        );
+        var size = Size(blueprint, start, outward, space.Size, out var bounds, out var turn);
 
         var components = Components(blueprint, skipFirst: true);
         var containers = Containers(shipyard).ToList();
@@ -3399,11 +3391,11 @@ internal static partial class ShipyardOrders
         return shipyard;
     }
 
-    // An OmniArc welder targets a block whose center is within ToolCore's TargetRadius, 100 m,
-    // of a point 1 m past its emitter, where the turret points then. The emitter is 1.18 m from
-    // the ball, the ball 1.75 m from the block's center: a block this close to the welder
-    // block's center is in reach in any pose (SE-959).
-    private const double WelderReach = 100 - 1 - 1.18 - 1.75;
+    // An OmniArc welder reaches a block whose center is within ToolCore's TargetRadius, 100 m, of
+    // the welder block's center, where its ball can tilt toward it. make_helix_shipyard.py sizes
+    // the double helix shipyard by the same rule, so its welders reach every block on its axis.
+    // At 100 m and more they didn't in game (SE-959).
+    private const double WelderReach = 100;
 
     // The turret turns all the way around the block's Up and tilts 45 degrees out of that plane
     private static readonly double WelderTilt = Math.Sin(MathHelper.ToRadians(45));
@@ -3412,27 +3404,29 @@ internal static partial class ShipyardOrders
     // is for
     private const int ReferenceWelders = 24;
     private const double ReferenceVolume = 72.5 * 75 * 282.5;
-    private const int MaxOrderMinutes = 5 * 60;
+    private const int MaxOrderMinutes = 4 * 60;
 
     // How long an order runs at most at this shipyard: ShipyardOrderMinutes in proportion to its
     // welders and to the volume of its free build space, which sets how big the ships it builds
-    // are, against the Omni Arc Beam Shipyard's. Never less, and at most 5 hours (SE-959).
+    // are, against the Omni Arc Beam Shipyard's. Never less, and at most 4 hours (SE-959).
     internal static int OrderMinutes(MyCubeGrid shipyard)
     {
         var minutes = Config.ShipyardOrderMinutes;
-        var size = FreeSpace(shipyard).HalfExtent * 2;
         var scale =
-            Beams(shipyard).Count() / (double)ReferenceWelders * size.Volume / ReferenceVolume;
+            Beams(shipyard).Count()
+            / (double)ReferenceWelders
+            * FreeSpace(shipyard).Volume
+            / ReferenceVolume;
         return Math.Max(minutes, Math.Min(MaxOrderMinutes, (int)Math.Round(minutes * scale)));
     }
 
-    // The largest box free of the shipyard's blocks and in its welders' reach, grown from the
-    // middle of its welders one layer at a time and kept within its grid's bounds, in world
-    // coordinates. The Omni Arc Beam Shipyard's whole frame is in reach; the double helix
-    // shipyard's round volume isn't, between the welders near its wall and its ends (SE-959).
-    private static MyOrientedBoundingBoxD FreeSpace(MyCubeGrid shipyard)
+    // The free space of a shipyard with an arm: the largest box free of the shipyard's blocks and
+    // in its welders' reach, grown from the middle of its welders one layer at a time and kept
+    // within its grid's bounds. A shipyard without an arm, the double helix one, builds in its
+    // round volume: the largest cylinder along its grid's Z grown the same way (SE-959).
+    private static BuildSpace FreeSpace(MyCubeGrid shipyard)
     {
-        if (!freeBoxes.TryGetValue(shipyard.EntityId, out var box))
+        if (!freeBoxes.TryGetValue(shipyard.EntityId, out var free))
         {
             var beams = Beams(shipyard).ToList();
             var start = Vector3I.Zero;
@@ -3447,58 +3441,139 @@ internal static partial class ShipyardOrders
                     )
                 )
                 .ToList();
-            box = new BoundingBoxI(start, start);
-            for (var grew = true; grew; )
-            {
-                grew = false;
-                foreach (var d in Base6Directions.IntDirections)
-                {
-                    var grown = new BoundingBoxI(
-                        box.Min + Vector3I.Min(d, Vector3I.Zero),
-                        box.Max + Vector3I.Max(d, Vector3I.Zero)
-                    );
-                    // The new layer only
-                    var layer = grown;
-                    if (d.X + d.Y + d.Z > 0)
-                        layer.Min = box.Min + (box.Max - box.Min + Vector3I.One) * d;
-                    else
-                        layer.Max = box.Max + (box.Max - box.Min + Vector3I.One) * d;
-                    if (
-                        Vector3I.Min(grown.Min, shipyard.Min) != shipyard.Min
-                        || Vector3I.Max(grown.Max, shipyard.Max) != shipyard.Max
-                        || !Free(shipyard, layer)
-                        || !Reached(welders, layer, shipyard.GridSize)
-                    )
-                        continue;
-                    box = grown;
-                    grew = true;
-                }
-            }
+            free =
+                ShipyardArm.Rotors(shipyard).Count > 0
+                    ? (FreeBox(shipyard, start, welders), false)
+                    : (FreeCylinder(shipyard, start, welders), true);
             if (beams.Count > 0)
-                freeBoxes[shipyard.EntityId] = box;
+                freeBoxes[shipyard.EntityId] = free;
         }
         var cube = shipyard.GridSize;
-        return new MyOrientedBoundingBoxD(
-            new BoundingBoxD(((Vector3D)box.Min - 0.5) * cube, ((Vector3D)box.Max + 0.5) * cube),
-            shipyard.WorldMatrix
+        var (box, round) = free;
+        // A cylinder's radius in cells goes from its axis to the centers of its outermost cells
+        var margin = round ? new Vector3D(0, 0, 0.5) : new Vector3D(0.5);
+        return new BuildSpace(
+            new MyOrientedBoundingBoxD(
+                new BoundingBoxD(
+                    ((Vector3D)box.Min - margin) * cube,
+                    ((Vector3D)box.Max + margin) * cube
+                ),
+                shipyard.WorldMatrix
+            ),
+            round
+        );
+    }
+
+    private static BoundingBoxI FreeBox(
+        MyCubeGrid shipyard,
+        Vector3I start,
+        List<(Vector3D Center, Vector3D Up)> welders
+    )
+    {
+        var box = new BoundingBoxI(start, start);
+        for (var grew = true; grew; )
+        {
+            grew = false;
+            foreach (var d in Base6Directions.IntDirections)
+            {
+                var grown = new BoundingBoxI(
+                    box.Min + Vector3I.Min(d, Vector3I.Zero),
+                    box.Max + Vector3I.Max(d, Vector3I.Zero)
+                );
+                // The new layer only
+                var layer = grown;
+                if (d.X + d.Y + d.Z > 0)
+                    layer.Min = box.Min + (box.Max - box.Min + Vector3I.One) * d;
+                else
+                    layer.Max = box.Max + (box.Max - box.Min + Vector3I.One) * d;
+                if (
+                    Vector3I.Min(grown.Min, shipyard.Min) != shipyard.Min
+                    || Vector3I.Max(grown.Max, shipyard.Max) != shipyard.Max
+                    || !Free(shipyard, Cells(layer))
+                    || !Reached(welders, Cells(layer), shipyard.GridSize)
+                )
+                    continue;
+                box = grown;
+                grew = true;
+            }
+        }
+        return box;
+    }
+
+    // The cylinder's box: its radius in cells across, its length along Z, between the end
+    // welders: the rings there are wider than the cylinder and wouldn't stop it. Its cells are
+    // those within radius + 0.71 cells of the axis, center to center, which holds every cell a
+    // point within the radius is in.
+    private static BoundingBoxI FreeCylinder(
+        MyCubeGrid shipyard,
+        Vector3I start,
+        List<(Vector3D Center, Vector3D Up)> welders
+    )
+    {
+        int radius = 0,
+            low = start.Z,
+            high = start.Z;
+        IEnumerable<Vector3I> Disc(int r, int z, int inside = -1)
+        {
+            for (var x = -r - 1; x <= r + 1; x++)
+            for (var y = -r - 1; y <= r + 1; y++)
+            {
+                var d = x * x + y * y;
+                if (
+                    d <= (r + 0.71) * (r + 0.71)
+                    && (inside < 0 || d > (inside + 0.71) * (inside + 0.71))
+                )
+                    yield return new Vector3I(start.X + x, start.Y + y, z);
+            }
+        }
+        var ends = welders.Select(w => (int)w.Center.Z).DefaultIfEmpty(start.Z).ToList();
+        bool Takes(List<Vector3I> cells) =>
+            cells.All(c =>
+                Vector3I.Min(c, shipyard.Min) == shipyard.Min
+                && Vector3I.Max(c, shipyard.Max) == shipyard.Max
+            )
+            && Free(shipyard, cells)
+            && Reached(welders, cells, shipyard.GridSize);
+        for (var grew = true; grew; )
+        {
+            grew = false;
+            var ring = Enumerable
+                .Range(low, high - low + 1)
+                .SelectMany(z => Disc(radius + 1, z, radius))
+                .ToList();
+            if (Takes(ring))
+            {
+                radius++;
+                grew = true;
+            }
+            if (low > ends.Min() && Takes(Disc(radius, low - 1).ToList()))
+            {
+                low--;
+                grew = true;
+            }
+            if (high < ends.Max() && Takes(Disc(radius, high + 1).ToList()))
+            {
+                high++;
+                grew = true;
+            }
+        }
+        return new BoundingBoxI(
+            new Vector3I(start.X - radius, start.Y - radius, low),
+            new Vector3I(start.X + radius, start.Y + radius, high)
         );
     }
 
     // Where the center of a ship of this length goes: on the free space's center line, a short
     // ship toward the end nearer the station
-    private static Vector3D ShipCenter(
-        MyCubeGrid shipyard,
-        MyOrientedBoundingBoxD space,
-        double length
-    )
+    private static Vector3D ShipCenter(MyCubeGrid shipyard, BuildSpace space, double length)
     {
-        var offset = ShipyardPlacement.Offset(length, space.HalfExtent.Z * 2);
+        var offset = ShipyardPlacement.Offset(length, space.Size.Z);
         var station = offset > 0 ? NearestStation(shipyard) : null;
         if (station == null)
-            return space.Center;
+            return space.Box.Center;
         var along = shipyard.WorldMatrix.Forward;
-        var toStation = station.PositionComp.WorldAABB.Center - space.Center;
-        return space.Center + along * (Vector3D.Dot(toStation, along) > 0 ? offset : -offset);
+        var toStation = station.PositionComp.WorldAABB.Center - space.Box.Center;
+        return space.Box.Center + along * (Vector3D.Dot(toStation, along) > 0 ? offset : -offset);
     }
 
     // The grid of the nearest station hologram table within 1 km of the shipyard
@@ -3521,17 +3596,14 @@ internal static partial class ShipyardOrders
     // welders to tell
     private static bool Reached(
         List<(Vector3D Center, Vector3D Up)> welders,
-        BoundingBoxI box,
+        IEnumerable<Vector3I> cells,
         double cube
     )
     {
         if (welders.Count == 0)
             return true;
-        for (var x = box.Min.X; x <= box.Max.X; x++)
-        for (var y = box.Min.Y; y <= box.Max.Y; y++)
-        for (var z = box.Min.Z; z <= box.Max.Z; z++)
+        foreach (Vector3D cell in cells)
         {
-            var cell = new Vector3D(x, y, z);
             var reached = false;
             foreach (var (center, up) in welders)
             {
@@ -3552,14 +3624,15 @@ internal static partial class ShipyardOrders
         return true;
     }
 
-    private static bool Free(MyCubeGrid grid, BoundingBoxI box)
+    private static bool Free(MyCubeGrid grid, IEnumerable<Vector3I> cells) =>
+        !cells.Any(grid.CubeExists);
+
+    private static IEnumerable<Vector3I> Cells(BoundingBoxI box)
     {
         for (var x = box.Min.X; x <= box.Max.X; x++)
         for (var y = box.Min.Y; y <= box.Max.Y; y++)
         for (var z = box.Min.Z; z <= box.Max.Z; z++)
-            if (grid.CubeExists(new Vector3I(x, y, z)))
-                return false;
-        return true;
+            yield return new Vector3I(x, y, z);
     }
 
     // A grid with a block in the shipyard's free space that isn't the shipyard or on its rotors.
@@ -3568,21 +3641,13 @@ internal static partial class ShipyardOrders
     {
         var own = Grids(shipyard);
         var space = FreeSpace(shipyard);
-        return GridsIn(space).FirstOrDefault(g => !own.Contains(g) && HasBlockIn(g, space));
+        return GridsIn(space.Box).FirstOrDefault(g => !own.Contains(g) && HasBlockIn(g, space));
     }
 
     // GridsIn goes by the world axis box around each grid, which at a shipyard lying at an angle
     // holds much that is outside the shipyard
-    private static bool HasBlockIn(MyCubeGrid grid, MyOrientedBoundingBoxD box)
+    private static bool HasBlockIn(MyCubeGrid grid, BuildSpace space)
     {
-        var toGrid = grid.PositionComp.WorldMatrixNormalizedInv;
-        var local = new MyOrientedBoundingBoxD(
-            Vector3D.Transform(box.Center, toGrid),
-            box.HalfExtent,
-            Quaternion.CreateFromRotationMatrix(
-                MatrixD.CreateFromQuaternion(box.Orientation) * toGrid
-            )
-        );
         var cube = grid.GridSize;
         foreach (var block in grid.GetBlocks())
         {
@@ -3590,7 +3655,7 @@ internal static partial class ShipyardOrders
                 ((Vector3D)block.Min - 0.5) * cube,
                 ((Vector3D)block.Max + 0.5) * cube
             );
-            if (local.Intersects(ref cells))
+            if (space.Intersects(cells, grid.WorldMatrix))
                 return true;
         }
         return false;
@@ -3606,7 +3671,7 @@ internal static partial class ShipyardOrders
         var inside = entities
             .OfType<MyCubeGrid>()
             .Where(ShipyardZoneWelding.IsShipyard)
-            .Any(s => FreeSpace(s).Contains(ref center));
+            .Any(s => FreeSpace(s).Contains(center));
         entities.Clear();
         return inside;
     }
@@ -3931,7 +3996,7 @@ internal static partial class ShipyardOrders
         var found = grids
             ? entities
                 .OfType<MyCubeGrid>()
-                .Where(g => !g.IsPreview && HasBlockIn(g, box))
+                .Where(g => !g.IsPreview && HasBlockIn(g, new BuildSpace(box, false)))
                 .Select(Grids)
                 .ToList()
             : [];

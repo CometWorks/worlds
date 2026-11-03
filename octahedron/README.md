@@ -76,13 +76,12 @@ station and shipyard blueprints are in `blueprints/`.
   60 degrees, so their shipyards don't hide the rings of their lanes to Beta
   Station from the lobby. The lanes don't turn. Moon Station's up is square to the line
   between EarthLike and the Moon, the one such direction nearest to where Delta
-  Station was before the turn, and it is turned 180 degrees about its up and
-  upside down: it faces the Moon, its lobby toward EarthLike, and its shipyard
-  lies above it (see below). Delta Station, whose up leaned 25 degrees away
+  Station was before the turn. That place only sets its safe zone and the axes
+  its layout with the shipyard goes by (see below). Delta Station, whose up leaned 25 degrees away
   from EarthLike, is turned 50 degrees further, so its up leans 25 degrees
   toward it, like Beta Station's: the lobby sees the planet, and the deck is
   still tilted against the Sun. Each station sits in a 250 m admin safe zone, Moon Station
-  in a 500 m one that also holds its longer shipyard, owned by the
+  in a 400 m one that also holds its longer shipyard, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
   zone allows no action: no welding, grinding or block placing, also not by the
   shipyard's welders until the Octahedron plugin makes an exception for them
@@ -98,34 +97,32 @@ station and shipyard blueprints are in `blueprints/`.
   lobby, its pressurized back half
   ([SE-945](https://tasks.cometworks.se/tasks/1832)). Moon Station has the
   double helix shipyard instead (`blueprints/double-helix-shipyard.sbc` from
-  `make_helix_shipyard.py`, 34 welders on two strands of conveyor pipe around a
-  build volume 177.5 m across and 500 m long, no arm rotors;
+  `make_helix_shipyard.py`, 26 welders on two strands of conveyor pipe around a
+  build volume 192.5 m across and 375 m long, no arm rotors;
   [SE-959](https://tasks.cometworks.se/tasks/1846)).
-  - Every shipyard starts where Viktor put Gamma Station's on the live cluster
+  - Every Earth station's shipyard starts where Viktor put Gamma Station's on the live cluster
     (`SHIPYARD_PLACE`, in the station's own axes): 180 m from the station, 140 m
     along its up and 112 m behind it, turned the same way against it.
   - Then it moves along the Sun's axis, away from the station, until its block
     bounds are 15 m out of the slab of the Sun's rays through the station's
     bounding sphere, so the Sun never goes behind it as seen from the station
     (see "The Sun" below). That takes 12 to 58 m at the Earth stations, ending
-    189 to 222 m from them, and 164 m at Moon Station, 248 m from it: Moon
-    Station's front, toward the Moon, is steep against the Sun's path, which
-    stands the shipyard on end there.
-  - Moon Station's double helix shipyard is 575 m long with its end towers, too
-    long to stand on end in the zone. It takes the same place and orientation,
-    turned by as little as lays its length and its block bounds' sides square to
-    the Sun's axis (`HELIX_STATIONS`), then moves the same way: 142 m along the
-    Sun's axis, ending 233 m from the station, above the lobby's dome. The
-    station sits about 217 m from its axis, off its middle toward one end.
-  - The station and its shipyard are centered on the safe zone together. Where a
+    189 to 222 m from them.
+  - Moon Station and its double helix shipyard are laid out as Viktor placed them
+    in the Octahedron Design world (`HELIX_PLACE`, in the axes of the station's
+    place): both orientations, and the station 180 m from the shipyard's axis,
+    23 m off its middle. The pair is centered in the 400 m zone. No place there
+    keeps the Moon lanes' end gates' shadows off the decks, and the Sun can pass
+    behind the shipyard as seen from the station: `check_sun_clearance.py` shows
+    those as "laid" and doesn't fail on them. 7 of the lobby's 25 spots see the
+    middle of the build volume.
+  - The Earth stations and their shipyards are centered on the safe zone together. Where a
     gate would still shade the station's hangar deck or lobby, the pair moves
     together by as little as clears them with both block bounds 10 m inside the
-    zone's edge. None needs to: a Moon lane's end gate covers Moon Station's
-    zone from 124 m below the center upward, and the station already sits low
-    in its 500 m zone, its shipyard above it. A gate may shade the engineering
+    zone's edge. None needs to. A gate may shade the engineering
     rooms under the hangar deck. The farthest blocks end up 176 to 222 m from
-    the zone's center at the Earth stations, 304 m at Moon Station, whose zone
-    ends 2.2 km outside the Moon's gravity (`build_world.py` checks every zone
+    the zone's center at the Earth stations, 245 m at Moon Station, whose zone
+    ends 2.3 km outside the Moon's gravity (`build_world.py` checks every zone
     against the planets' gravity).
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries (the double helix shipyard: 8 large reactors and 72 batteries). Those

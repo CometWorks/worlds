@@ -825,7 +825,10 @@ internal static partial class ShipyardOrders
         if (ships.Count == 0)
             return;
         var space = FreeSpace(shipyard);
-        var here = GridsIn(space).Where(g => HasBlockIn(g, space)).Select(g => g.EntityId).ToHashSet();
+        var here = GridsIn(space.Box)
+            .Where(g => HasBlockIn(g, space))
+            .Select(g => g.EntityId)
+            .ToHashSet();
         foreach (
             var ship in ships.Where(s => !here.Contains(s.Grid) && !refunds.ContainsKey(s.Grid))
         )
