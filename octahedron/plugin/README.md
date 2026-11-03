@@ -491,7 +491,8 @@ chat messages find the player on any node. One who is logged off misses them.
   the station on the Store's terms: OCT's bid, tax in it, or the item's base price
   less tax if it has none, into OCT's stock. The money goes to the player, with a chat
   message.
-- A ship in the build space holds up the next order. Its owner is told, and after
+- A ship in the build space holds up the next order. A ship an order built has that
+  deadline also with no order waiting, from when the queue is empty. Its owner is told, and after
   `ShipyardClearMinutes` (5) a ship an order built, until it first leaves the build
   space, goes into the Hangar of the player who ordered it (Hangar 1.2.0 or later). The
   entry counts as stored at this station, so it comes back free here. With no free slot
@@ -1325,7 +1326,8 @@ local test cluster, with the World Authority keeping both: see its docstring.
 `ShipyardClearMinutes`, with a Hangar working copy (`OCT_HANGAR_REPO`) on the server: stored
 for its orderer and counted once in their PCU, free to load at the station, removed and refunded
 with the slot taken, a free ship just removed, a ship that left and came back moved out as any
-grid, the same with Hangar off, and restarts in the wait and after a refund.
+grid, the same with Hangar off, restarts in the wait and after a refund, and a ship stored
+with no next order in the queue.
 `tests/shipyard_deadline_cluster.py` does it on a cluster: the node stores, another node loads,
 the World Authority refunds, over node restarts in the wait and a graceful stop.
 `tests/hangar_where_saved_cluster.py` checks `config/hangar.cfg` on a cluster: back at the

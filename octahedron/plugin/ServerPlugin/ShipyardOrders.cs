@@ -1542,7 +1542,17 @@ internal static partial class ShipyardOrders
                 )
                     FloatFree(shipyard, 0);
                 if (queue.Count == 0)
+                {
+                    // A ship an order built has its deadline also when no order waits for it
+                    if (
+                        Obstacle(shipyard) is { } obstacle
+                        && BuiltShipOf(shipyard, obstacle) != null
+                    )
+                        ClearWay(station, shipyard, obstacle, false);
+                    else
+                        blockers.Remove(shipyard.EntityId);
                     return;
+                }
                 var next = queue[0];
                 if (next.Phase == BuildPhase.After)
                 {

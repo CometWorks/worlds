@@ -3,7 +3,8 @@ built by build_world.py with Hangar on the server (OCT_HANGAR_REPO, 1.2.0 or lat
 AdminSafeZonesOnly and one slot per player. The ship goes into its orderer's Hangar, recorded at this
 station and with no cool-down started, and is counted once in the player's PCU. With the slot taken a
 paid ship is removed and what it cost comes back, and a free one is just removed. A ship that left the
-build space and came back, and one Hangar can't take, are moved out as any other grid. A restart in
+build space and came back, and one Hangar can't take, are moved out as any other grid. With no order
+behind it the ship goes into the Hangar at the deadline as well (SE-938). A restart in
 the wait keeps the ship, and one after a refund doesn't pay again.
 
     OCT_TASK=SE-929 OCT_WORLD_SOURCE=<world from build_world.py> OCT_HANGAR_REPO=<hangar> \\
@@ -77,6 +78,25 @@ def leave_paid(a, blueprint: str = tu.PAID) -> int:
     tu.free_at_end(a, "the paid ship's turn")
     tr.remove(a)
     return paid
+
+
+def unqueued(a) -> None:
+    """SE-938: with no order behind it the ship goes into the Hangar at the deadline as well"""
+    mark = tp.latest(a)
+    leave_paid(a)
+    told = tp.wait_chat(a, "is still in", 60, mark)
+    check(
+        told is not None and "goes into your Hangar" in told,
+        f"warned with no order waiting: {told}",
+    )
+    stored = tp.wait_chat(a, "in your Hangar now", CLEAR * 60 + 40, mark)
+    check(stored is not None, f"stored with no order waiting: {stored}")
+    check(
+        tu.wait_for(lambda: not ship_here(a), 15, 1), "the ship is gone from the world"
+    )
+    check(SHIP in hangar(a), "it is in the Hangar")
+    hangar(a, f"remove {SHIP}")
+    check("empty" in hangar(a), "the slot is free again")
 
 
 def blocked(a, blueprint: str = tu.NEXT) -> tuple[str | None, tuple]:
@@ -292,6 +312,7 @@ def main() -> int:
         log(tr.remove(a))
         sa.admin(a, f"!oct market set {STATION} {tu.PLATE} 10000")
         for scenario in (
+            unqueued,
             into_hangar,
             no_slot_paid,
             no_slot_free,
