@@ -1242,6 +1242,12 @@ equatorial stations, the widest small grid ship among them, and a ship of 1/4 of
 the length in the middle. With the arm's time limit forced to 0 it checks that a
 press is refused and that a queued paid order ends with its reason and everything
 given back.
+`tests/test_shipyard_sight.py` loads a world built by `build_world.py` with the sight
+probe (`tests/sight-probe`), a server plugin that casts rays through the game's
+physics from the lobby spots of `check_sun_clearance.py` to each shipyard's free
+build space, windows letting them through. It needs no client, prints how many
+spots see the center and the 1/3 points and, with `-v`, what blocks each ray, and
+fails when an equatorial station's center is in sight of fewer than half its spots.
 `tests/test_shipyard_order.py` orders a ship at a station table with the client
 (the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
 order run out after a server restart; with `OCT_SHOTS` it also takes

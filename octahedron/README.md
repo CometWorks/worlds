@@ -97,7 +97,10 @@ station and shipyard blueprints are in `blueprints/`.
   - The shipyard's side faces the lobby, rolled 30 degrees about its long axis
     with its top toward the station, lifted 50 m along the station's up and
     turned 17.5 degrees about it, so more of the build volume shows past its
-    near wall and the wall's middle beam doesn't hide its center.
+    near wall and the wall's middle beam doesn't hide its center. Gamma
+    Station's shipyard is turned the other way (`SHIPYARD_YAW_REVERSED`): its
+    turn for the Sun, below, went against the 17.5 degrees and put the beam
+    back in front of the center.
   - The station and its shipyard are centered on the safe zone together and
     spread apart as far as their block bounds stay 10 m inside the zone's edge:
     100 m between them, the farthest block 227 m from the zone's center.
@@ -130,7 +133,7 @@ station and shipyard blueprints are in `blueprints/`.
     concrete.
   - The Sun never goes behind a station's own shipyard: see "The Sun" below.
     For that the line between Alpha, Gamma, North and South Station and their
-    shipyards is turned 33, 30, 12 and 12 degrees about the zone's center
+    shipyards is turned 33, 33, 12 and 12 degrees about the zone's center
     (`SHIPYARD_SUN_TURN`), both keeping their orientation, and Moon Station and
     its shipyard turn 22 degrees as one unit (`MOON_SUN_TURN_DEGREES`).
 - Makes the stations the NPC faction's trade stations: the faction is a Trader
@@ -233,7 +236,10 @@ day, every gate and shipyard block against each station. It prints the
 smallest clearance in meters and degrees per station, how many of 26 lobby spots
 see the shipyard's center and its corners past the blocks, and how far the
 farthest block is from the zone's center. It exits with 1 when the Sun can reach
-a station through one of them, or a block leaves the zone.
+a station through one of them, or a block leaves the zone. Its sight counts take
+each block as its first cell only, so they can miss a beam in the way: at Gamma
+Station it counted 18 of 25 spots where the game had none (SE-934). The
+plugin's `tests/test_shipyard_sight.py` counts them with the game's physics.
 
 The clearances are for the ray that casts shadows. Other stations aren't counted:
 one passes in front of the Sun once a day at about 200 km, which doesn't flicker.

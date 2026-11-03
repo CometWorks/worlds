@@ -172,6 +172,11 @@ SHIPYARD_ROLL_DEGREES = 30.0
 # up: center clear from 8 at +17.5 and at -17.5 (the station's kitchen blocks the other 2),
 # from none unturned.
 SHIPYARD_YAW_DEGREES = 17.5
+# Turned the other way at Gamma Station, where SHIPYARD_SUN_TURN went against the yaw and
+# canceled it: the lobby looked straight across the shipyard into the middle beam again, and in
+# game no lobby spot saw its center (SE-934). This way the turn adds to the yaw, as at Alpha
+# Station.
+SHIPYARD_YAW_REVERSED = {"Gamma Station"}
 # Its refill stations and lights are shared with everyone. Its containers, connectors and welders go
 # to a player for their turn at it, its power never: the Octahedron plugin keeps the reactors at
 # SHIPYARD_REACTOR_URANIUM ingots and the batteries charged (RefillContainers in
@@ -183,12 +188,14 @@ SHIPYARD_OFF = {"ShipConnector", "ConveyorSorter"}
 # plane of the Sun's path, so the Sun never goes behind the shipyard (SE-720). Both keep their
 # orientation. Picked for the view from the lobby among the turns that clear the Sun: the
 # shipyard's center is in sight of 17 to 21 of 26 lobby spots (check_sun_clearance.py), against
-# 9 to 16 with the smallest clearing turns, where the near wall's beams get in the way.
+# 9 to 16 with the smallest clearing turns, where the near wall's beams get in the way. Gamma
+# Station mirrors Alpha Station: in game its center is in sight of 20 of 23 lobby spots, Alpha's
+# of 21 (tests/test_shipyard_sight.py), against 14 at 30 degrees.
 SHIPYARD_SUN_TURN = {
     "North Station": 12.0,
     "South Station": 12.0,
     "Alpha Station": 33.0,
-    "Gamma Station": 30.0,
+    "Gamma Station": 33.0,
 }
 # Moon Station has no deck to keep level, and turning only the line would take its shipyard out of
 # the lobby's view, so the station and its shipyard turn this far as one unit instead.
@@ -765,7 +772,7 @@ def box_corners(grid, center, forward, up):
     return corners
 
 
-def station_and_shipyard(station_grid, zone, forward, up, away):
+def station_and_shipyard(station_grid, zone, forward, up, away, yaw_degrees):
     """(station center, (shipyard center, forward, up)) around the safe zone's center.
 
     The shipyard goes on the side between the station's back, where the lobby is, and away,
@@ -782,7 +789,7 @@ def station_and_shipyard(station_grid, zone, forward, up, away):
     # The long axis, which the roll turns about
     yard_forward = cross(level, side)
     # Then turned about the station's up
-    yaw = math.radians(SHIPYARD_YAW_DEGREES)
+    yaw = math.radians(yaw_degrees)
     yard_right, yard_up, yard_forward = (
         rotate(v, up, yaw) for v in (yard_right, yard_up, yard_forward)
     )
@@ -1583,8 +1590,9 @@ def main():
                 template, center, forward, up, norm(offset), yard_forward, yard_up, 0
             )
         else:
+            yaw = SHIPYARD_YAW_DEGREES * (-1 if name in SHIPYARD_YAW_REVERSED else 1)
             station_center, yard = station_and_shipyard(
-                template, center, forward, up, away
+                template, center, forward, up, away, yaw
             )
         if name in EQUATOR_STATIONS:
             # Turn the pair about the zone's center until the station's deck lies parallel to
