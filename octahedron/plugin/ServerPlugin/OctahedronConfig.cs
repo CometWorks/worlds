@@ -1523,6 +1523,16 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "Curved LCD Panel - Station Lounge Leaderboard";
 
+    [BoolOption(
+        "Rank OCT's players one by one, by name, with their own bank account and grids. Off: OCT is left out with all its players.",
+        Parent = "leaderboard"
+    )]
+    public bool LeaderboardOctPlayers
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
     [IntOption(
         10,
         description: "Seconds between two counts of the leaderboard. A count values every grid of the world, a few per tick.",

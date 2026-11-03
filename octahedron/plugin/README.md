@@ -114,6 +114,10 @@ everyone. A pasted grid keeps the shares it was saved with. Players in other fac
 the game's faction share. Where the plugin asks whether two players are teammates (the
 shipyard's welders, contract abuse) OCT doesn't count as a team (`OctFaction`).
 
+`tests/test_oct_faction.py` checks it in game with the client: a new player joins OCT and
+their placed blocks are No share, a player who makes their own faction keeps faction share
+(`--own-faction`), and with the options off nothing changes (`--no-oct`).
+
 ### Refill containers
 
 `RefillContainers` keeps blocks stocked with fixed items, independent of the
@@ -1051,7 +1055,11 @@ member. Its value is what its blocks are built of, their mounted components, plu
 inventories, each item at the stations' price: the middle of OCT's bid and ask as
 the station's market shows them (the specialty price while the day's quota lasts),
 averaged over the stations that trade it. Items OCT doesn't trade count for nothing.
-OCT and the NPC factions are left out. The panels show the first `LeaderboardRows` (15)
+Only factions players made are on it: OCT, the economy's NPC factions and those of mods
+like MES are left out (a faction with a type other than player made, or without a human
+member). With `LeaderboardOctPlayers` on (off by default) OCT's players are ranked too,
+one by one by name with their own bank account and grids, and the board's title drops
+"FACTION". The panels show the first `LeaderboardRows` (15)
 in Monospace at `LeaderboardFontSize` (0.45), 45 characters a line.
 
 Every `LeaderboardIntervalSeconds` (300) the server counts the world's grids, a few

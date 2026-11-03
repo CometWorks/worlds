@@ -230,6 +230,8 @@ SETTINGS = {
     # dedicated server admits at most MaxPlayers players, so both are set
     "MaxPlayers": MAX_PLAYERS,
     "BlockLimitsEnabled": "PER_PLAYER",
+    # Every player is in OCT, and the game spares allies' characters from rifle fire without it
+    "EnableFriendlyFire": "true",
     "TotalPCU": 1_000_000 * MAX_PLAYERS,
     "MaxFactionsCount": 0,
     "EnableCopyPaste": "false",
@@ -1378,7 +1380,7 @@ def add_npc(checkpoint, ids):
     el(faction, "AutoAcceptMember", "false")
     el(faction, "AutoAcceptPeace", "true")
     el(faction, "AcceptHumans", "false")
-    el(faction, "EnableFriendlyFire", "false")
+    el(faction, "EnableFriendlyFire", "true")
     # A trade faction: the economy stocks its stations' stores and offers contracts there
     el(faction, "FactionType", "Trader")
     el(faction, "FactionTypeString", "Trader")
