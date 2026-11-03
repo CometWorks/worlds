@@ -834,6 +834,13 @@ stock as long as its entry keeps the name.
   for all stations, with `MarketStationStock` for a station's own profile (empty
   for now), never over the 200 t. Anything not completely out is left alone. Its
   acquisition contracts ask for what it lacks of these lists (`Market.Missing`).
+- Players must mine the metals of `MarketPlayerMinedMetals` (gold, silver,
+  platinum and uranium). OCT never restocks their ores and ingots, nor any
+  component whose blueprint needs those ingots (Thrust, Superconductor, Reactor,
+  Gravity Generator and others; the server logs the list), and its acquisition
+  contracts don't ask for them, whatever the two stock lists name. OCT still buys
+  them from players and sells what it bought. Free shipyard builds need no
+  components, so the rule doesn't touch them, nor the Free Tools boxes.
 - `MarketSpecialties` names what each station buys at `MarketSpecialtyPercent`
   (120 %) less the tax, up to `MarketSpecialtyDailyTonnes` (50 t) a UTC day per
   station; past that OCT pays its normal price. Such an item sells there at no less,

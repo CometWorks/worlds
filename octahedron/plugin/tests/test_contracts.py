@@ -24,12 +24,12 @@ import rig
 from test_client import log
 
 checks: list[tuple[bool, str]] = []
-# Options of the test on top of the world's config: a gold stock a character can carry,
+# Options of the test on top of the world's config: a magnesium stock a character can carry,
 # without the market's hourly restock, which would fill it before the first contracts;
 # a low threat for the small test grid
 OPTIONS = {
     "MarketEnabled": "false",
-    "MarketMinStock": "Ingot/Gold=10",
+    "MarketMinStock": "Ingot/Magnesium=10",
     "ContractAcquisitionMaxAmount": 10,
     "ContractBountyMinThreat": 1,
     "ContractSalvageRadius": 500,
@@ -196,10 +196,12 @@ def main() -> int:
             len(hauling) == 3 and all(c[4].startswith("to ") for c in hauling),
             f"{station}: 3 hauling contracts {[c[3] for c in hauling]}",
         )
-        gold = [c for c in list_ if c[1] == "acquisition"]
+        magnesium = [c for c in list_ if c[1] == "acquisition"]
         check(
-            len(gold) == 1 and gold[0][4] == "Ingot/Gold 10" and gold[0][3] > 0,
-            f"{station}: one acquisition of 10 gold {gold}",
+            len(magnesium) == 1
+            and magnesium[0][4] == "Ingot/Magnesium 10"
+            and magnesium[0][3] > 0,
+            f"{station}: one acquisition of 10 magnesium {magnesium}",
         )
         check(others.get(station) == 0, f"{station}: none of the game's own contracts")
     alpha = found["Alpha Station"]
@@ -230,13 +232,15 @@ def main() -> int:
     act(remote, f"deliver {haul[0]}", "Success", "hand in the package")
     paid_for(remote, haul, before, "hauling paid by OCT")
 
-    # Acquisition: the gold goes into OCT's stock at Alpha
-    gold = one(found, "Alpha Station", "acquisition")
+    # Acquisition: the magnesium goes into OCT's stock at Alpha
+    magnesium = one(found, "Alpha Station", "acquisition")
     before = balances(remote)
-    act(remote, f"accept {gold[0]}", "Success", "take the acquisition")
-    act(remote, f"deliver {gold[0]}", "NotEnoughItems", "no gold, no delivery")
-    act(remote, f"deliver {gold[0]} fill", "Success", "deliver 10 gold")
-    paid_for(remote, gold, before, "acquisition paid by OCT")
+    act(remote, f"accept {magnesium[0]}", "Success", "take the acquisition")
+    act(
+        remote, f"deliver {magnesium[0]}", "NotEnoughItems", "no magnesium, no delivery"
+    )
+    act(remote, f"deliver {magnesium[0]} fill", "Success", "deliver 10 magnesium")
+    paid_for(remote, magnesium, before, "acquisition paid by OCT")
 
     check(
         not any("Yard Derelict" in c[4] for c in alpha),
@@ -313,7 +317,7 @@ def main() -> int:
     )
     check(
         not any(c[1] == "acquisition" for c in alpha),
-        f"no acquisition at Alpha while OCT holds its gold: {alpha}",
+        f"no acquisition at Alpha while OCT holds its magnesium: {alpha}",
     )
     check(
         not any(c[1] == "salvage" for c in alpha),
