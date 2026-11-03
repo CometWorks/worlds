@@ -53,8 +53,8 @@ internal static class OfflineCharacters
     private const string TakeCommand = "offline-character-take";
     private const string ConsumeCommand = "offline-character-consume";
 
-    // Answers once a recoverable global save holds what the WA did before it. A cluster from before
-    // this command answers Unsupported.
+    // Answers once a recoverable global save holds what the WA did before it. A cluster older than
+    // 0.2 answers Unsupported, and then offline characters stay in the world.
     private const string GlobalSaveCommand = "cluster.global-save";
     private const string Credit = "SpaceCredit";
     private const int Attempts = 4;
@@ -126,78 +126,23 @@ internal static class OfflineCharacters
     private static readonly HashSet<long> emptied = [];
     private static readonly List<(long Identity, long Body)> unconsumed = [];
 
-    // A cluster process has this once its plugins are loaded
-    private static Type runtimeType;
-    private static Type RuntimeType =>
-        runtimeType ??= AccessTools.TypeByName("ClusterPlugin.ClusterRuntime");
-
-    // Does this cluster have GlobalSaveCommand? Null until it answered, and commands wait for that.
-    private static bool? askSaves;
-
-    // With it a change's order is its number here, and the command's answer covers those made before
+    // A change's order is its number here, and GlobalSaveCommand's answer covers those made before
     // it was sent. Numbers start again after a load, where Order is zero: it came from a save.
     private static long changes;
     private static long saveCovers;
     private static Guid saveOperation;
     private static bool saveAsked;
 
-    // Without it a plugin's global command doesn't wait for a save either, so this
-    // looks at the saves. Their place in the order: the generation, then the sequence. Only without
-    // saves at all is everything saved. Goes once no cluster without the command is left.
-    private static long SaveMark(long generation, long sequence) => (generation << 32) + sequence;
+    // GlobalSaveCommand answered once: the keeper registers its commands only then
+    private static bool savesFollowed;
 
-    // What a replacement WA could restore: the last order the command covered, or else the newest
-    // global save as the gateway says
+    // What a replacement WA could restore: the last order the command covered
     private static long recoverable;
 
-    // The first save that can hold a change made now: one runs at a time, and it may have been
-    // captured before this. Nothing can be saved past the end if the cluster's insides moved, so a
-    // body then stays in the world, and Register says so.
-    private static long NextSave
-    {
-        get
-        {
-            if (!PluginCluster.IsClusterProcess)
-                return 0;
-            if (askSaves == true)
-                return ++changes;
-            var persistence = AccessTools
-                .Field(RuntimeType, "m_worldAuthorityPersistence")
-                ?.GetValue(null);
-            var sequence =
-                persistence == null
-                    ? null
-                    : AccessTools.Field(persistence.GetType(), "m_sequence")?.GetValue(persistence);
-            var generation = AccessTools
-                .PropertyGetter(RuntimeType, "AuthorityGeneration")
-                ?.Invoke(null, null);
-            return sequence == null || generation == null
-                ? long.MaxValue
-                : SaveMark((long)generation, (uint)sequence + 1L);
-        }
-    }
+    // A plain server's save holds the world and the book together
+    private static long NextSave => PluginCluster.IsClusterProcess ? ++changes : 0;
 
-    private static long Saved
-    {
-        get
-        {
-            if (!PluginCluster.IsClusterProcess)
-                return long.MaxValue;
-            if (askSaves == true)
-                return recoverable;
-            var persists = AccessTools
-                .PropertyGetter(RuntimeType, "GlobalSavesPersist")
-                ?.Invoke(null, null);
-            return persists is false ? long.MaxValue : recoverable;
-        }
-    }
-
-    private static void RequestSave()
-    {
-        // GlobalSaveCommand asks for the save itself
-        if (askSaves != true && RuntimeType != null)
-            AccessTools.Method(RuntimeType, "RequestGlobalSave")?.Invoke(null, null);
-    }
+    private static long Saved => PluginCluster.IsClusterProcess ? recoverable : long.MaxValue;
 
     private static ParkingBook Book
     {
@@ -252,10 +197,7 @@ internal static class OfflineCharacters
         if (PluginCluster.IsClusterProcess && unsaved && utc >= nextSaveCheck)
         {
             nextSaveCheck = utc + SaveCheckInterval;
-            if (askSaves == true)
-                _ = AskSave();
-            else
-                _ = Task.Run(CheckSaves);
+            _ = AskSave();
         }
 #endif
     }
@@ -268,15 +210,12 @@ internal static class OfflineCharacters
             return true;
         if (registrationFailed || PluginCluster.Current == null)
             return false;
-        if (askSaves == null)
+        // Until then a kept inventory couldn't count as saved, and a body taken back would be emptied
+        if (!savesFollowed)
         {
             _ = AskSave();
             return false;
         }
-        if (NextSave == long.MaxValue)
-            Plugin.Log.Error(
-                "The cluster's saves can't be followed: no kept inventory counts as saved, so offline characters stay in the world"
-            );
         var commands = new[]
         {
             Cluster.RegisterGlobalCommand(ParkCommand, Text(Park)),
@@ -347,7 +286,6 @@ internal static class OfflineCharacters
     private static string Status(string request)
     {
         var durable = Saved;
-        var hold = false;
         var verdicts = new List<string>();
         foreach (var line in request.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -356,12 +294,9 @@ internal static class OfflineCharacters
             // Whoever looks at the time before the online list is in may see a player gone
             if (verdict == ParkingVerdict.Park && !OnlineListReady)
                 verdict = ParkingVerdict.Wait;
-            hold |= verdict == ParkingVerdict.Hold;
             verdicts.Add(verdict.ToString());
         }
         dirty = true;
-        if (hold)
-            RequestSave();
         return string.Join("\n", verdicts);
     }
 
@@ -382,7 +317,6 @@ internal static class OfflineCharacters
         Plugin.Log.Info(
             $"Offline character of {identity}: body {body} kept, {f[3].Length} characters of items, {credits} SC to the bank"
         );
-        RequestSave();
         return "ok";
     }
 
@@ -394,10 +328,7 @@ internal static class OfflineCharacters
         var answer = Book.Take(identity, body, NextSave, Saved);
         dirty = true;
         if (answer.Wait)
-        {
-            RequestSave();
             return "wait";
-        }
         if (answer.Parked.Count == 0)
             return "none";
         return string.Join(
@@ -474,11 +405,16 @@ internal static class OfflineCharacters
         OnGameThread(() =>
         {
             saveAsked = false;
-            if (code == PluginResultCode.Unsupported)
-                askSaves ??= false;
+            if (code == PluginResultCode.Unsupported && !savesFollowed && !registrationFailed)
+            {
+                registrationFailed = true;
+                Plugin.Log.Error(
+                    $"This cluster has no {GlobalSaveCommand} command: offline characters stay in the world"
+                );
+            }
             if (code != PluginResultCode.Success)
                 return;
-            askSaves = true;
+            savesFollowed = true;
             recoverable = Math.Max(recoverable, saveCovers);
             saveOperation = Guid.Empty;
         });
@@ -499,38 +435,6 @@ internal static class OfflineCharacters
                 token
             );
         return client;
-    }
-
-    // The route the cluster's own durable commands wait on: catalogued and held by another node too
-    private static async Task CheckSaves()
-    {
-        var root = Environment.GetEnvironmentVariable("CLUSTER_GATEWAY_REGISTRY")?.TrimEnd('/');
-        var node = Environment.GetEnvironmentVariable("CLUSTER_NODE_ID");
-        if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(node))
-            return;
-        try
-        {
-            using var answer = await Gateway
-                .GetAsync(
-                    $"{root}/registry/global-saves/recovery?without={Uri.EscapeDataString(node)}"
-                )
-                .ConfigureAwait(false);
-            if (!answer.IsSuccessStatusCode)
-                return;
-            using var document = JsonDocument.Parse(
-                await answer.Content.ReadAsStringAsync().ConfigureAwait(false)
-            );
-            var id = document.RootElement.GetProperty("SaveId");
-            var mark = SaveMark(
-                id.GetProperty("Generation").GetInt64(),
-                id.GetProperty("Sequence").GetInt64()
-            );
-            OnGameThread(() => recoverable = Math.Max(recoverable, mark));
-        }
-        catch (Exception e)
-        {
-            Plugin.Log.Warning($"Offline characters: no answer on the saves: {e.Message}");
-        }
     }
 
     private static void Wake()
