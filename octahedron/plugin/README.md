@@ -466,7 +466,15 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   at the next 10 s check and once more at the one after (SE-782), and nothing to the
   clients it already told. ToolCore is the mod's own code: this reaches its session
   and packet by reflection and does nothing if they are gone.
-- A build whose ship gains no integrity for 60 s stops. A paid build short of
+- A build whose ship gains no integrity for 60 s has stalled. The plugin first
+  places the projected blocks that only a collision with another part of the ship
+  keeps the welders from, welds them from the containers and watches the physics
+  for 10 s: a ship that shakes (clang) is removed and refunded, else the build goes
+  on (SE-940). Then it finishes the blocks the welders left though the containers
+  hold their components, which happens on big ships: it welds the built ones and
+  places and welds the projected ones that pass the build check, up to 200 at each
+  10 s check while the welders make no progress, and the build goes on (SE-953).
+  When nothing is left to finish, the build stops. A paid build short of
   components in the shipyard first waits `ShipyardTopUpMinutes` (5) for a top-up and
   tells the player. Plain blocks, armor and decorations, are those of the plain
   `CubeBlock` type; every block of its own type, lights, panels and conveyors included,
