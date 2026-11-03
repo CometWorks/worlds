@@ -10,6 +10,7 @@ using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
+using Sandbox.Game.Entities.Character.Components;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
@@ -1501,6 +1502,238 @@ public sealed class ProbeCommands : CommandModule
             ShareMode = MyOwnershipShareModeEnum.None,
         };
         return block;
+    }
+
+    // The NPC's blocks of the station and its shipyard
+    private static IEnumerable<MyTerminalBlock> NpcBlocks(string station) =>
+        StationGrids(station)
+            .Append(Yard(station))
+            .Where(g => g != null)
+            .SelectMany(g => g.GetFatBlocks<MyTerminalBlock>())
+            .Where(b => MySession.Static.Players.IdentityIsNpc(b.OwnerId));
+
+    private static string Kind(MyCubeBlock block) =>
+        $"{block.BlockDefinition.Id.TypeId.ToString().Replace("MyObjectBuilder_", "")}/{block.BlockDefinition.Id.SubtypeName}";
+
+    [Command(
+        "access",
+        "The NPC's blocks of the station and its shipyard that the caller's terminal can work: one BLOCK line each, then ACCESS count NOACCESS count",
+        "!sprobe access <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Access(string station)
+    {
+        long me = Context.Caller.IdentityId;
+        var lines = new List<string>();
+        var none = 0;
+        foreach (var block in NpcBlocks(station))
+        {
+            if (!block.HasPlayerAccess(me))
+            {
+                none++;
+                continue;
+            }
+            var inventory = block.HasInventory ? (block.ShowInInventory ? "yes" : "hidden") : "-";
+            lines.Add(
+                $"BLOCK {block.EntityId} {block.CubeGrid.EntityId} {block.Min.X},{block.Min.Y},{block.Min.Z} {Kind(block)} "
+                    + $"share={block.IDModule.ShareMode} terminal={(block.ShowInTerminal ? "yes" : "hidden")} inventory={inventory} name={block.CustomName}"
+            );
+        }
+        lines.Add($"ACCESS {lines.Count} NOACCESS {none}");
+        return string.Join("\n", lines);
+    }
+
+    private static readonly Dictionary<long, Dictionary<string, string>> saved = [];
+
+    // Everything the block saves but its inventories, as path=value
+    private static Dictionary<string, string> Settings(MyCubeBlock block)
+    {
+        var builder = block.GetObjectBuilderCubeBlock(copy: true);
+        builder.ComponentContainer = null;
+        using var stream = new System.IO.MemoryStream();
+        VRage.ObjectBuilders.Private.MyObjectBuilderSerializerKeen.SerializeXML(stream, builder);
+        stream.Position = 0;
+        var values = new Dictionary<string, string>();
+        void Walk(System.Xml.Linq.XElement element, string path)
+        {
+            if (!element.HasElements)
+            {
+                values[path] = element.Value;
+                return;
+            }
+            var seen = new Dictionary<string, int>();
+            foreach (var child in element.Elements())
+            {
+                var name = child.Name.LocalName;
+                seen[name] = seen.TryGetValue(name, out var n) ? n + 1 : 0;
+                Walk(child, $"{path}/{name}[{seen[name]}]");
+            }
+        }
+        Walk(System.Xml.Linq.XDocument.Load(stream).Root, "");
+        return values;
+    }
+
+    [Command(
+        "settings",
+        "save keeps the settings of the NPC's blocks the caller has access to; diff lists what changed since: CHANGED id kind path old -> new, then SAME count CHANGED count",
+        "!sprobe settings <station> <save|diff>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string SettingsCommand(string station, string what)
+    {
+        long me = Context.Caller.IdentityId;
+        var blocks = NpcBlocks(station).Where(b => b.HasPlayerAccess(me)).ToList();
+        if (what == "save")
+        {
+            saved.Clear();
+            foreach (var block in blocks)
+                saved[block.EntityId] = Settings(block);
+            return $"SAVED {saved.Count}";
+        }
+        var lines = new List<string>();
+        int same = 0,
+            changed = 0;
+        foreach (var block in blocks)
+        {
+            if (!saved.TryGetValue(block.EntityId, out var before))
+                continue;
+            var after = Settings(block);
+            var diffs = before
+                .Keys.Union(after.Keys)
+                .Where(k => before.GetValueOrDefault(k) != after.GetValueOrDefault(k))
+                .ToList();
+            if (diffs.Count == 0)
+            {
+                same++;
+                continue;
+            }
+            changed++;
+            foreach (var k in diffs.Take(5))
+                lines.Add(
+                    $"CHANGED {block.EntityId} {Kind(block)} {k} {before.GetValueOrDefault(k)} -> {after.GetValueOrDefault(k)}"
+                );
+        }
+        lines.Add($"SAME {same} CHANGED {changed}");
+        return string.Join("\n", lines);
+    }
+
+    [Command(
+        "groups",
+        "The block groups of the station's grids: GROUPS count names",
+        "!sprobe groups <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Groups(string station)
+    {
+        var names = StationGrids(station)
+            .SelectMany(g => g.GridSystems.TerminalSystem.BlockGroups)
+            .Select(g => g.Name.ToString())
+            .Distinct()
+            .ToList();
+        return $"GROUPS {names.Count} {string.Join("|", names)}";
+    }
+
+    [Command(
+        "suit",
+        "The caller's health, suit energy, oxygen and hydrogen: SUIT health energy o2 h2; drain sets them to 50, 0.1, 0.1 and 0",
+        "!sprobe suit [drain]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Suit(string what = "")
+    {
+        var character = MySession
+            .Static.Players.TryGetIdentity(Context.Caller.IdentityId)
+            ?.Character;
+        if (character?.OxygenComponent == null || character.StatComp?.Health == null)
+            return "NOCHARACTER";
+        var oxygen = character.OxygenComponent;
+        var hydrogen = MyCharacterOxygenComponent.HydrogenId;
+        if (what == "drain")
+        {
+            character.StatComp.Health.Value = 50;
+            character.SuitBattery.ResourceSource.SetRemainingCapacityByType(
+                MyResourceDistributorComponent.ElectricityId,
+                MyEnergyConstants.BATTERY_MAX_CAPACITY * 0.1f
+            );
+            oxygen.SuitOxygenAmount = oxygen.OxygenCapacity * 0.1f;
+            oxygen.UpdateStoredGasLevel(ref hydrogen, 0);
+        }
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "SUIT {0:0.###} {1:0.###} {2:0.###} {3:0.###}",
+            character.StatComp.Health.Value,
+            character.SuitEnergyLevel,
+            oxygen.SuitOxygenLevel,
+            oxygen.GetGasFillLevel(hydrogen)
+        );
+    }
+
+    [Command(
+        "medical",
+        "The station's medical room and where its use detectors are: MEDICAL id x y z FORWARD x y z UP x y z, then DETECTOR name x y z",
+        "!sprobe medical <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Medical(string station)
+    {
+        var room = StationGrids(station)
+            .SelectMany(g => g.GetFatBlocks<SpaceEngineers.Game.Entities.Blocks.MyMedicalRoom>())
+            .FirstOrDefault();
+        if (room == null)
+            return "NOMEDICAL";
+        var m = room.WorldMatrix;
+        var lines = new List<string>
+        {
+            $"MEDICAL {room.EntityId} {V(m.Translation)} FORWARD {V(m.Forward)} UP {V(m.Up)}",
+        };
+        foreach (var dummy in room.Model.Dummies)
+            if (dummy.Key.StartsWith("detector", StringComparison.OrdinalIgnoreCase))
+                lines.Add(
+                    $"DETECTOR {dummy.Key} {V(Vector3D.Transform(dummy.Value.Matrix.Translation, room.WorldMatrix))}"
+                );
+        return string.Join("\n", lines);
+    }
+
+    [Command(
+        "enabled",
+        "Whether a block is switched on: ENABLED id yes|no",
+        "!sprobe enabled <entity id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Enabled(long entityId) =>
+        MyEntities.TryGetEntityById(entityId, out MyFunctionalBlock block)
+            ? $"ENABLED {entityId} {(block.Enabled ? "yes" : "no")}"
+            : $"NOBLOCK {entityId}";
+
+    [Command(
+        "owner",
+        "Who owns a block: OWNER id npc|player|other share",
+        "!sprobe owner <entity id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Owner(long entityId)
+    {
+        if (!MyEntities.TryGetEntityById(entityId, out MyCubeBlock block))
+            return $"NOBLOCK {entityId}";
+        var who =
+            block.OwnerId == Context.Caller.IdentityId ? "player"
+            : MySession.Static.Players.IdentityIsNpc(block.OwnerId) ? "npc"
+            : "other";
+        return $"OWNER {entityId} {who} {block.IDModule?.ShareMode}";
+    }
+
+    [Command(
+        "item",
+        "How many of an item a block holds: ITEM entity-id amount",
+        "!sprobe item <block entity id> <Type/Subtype>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Item(long entityId, string item)
+    {
+        if (!MyEntities.TryGetEntityById(entityId, out MyCubeBlock block) || !block.HasInventory)
+            return $"NOBLOCK {entityId}";
+        var id = MyDefinitionId.Parse("MyObjectBuilder_" + item);
+        return $"ITEM {entityId} {(double)block.GetInventory().GetItemAmount(id)}";
     }
 
     private static IEnumerable<MyCubeGrid> StationGrids(string station)

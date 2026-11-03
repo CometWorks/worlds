@@ -45,6 +45,24 @@ seconds each connector found otherwise is put right, and a ship docked to one th
 didn't trade is let go first. Players dock just the same: that needs no access to
 the connector. On a cluster each node does this for the stations it simulates.
 
+### Shared NPC blocks
+
+A station shares some blocks with everyone: the medical room, store, ATM, vending
+machine, contract block, hologram table, doors, button panel, seats and the 4 Free
+Tools boxes, and its shipyard shares the medical room and lights. Sharing lets any
+player past the game's ownership check, which guards a block's settings as well as
+its use. With `NpcBlocksLocked` on, the server refuses a change to any block an NPC
+shares with everyone from a player outside the NPC's faction: settings and on/off,
+name, custom data, LCD texts, toolbars, button names, a medical room's spawn name,
+the projector's offsets, and new block groups on the NPC's grid. An admin with "Use
+terminals" on (Alt+F10) is let through, as by the game. Everything else stays open:
+the inventories, pressing buttons, opening doors, the medical room's healing and
+refills and its wardrobe, sitting in a seat, the store and contracts, and loading a
+blueprint into a hologram table and switching the table on or off. A refused
+setting is sent back to the player's client; a refused name or text stays on that
+client only until it reconnects. The server logs the first refusal of each kind per
+player and block.
+
 ### Refill containers
 
 `RefillContainers` keeps blocks stocked with fixed items, independent of the

@@ -113,6 +113,17 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = true;
 
+    [BoolOption(
+        "Players use the blocks an NPC shares with everyone (inventories, doors, buttons, seats, medical rooms, stores, contracts, "
+            + "loading a hologram table) but can't change their settings, names, texts, toolbars or the grid's groups.",
+        Parent = "stations"
+    )]
+    public bool NpcBlocksLocked
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
     [BoolOption("Fill the turrets with ammo.", Parent = "stations")]
     public bool StationReloadTurrets
     {
