@@ -18,6 +18,9 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
 
+    <!-- Oldest Magnetar whose PluginSdk has every member the ServerPlugin calls -->
+    <MinPluginSdkVersion>2.4.3.9</MinPluginSdkVersion>
+
     <!-- Keep original behavior for post/pre build events -->
     <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
   </PropertyGroup>
@@ -322,6 +325,14 @@
     <Error
       Condition="'$(MagnetarBinDir)' == '' Or !Exists('$(MagnetarBinDir)PluginSdk.dll')"
       Text="Could not locate PluginSdk.dll under &quot;$(MagnetarBinDir)&quot;. Set &lt;Magnetar&gt; to your Magnetar installation folder in &quot;$(RepoRoot)Directory.Build.props.user&quot;."
+    />
+    <!-- An older Magnetar fails later with a missing PluginSdk member (RegisterOfflineBlocker) -->
+    <GetAssemblyIdentity AssemblyFiles="$(MagnetarBinDir)PluginSdk.dll">
+      <Output TaskParameter="Assemblies" ItemName="PluginSdkIdentity" />
+    </GetAssemblyIdentity>
+    <Error
+      Condition="$([System.Version]::Parse('%(PluginSdkIdentity.Version)').CompareTo($([System.Version]::Parse('$(MinPluginSdkVersion)')))) &lt; 0"
+      Text="PluginSdk.dll under &quot;$(MagnetarBinDir)&quot; is %(PluginSdkIdentity.Version), the ServerPlugin needs Magnetar $(MinPluginSdkVersion) or later. Update that Magnetar installation or point &lt;Magnetar&gt; in &quot;$(RepoRoot)Directory.Build.props.user&quot; to a newer one."
     />
   </Target>
 </Project>
