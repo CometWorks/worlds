@@ -295,7 +295,12 @@ def forced_limit(remote):
 
 def main() -> int:
     cases = sys.argv[1:] or [c for c in SHIPS if c != "round"]
-    tables = [SHIPS[c][2][0] for c in SHIPS]
+    # A table per station, in the world's order: the blueprint of a case run there
+    stations = dict.fromkeys(station for station, _, _ in SHIPS.values())
+    tables = [
+        next(SHIPS[c][2][0] for c in [*cases, *SHIPS] if SHIPS[c][0] == station)
+        for station in stations
+    ]
     for case, (station, ship, (_, blocks)) in SHIPS.items():
         sa.CASES[case] = (station, ship, blocks, False, False, SIZES.get(case, "Large"))
     rig.stop_client()
