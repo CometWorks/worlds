@@ -27,8 +27,8 @@ namespace ServerPlugin;
 // direction at full override over the mass, plus natural and artificial gravity.
 // Outside safe zones a window with a contact with anything outside the group doesn't count: a
 // crash isn't punished. Skipped: groups without thrusters, with a static grid (docked to a
-// station), owned by an NPC, or in a shipyard's build space. Each cluster node checks what it
-// simulates.
+// station), owned by an NPC, in a shipyard's build space or switched off already. Each cluster
+// node checks what it simulates.
 internal static class ClangDrives
 {
     private const double FramesPerSecond = 60;
@@ -37,6 +37,12 @@ internal static class ClangDrives
     {
         public long Signature;
         public int Seen;
+
+        // Thrust over mass, taken each second, the last two: a ramming ship may lose its
+        // thrusters in the very hit that is measured
+        public double Accel;
+        public double LastAccel;
+        public int AccelFrame = -1_000_000;
         public readonly Queue<(int Frame, Vector3D Velocity)> Samples = new();
     }
 
@@ -110,6 +116,12 @@ internal static class ClangDrives
         if (!tracks.TryGetValue(key, out var track) || track.Signature != signature)
             tracks[key] = track = new Track { Signature = signature };
         track.Seen = frame;
+        if (frame - track.AccelFrame >= FramesPerSecond)
+        {
+            track.LastAccel = track.Accel;
+            track.Accel = StrongestThrust(group, main) / mass;
+            track.AccelFrame = frame;
+        }
         var velocity = momentum / mass;
         track.Samples.Enqueue((frame, velocity));
         while (frame - track.Samples.Peek().Frame > window)
@@ -123,39 +135,44 @@ internal static class ClangDrives
         var measured = (velocity - before).Length() / seconds;
         if (measured < config.ClangDriveMinAcceleration)
             return;
-        var thrust = StrongestThrust(group, main);
-        if (thrust <= 0)
+        var accel = Math.Max(
+            Math.Max(track.Accel, track.LastAccel),
+            StrongestThrust(group, main) / mass
+        );
+        if (accel <= 0)
             return;
         var position = main.Physics.CenterOfMassWorld;
         double gravity =
             MyGravityProviderSystem.CalculateNaturalGravityInPoint(position).Length()
             + MyGravityProviderSystem.CalculateArtificialGravityInPoint(position).Length();
-        var limit = config.ClangDriveFactor * thrust / mass + gravity;
-        if (measured <= limit)
+        var limit = config.ClangDriveFactor * accel + gravity;
+        if (measured <= limit || !main.IsPowerSwitchOn)
             return;
 
         var owner = main.BigOwners.FirstOrDefault();
         var players = MySession.Static.Players;
-        if (owner != 0 && players.IdentityIsNpc(owner))
-            return;
         var inZone = MySessionComponentSafeZones.SafeZones.Any(z =>
             z.Enabled && !z.MarkedForClose && z.Contains(main.PositionComp.WorldAABB.Center)
         );
-        if (!inZone && Touched(group, window))
-            return;
-        if (!main.IsPowerSwitchOn || ShipyardOrders.InBuildSpace(main))
-            return;
-
-        SwitchOff(group);
+        var skipped =
+            owner != 0 && players.IdentityIsNpc(owner) ? "an NPC's"
+            : !inZone && Touched(group, window) ? "a collision"
+            : ShipyardOrders.InBuildSpace(main) ? "in a shipyard"
+            : null;
         var peak = PeakFrame(track);
+        // Measured anew: one line per event
         track.Samples.Clear();
         var ownerName = owner == 0 ? "nobody" : players.TryGetIdentity(owner)?.DisplayName;
         Plugin.Log.Info(
-            $"Clang drive: {main.DisplayName} ({main.EntityId}) of {ownerName} ({owner}) switched off, "
-                + $"{(inZone ? "in a safe zone" : "no collision")}: {measured:F2} m/s² over {window} frames (peak frame {peak:F1}), "
-                + $"allowed {limit:F2} m/s² ({config.ClangDriveFactor:G}x {thrust / mass:F2} thrust + {gravity:F2} gravity), "
+            $"Clang drive: {main.DisplayName} ({main.EntityId}) of {ownerName} ({owner}) "
+                + (skipped == null ? "switched off, " : $"left on, {skipped}, ")
+                + $"{(inZone ? "in a safe zone" : "outside safe zones")}: {measured:F2} m/s² over {window} frames (peak frame {peak:F1}), "
+                + $"allowed {limit:F2} m/s² ({config.ClangDriveFactor:G}x {accel:F2} thrust + {gravity:F2} gravity), "
                 + $"{group.Count} grids, {mass:F0} kg"
         );
+        if (skipped != null)
+            return;
+        SwitchOff(group);
         if (owner != 0)
             MyVisualScriptLogicProvider.SendChatMessage(
                 $"{main.DisplayName} was switched off: its speed changed faster than its thrusters can change it"

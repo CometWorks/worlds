@@ -83,6 +83,22 @@ public class Plugin : IPlugin
                 .Count(b => b is IMyPowerProducer && b.Enabled);
             var p = grid.Physics.CenterOfMassWorld;
             var gravity = MyGravityProviderSystem.CalculateNaturalGravityInPoint(p).Length();
+            File.AppendAllText(
+                Path.Combine(MyFileSystem.UserDataPath, "clang-trace.txt"),
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0};{1};{2:F2};{3};{4};{5};{6:F1};{7:F1};{8:F1}\n",
+                    frame,
+                    name,
+                    speed,
+                    grid.BlocksCount,
+                    thrusters.Count,
+                    producers,
+                    p.X,
+                    p.Y,
+                    p.Z
+                )
+            );
             lines[name] = string.Format(
                 CultureInfo.InvariantCulture,
                 "{0};{1};{2};{3};{4};{5};{6};{7};{8};{9}",
