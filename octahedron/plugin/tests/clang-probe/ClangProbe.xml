@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>clang-probe</Id>
+    <GroupId>clang-probe</GroupId>
+    <RepoId>local/clang-probe</RepoId>
+
+    <FriendlyName>Clang Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: pushes the test's ships as a clang drive would and writes their state</Tooltip>
+    <Description>Test only. Pushes the test's "CL Push" and "CL Spike" grids beyond what their thrusters can,
+        starts the clang drives' "CL Start" timer or piston, and writes the speed, power and thrust the
+        server has for every "CL" grid to clang-probe.txt in the game's user data folder.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>

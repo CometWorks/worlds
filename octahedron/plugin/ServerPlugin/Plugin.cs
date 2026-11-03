@@ -77,6 +77,7 @@ public class Plugin : IPlugin
             StationConnectors.Update();
             worldEdge.Update();
             NoGravityDrives.Update();
+            ClangDrives.Update();
             BinocularsInZones.Update();
             TableHologram.Update();
             ShipyardOrders.Update();
