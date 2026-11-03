@@ -104,11 +104,22 @@ public class OctahedronConfig : PluginConfig
     } = true;
 
     [BoolOption(
-        "Keep the stations' connectors trading and shared with the station owner's faction only: a docked ship gets no power, gas or conveyor access, "
+        "Keep the stations' connectors trading and shared with the station owner's faction only: a docked ship gets no gas or conveyor access, "
             + "and players can't turn trading off. A ship docked to one that didn't trade is let go.",
         Parent = "stations"
     )]
     public bool StationConnectorsTrade
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [BoolOption(
+        "Charge the batteries of a ship docked at a station's trading connector from the station, at their input power. "
+            + "While the docked ships want more than the station has to spare, the one drawing the most stops charging until it undocks.",
+        Parent = "stations"
+    )]
+    public bool StationDockCharging
     {
         get;
         set => SetField(ref field, value);

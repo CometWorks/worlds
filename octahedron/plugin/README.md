@@ -38,12 +38,32 @@ refill.
 
 With `StationConnectorsTrade` on, the connectors of every trade station are kept
 trading and shared with the station owner's faction only. A ship docked to a
-trading connector gets no power, gas or conveyor access from the station. Before,
+trading connector gets no gas or conveyor access from the station, and no power
+from the game (see Station charging). Before,
 the connectors were shared with everyone, so a player could open one's terminal,
 turn trading off and charge and fuel a ship from the station for free. Every 5
 seconds each connector found otherwise is put right, and a ship docked to one that
 didn't trade is let go first. Players dock just the same: that needs no access to
 the connector. On a cluster each node does this for the stations it simulates.
+
+### Station charging
+
+With `StationDockCharging` on, a ship docked at a trade station's trading
+connector charges from the station. The game passes no power through a trading
+connection: the grids keep separate resource distributors, and joining them would
+open the station's conveyors and terminal too. So the plugin moves the energy
+itself, once a second. Each battery of the docked ship that is on and not set to
+discharge gets its input power (12 MW for a large battery) until it is full. The
+station pays for it with uranium from its working reactors, at the rate they burn
+it, and then from its batteries.
+
+The station has a fuse. While the docked ships want more power than the station
+has to spare (its sources' maximum output less what its own blocks draw), the ship
+that wants the most stops charging, then the next, until the rest fit. The ship's
+owner gets a chat message. Charging stays off for that ship until every connector
+of the station that held it lets go; docking again resets the fuse. A ship's
+grids on rotors, pistons or its own connectors count as one ship. On a cluster
+each node charges at the stations it simulates.
 
 ### Shared NPC blocks
 

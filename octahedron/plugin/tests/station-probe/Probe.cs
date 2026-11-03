@@ -107,7 +107,7 @@ public sealed class ProbeCommands : CommandModule
     [Command(
         "dock",
         "Builds a ship with a cargo container at a free connector of the station and connects it: SHIP grid-id",
-        "!sprobe dock <station> <mine|stranger> [Type/Subtype=amount ...]"
+        "!sprobe dock <station> <mine|stranger> [Type/Subtype=amount,...,AT=x;y;z]"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Dock(
@@ -120,10 +120,18 @@ public sealed class ProbeCommands : CommandModule
             owner == "mine"
                 ? Context.Caller.IdentityId
                 : MySession.Static.Players.CreateNewIdentity("Dock Stranger").IdentityId;
+        // AT=x,y,z: the station connector at that cell, else the first free one
+        var at = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("AT="));
+        var cell = at == null ? null : at.Substring(3).Replace(';', ',');
         var free = StationGrids(station)
             .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
             .FirstOrDefault(c =>
-                !c.Connected && c.Other == null && connecting.All(x => x.Station != c)
+                !c.Connected
+                && c.Other == null
+                && connecting.All(x => x.Station != c)
+                && (cell == null || $"{c.Min.X},{c.Min.Y},{c.Min.Z}" == cell)
             );
         if (free == null)
             return "NOCONNECTOR";
@@ -204,15 +212,18 @@ public sealed class ProbeCommands : CommandModule
             }
             grid.CubeBlocks.Add(tank);
         }
-        // BAT=<MWh>: a battery holding that much, the ship's only power
+        // BAT=<MWh>: a battery holding that much, the ship's only power. BATS=<n>: n of them in a row.
         var bat = items
             .Split(',', StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault(p => p.StartsWith("BAT="));
-        if (bat != null)
+        var bats = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("BATS="));
+        for (int i = 0; bat != null && i < (bats == null ? 1 : int.Parse(bats.Substring(5))); i++)
         {
             var battery = Block<MyObjectBuilder_BatteryBlock>(
                 "LargeBlockBatteryBlock",
-                new Vector3I(1, 0, 1),
+                new Vector3I(1, 0, 1 + i),
                 ownerId
             );
             battery.CurrentStoredPower = float.Parse(
@@ -225,7 +236,13 @@ public sealed class ProbeCommands : CommandModule
         var cargo = entity.GetFatBlocks<MyCargoContainer>().First();
         foreach (var pair in items.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
-            if (pair.StartsWith("H2=") || pair.StartsWith("BAT=") || pair == "STOCKPILE")
+            if (
+                pair.StartsWith("H2=")
+                || pair.StartsWith("BAT=")
+                || pair.StartsWith("BATS=")
+                || pair.StartsWith("AT=")
+                || pair == "STOCKPILE"
+            )
                 continue;
             var f = pair.Split('=');
             if (!MyDefinitionId.TryParse("MyObjectBuilder_" + f[0], out var id))
@@ -1388,6 +1405,63 @@ public sealed class ProbeCommands : CommandModule
         StationGrids(station)
             .SelectMany(g => g.GetFatBlocks<MyCargoContainer>())
             .Where(b => b.CustomName?.ToString().Trim() == "Free Tools");
+
+    [Command(
+        "power",
+        "The station's spare power and its reactors' uranium, after turning its reactors on or off if asked, and with off, all but the given number of its batteries: POWER station spare=MW uranium=kg reactors=n",
+        "!sprobe power <station> [on|off [batteries]]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Power(string station, string state = "", int batteries = int.MaxValue)
+    {
+        var grid = StationGrids(station).First();
+        var reactors = grid.GetFatBlocks<MyReactor>().ToList();
+        if (state != "")
+        {
+            foreach (var reactor in reactors)
+                reactor.Enabled = state == "on";
+            int left = state == "on" ? int.MaxValue : batteries;
+            foreach (var battery in grid.GetFatBlocks<MyBatteryBlock>())
+                battery.Enabled = left-- > 0;
+        }
+        var distributor = grid.GridSystems.ResourceDistributor;
+        var electricity = MyResourceDistributorComponent.ElectricityId;
+        var spare =
+            distributor.MaxAvailableResourceByType(electricity, grid)
+            - distributor.TotalRequiredInputByType(electricity, grid);
+        var uranium = reactors.Sum(r =>
+            (double)r.GetInventory().GetItemAmount(r.BlockDefinition.FuelInfos[0].FuelId)
+        );
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "POWER {0} spare={1:0.###} uranium={2:0.####} reactors={3}",
+            station,
+            spare,
+            uranium,
+            reactors.Count
+        );
+    }
+
+    [Command(
+        "redock",
+        "Disconnects the ship from the station and connects it again once the connector lets it: REDOCK grid-id",
+        "!sprobe redock <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Redock(string gridId)
+    {
+        if (
+            !long.TryParse(gridId, out long id)
+            || !MyEntities.TryGetEntityById(id, out MyCubeGrid grid)
+        )
+            return $"REDOCK {gridId} gone";
+        var c = grid.GetFatBlocks<MyShipConnector>().First();
+        var station = c.Other;
+        c.TryDisconnect();
+        // A trading connector won't lock again for a while after letting go
+        connecting.Add((c, station, -1800));
+        return $"REDOCK {gridId}";
+    }
 
     [Command("undock", "Disconnects and deletes the probe's ships", "!sprobe undock")]
     [Permission(MyPromoteLevel.Admin)]
