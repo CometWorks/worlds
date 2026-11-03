@@ -465,6 +465,9 @@ def order(remote, case: str) -> tuple:
         )
         ignore_pcu(remote, True)
     reply = admin(remote, "!oct order", 8)
+    if reply.strip() == "The shipyard answers in chat.":
+        # The arm is still being planned: the quote comes in chat when it is done
+        reply = wait_chat(remote, "Your quote for", 60, mark) or reply
     if "Your quote for" in reply:
         check(f"'{ship}'" in reply, f"{case}: the quote is for {ship}: {reply}")
         if exempt:
