@@ -90,7 +90,7 @@ def prepare(blueprint: str, minutes: int, plugins=()) -> None:
     )
     sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
     text, count = re.subn(
-        r"<AllowedActions>[^<]*</AllowedActions>",
+        r"<AllowedActions(?: />|>[^<]*</AllowedActions>)",
         f"<AllowedActions>{sz.ZONE_ACTIONS}</AllowedActions>",
         sector.read_text(encoding="utf-8"),
     )
