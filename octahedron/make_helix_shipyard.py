@@ -19,7 +19,10 @@ joins the strands. Each ring has a docking connector and a refill station every
 90 degrees. Where the strands end, the connector sits at the tip of a tower
 pointing along the axis, and the tower holds the cargo, the reactors and the
 batteries. The other connectors point away from the axis, one pipe out from
-the ring.
+the ring. In the middle of the length, four advanced rotors stand on the
+strands beside the welders, a large and a small grid head on either side,
+pointing at the axis: the Octahedron plugin builds a ship's support arm from
+one of them.
 Block types, templates and colors come from the current shipyard
 (blueprints/omni-arc-beam-shipyard.sbc).
 """
@@ -139,6 +142,7 @@ BLOCKS = {
         None,
     ),
     "LargeBlockBatteryBlock": ("BatteryBlock", (1, 1, 1), [], 15, None),
+    "LargeAdvancedStator": ("MotorAdvancedStator", (1, 2, 1), [(O, NY)], 100, None),
     "LargeBlockBulkContainerB": (
         "CargoContainer",
         (6, 3, 3),
@@ -224,6 +228,7 @@ def rasterize(curve, length, closed=False):
 class Shipyard:
     def __init__(self):
         self.blocks = []  # (subtype, forward, up, cells, ports, color)
+        self.rotors = {}  # index into blocks: the rotor's name
         self.cells = {}  # cell: index into blocks
         self.pipes = (
             {}
@@ -355,6 +360,7 @@ def build():
         yard.path(rasterize(circle, 8 * RADIUS, closed=True), RED, closed=True)
 
     welders = TURNS * WELDERS_PER_TURN + 1
+    middles = []
     for start in (0.0, math.pi):
         # A welder every quarter turn, inline where the strand runs level along the
         # ring's tangent, its Up along the pipe and its Forward toward the axis
@@ -392,6 +398,20 @@ def build():
             del yard.pipes[cell]
             inward = to_cell((-math.cos(angle), -math.sin(angle), 0))
             yard.block("OmniArcBeam", inward, tangent, cell, YELLOW)
+        middles.append(spots[(welders - 1) // 2])
+
+    # The support arm's rotors, which the Octahedron plugin builds a ship's arm from
+    # (ShipyardArmRotors), as on the Omni Arc Beam Shipyard: a large and a small grid
+    # head on either side of the build volume, beside the welders in the middle of
+    # its length. Each stands on the strand's pipe there, which becomes a tee, and
+    # points at the axis; its head stays out of the build volume.
+    for side, (angle, _, cell, tangent) in zip(("Top", "Bottom"), middles):
+        inward = to_cell((-math.cos(angle), -math.sin(angle), 0))
+        for head, along in (("Large", 1), ("Small", -1)):
+            pipe = add(cell, scale(tangent, along))
+            assert yard.pipes[pipe][0] == {tangent, neg(tangent)}, pipe
+            yard.block("LargeAdvancedStator", Z, inward, add(pipe, inward), RED)
+            yard.rotors[len(yard.blocks) - 1] = f"Advanced Rotor {side} Arm {head}"
 
     # A tower every 90 degrees on both rings. Frame: u away from the axis, v along
     # the ring, w away from the build volume.
@@ -475,8 +495,10 @@ def blueprint_xml(yard):
         templates.setdefault(b.findtext("SubtypeName"), b)
     ids = entity_ids()
 
+    heads = template_heads(template)
+    new_heads = []
     blocks.clear()
-    for subtype, forward, up, cells, _, (hsv, skin) in yard.blocks:
+    for index, (subtype, forward, up, cells, _, (hsv, skin)) in enumerate(yard.blocks):
         if subtype in templates:
             b = copy.deepcopy(templates[subtype])
             for tag in ("Owner", "ShareMode", "NumberInGrid", "CustomName"):
@@ -507,6 +529,13 @@ def blueprint_xml(yard):
         b.find("ColorMaskHSV").attrib = dict(zip("xyz", map(str, hsv)))
         b.find("SkinSubtypeId").text = skin
         blocks.append(b)
+        if index in yard.rotors:
+            name = yard.rotors[index]
+            e = ET.Element("CustomName")
+            e.text = name
+            b.insert(list(b).index(b.find("SkinSubtypeId")) + 1, e)
+            center = np.mean(cells, axis=0) * GRID
+            new_heads.append(head_grid(heads[name], b, center, forward, up, ids))
 
     for tag in ("ConveyorLines", "BlockGroups"):
         for e in grid.findall(tag):
@@ -530,11 +559,81 @@ def blueprint_xml(yard):
     grids = bp.find("CubeGrids")
     for e in grids.findall("CubeGrid")[1:]:
         grids.remove(e)
+    grids.extend(new_heads)
     for e in bp.findall("WorkshopIds"):
         bp.remove(e)
     bp.find("WorkshopId").text = "0"
     ET.indent(root, "  ")
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def rotation(forward, up):
+    """Columns Right, Up, Backward."""
+    forward, up = np.array(forward, float), np.array(up, float)
+    return np.column_stack([np.cross(forward, up), up, -forward])
+
+
+def vector(element, value):
+    element.attrib = {k: repr(float(v)) for k, v in zip("xyz", value)}
+
+
+def template_heads(template):
+    """The template's rotor heads by rotor name: the head grid, and its position, forward
+    and up in the frame of the rotor block's center and orientation."""
+    names = {v: k for k, v in DIRECTION_NAMES.items()}
+    grids = template.findall(".//CubeGrid")
+    main = grids[0].find("PositionAndOrientation")
+    position, forward, up = (
+        np.array([float(main.find(t).get(k)) for k in "xyz"])
+        for t in ("Position", "Forward", "Up")
+    )
+    grid_axes = rotation(forward, up)
+    by_block = {g.find("CubeBlocks")[0].findtext("EntityId"): g for g in grids[1:]}
+    heads = {}
+    for b in grids[0].find("CubeBlocks"):
+        if b.get(XSI_TYPE) != "MyObjectBuilder_MotorAdvancedStator":
+            continue
+        o = b.find("BlockOrientation")
+        block_up = names[o.get("Up")]
+        cell = np.array([int(b.find("Min").get(k)) for k in "xyz"])
+        # A rotor's base is two cells along its Up from its lowest cell
+        center = (cell + 0.5 * np.abs(block_up)) * GRID
+        axes = grid_axes @ rotation(names[o.get("Forward")], block_up)
+        origin = position + grid_axes @ center
+        head = by_block[b.findtext("TopBlockId")]
+        pose = head.find("PositionAndOrientation")
+        h = [
+            np.array([float(pose.find(t).get(k)) for k in "xyz"])
+            for t in ("Position", "Forward", "Up")
+        ]
+        heads[b.findtext("CustomName")] = (
+            head,
+            axes.T @ (h[0] - origin),
+            axes.T @ h[1],
+            axes.T @ h[2],
+        )
+    return heads
+
+
+def head_grid(template, rotor, center, forward, up, ids):
+    """A copy of the template's head grid on the rotor, a block of the main grid whose
+    center and orientation are given; the main grid has no turn and sits at the origin.
+    """
+    grid, offset, head_forward, head_up = template
+    grid = copy.deepcopy(grid)
+    axes = rotation(forward, up)
+    grid.find("EntityId").text = grid.find("Name").text = str(next(ids))
+    block = grid.find("CubeBlocks")[0]
+    block.find("EntityId").text = str(next(ids))
+    block.find("ParentEntityId").text = rotor.findtext("EntityId")
+    rotor.find("TopBlockId").text = block.findtext("EntityId")
+    pose = grid.find("PositionAndOrientation")
+    vector(pose.find("Position"), center + axes @ offset)
+    vector(pose.find("Forward"), axes @ head_forward)
+    vector(pose.find("Up"), axes @ head_up)
+    # Forward and Up hold the turn; a quaternion would override them
+    pose.remove(pose.find("Orientation"))
+    return grid
 
 
 def thumbnail(yard, path, size=512):
@@ -636,9 +735,18 @@ def report(yard, blocked, welders):
     cells = list(yard.cells)
     size = [max(c[a] for c in cells) - min(c[a] for c in cells) + 1 for a in range(3)]
     print(f"bounding box {size} blocks")
-    clear = min(math.hypot(c[0], c[1]) for c in cells if 1 <= c[2] <= LENGTH)
+    # The arm rotors stand inside the strands' radius, on purpose
+    clear = min(
+        math.hypot(c[0], c[1])
+        for c, i in yard.cells.items()
+        if 1 <= c[2] <= LENGTH and i not in yard.rotors
+    )
     print(
-        f"build volume {LENGTH} blocks long between the rings, no block within {clear:.2f} blocks of the axis"
+        f"build volume {LENGTH} blocks long between the rings, no block but the arm rotors within {clear:.2f} blocks of the axis"
+    )
+    rotors = [yard.blocks[i][3] for i in yard.rotors]
+    print(
+        f"arm rotors {len(rotors)}, their heads {min(math.hypot(c[0], c[1]) for cells in rotors for c in cells) - 1:.2f} blocks from the axis"
     )
     center = center_line(yard)
     print(

@@ -368,7 +368,7 @@ def build_and_deadline(a) -> None:
     check(state["elsewhere"] == "0", f"no uranium elsewhere: {state['elsewhere']}")
     left = stock(a)
     check(left.get(GOLD) == 50, f"what they loaded on top is there: {left}")
-    # Plates the build didn't take: the double helix shipyard has no arm to use them on
+    # Plates the build didn't take, which the station buys too
     plates = left.get(PLATE, 0) * market(a, PLATE)[0]
     docked = re.search(r"SHIP (\d+)", probe(a, f"yardship {STATION}"))
     check(docked is not None, f"a ship docks to take it: {docked}")

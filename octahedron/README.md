@@ -98,7 +98,8 @@ station and shipyard blueprints are in `blueprints/`.
   ([SE-945](https://tasks.cometworks.se/tasks/1832)). Moon Station has the
   double helix shipyard instead (`blueprints/double-helix-shipyard.sbc` from
   `make_helix_shipyard.py`, 26 welders on two strands of conveyor pipe around a
-  build volume 192.5 m across and 375 m long, no arm rotors;
+  build volume 192.5 m across and 375 m long, and the old shipyard's four arm
+  rotors in the middle of its length;
   [SE-959](https://tasks.cometworks.se/tasks/1846)).
   - Every Earth station's shipyard starts where Viktor put Gamma Station's on the live cluster
     (`SHIPYARD_PLACE`, in the station's own axes): 180 m from the station, 140 m

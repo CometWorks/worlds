@@ -481,10 +481,10 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
 - The ship must fit the shipyard's free space, free of its blocks and with every
   block in some welder's reach: within ToolCore's 100 m of the welder block's
   center, and at most 45 degrees out of the plane its turret turns in. At a
-  shipyard with an arm it is the largest box between its welders, 72.5 x 75 x
-  282.5 m in the Omni Arc Beam Shipyard, all of its frame. The double helix
-  shipyard has no arm and a round build volume: there it is the largest cylinder
-  along its axis between its end welders, 150 m across and 375 m long. A ship
+  shipyard it is the largest box between its welders, or the largest cylinder
+  along its axis between its end welders when that holds more: 72.5 x 75 x
+  282.5 m in the Omni Arc Beam Shipyard, all of its frame, and in the round
+  volume of the double helix shipyard a cylinder 150 m across and 375 m long. A ship
   fits it when its length fits and its width and height, corner to corner, fit
   across (SE-959). The ship is turned so that its main cockpit points along the
   shipyard or, when it only fits another way, by right angles from there,
@@ -1364,7 +1364,8 @@ keeps the grid's forward. It checks how they lie in the saved world. `OCT_ALIGN_
 `tests/test_shipyard_placement.py` checks in the saved world where ships end up
 along the shipyard: short ones at the 1/3 point nearer the station, at pole and
 equatorial stations, the widest small grid ship among them, and a ship of 1/4 of
-the length in the middle; at Moon Station, a small grid ship built without an arm. With the arm's time limit forced to 0 it checks that a
+the length in the middle; at Moon Station, a small grid ship, and on its own ("round") a
+ship that fits only the double helix shipyard's round build space. With the arm's time limit forced to 0 it checks that a
 press is refused and that a queued paid order ends with its reason and everything
 given back.
 `tests/test_shipyard_sight.py` loads a world built by `build_world.py` with the sight
@@ -1375,8 +1376,8 @@ spots see the center and the 1/3 points and, with `-v`, what blocks each ray, an
 fails when an equatorial station's center is in sight of fewer than half its spots.
 `tests/test_shipyard_order.py` orders a ship at a station table with the client
 (the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
-order run out after a server restart. "helix" orders the first ship at Moon Station,
-whose double helix shipyard has no arm rotors. With `OCT_SHOTS` it also takes
+order run out after a server restart. "helix" orders the first ship at Moon Station's
+double helix shipyard, "helix-long" a 350 m line along its axis. With `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
 `tests/test_shipyard_beams.py` checks the welders' beams as a client sees them
 during a long build: the client and the server run the `tests/beam-probe` test

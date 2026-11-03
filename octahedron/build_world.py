@@ -891,7 +891,7 @@ def block_offsets(grid, forward, up):
 
 def shipyard_grids(name):
     """The grids of the station's shipyard blueprint: the main grid first, then its arm
-    rotors' heads. The double helix shipyard has no arm rotors."""
+    rotors' heads."""
     blueprint = (
         HELIX_SHIPYARD_BLUEPRINT if name in HELIX_STATIONS else SHIPYARD_BLUEPRINT
     )

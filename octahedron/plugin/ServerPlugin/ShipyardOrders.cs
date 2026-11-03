@@ -3420,10 +3420,11 @@ internal static partial class ShipyardOrders
         return Math.Max(minutes, Math.Min(MaxOrderMinutes, (int)Math.Round(minutes * scale)));
     }
 
-    // The free space of a shipyard with an arm: the largest box free of the shipyard's blocks and
-    // in its welders' reach, grown from the middle of its welders one layer at a time and kept
-    // within its grid's bounds. A shipyard without an arm, the double helix one, builds in its
-    // round volume: the largest cylinder along its grid's Z grown the same way (SE-959).
+    // The shipyard's free space: the largest box free of its blocks and in its welders' reach,
+    // grown from the middle of its welders one layer at a time and kept within its grid's
+    // bounds, or the largest such cylinder along its grid's Z when that holds more. The frame of
+    // the Omni Arc Beam Shipyard makes its space a box, the round volume of the double helix
+    // shipyard a cylinder (SE-959).
     private static BuildSpace FreeSpace(MyCubeGrid shipyard)
     {
         if (!freeBoxes.TryGetValue(shipyard.EntityId, out var free))
@@ -3441,10 +3442,14 @@ internal static partial class ShipyardOrders
                     )
                 )
                 .ToList();
+            var square = FreeBox(shipyard, start, welders);
+            var cylinder = FreeCylinder(shipyard, start, welders);
+            var radius = (cylinder.Max.X - cylinder.Min.X) / 2.0;
             free =
-                ShipyardArm.Rotors(shipyard).Count > 0
-                    ? (FreeBox(shipyard, start, welders), false)
-                    : (FreeCylinder(shipyard, start, welders), true);
+                Math.PI * radius * radius * (cylinder.Max.Z - cylinder.Min.Z + 1)
+                > (square.Max - square.Min + Vector3I.One).Volume()
+                    ? (cylinder, true)
+                    : (square, false);
             if (beams.Count > 0)
                 freeBoxes[shipyard.EntityId] = free;
         }

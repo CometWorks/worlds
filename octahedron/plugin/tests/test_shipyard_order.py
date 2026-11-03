@@ -13,8 +13,7 @@ headless client.
   the world and end it once the 2 minutes are up (the restart alone may take that
   long). The saved world must then hold the unfinished ship, dynamic and the
   player's, with no scaffold and no leftover components.
-- "helix": the "complete" ship at Moon Station, whose double helix shipyard has no arm
-  rotors, so the build starts from the ship's first block and a scaffold (SE-959). Needs
+- "helix": the "complete" ship at Moon Station, at its double helix shipyard (SE-959). Needs
   OCT_WORLD_SOURCE, a world built by build_world.py.
 - "helix-long": the same with a 350 m line of armor along the shipyard's axis, which its
   welders, 97.5 m out, have to reach along most of its length.
