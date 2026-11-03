@@ -4,12 +4,16 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
 using Sandbox.Game.World;
 using Sandbox.ModAPI.Ingame;
+using SpaceEngineers.Game.Entities.Blocks;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.FileSystem;
 using VRage.Plugins;
+using VRage.Utils;
 using VRageMath;
 
 namespace ClangProbe;
@@ -19,7 +23,9 @@ namespace ClangProbe;
 // and position; the line of a grid that is gone stays. While its power is on, a grid named
 // "CL Push <k> ..." is pushed forward each frame by k times its thrust over mass, as a clang drive would,
 // "CL Spike <k> ..." gets k times its thrust over mass, times a second, as one frame's speed change once,
-// 5 s after it is first seen, and "CL Thrust ..." has its thrusters at full override.
+// 5 s after it is first seen, and "CL Thrust ..." has its thrusters at full override. 5 s after a grid is
+// first seen, a timer block on it named "CL Start" is triggered and a piston so named is reversed: a
+// clang drive's starter.
 // ReSharper disable once UnusedType.Global
 public class Plugin : IPlugin
 {
@@ -42,10 +48,17 @@ public class Plugin : IPlugin
         foreach (var grid in MyEntities.GetEntities().OfType<MyCubeGrid>().ToList())
         {
             var name = grid.DisplayName;
-            if (name?.StartsWith("CL ") != true || grid.Physics == null || grid.IsStatic)
+            if (name?.StartsWith("CL ") != true)
                 continue;
             if (!firstSeen.ContainsKey(grid.EntityId))
+            {
                 firstSeen[grid.EntityId] = frame;
+                MyLog.Default.WriteLine(
+                    $"ClangProbe: {name} ({grid.EntityId}) first seen, static {grid.IsStatic}, physics {grid.Physics != null}, {grid.BlocksCount} blocks"
+                );
+            }
+            if (grid.Physics == null || grid.IsStatic)
+                continue;
             var thrusters = grid.GetFatBlocks<MyThrust>().Where(t => t.IsFunctional).ToList();
             var accel =
                 thrusters.Sum(t => ((IMyThrust)t).MaxEffectiveThrust)
@@ -75,6 +88,19 @@ public class Plugin : IPlugin
                     foreach (var t in thrusters)
                         ((IMyThrust)t).ThrustOverridePercentage = 1;
             }
+            // A clang drive's starter, as its pilot would use it
+            if (frame - firstSeen[grid.EntityId] == SpikeFrames)
+                foreach (var block in grid.GetFatBlocks<MyTerminalBlock>())
+                    if (block.CustomName.ToString() == "CL Start")
+                        switch (block)
+                        {
+                            case MyTimerBlock timer:
+                                ((IMyTimerBlock)timer).Trigger();
+                                break;
+                            case MyPistonBase piston:
+                                ((IMyPistonBase)piston).Reverse();
+                                break;
+                        }
             if (frame % 6 != 0)
                 continue;
             var speed = grid.Physics.LinearVelocity.Length();

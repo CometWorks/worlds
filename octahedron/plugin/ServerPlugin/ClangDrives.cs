@@ -22,16 +22,20 @@ namespace ServerPlugin;
 // zone. The ship is a physical group, the grids on rotors, pistons, connectors and landing gear,
 // and its speed is the group's center of mass's, so parts moving inside it cancel out. Time is game
 // time: each simulation frame's acceleration comes from its velocity and the one of the frame before,
-// over 1/60 s, and the rule averages these over the frames of ClangDriveWindowSeconds, so a single
-// spike adds only its share. The limit is ClangDriveFactor times the thrust of the strongest
-// direction at full override over the mass, plus natural and artificial gravity.
-// Outside safe zones a window with a contact with anything outside the group doesn't count: a
-// crash isn't punished. Skipped: groups without thrusters, with a static grid (docked to a
-// station), owned by an NPC, in a shipyard's build space or switched off already. Each cluster
-// node checks what it simulates.
+// over 1/60 s, and the rule averages these over ClangDriveWindowFrames, so a single spike adds only
+// its share. The limit is ClangDriveFactor times the thrust of the strongest direction at full
+// override over the mass, plus natural and artificial gravity; a ship without thrusters may only
+// fall. Ships slower than ClangDriveMinSpeed are left alone. Outside safe zones a ship that touched
+// anything outside the group within the last second isn't punished: a crash. Inside one, only the
+// faster of two colliding ships is switched off. A ship left on is left alone for five seconds
+// more, the aftermath of its hit: its wreck's pieces keep bumping into each other. Skipped: groups with a static grid (docked to a station), owned by an NPC,
+// in a shipyard's build space or switched off already. Each cluster node checks what it simulates.
 internal static class ClangDrives
 {
     private const double FramesPerSecond = 60;
+    private const int ContactFrames = 60;
+    private const int SparedFrames = 300;
+    private const int ChatFrames = 3600;
 
     private sealed class Track
     {
@@ -43,6 +47,12 @@ internal static class ClangDrives
         public double Accel;
         public double LastAccel;
         public int AccelFrame = -1_000_000;
+
+        // The last frame the ship was over the limit and left on
+        public int Spared = -1_000_000;
+
+        // The speed at the start of the last full window: before a collision in it
+        public double Speed;
         public readonly Queue<(int Frame, Vector3D Velocity)> Samples = new();
     }
 
@@ -52,6 +62,9 @@ internal static class ClangDrives
     // The last frame each grid touched something, by the grid and the other entity. Written on
     // Havok's threads.
     private static readonly ConcurrentDictionary<(long Grid, long Other), int> contacts = new();
+
+    // The last frame each owner was told
+    private static readonly Dictionary<long, int> told = new();
 
     private static volatile bool active;
     private static volatile int frame;
@@ -72,10 +85,10 @@ internal static class ClangDrives
             return;
         frame = now;
 
-        var window = Math.Max(1, (int)Math.Round(config.ClangDriveWindowSeconds * FramesPerSecond));
+        var window = Math.Max(1, config.ClangDriveWindowFrames);
         if (frame % 60 == 0)
             foreach (var contact in contacts)
-                if (frame - contact.Value > window)
+                if (frame - contact.Value > ContactFrames)
                     contacts.TryRemove(contact.Key, out _);
 
         var visited = new HashSet<MyCubeGrid>();
@@ -101,20 +114,23 @@ internal static class ClangDrives
 
         double mass = 0;
         var momentum = Vector3D.Zero;
+        var center = Vector3D.Zero;
         long signature = group.Count;
         foreach (var grid in group)
         {
             mass += grid.Physics.Mass;
             momentum += (Vector3D)grid.Physics.LinearVelocity * grid.Physics.Mass;
+            center += grid.Physics.CenterOfMassWorld * grid.Physics.Mass;
             signature = signature * 31 + grid.EntityId;
         }
         if (mass <= 0)
             return;
 
-        // A grid joining or leaving the group changes its speed at once: measure anew
+        // A grid joining or leaving the group changes its speed at once: measure anew, but keep
+        // what it did before, so a ship hit by one breaking up still counts as the slower one
         var key = group.Min(g => g.EntityId);
         if (!tracks.TryGetValue(key, out var track) || track.Signature != signature)
-            tracks[key] = track = new Track { Signature = signature };
+            tracks[key] = track = new Track { Signature = signature, Speed = track?.Speed ?? 0 };
         track.Seen = frame;
         if (frame - track.AccelFrame >= FramesPerSecond)
         {
@@ -129,22 +145,25 @@ internal static class ClangDrives
         var (then, before) = track.Samples.Peek();
         if (frame - then < window)
             return;
+        track.Speed = before.Length();
+        if (
+            Math.Max(track.Speed, velocity.Length()) < config.ClangDriveMinSpeed
+            || frame - track.Spared < SparedFrames
+        )
+            return;
 
         // The mean of the frames' accelerations, each (v[n] - v[n-1]) * 60
-        var seconds = window / FramesPerSecond;
-        var measured = (velocity - before).Length() / seconds;
-        if (measured < config.ClangDriveMinAcceleration)
+        var measured = (velocity - before).Length() * FramesPerSecond / window;
+        var position = center / mass;
+        double gravity =
+            MyGravityProviderSystem.CalculateNaturalGravityInPoint(position).Length()
+            + MyGravityProviderSystem.CalculateArtificialGravityInPoint(position).Length();
+        if (measured < config.ClangDriveMinAcceleration + gravity)
             return;
         var accel = Math.Max(
             Math.Max(track.Accel, track.LastAccel),
             StrongestThrust(group, main) / mass
         );
-        if (accel <= 0)
-            return;
-        var position = main.Physics.CenterOfMassWorld;
-        double gravity =
-            MyGravityProviderSystem.CalculateNaturalGravityInPoint(position).Length()
-            + MyGravityProviderSystem.CalculateArtificialGravityInPoint(position).Length();
         var limit = config.ClangDriveFactor * accel + gravity;
         if (measured <= limit || !main.IsPowerSwitchOn)
             return;
@@ -154,9 +173,11 @@ internal static class ClangDrives
         var inZone = MySessionComponentSafeZones.SafeZones.Any(z =>
             z.Enabled && !z.MarkedForClose && z.Contains(main.PositionComp.WorldAABB.Center)
         );
+        var others = Touched(group);
         var skipped =
             owner != 0 && players.IdentityIsNpc(owner) ? "an NPC's"
-            : !inZone && Touched(group, window) ? "a collision"
+            : !inZone && others.Count > 0 ? "a collision"
+            : others.Any(o => SpeedOf(o) > track.Speed) ? "hit by a faster ship"
             : ShipyardOrders.InBuildSpace(main) ? "in a shipyard"
             : null;
         var peak = PeakFrame(track);
@@ -171,15 +192,20 @@ internal static class ClangDrives
                 + $"{group.Count} grids, {mass:F0} kg"
         );
         if (skipped != null)
+        {
+            track.Spared = frame;
             return;
+        }
         SwitchOff(group);
-        if (owner != 0)
-            MyVisualScriptLogicProvider.SendChatMessage(
-                $"{main.DisplayName} was switched off: its speed changed faster than its thrusters can change it"
-                    + (inZone ? ", ramming in a safe zone." : ", a clang drive."),
-                "Octahedron",
-                owner
-            );
+        if (owner == 0 || told.TryGetValue(owner, out var last) && frame - last < ChatFrames)
+            return;
+        told[owner] = frame;
+        MyVisualScriptLogicProvider.SendChatMessage(
+            $"{main.DisplayName} was switched off: its speed changed faster than its thrusters can change it"
+                + (inZone ? ", ramming in a safe zone." : ", a clang drive."),
+            "Octahedron",
+            owner
+        );
     }
 
     // The thrust of the direction the group's functional thrusters, on or off, push most along,
@@ -227,13 +253,28 @@ internal static class ClangDrives
         return peak;
     }
 
-    // Whether a grid of the group touched a voxel or a grid outside it within the window
-    private static bool Touched(List<MyCubeGrid> group, int window)
+    // The voxels and grids outside the group a grid of it touched within the last second
+    private static List<long> Touched(List<MyCubeGrid> group)
     {
         var ids = group.Select(g => g.EntityId).ToHashSet();
-        return contacts.Any(c =>
-            ids.Contains(c.Key.Grid) && !ids.Contains(c.Key.Other) && frame - c.Value <= window
-        );
+        return contacts
+            .Where(c =>
+                ids.Contains(c.Key.Grid)
+                && !ids.Contains(c.Key.Other)
+                && frame - c.Value <= ContactFrames
+            )
+            .Select(c => c.Key.Other)
+            .Distinct()
+            .ToList();
+    }
+
+    // The speed of a touched entity's ship before the window; a voxel or a station stands still
+    private static double SpeedOf(long entity)
+    {
+        if (!MyEntities.TryGetEntityById(entity, out var found) || found is not MyCubeGrid grid)
+            return 0;
+        var key = MyCubeGridGroups.Static.Physical.GetGroupNodes(grid).Min(g => g.EntityId);
+        return tracks.TryGetValue(key, out var track) ? track.Speed : 0;
     }
 
     // What the Y key does, on every grid of the group: the power switch and every power producer off
@@ -254,7 +295,8 @@ internal static class ClangDrives
         {
             if (!active || __instance.Entity is not MyCubeGrid grid)
                 return;
-            var other = value.GetOtherEntity(grid);
+            // A door's panels are subparts of their grid: the ship's own
+            var other = value.GetOtherEntity(grid)?.GetTopMostParent();
             if (other != null && other is not MyCharacter)
                 contacts[(grid.EntityId, other.EntityId)] = frame;
         }

@@ -2,8 +2,8 @@
 server, without a client: the nodes' own test routes give the ships their speed. A heavy ship whose speed jumps
 by 50 m/s in one write (no collision) is switched off, and so is one that flies into Alpha Station's safe zone at
 50 m/s and rams a static wall there, with the line in the log of the node that simulates them. The same ship
-crashing into a wall outside safe zones stays on. The rams get their speed bit by bit, at 4 m/s², below twice
-their thrust, so that only the hit counts.
+crashing into a wall outside safe zones stays on. The rams get their speed bit by bit, below twice their
+thrust, so that only the hit counts.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/clang_drive_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 
@@ -34,17 +34,21 @@ PROCESSES = ("wa-1", *NODES)
 SPEED = cd.RAM_SPEED
 CRASH = (cd.SPACE[0], cd.SPACE[1] - 5000, cd.SPACE[2])
 # name -> (where its first grid goes, the wall's position or None, expected off, safe zone)
-# Up to speed in 12.5 s and 312 m: the rams start 400 m before the zone's wall, the zone's edge 50 m before it
-RAMP = 4.0
+# The rams get 19 m/s at once, below the speed that counts, then 0.3 m/s every 0.15 s: a step is 3 m/s² over
+# the 6-frame window, three of them in one still below twice the thrust. Up to speed in about 16 s and 550 m:
+# they start 700 m before their wall, the zone's edge 55 m before it.
+BELOW = 19.0
+STEP = 0.3
+STEP_SECONDS = 0.15
 CASES = {
     "CL Spike": ((cd.SPACE[0], cd.SPACE[1], cd.SPACE[2]), None, True, False),
     "CL Ram Zone": (
-        (cd.ZONE[0], cd.ZONE[1], cd.ZONE[2] + 600),
+        (cd.ZONE[0], cd.ZONE[1], cd.ZONE[2] + 895),
         (cd.ZONE[0], cd.ZONE[1], cd.ZONE[2] + 195),
         True,
         True,
     ),
-    "CL Ram Crash": ((CRASH[0], CRASH[1], CRASH[2] + 400), CRASH, False, False),
+    "CL Ram Crash": ((CRASH[0], CRASH[1], CRASH[2] + 700), CRASH, False, False),
 }
 
 
@@ -58,11 +62,13 @@ def node_log(bench, node: str) -> str:
 
 
 def switch_offs(bench, kind: str = "switched off") -> dict[str, tuple[str, str]]:
-    """name -> (node, log line) of its last switch-off, or with kind "left on" of the last time the rule let it be"""
+    """name -> (node, log line) of its last switch-off, with kind "left on" of the last time the rule let it be,
+    or with kind "" of its last line of either
+    """
     found = {}
     for node in NODES:
         for line in node_log(bench, node).splitlines():
-            if cd.LOG_MARK in line and f") {kind}, " in line:
+            if cd.LOG_MARK in line and f"{kind}, " in line:
                 found[line.split(cd.LOG_MARK, 1)[1].split(" (", 1)[0]] = (node, line)
     return found
 
@@ -148,15 +154,21 @@ def run(bench) -> None:
     time.sleep(5)
     node = push(grids["CL Spike"], (0, 0, -SPEED))
     print(f"CL Spike: {SPEED} m/s in one write on {node}", flush=True)
-    began = time.monotonic()
-    while (speed := min(SPEED, RAMP * (time.monotonic() - began))) < SPEED:
+    # Too slow to count in one write, then in steps the window takes
+    speed = BELOW
+    while speed < SPEED:
         for name in ("CL Ram Zone", "CL Ram Crash"):
             push(grids[name], (0, 0, -speed))
-        time.sleep(0.2)
+        speed = min(SPEED, speed + STEP)
+        time.sleep(STEP_SECONDS)
     for name in ("CL Ram Zone", "CL Ram Crash"):
         print(f"{name}: {SPEED} m/s on {push(grids[name], (0, 0, -SPEED))}", flush=True)
 
     slowest = {name: SPEED for name in CASES}
+
+    def hit(name: str) -> bool:
+        """Slowed down, or over the limit at all: a crash may break the ship up, its main grid gone or flying on"""
+        return slowest[name] < SPEED * 0.8 or name in switch_offs(bench, "")
 
     def settled() -> bool:
         for name in CASES:
@@ -164,9 +176,9 @@ def run(bench) -> None:
             if state.get("found"):
                 slowest[name] = min(slowest[name], state["speed"])
         off = switch_offs(bench)
-        return all(
-            slowest[n] < SPEED * 0.8 for n in ("CL Ram Zone", "CL Ram Crash")
-        ) and all(n in off for n, (*_, expected, _) in CASES.items() if expected)
+        return all(hit(n) for n in ("CL Ram Zone", "CL Ram Crash")) and all(
+            n in off for n, (*_, expected, _) in CASES.items() if expected
+        )
 
     try:
         wa.wait_until(settled, 60, "the rams and the switch-offs")
@@ -187,8 +199,7 @@ def run(bench) -> None:
         if zone:
             check(f"{name}'s line says safe zone", "in a safe zone" in line, line)
     for name in ("CL Ram Zone", "CL Ram Crash"):
-        # A crash may break the ship up and a part fly on through what is left of the wall
-        check(f"{name} hit its wall", slowest[name] < SPEED * 0.8, slowest[name])
+        check(f"{name} hit its wall", hit(name), slowest[name])
     left = switch_offs(bench, "left on").get("CL Ram Crash", ("", ""))[1]
     print(f"CL Ram Crash: {left[:400]}", flush=True)
     check(
