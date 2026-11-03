@@ -6,7 +6,9 @@ build_world.py with the final shipyard.
 
 The steps, with a long build running: OCT_BEAM_STEPS=stream goes beyond sync distance and
 comes back, =rejoin leaves the game and joins again; the shipyard is streamed in again each
-time; =none stays in range, to count the packets. All of its welders must shoot on the client after that, and some must hit, also once
+time; =off switches the welders off on the client alone, with nothing streamed, which only the
+plugin's switch sent every 30 s turns on again (SE-963); =none stays in range, to count the
+packets. All of its welders must shoot on the client after that, and some must hit, also once
 all blocks are placed and only their integrity is left.
 
     OCT_TASK=SE-782 OCT_WORLD_SOURCE=<world from build_world.py> \\
@@ -47,7 +49,10 @@ PROBE = (
 SHIP = "ArmBeams"
 STATION = "Alpha"
 ENTITY = 777000782000100
-STEPS = os.environ.get("OCT_BEAM_STEPS", "stream,rejoin").split(",")
+STEPS = os.environ.get("OCT_BEAM_STEPS", "stream,rejoin,off").split(",")
+# The plugin sends the switch to all clients in range every 30 s, at one of its 10 s checks
+RESEND = 45
+OFF = "the welders go off on the client alone"
 SIZE = tuple(int(x) for x in os.environ.get("OCT_BEAM_SHIP", "8,8,24").split(","))
 
 
@@ -105,7 +110,32 @@ def scenario(remote):
         )
         mark("the client is back in the game")
         time.sleep(wait)
+    if "off" in STEPS:
+        switch_off(rig.APPDATA)
+        time.sleep(RESEND + 30)
     return remote
+
+
+def switch_off(user_data: Path) -> None:
+    """The probe switches the client's welders off at its next sample"""
+    mark(OFF)
+    (user_data / "beam-probe.off").touch()
+
+
+def recovered(picked: list[dict]) -> str:
+    """How long the welders stayed off after the switch-off, from the samples after it"""
+    off = next((s for s in picked if int(s["activated"]) < int(s["tools"])), None)
+    if off is None:
+        return "never off"
+    on = next(
+        (
+            s
+            for s in picked
+            if s["t"] > off["t"] and int(s["activated"]) == int(s["tools"])
+        ),
+        None,
+    )
+    return f"on again after {on['t'] - off['t']:.0f} s" if on else "still off"
 
 
 def samples(path: Path) -> list[dict]:
@@ -255,6 +285,17 @@ def check_beams() -> None:
             shooting(
                 f"after {text!r}",
                 [s for s in building if at + settle < s["t"] < until],
+            )
+    for i, (at, text) in enumerate(marks):
+        if text == OFF:
+            until = marks[i + 1][0] if i + 1 < len(marks) else ends
+            again = recovered([s for s in client if at <= s["t"] < until])
+            sa.check(
+                again.startswith("on again"), f"after {text!r}: the welders are {again}"
+            )
+            shooting(
+                f"after {text!r}",
+                [s for s in building if at + RESEND < s["t"] < until],
             )
     shooting(
         "only integrity left",

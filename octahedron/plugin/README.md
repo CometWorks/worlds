@@ -463,8 +463,10 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   in during a build (it comes back in range, joins or crosses to this node) still
   turns the tools off before that message comes, and ToolCore tells it only when
   the server's switch changes. So the plugin sends each such client the switch itself
-  at the next 10 s check and once more at the one after (SE-782), and nothing to the
-  clients it already told. ToolCore is the mod's own code: this reaches its session
+  at the next 10 s check and once more at the one after (SE-782). Not every such client
+  shows up as one with a new tool, so every 30 s of a build the switch also goes to the
+  online players within sync distance of the shipyard that have the tools (SE-963).
+  ToolCore is the mod's own code: this reaches its session
   and packet by reflection and does nothing if they are gone.
 - A build whose ship gains no integrity for 60 s stops. A paid build short of
   components in the shipyard first waits `ShipyardTopUpMinutes` (5) for a top-up and
