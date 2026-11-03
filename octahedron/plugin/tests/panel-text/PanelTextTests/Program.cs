@@ -45,6 +45,31 @@ Check(lines.Length == 2, "the ticket's entry takes two lines");
 Check(!entry.Contains("..."), "the ticket's entry is not cut");
 Check(lines.All(l => l.Length <= Columns), "the ticket's entry fits the columns");
 
+// SE-962: a deadline shows the minutes left with its UTC time, rounded up and never below 0
+var start = new DateTime(2026, 11, 3, 2, 38, 38, DateTimeKind.Utc);
+var ends = start.AddMinutes(60);
+Check(PanelText.Left(ends, start) == "60 min (by 03:38 UTC)", "60 min left at the start");
+Check(
+    PanelText.Left(ends, start.AddSeconds(1)) == "60 min (by 03:38 UTC)",
+    "59 min 59 s rounds up to 60 min"
+);
+Check(PanelText.Left(ends, start.AddMinutes(59.5)) == "1 min (by 03:38 UTC)", "the last minute");
+Check(
+    PanelText.Left(ends, ends.AddMinutes(2)) == "0 min (by 03:38 UTC)",
+    "0 min past the deadline"
+);
+var orderEntry = PanelText.Item(
+    "1. ",
+    $"'Polaris Mk2 RC8' (23,276 PCU) for Viktor: building, done within {PanelText.Left(ends, start.AddSeconds(30))}",
+    Columns,
+    2
+);
+var orderLines = orderEntry.Split('\n');
+Check(orderLines.Length == 2, "SE-962's entry takes two lines");
+Check(!orderEntry.Contains("..."), "SE-962's entry is not cut");
+Check(orderLines.All(l => l.Length <= Columns), "SE-962's entry fits the columns");
+Console.WriteLine(orderEntry);
+
 // A full queue with the longest names, a waiting ship and the longest shipyard name
 var name = new string('N', 32);
 var full = "Gamma Station Shipyard queue\n\n";
@@ -52,7 +77,7 @@ for (int i = 1; i <= 6; i++)
     full +=
         PanelText.Item(
             $"{i}. ",
-            $"'{name}' (100,000 PCU) for {name}: loading parts until 01:39 UTC",
+            $"'{name}' (100,000 PCU) for {name}: loading parts within 10 min (by 01:39 UTC)",
             Columns,
             2
         ) + "\n";
