@@ -71,7 +71,9 @@ station and shipyard blueprints are in `blueprints/`.
   shines sideways through the deck all day: bad shadows and unreadable LCDs.
   North and South Station stay level with the equator, both with their up
   toward EarthLike: North Station is upside down, so its lobby looks down on
-  the ring. The lanes don't turn. Moon Station's up is square to the line
+  the ring. North Station is turned 240 degrees about its up and South Station
+  60 degrees, so their shipyards don't hide the rings of their lanes to Beta
+  Station from the lobby. The lanes don't turn. Moon Station's up is square to the line
   between EarthLike and the Moon, the one such direction nearest to where Delta
   Station was before the turn, and it is turned 180 degrees about its up and
   upside down: it faces the Moon, its lobby toward EarthLike, and its shipyard

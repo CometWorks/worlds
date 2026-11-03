@@ -159,6 +159,10 @@ SHIPYARD_OFF = {"ShipConnector", "ConveyorSorter"}
 # leans 25 degrees away from it there: the lobby sees the planet and the deck is as tilted
 # against the Sun as Beta Station's (SE-720)
 DELTA_TILT_DEGREES = 50.0
+# North and South Station turned this far about their up, the Sun's axis, so every Sun
+# condition stays as it was: their shipyards no longer stand between the lobby and the rings
+# of the lane to Beta Station (SE-945, test_shipyard_sight.py)
+POLE_TURN_DEGREES = {"North Station": 240.0, "South Station": 60.0}
 # Each station's color: its shipyard's red frame gets the skin and the color, the station's
 # purple walls and furniture only the color. Skin None is the default, painted metal. Colors
 # are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1); the game adds
@@ -1497,6 +1501,8 @@ def main():
             # Upside down, like South Station: its up toward EarthLike, so the lobby looks
             # down on the ring
             up = mul(up, -1)
+        if name in POLE_TURN_DEGREES:
+            forward = rotate(forward, up, math.radians(POLE_TURN_DEGREES[name]))
         if name in EQUATOR_STATIONS:
             # The deck parallel to the asteroid ring (up along the ring's axis, the north side),
             # so the sun doesn't shine sideways through it all day, and the front toward
