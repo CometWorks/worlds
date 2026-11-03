@@ -13,6 +13,9 @@ headless client.
   the world and end it once the 2 minutes are up (the restart alone may take that
   long). The saved world must then hold the unfinished ship, dynamic and the
   player's, with no scaffold and no leftover components.
+- "helix": the "complete" ship at Moon Station, whose double helix shipyard has no arm
+  rotors, so the build starts from the ship's first block and a scaffold (SE-959). Needs
+  OCT_WORLD_SOURCE, a world built by build_world.py.
 
     uv run --no-project --with httpx python tests/test_shipyard_order.py [case ...]
 
@@ -68,7 +71,13 @@ BIG = rig.grid(
     tag="MyObjectBuilder_CubeGrid",
 )
 # name: (blueprint, its blocks, ShipyardOrderMinutes)
-CASES = {"complete": (SMALL, 10, 60), "expire": (BIG, 1536, 2)}
+CASES = {
+    "complete": (SMALL, 10, 60),
+    "expire": (BIG, 1536, 2),
+    "helix": (SMALL, 10, 60),
+}
+# The station of a case's table, by its name's first word; else the nearest table
+STATIONS = {"helix": "Moon"}
 
 SHOTS = os.environ.get("OCT_SHOTS")
 started = time.monotonic()
@@ -154,13 +163,20 @@ def place(remote, name: str) -> str:
     return wait_chat(remote, f"builds '{name}' for you now", 60)
 
 
-def order(remote) -> int:
-    """Orders at the nearest table and returns the shipyard's grid id"""
-    table = min(tc.tables(remote), key=lambda b: b["distance"])
-    tc.stand_by(remote, table)
+def order(remote, station: str | None = None) -> int:
+    """Orders at the station's table, else the nearest one, and returns the shipyard's grid
+    id"""
+    if station:
+        import test_support_arm as sa
+
+        sa.at_table(remote, station)
+    else:
+        table = min(tc.tables(remote), key=lambda b: b["distance"])
+        tc.stand_by(remote, table)
     name = re.search(r"<DisplayName>([^<]*)</DisplayName>", table_blueprint)[1]
     line = place(remote, name)
     shipyard = re.search(r"(\w+ Station Shipyard) builds", line)[1]
+    assert not station or shipyard == f"{station} Station Shipyard", line
     return next(g["entityId"] for g in remote.list_grids() if g["name"] == shipyard)
 
 
@@ -276,14 +292,14 @@ def run(case: str) -> None:
     rig.start_server()
     log("server ready")
     remote = rig.start_client(render=bool(SHOTS))
-    shipyard = order(remote)
+    shipyard = order(remote, STATIONS.get(case))
     ordered = time.monotonic()
     time.sleep(20)
     log(f"client: a welder's ToolCore_Shoot {beam_shoot(remote, shipyard)}")
     if SHOTS:
         screenshots(remote, shipyard, case)
 
-    if case == "complete":
+    if case != "expire":
         log(wait_chat(remote, "is ready", 900))
         rig.stop_client()
         rig.stop_server()

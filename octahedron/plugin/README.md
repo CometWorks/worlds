@@ -395,7 +395,11 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   ShipyardQueue`) show it, and which ship blocks the shipyard. Each entry wraps to
   two lines of 46 columns and is cut after that, so a full queue keeps font size 0.57.
 - The ship must fit the shipyard's free space, the largest box between its
-  welders free of its blocks, turned so that its main cockpit points along the
+  welders free of its blocks, along the shipyard at most 6 cells (15 m) past its
+  outermost welders: the double helix shipyard's end towers reach farther out,
+  its welders don't. That box is 72.5 x 75 x 282.5 m in the Omni Arc Beam
+  Shipyard and 142.5 x 137.5 x 530 m in the double helix one, whose round build
+  volume holds no wider box. The ship is turned so that its main cockpit points along the
   shipyard or, when it only fits another way, by right angles from there,
   its components the shipyard's containers, and it may have at most
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
@@ -1265,7 +1269,8 @@ spots see the center and the 1/3 points and, with `-v`, what blocks each ray, an
 fails when an equatorial station's center is in sight of fewer than half its spots.
 `tests/test_shipyard_order.py` orders a ship at a station table with the client
 (the quote, then the order) and checks the saved world after the shipyard finished it, then lets a bigger
-order run out after a server restart; with `OCT_SHOTS` it also takes
+order run out after a server restart. "helix" orders the first ship at Moon Station,
+whose double helix shipyard has no arm rotors. With `OCT_SHOTS` it also takes
 screenshots of the welding from among the welders.
 `tests/test_shipyard_beams.py` checks the welders' beams as a client sees them
 during a long build: the client and the server run the `tests/beam-probe` test

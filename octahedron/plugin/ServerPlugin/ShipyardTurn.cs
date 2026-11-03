@@ -9,8 +9,8 @@ namespace ServerPlugin;
 
 // A player's turn at a shipyard: its containers, welders and connectors are theirs and shared
 // with their faction, so they can dock a ship and the welders take components from it. Everything
-// else stays OCT's, the reactors most of all, whose uranium conveyors can't take out either. OCT
-// keeps most of the shipyard's blocks, so the grid stays its big owner and a shipyard.
+// else stays OCT's, the reactors most of all, whose uranium conveyors can't take out either. The
+// grid stays a shipyard while OCT owns any of its blocks (ShipyardZoneWelding.Owners).
 //
 // Without a turn the connectors and welders are off, and a free build turns on only the welders.
 // Cargo containers and terminals have no switch: OCT's ownership is what locks them, and with the
@@ -71,7 +71,7 @@ internal static class ShipyardTurn
 
     /// <summary>The NPC who owns the shipyard, in or out of a turn.</summary>
     public static long Npc(MyCubeGrid shipyard) =>
-        shipyard.BigOwners.First(MySession.Static.Players.IdentityIsNpc);
+        ShipyardZoneWelding.Owners(shipyard).First(MySession.Static.Players.IdentityIsNpc);
 
     // The game's request lets the server give only a block without an owner to someone
     internal static void SetOwner(MyCubeBlock block, long owner, MyOwnershipShareModeEnum share)

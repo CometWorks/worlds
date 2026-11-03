@@ -455,7 +455,7 @@ def blueprint_xml(yard):
     for subtype, forward, up, cells, _, (hsv, skin) in yard.blocks:
         if subtype in templates:
             b = copy.deepcopy(templates[subtype])
-            for tag in ("Owner", "ShareMode", "NumberInGrid", "CustomName"):
+            for tag in ("NumberInGrid", "CustomName"):
                 for e in b.findall(tag):
                     b.remove(e)
         else:

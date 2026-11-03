@@ -1843,6 +1843,7 @@ internal static partial class ShipyardOrders
         orders[shipyard.EntityId] = new Order
         {
             Projector = projector,
+            Name = grid.DisplayName,
             Player = next.Player,
             Ends = ends,
             Blocks = blueprint.Sum(g => g.CubeBlocks.Count),
@@ -2658,12 +2659,16 @@ internal static partial class ShipyardOrders
     internal static bool Exempt(long player) =>
         orders.Values.Any(o => o.Exempt && o.Player == player);
 
-    /// <summary>The PCU of the support arms on the grid, which the cap of a ship leaves out.</summary>
+    /// <summary>The PCU of the support arm or the scaffold on the grid, which the cap of a ship leaves out.</summary>
     internal static int ArmPcu(MyCubeGrid grid)
     {
         foreach (var order in orders.Values)
-            if (order.Arm.Count > 0 && order.Projector.CubeGrid == grid)
-                return order.Arm.Sum(c => grid.GetCubeBlock(c)?.BlockDefinition.PCU ?? 0);
+            if (order.Projector.CubeGrid == grid)
+                return order.Arm.Count > 0
+                    ? order.Arm.Sum(c => grid.GetCubeBlock(c)?.BlockDefinition.PCU ?? 0)
+                    : grid.GetFatBlocks<MyTerminalBlock>()
+                        .Where(IsScaffold)
+                        .Sum(b => b.BlockDefinition.PCU);
         return 0;
     }
 
@@ -3343,8 +3348,14 @@ internal static partial class ShipyardOrders
         return shipyard;
     }
 
+    // How far a ship may reach past the outermost welders along the shipyard, in cells: as far
+    // as the Omni Arc Beam Shipyard's frame goes. The double helix shipyard's end towers reach
+    // farther out, its welders don't (SE-959).
+    private const int WelderEndCells = 6;
+
     // The largest box free of the shipyard's blocks, grown from the middle of its welders
-    // one layer at a time and kept within its grid's bounds, in world coordinates
+    // one layer at a time and kept within its grid's bounds and, along the shipyard,
+    // WelderEndCells past its welders, in world coordinates
     private static MyOrientedBoundingBoxD FreeSpace(MyCubeGrid shipyard)
     {
         if (!freeBoxes.TryGetValue(shipyard.EntityId, out var box))
@@ -3354,6 +3365,13 @@ internal static partial class ShipyardOrders
             foreach (var beam in beams)
                 start += beam.Position;
             start /= Math.Max(1, beams.Count);
+            var min = shipyard.Min;
+            var max = shipyard.Max;
+            if (beams.Count > 0)
+            {
+                min.Z = Math.Max(min.Z, beams.Min(b => b.Min.Z) - WelderEndCells);
+                max.Z = Math.Min(max.Z, beams.Max(b => b.Max.Z) + WelderEndCells);
+            }
             box = new BoundingBoxI(start, start);
             for (var grew = true; grew; )
             {
@@ -3371,8 +3389,8 @@ internal static partial class ShipyardOrders
                     else
                         layer.Max = box.Max + (box.Max - box.Min + Vector3I.One) * d;
                     if (
-                        Vector3I.Min(grown.Min, shipyard.Min) != shipyard.Min
-                        || Vector3I.Max(grown.Max, shipyard.Max) != shipyard.Max
+                        Vector3I.Min(grown.Min, min) != min
+                        || Vector3I.Max(grown.Max, max) != max
                         || !Free(shipyard, layer)
                     )
                         continue;

@@ -17,7 +17,9 @@ the lobby above it (build_world.STATION_DECKS_BOTTOM), block by block: a gate ma
 engineering rooms below (SE-945). The angle is how far the Sun stays from the object's edge
 seen from the station's lobby and from its hangar deck. "box" is how far the shipyard's block
 bounds stay out of the slab of the Sun's rays through the station's bounding sphere, along
-the Sun's axis: above 0 m the Sun never goes behind them.
+the Sun's axis: above 0 m the Sun never goes behind them. "zone" is the farthest block from
+the safe zone's center, of its radius; "gravity" how far the zone stays out of the nearest
+planet's gravity.
 
 Prints a line per station and exits with 1 if any clearance is 0 or less.
 """
@@ -265,6 +267,7 @@ def main():
     by_name = {g.findtext("DisplayName"): g for g in grids}
     sun, axis = sun_path(args.world, args.steps)
     gates = lane_gates(grids)
+    planets = list(world.load_planets(sector).values())
     print(
         f"Sun axis {np.round(axis, 3)}, {args.steps} positions a day, {len(gates)} gates"
         " (clearance m / degrees from lobby and hangar)"
@@ -296,19 +299,30 @@ def main():
         cells.append(
             f"sight center {center_clear}/{spots} corners {corners_seen:.0f}/{spots}"
         )
-        zone = next(
-            world_position(o)
+        zone_entity = next(
+            o
             for o in objects
             if o.get(world.XSI_TYPE) == "MyObjectBuilder_SafeZone"
             and o.findtext("DisplayName") == name
         )
+        zone = world_position(zone_entity)
+        zone_radius = float(zone_entity.findtext("Radius"))
         farthest = max(
             np.linalg.norm(to_world(g, block_cells(g)) - zone, axis=1).max()
             for g in (grid, yard)
         )
-        inside = farthest + world.BLOCK_RADIUS <= world.STATION_SAFE_ZONE_RADIUS
+        inside = farthest + world.BLOCK_RADIUS <= zone_radius
         failed |= not inside
-        cells.append(f"zone {'ok' if inside else 'FAIL'} {farthest:.0f} m")
+        cells.append(
+            f"zone {'ok' if inside else 'FAIL'} {farthest:.0f}/{zone_radius:.0f} m"
+        )
+        # How far the zone's surface stays out of the nearest planet's gravity
+        gravity = min(
+            np.linalg.norm(zone - np.array(p.center)) - zone_radius - p.gravity_limit
+            for p in planets
+        )
+        failed |= gravity <= 0
+        cells.append(f"gravity {'ok' if gravity > 0 else 'FAIL'} {gravity:.0f} m")
         print(f"{name:14s} {'  '.join(cells)}")
         stations += 1
     failed |= stations == 0

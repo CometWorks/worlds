@@ -11,7 +11,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
-| `make_helix_shipyard.py` | generates the double helix shipyard blueprint (SE-952), not used by the world yet |
+| `make_helix_shipyard.py` | generates the double helix shipyard blueprint (SE-952), `blueprints/double-helix-shipyard.sbc`, Moon Station's shipyard |
 | `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Hangar plugin's options (`hangar.cfg`); the Performance plugin's options that differ from its defaults (`performance.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
@@ -81,7 +81,8 @@ station and shipyard blueprints are in `blueprints/`.
   lies above it (see below). Delta Station, whose up leaned 25 degrees away
   from EarthLike, is turned 50 degrees further, so its up leans 25 degrees
   toward it, like Beta Station's: the lobby sees the planet, and the deck is
-  still tilted against the Sun. Each station sits in a 250 m admin safe zone, owned by the
+  still tilted against the Sun. Each station sits in a 250 m admin safe zone, Moon Station
+  in a 500 m one that also holds its longer shipyard, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
   zone allows only drilling and landing gear locks: no welding, grinding or
   block placing, also not by the shipyard's welders until the Octahedron plugin
@@ -93,7 +94,11 @@ station and shipyard blueprints are in `blueprints/`.
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame), in view of the station's
   lobby, its pressurized back half
-  ([SE-945](https://tasks.cometworks.se/tasks/1832)).
+  ([SE-945](https://tasks.cometworks.se/tasks/1832)). Moon Station has the
+  double helix shipyard instead (`blueprints/double-helix-shipyard.sbc` from
+  `make_helix_shipyard.py`, 34 welders on two strands of conveyor pipe around a
+  build volume 197.5 m across and 500 m long, no arm rotors;
+  [SE-959](https://tasks.cometworks.se/tasks/1846)).
   - Every shipyard starts where Viktor put Gamma Station's on the live cluster
     (`SHIPYARD_PLACE`, in the station's own axes): 180 m from the station, 140 m
     along its up and 112 m behind it, turned the same way against it.
@@ -104,15 +109,25 @@ station and shipyard blueprints are in `blueprints/`.
     189 to 222 m from them, and 164 m at Moon Station, 248 m from it: Moon
     Station's front, toward the Moon, is steep against the Sun's path, which
     stands the shipyard on end there.
+  - Moon Station's double helix shipyard is 575 m long with its end towers, too
+    long to stand on end in the zone. It takes the same place and orientation,
+    turned by as little as lays its length and its block bounds' sides square to
+    the Sun's axis (`HELIX_STATIONS`), then moves the same way: 152 m along the
+    Sun's axis, ending 240 m from the station, above the lobby's dome. The
+    station sits about 220 m from its axis, off its middle toward one end.
   - The station and its shipyard are centered on the safe zone together. Where a
     gate would still shade the station's hangar deck or lobby, the pair moves
     together by as little as clears them with both block bounds 10 m inside the
-    zone's edge. Only Moon Station moves, 57 m: a Moon lane's end gate covers
-    its zone from 130 m below the center upward, so the station sits low and
-    its shipyard above it. A gate may shade the engineering rooms under the
-    hangar deck. The farthest blocks end up 176 to 222 m from the zone's center.
+    zone's edge. None needs to: a Moon lane's end gate covers Moon Station's
+    zone from 124 m below the center upward, and the station already sits low
+    in its 500 m zone, its shipyard above it. A gate may shade the engineering
+    rooms under the hangar deck. The farthest blocks end up 176 to 222 m from
+    the zone's center at the Earth stations, 304 m at Moon Station, whose zone
+    ends 2.2 km outside the Moon's gravity (`build_world.py` checks every zone
+    against the planets' gravity).
   - Its blocks are shared with everyone but its 4 large reactors and 72
-    batteries. Those start with 10 uranium ingots each and full charge, and on
+    batteries (the double helix shipyard: 8 large reactors, no batteries). Those
+    start with 10 uranium ingots each and full charge, and on
     the server the Octahedron plugin tops them back up every 10 minutes
     (`config/octahedron.cfg`). Only 10 ingots, since players get at the reactors
     while renting the shipyard.
@@ -225,8 +240,10 @@ block against each station. It also checks the shipyard's block bounds against
 the slab of the station's bounding sphere ("box"). It prints the
 smallest clearance in meters and degrees per station, how many of 26 lobby spots
 see the shipyard's center and its corners past the blocks, and how far the
-farthest block is from the zone's center. It exits with 1 when the Sun can reach
-a station through one of them, or a block leaves the zone. Its sight counts take
+farthest block is from the zone's center, of the zone's radius, and how far the
+zone's surface stays out of the nearest planet's gravity. It exits with 1 when the
+Sun can reach a station through one of them, a block leaves the zone, or the zone
+reaches into a planet's gravity. Its sight counts take
 each block as its first cell only, so they can miss a beam in the way: at Gamma
 Station it counted 18 of 25 spots where the game had none (SE-934). The
 plugin's `tests/test_shipyard_sight.py` counts them with the game's physics.

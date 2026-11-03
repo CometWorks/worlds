@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Sandbox.Common.ObjectBuilders.Definitions;
 using Sandbox.Definitions;
 using Sandbox.Game;
@@ -58,7 +59,7 @@ internal sealed class RefillContainers
             if (
                 entity is not MyCubeGrid grid
                 || grid.MarkedForClose
-                || !grid.BigOwners.Exists(MySession.Static.Players.IdentityIsNpc)
+                || !ShipyardZoneWelding.Owners(grid).Any(MySession.Static.Players.IdentityIsNpc)
             )
                 continue;
             foreach (var block in grid.GetFatBlocks<MyTerminalBlock>())

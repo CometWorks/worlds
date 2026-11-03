@@ -37,6 +37,10 @@ SCENARIO = STEAM / "common/SpaceEngineers/Content/CustomWorlds/Star System"
 CONFIG = Path(__file__).parent / "config"
 STATION_BLUEPRINT = Path(__file__).parent / "blueprints/octahedron-station.sbc"
 SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/omni-arc-beam-shipyard.sbc"
+# make_helix_shipyard.py's output (SE-952)
+HELIX_SHIPYARD_BLUEPRINT = (
+    Path(__file__).parent / "blueprints/double-helix-shipyard.sbc"
+)
 MES_MODS = CONFIG / "mes-mods.xml"
 MES_STORAGE = CONFIG / "storage"
 RELATIVE_TOP_SPEED = CONFIG / "relative-top-speed.xml"
@@ -73,6 +77,9 @@ ICE_MATERIAL = "Ice_02"
 VOXEL_GENERATOR = 4
 
 STATION_SAFE_ZONE_RADIUS = 250.0
+# Moon Station's zone holds its double helix shipyard too (SE-959). It ends 2.2 km outside the
+# Moon's gravity; build_world asserts every zone stays out of the planets' gravity.
+SAFE_ZONE_RADII = {"Moon Station": 500.0}
 LANE_ENDPOINT_DISTANCE = 1_000.0
 # The Earth end of a Moon lane, farther out, so its rings stay clear of the station's other
 # lane ends (they touched another lane's at Delta Station)
@@ -150,6 +157,11 @@ SHIPYARD_PLACE = (
 )
 # The pair's block bounds stay this far inside the safe zone's edge
 SAFE_ZONE_MARGIN = 10.0
+# The stations with the double helix shipyard (SE-959). It is 575 m long, too long to stand
+# beside the station along the Sun's axis in the zone, so it lies across that axis instead:
+# SHIPYARD_PLACE's forward and up turned by as little as lays its length and its block bounds'
+# sides square to the axis.
+HELIX_STATIONS = {"Moon Station"}
 # Its refill stations and lights are shared with everyone. Its containers, connectors and welders go
 # to a player for their turn at it, its power never: the Octahedron plugin keeps the reactors at
 # SHIPYARD_REACTOR_URANIUM ingots and the batteries charged (RefillContainers in
@@ -735,10 +747,13 @@ def box_corners(grid, center, forward, up):
     return corners
 
 
-def station_and_shipyard(station_grid, zone, forward, up, sun, gates):
-    """(station center, (shipyard center, forward, up)) in the safe zone around zone.
+def station_and_shipyard(
+    station_grid, yard, zone, radius, forward, up, sun, gates, level
+):
+    """(station center, (shipyard center, forward, up)) in the safe zone of radius around zone.
 
-    The shipyard takes SHIPYARD_PLACE in the station's axes, then moves along the Sun's axis,
+    The shipyard (yard, its main grid) takes SHIPYARD_PLACE in the station's axes, with level
+    turned to lie across the Sun's axis (HELIX_STATIONS), then moves along the Sun's axis,
     away from the station, by as little as takes its block bounds out of the slab of the Sun's
     rays through the station's bounding sphere: seen from the station, the Sun never goes
     behind it. The pair is centered on the zone, then moved together by as little as keeps
@@ -749,7 +764,9 @@ def station_and_shipyard(station_grid, zone, forward, up, sun, gates):
     local = lambda v: add(add(mul(right, v[0]), mul(up, v[1])), mul(forward, v[2]))
     offset, yard_forward, yard_up = map(local, SHIPYARD_PLACE)
     yard_up = norm(perpendicular_part(yard_up, yard_forward))
-    yard = shipyard_template()
+    if level:
+        yard_forward = norm(perpendicular_part(yard_forward, sun))
+        yard_up = mul(sun, 1 if dot(yard_up, sun) >= 0 else -1)
     # Out of the station's slab on the side the shipyard already lies
     side = mul(sun, 1 if dot(offset, sun) >= 0 else -1)
     low = min(dot(c, side) for c in box_corners(yard, offset, yard_forward, yard_up))
@@ -768,13 +785,12 @@ def station_and_shipyard(station_grid, zone, forward, up, sun, gates):
     ]
     # The Sun's rays all day stay square to its axis: a gate shades a block only from the
     # same height along it. Only the gates that can reach into the zone's heights count.
-    reach = STATION_SAFE_ZONE_RADIUS + GATE_RADIUS + BLOCK_RADIUS
+    reach = radius + GATE_RADIUS + BLOCK_RADIUS
     shades = [dot(g, sun) for g in gates if abs(dot(sub(g, zone), sun)) < reach]
 
     def fits(center):
         return all(
-            dist(add(center, c), zone) <= STATION_SAFE_ZONE_RADIUS - SAFE_ZONE_MARGIN
-            for c in corners
+            dist(add(center, c), zone) <= radius - SAFE_ZONE_MARGIN for c in corners
         )
 
     def unshaded(center):
@@ -839,18 +855,17 @@ def block_offsets(grid, forward, up):
     ]
 
 
-def shipyard_template():
-    """The shipyard blueprint's main grid."""
-    return shipyard_grids()[0]
-
-
-def shipyard_grids():
-    """The shipyard blueprint's grids: the main grid first, then its arm rotors' heads."""
-    return ET.parse(SHIPYARD_BLUEPRINT).getroot().findall(".//CubeGrid")
+def shipyard_grids(name):
+    """The grids of the station's shipyard blueprint: the main grid first, then its arm
+    rotors' heads. The double helix shipyard has no arm rotors."""
+    blueprint = (
+        HELIX_SHIPYARD_BLUEPRINT if name in HELIX_STATIONS else SHIPYARD_BLUEPRINT
+    )
+    return ET.parse(blueprint).getroot().findall(".//CubeGrid")
 
 
 def shipyard(template, ids, name, center, forward, up, owner, color):
-    """The shipyard's main grid and its rotor heads, from template, shipyard_grids()."""
+    """The shipyard's main grid and its rotor heads, from template, shipyard_grids(name)."""
     grid, *heads = clone_grids(template, ids)
     before = frame(grid)
     place_grid(grid, center, forward, up)
@@ -865,10 +880,12 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
+    owned = 0
     for block in grid.find("CubeBlocks"):
         recolor(block, color, skin=True)
         if block.find("Owner") is None:
             continue
+        owned += 1
         block.find("Owner").text = str(owner)
         kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
         block.find("ShareMode").text = "All" if kind in SHIPYARD_SHARED else "Faction"
@@ -879,6 +896,8 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
         if kind in SHIPYARD_OFF:
             set_child(block, "Enabled", "false")
         stock(block, kind, SHIPYARD_REACTOR_URANIUM)
+    # The Octahedron plugin knows a shipyard by its name and its NPC owner
+    assert owned, f"{name}: the blueprint has no block with an owner"
     return [as_sector_object(g) for g in (grid, *heads)]
 
 
@@ -1008,6 +1027,12 @@ class Planet:
             corner,
             add(add(mul(right, half), mul(self.up, half)), mul(self.forward, -half)),
         )
+        # MySphericalNaturalGravityComponent: gravity ends where it falls to 0.05 g, from the
+        # highest hills down with distance to the power of GravityFalloff
+        number = lambda tag: float(entity.findtext(tag))
+        self.gravity_limit = number("MaximumHillRadius") * (
+            number("SurfaceGravity") / 0.05
+        ) ** (1 / number("GravityFalloff"))
 
 
 def load_planets(sector):
@@ -1525,14 +1550,27 @@ def main():
             # in the zone, its decks under the shadow of the Moon lanes' end gates
             forward, up = mul(forward, -1), mul(up, -1)
         # The station and its shipyard share the safe zone around the station's place
+        radius = SAFE_ZONE_RADII.get(name, STATION_SAFE_ZONE_RADIUS)
+        for planet in (earth, moon):
+            assert (
+                dist(center, planet.center) - radius > planet.gravity_limit
+            ), f"{name}'s safe zone reaches into a planet's gravity"
         station_center, yard = station_and_shipyard(
-            template, center, forward, up, sun, gates
+            template,
+            shipyard_grids(name)[0],
+            center,
+            radius,
+            forward,
+            up,
+            sun,
+            gates,
+            name in HELIX_STATIONS,
         )
         shipyards[name] = yard
         grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
-        objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
+        objects.append(safe_zone(ids, center, radius, name))
 
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
@@ -1548,11 +1586,15 @@ def main():
 
     add_trade_stations(checkpoint, ids, faction, trade_stations)
 
-    yard = shipyard_grids()
     for name, placement in shipyards.items():
         objects.extend(
             shipyard(
-                yard, ids, f"{name} Shipyard", *placement, owner, STATION_COLORS[name]
+                shipyard_grids(name),
+                ids,
+                f"{name} Shipyard",
+                *placement,
+                owner,
+                STATION_COLORS[name],
             )
         )
 
