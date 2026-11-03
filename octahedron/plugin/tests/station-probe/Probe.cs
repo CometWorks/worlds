@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using PluginSdk.Commands;
 using Sandbox.Common.ObjectBuilders;
+using Sandbox.Common.ObjectBuilders.Definitions;
 using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
@@ -1191,6 +1192,70 @@ public sealed class ProbeCommands : CommandModule
                     $"BUTTON {b.EntityId} '{b.CustomName}' {b.Toolbar.GetItemAtIndex(0)?.GetType().Name ?? "empty"}"
                 )
         );
+
+    [Command(
+        "bottleswap",
+        "In one of the station's Free Tools boxes, swaps a full oxygen and a full hydrogen bottle for a half full and an empty one, as a player would, then counts the bottles as bottles does",
+        "!sprobe bottleswap <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string BottleSwap(string station)
+    {
+        var box = FreeTools(station).FirstOrDefault();
+        if (box == null)
+            return "NOBOX";
+        var inventory = box.GetInventory();
+        foreach (var (subtype, level) in new[] { ("OxygenBottle", 0.5f), ("HydrogenBottle", 0f) })
+        {
+            var items = inventory.GetItems();
+            var full = items.FindIndex(i =>
+                i.Content is MyObjectBuilder_GasContainerObject b
+                && b.SubtypeName == subtype
+                && b.GasLevel >= 1f
+            );
+            if (full < 0)
+                return $"NOFULL {subtype}";
+            var used = (MyObjectBuilder_GasContainerObject)items[full].Content.Clone();
+            // One bottle of the stack, as a player takes one
+            inventory.RemoveItems(items[full].ItemId, 1);
+            used.GasLevel = level;
+            inventory.AddItems(1, used);
+        }
+        return Bottles(station);
+    }
+
+    [Command(
+        "bottles",
+        "The bottles in the station's Free Tools boxes: BOTTLES boxes=count subtype full=count used=count ...",
+        "!sprobe bottles <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Bottles(string station)
+    {
+        var boxes = FreeTools(station).ToList();
+        // A stack of bottles is one item with an amount
+        var bottles = boxes
+            .SelectMany(b => b.GetInventory().GetItems())
+            .Where(i => i.Content is MyObjectBuilder_GasContainerObject)
+            .Select(i => ((MyObjectBuilder_GasContainerObject)i.Content, (int)i.Amount))
+            .ToList();
+        int Count(string subtype, bool full) =>
+            bottles
+                .Where(b => b.Item1.SubtypeName == subtype && b.Item1.GasLevel >= 0.999f == full)
+                .Sum(b => b.Item2);
+        return $"BOTTLES boxes={boxes.Count} "
+            + string.Join(
+                " ",
+                new[] { "OxygenBottle", "HydrogenBottle" }.Select(subtype =>
+                    $"{subtype} full={Count(subtype, true)} used={Count(subtype, false)}"
+                )
+            );
+    }
+
+    private static IEnumerable<MyCargoContainer> FreeTools(string station) =>
+        StationGrids(station)
+            .SelectMany(g => g.GetFatBlocks<MyCargoContainer>())
+            .Where(b => b.CustomName?.ToString().Trim() == "Free Tools");
 
     [Command("undock", "Disconnects and deletes the probe's ships", "!sprobe undock")]
     [Permission(MyPromoteLevel.Admin)]

@@ -311,8 +311,10 @@ game update that changes the planet or voxel material definitions or maps.
   to 3 each of welders, grinders and drills, each one Enhanced or Proficient at
   random (the two tiers above the basic tool), 1 pair of binoculars (the
   Binoculars mod, which has no tiers), 3 full oxygen and 3 full
-  hydrogen bottles, and 3 suit battery packs (Powerkit). "Station Loot" is the blueprint's tools,
-  bottles and ammo container.
+  hydrogen bottles, and 3 suit battery packs (Powerkit). Each refill first takes
+  out the bottles that aren't full, so a player can swap a used bottle for a
+  full one there. "Station Loot" is the blueprint's tools, bottles and ammo
+  container.
 - Binoculars work in a safe zone that forbids shooting, though the game counts them as a
   rifle. Clients have no plugin, so the plugin's `BinocularsInZones` tells them the zone
   doesn't hold a character holding binoculars. The server's own check doesn't change.
