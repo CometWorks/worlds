@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pillow"]
+# dependencies = ["numpy", "pillow"]
 # ///
 """Generates the double helix shipyard blueprint (SE-952).
 
@@ -9,10 +9,11 @@
 
 Writes bp.sbc and thumb.png into the folder, as a local blueprint folder
 (Blueprints/local/<name>) has them, and prints the checks: block counts, PCU,
-open conveyor ports and the build volume.
+open conveyor ports, the build volume and how far the welders reach into it.
 
-Two strands of industrial conveyor pipe wind around a 400 block long build
-volume, each with an OmniArc beam welder every quarter turn. A ring of pipe at
+Two strands of industrial conveyor pipe wind around a build volume 79 blocks
+across and 200 blocks long. Every quarter turn an OmniArc beam welder sits
+inline in each strand, the conveyor passing through it. A ring of pipe at
 each end joins the strands. Four towers point outward from each ring, every 90
 degrees, each with a docking connector at its tip and a refill station beside
 it. The towers at the strands' ends also hold the cargo and the reactors.
@@ -30,17 +31,19 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 TEMPLATE_BLUEPRINT = Path(__file__).parent / "blueprints/omni-arc-beam-shipyard.sbc"
 NAME = "Double Helix Shipyard"
 
-# Radius of the strands and the rings, in blocks from the axis. The pipes' cells
-# stay at least 51 blocks from the axis, so the build volume is over 100 blocks
-# (250 m) across.
-RADIUS = 52
-# Blocks between the rings: the build volume's length (1000 m)
-LENGTH = 400
+# Radius of the strands and the rings, in blocks from the axis. Every pipe cell
+# is more than CLEAR blocks from the axis, so the build volume is 2 * CLEAR + 1 =
+# 79 blocks (197.5 m) across around a center block.
+RADIUS = 40
+CLEAR = 39
+# Blocks between the rings: the build volume's length (500 m)
+LENGTH = 200
 TURNS = 4
 # Welders per strand and turn: one every 90 degrees, from ring to ring
 WELDERS_PER_TURN = 4
@@ -52,6 +55,15 @@ TEMPLATE_REACTORS = 4
 STRAND_ENDS = 4
 # Pipe from a ring to the connector at a tower's tip, in blocks
 TOWER = 13
+# The welder's reach (ToolCore definition of OmniArcBeam and its models): it
+# targets blocks within 100 m of its emitter. The emitter sits 1.18 m from the
+# ball toward the target, and the ball 1.75 m from the block's center on the
+# ring, which turns all the way around the block's Up. The ball tilts at most
+# 45 degrees out of the ring's plane.
+GRID = 2.5
+REACH = 100 + 1.18
+BALL = 1.75
+TILT = 45
 
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
 XSI_TYPE = f"{{{XSI}}}type"
@@ -333,46 +345,42 @@ def build():
 
     welders = TURNS * WELDERS_PER_TURN + 1
     for start in (0.0, math.pi):
-
-        def helix(t):
-            angle = start + 2 * math.pi * TURNS * t
-            return (
-                RADIUS * math.cos(angle),
-                RADIUS * math.sin(angle),
-                1 + (LENGTH - 1) * t,
-            )
-
-        strand = rasterize(
-            helix, TURNS * math.hypot(2 * math.pi * RADIUS, LENGTH / TURNS)
-        )
-        assert strand[0] == ring_cell(start, 1) and strand[-1] == ring_cell(
-            start, LENGTH
-        )
-        yard.path([ring_cell(start, 0)] + strand + [ring_cell(start, top)], YELLOW)
-
-        # Each welder stands on a straight, level pipe nearest to its quarter turn,
-        # with a cap on top
-        turned = [0.0]
-        for a, b in zip(strand, strand[1:]):
-            step = math.atan2(b[1], b[0]) - math.atan2(a[1], a[0])
-            turned.append(turned[-1] + (step + math.pi) % (2 * math.pi) - math.pi)
+        # A welder every quarter turn, inline where the strand runs level along the
+        # ring's tangent, its Up along the pipe and its Forward toward the axis
+        spots = []
         for n in range(welders):
-            target = 2 * math.pi * n / WELDERS_PER_TURN
-            spots = []
-            for i in range(1, len(strand) - 1):
-                before, cell, after = strand[i - 1 : i + 2]
-                if (
-                    before[2] != cell[2]
-                    or after[2] != cell[2]
-                    or add(before, after) != scale(cell, 2)
-                ):
-                    continue
-                for up in (Z, NZ):
-                    welder, cap = add(cell, up), add(cell, scale(up, 2))
-                    if 1 <= cap[2] <= LENGTH and yard.free(welder) and yard.free(cap):
-                        spots.append((abs(turned[i] - target), welder, up))
-            _, welder, up = min(spots)
-            yard.block("OmniArcBeam", X, up, welder, YELLOW)
+            angle = start + 2 * math.pi * n / WELDERS_PER_TURN
+            z = round(1 + (LENGTH - 1) * n / (welders - 1))
+            tangent = to_cell((-math.sin(angle), math.cos(angle), 0))
+            spots.append((angle, z, ring_cell(angle, z), tangent))
+        # The strand leaves the bottom ring beside the first welder and joins the
+        # top ring beside the last one
+        cells = [add(spots[0][2], neg(spots[0][3]), NZ)]
+        for (a0, z0, cell, tangent), (a1, z1, _, _) in zip(spots, spots[1:]):
+            cells += [add(cell, neg(tangent)), cell]
+            # The arc from beside this welder to beside the next
+            turn = math.asin(1 / RADIUS)
+
+            def arc(t):
+                angle = a0 + turn + (a1 - a0 - 2 * turn) * t
+                return (
+                    RADIUS * math.cos(angle),
+                    RADIUS * math.sin(angle),
+                    z0 + (z1 - z0) * t,
+                )
+
+            path = rasterize(arc, math.hypot(RADIUS * (a1 - a0), z1 - z0))
+            assert path[0] == add(cell, tangent)
+            cells += path[:-1]
+        _, _, cell, tangent = spots[-1]
+        cells += [add(cell, neg(tangent)), cell, add(cell, tangent)]
+        cells.append(add(cell, tangent, Z))
+        assert cells[0] in yard.pipes and cells[-1] in yard.pipes
+        yard.path(cells, YELLOW)
+        for angle, _, cell, tangent in spots:
+            del yard.pipes[cell]
+            inward = to_cell((-math.cos(angle), -math.sin(angle), 0))
+            yard.block("OmniArcBeam", inward, tangent, cell, YELLOW)
 
     # A tower every 90 degrees on both rings. Frame: u away from the axis, v along
     # the ring, w away from the build volume.
@@ -541,6 +549,41 @@ def thumbnail(yard, path, size=512):
     image.save(path)
 
 
+def reach(yard):
+    """How far the welders reach into the build volume: the least margin on the
+    axis in meters, the radius in blocks within which they reach every block, and
+    the share of the volume's blocks they reach."""
+    xs = np.arange(-CLEAR, CLEAR + 1)
+    x, y = np.meshgrid(xs, xs)
+    disc = x**2 + y**2 <= CLEAR**2
+    x, y = x[disc], y[disc]
+    radius = np.hypot(x, y)
+    welders = [
+        (np.array(cells[0], float), np.array(up, float))
+        for subtype, _, up, cells, _, _ in yard.blocks
+        if subtype == "OmniArcBeam"
+    ]
+    margins = []
+    for z in range(1, LENGTH + 1):
+        cells = np.stack([x, y, np.full(len(x), z)], 1).astype(float)
+        best = np.full(len(cells), -np.inf)
+        for center, up in welders:
+            d = (cells - center) * GRID
+            level = d - np.outer(d @ up, up)
+            ball = (
+                level / np.maximum(np.linalg.norm(level, axis=1), 1e-9)[:, None] * BALL
+            )
+            aim = d - ball
+            distance = np.linalg.norm(aim, axis=1)
+            tilt = np.degrees(np.arcsin(np.abs(aim @ up) / distance))
+            best = np.maximum(best, np.where(tilt <= TILT, REACH - distance, -np.inf))
+        margins.append(best)
+    margins = np.array(margins)
+    missed = (margins < 0).any(0)
+    covered = radius[missed].min() if missed.any() else CLEAR + 1
+    return margins[:, radius == 0].min(), covered, (margins >= 0).mean()
+
+
 def report(yard, blocked, welders):
     """Prints the checks; True when every conveyor port is connected or capped."""
     counts = Counter(b[0] for b in yard.blocks)
@@ -555,6 +598,10 @@ def report(yard, blocked, welders):
     print(
         f"build volume {LENGTH} blocks long between the rings, no block within {clear:.2f} blocks of the axis"
     )
+    axis, covered, share = reach(yard)
+    print(
+        f"welders reach the axis with {axis:.2f} m to spare, every block within {covered:.1f} blocks of the axis, {100 * share:.1f}% of the volume"
+    )
     open_ports = [
         (s, c, d)
         for s, _, _, _, ports, _ in yard.blocks
@@ -566,7 +613,7 @@ def report(yard, blocked, welders):
     )
     for b in open_ports + blocked:
         print("  ", b)
-    return not open_ports and not blocked
+    return not open_ports and not blocked and clear > CLEAR and axis >= 0
 
 
 def main():
