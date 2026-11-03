@@ -7,8 +7,9 @@ using VRage.Game;
 
 namespace ServerPlugin;
 
-// A player's turn at a shipyard: its containers, welders and connectors are theirs and shared
-// with their faction, so they can dock a ship and the welders take components from it. Everything
+// A player's turn at a shipyard: its containers, welders and connectors are theirs, shared with their
+// faction unless that is OCT, which every player is in (OctFaction), so they can dock a ship and the
+// welders take components from it. Everything
 // else stays OCT's, the reactors most of all, whose uranium conveyors can't take out either. OCT
 // keeps most of the shipyard's blocks, so the grid stays its big owner and a shipyard.
 //
@@ -18,8 +19,9 @@ namespace ServerPlugin;
 // never touched here.
 internal static class ShipyardTurn
 {
-    // As the world has them between turns: OCT's faction only (SHIPYARD_SHARED in build_world.py)
-    private const MyOwnershipShareModeEnum IdleShare = MyOwnershipShareModeEnum.Faction;
+    // As the world has them between turns: OCT's alone, not shared with its faction, which every
+    // player is in (SHIPYARD_SHARED in build_world.py)
+    private const MyOwnershipShareModeEnum IdleShare = MyOwnershipShareModeEnum.None;
 
     private static IEnumerable<MyCubeBlock> Blocks(MyCubeGrid shipyard) =>
         shipyard
@@ -27,13 +29,13 @@ internal static class ShipyardTurn
             .Where(b => b is MyCargoContainer or MyShipConnector)
             .Concat(ShipyardOrders.Beams(shipyard));
 
-    /// <summary>Hands the blocks to the player, shared with their faction and on. Connectors don't trade.</summary>
+    /// <summary>Hands the blocks to the player, shared as OctFaction.BuildShare says, and on. Connectors don't trade.</summary>
     public static void Give(MyCubeGrid shipyard, long player)
     {
         ShipyardOrders.WakeBeams(shipyard);
         foreach (var block in Blocks(shipyard))
         {
-            SetOwner(block, player, MyOwnershipShareModeEnum.Faction);
+            SetOwner(block, player, OctFaction.BuildShare(player));
             if (block is MyFunctionalBlock functional)
                 functional.Enabled = true;
             if (block is MyShipConnector connector)

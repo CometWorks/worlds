@@ -126,7 +126,8 @@ station and shipyard blueprints are in `blueprints/`.
     color, at 70 % brightness. North red, South blue, Beta green and Delta
     orange painted metal; Alpha black and Gamma cyan carbon fiber; Moon purple
     concrete.
-- Makes the stations the NPC faction's trade stations: the faction is a Trader
+- Makes the stations the NPC faction's trade stations: the faction, with the
+  game's OtherIcon_8 logo in black on white, is a Trader
   with a bank account, and each station grid has a station entry, so the
   economy stocks its store and contract blocks. The game's own trade factions
   and their procedural stations are off (`GenerateFactionsOnStart` false,
@@ -299,19 +300,21 @@ game update that changes the planet or voxel material definitions or maps.
   gas, ice in the gas generators, and loot (credits included) in every empty
   cargo container, which it then hides. On the server the Octahedron plugin
   replaces that with `config/octahedron.cfg`: loot only into the one
-  faction-only "Station Loot" cargo terminal per station, and no ice. A world
+  unshared "Station Loot" cargo terminal per station, and no ice. A world
   without the plugin, like the design world, has the game's refill. The
   server reads the file as `Octahedron.cfg` from its instance folder; the
   options it leaves out keep their defaults.
-- The stations' 8 connectors trade and are shared with OCT's faction only, so a
+- The stations' 8 connectors trade and are shared with nobody, so a
   docked ship gets no hydrogen or conveyor access from the station and no
   player can turn trading off. Trading needs no access to them. On the server
   the Octahedron plugin keeps them that way (`StationConnectorsTrade`), in a
   world from before the rule too, and charges a docked ship's batteries from
   the station (`StationDockCharging`).
-- A station's store, ATM, vending machine, contract block, doors and button
-  panel stay with OCT's faction, with the game's "Anyone can use" on: every
-  player uses them, nobody outside the faction can change them. A door the
+- Every new player joins OCT's faction (`NewPlayersJoinOct`), so the stations'
+  and shipyards' blocks are shared with nobody instead of with the faction
+  ([SE-975](https://tasks.cometworks.se/tasks/1866)). A station's store, ATM,
+  vending machine, contract block, doors and button panel have the game's
+  "Anyone can use" on: every player uses them, nobody can change them. A door the
   blueprint has off, like the engineering section's airlocks, stays off and shut
   to players. The medical
   room, hologram table, seats and Free Tools boxes have no such option, so they

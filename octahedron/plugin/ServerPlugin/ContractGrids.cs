@@ -270,7 +270,7 @@ internal static class ContractGrids
             // The order repeats until a report shows the owner: not over what the player set since
             if (!member.BigOwners.Contains(player))
                 TargetNeutrals.Clear(member);
-            member.ChangeGridOwnership(player, MyOwnershipShareModeEnum.Faction);
+            member.ChangeGridOwnership(player, OctFaction.BuildShare(player));
             foreach (var builder in member.GetBlocks().Select(b => b.BuiltBy).Distinct().ToList())
                 member.TransferBlocksBuiltByID(builder, player);
         }

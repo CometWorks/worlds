@@ -1816,7 +1816,7 @@ internal static partial class ShipyardOrders
         first.IntegrityPercent = first.BuildPercent = 1;
         first.ConstructionStockpile = null;
         first.Owner = first.BuiltBy = next.Player;
-        first.ShareMode = MyOwnershipShareModeEnum.Faction;
+        first.ShareMode = OctFaction.BuildShare(next.Player);
         TargetNeutrals.Clear(first);
         ship.CubeBlocks =
         [
@@ -3109,7 +3109,7 @@ internal static partial class ShipyardOrders
                     author,
                     player
                 );
-            grid.ChangeGridOwnership(player, MyOwnershipShareModeEnum.Faction);
+            grid.ChangeGridOwnership(player, OctFaction.BuildShare(player));
         }
     }
 

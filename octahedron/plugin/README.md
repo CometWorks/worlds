@@ -37,7 +37,8 @@ refill.
 ### Station connectors
 
 With `StationConnectorsTrade` on, the connectors of every trade station are kept
-trading and shared with the station owner's faction only. A ship docked to a
+trading and shared with nobody, not even the station owner's faction, which every
+player is in (OCT faction). A ship docked to a
 trading connector gets no gas or conveyor access from the station, and no power
 from the game (see Station charging). Before,
 the connectors were shared with everyone, so a player could open one's terminal,
@@ -69,8 +70,8 @@ each node charges at the stations it simulates.
 
 Whoever a block is shared with can also change it: the game's ownership check
 guards a block's settings as well as its use. `build_world.py` keeps a station's
-store, ATM, vending machine, contract block, doors and button panel with OCT's
-faction and turns on their "Anyone can use", which lets every player use them
+store, ATM, vending machine, contract block, doors and button panel unshared and
+turns on their "Anyone can use", which lets every player use them
 without a terminal. A door the blueprint has off, like the engineering section's
 airlocks, gets no "Anyone can use": players can neither open it nor switch it on.
 The medical room, hologram table, seats and Free Tools boxes
@@ -79,7 +80,7 @@ a blueprint, sit or reach the inventory. So they are shared with everyone, as ar
 the shipyard's medical room and lights.
 
 With `NpcBlocksLocked` on, the server refuses a change to any block an NPC shares
-with everyone from a player outside the NPC's faction: settings and on/off, name,
+with everyone from any player, OCT's members too: settings and on/off, name,
 custom data, LCD texts, toolbars, button names, a medical room's spawn name, the
 projector's offsets, and new block groups on the NPC's grid. An admin with "Use
 terminals" on (Alt+F10) is let through, as by the game. Everything else stays open:
@@ -91,6 +92,31 @@ the game sends nothing back, stay on that client only until it reconnects. The
 server logs the first refusal of each kind per player and block. In a world built
 before "Anyone can use", the store, contracts, doors and buttons are still shared
 with everyone, and the option covers them too.
+
+### OCT faction
+
+With `NewPlayersJoinOct` on, a new player joins OCT's faction (`MoneyAuthorityFactionTag`)
+when the game makes their identity: the server sends the game's join request and its
+acceptance, as a scenario's medical room does. Players relate to each other only through
+factions, so this makes every player an ally of every other one and of the stations: green
+markers, and turrets don't fire at them
+([SE-975](https://tasks.cometworks.se/tasks/1866)). A player can leave OCT; OCT accepts no
+request to join it again. Players who were in the world before keep their faction.
+
+The game shares whatever a player builds with their faction. With `OctBuildsPrivate` on, a
+block an OCT member places, welds from a projection or welds to working order, and a ship a
+shipyard or a contract gives them, starts as No share instead. Placing a block runs on
+every machine, and each one gives it faction share there, so the server follows with the
+game's ownership change, which reaches every client; welding to working order sets the owner
+on the server only, and the plugin changes the share before that. No client plugin is
+needed. Players can still share a block with the faction themselves, which in OCT is
+everyone. A pasted grid keeps the shares it was saved with. Players in other factions keep
+the game's faction share. Where the plugin asks whether two players are teammates (the
+shipyard's welders, contract abuse) OCT doesn't count as a team (`OctFaction`).
+
+`tests/test_oct_faction.py` checks it in game with the client: a new player joins OCT and
+their placed blocks are No share, a player who makes their own faction keeps faction share
+(`--own-faction`), and with the options off nothing changes (`--no-oct`).
 
 ### Refill containers
 
@@ -413,7 +439,8 @@ can cancel it when back.
 A repair slot is an entry "Repair" in the shipyard's queue, without a blueprint or a
 payment. It takes a place in the queue, and a player has one entry at a time at any
 shipyard, a build or a slot. When its turn comes the shipyard's welders go on, and its containers, welders
-and connectors become the player's and are shared with their faction (`ShipyardTurn`).
+and connectors become the player's, shared with their faction unless that is OCT
+(`ShipyardTurn`).
 The reactors and everything else stay OCT's, and the connectors are not in trading
 mode. The player docks a ship with the components to one of the connectors, which are
 on the outside of the frame, and the welders take them through the conveyors to weld
@@ -580,12 +607,12 @@ nobody there; a cluster that can't, from before SE-904, needs a visit first. The
 chat messages find the player on any node. One who is logged off misses them.
 
 - At the queue's front the player gets the shipyard's cargo containers, welders and
-  connectors, shared with their faction, connectors and welders on and connectors
+  connectors, shared with their faction unless that is OCT, connectors and welders on and connectors
   not trading. The reactors and batteries stay OCT's, and conveyors can't pull
   uranium out of a reactor. OCT keeps most of the blocks, so it stays the grid's big
   owner and the grid a shipyard.
 - While the welders are the player's they work only on the player's blocks and their
-  faction's: a block's owner, or for a block without one who built it, and for a
+  faction's, OCT not counting as one: a block's owner, or for a block without one who built it, and for a
   projection the projector's owner. The order's own projector counts as theirs. Another
   player's ship in the shipyard is neither targeted nor welded, and its projection isn't
   built. The plugin patches ToolCore on the server for this, so a client may still draw
@@ -985,7 +1012,7 @@ Every minute the plugin fills each station up again:
   shipyard is inside its station's zone. In an offline partition the zone counts as it
   was when the partition went offline.
 - Against abuse, for salvage and wrecks: a contract on a grid its taker or their faction
-  owned or mostly built when it was posted fails at once, unpaid, so nobody sells their
+  (not OCT) owned or mostly built when it was posted fails at once, unpaid, so nobody sells their
   own ship to OCT by disowning it. It also fails when a third player comes to own the
   target. A grid once given away never gets another contract. The given grid's blocks
   count against the new owner's limits, not the old owner's.
@@ -1028,7 +1055,11 @@ member. Its value is what its blocks are built of, their mounted components, plu
 inventories, each item at the stations' price: the middle of OCT's bid and ask as
 the station's market shows them (the specialty price while the day's quota lasts),
 averaged over the stations that trade it. Items OCT doesn't trade count for nothing.
-OCT and the NPC factions are left out. The panels show the first `LeaderboardRows` (15)
+Only factions players made are on it: OCT, the economy's NPC factions and those of mods
+like MES are left out (a faction with a type other than player made, or without a human
+member). With `LeaderboardOctPlayers` on (off by default) OCT's players are ranked too,
+one by one by name with their own bank account and grids, and the board's title drops
+"FACTION". The panels show the first `LeaderboardRows` (15)
 in Monospace at `LeaderboardFontSize` (0.45), 45 characters a line.
 
 Every `LeaderboardIntervalSeconds` (300) the server counts the world's grids, a few

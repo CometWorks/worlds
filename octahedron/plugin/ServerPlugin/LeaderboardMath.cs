@@ -6,14 +6,14 @@ using System.Text;
 
 namespace ServerPlugin;
 
-/// <summary>A faction's grids on one server: their value in SC and their PCU.</summary>
+/// <summary>A faction's or an OCT player's grids on one server: their value in SC and their PCU.</summary>
 public struct FactionGrids
 {
     public long Value;
     public long Pcu;
 }
 
-/// <summary>A faction on the leaderboard.</summary>
+/// <summary>A faction, or a player of OCT's without a tag, on the leaderboard.</summary>
 public sealed class LeaderboardRow
 {
     public string Tag = "";
@@ -52,7 +52,7 @@ public static class LeaderboardMath
         return mids.Count == 0 ? 0 : (long)Math.Round(mids.Average());
     }
 
-    /// <summary>The grids of every faction, summed over the servers' reports.</summary>
+    /// <summary>The grids of every faction and OCT player, summed over the servers' reports.</summary>
     public static Dictionary<long, FactionGrids> Sum(
         IEnumerable<IReadOnlyDictionary<long, FactionGrids>> reports
     )
@@ -79,21 +79,27 @@ public static class LeaderboardMath
             .ToList();
 
     /// <summary>The board's text from ranked rows, for a Monospace panel <see cref="Width"/> characters wide.</summary>
-    public static string Format(IReadOnlyList<LeaderboardRow> ranked, int rows, DateTime updated)
+    /// <paramref name="players"/>: OCT's players are on it too, so it is no faction board.
+    public static string Format(
+        IReadOnlyList<LeaderboardRow> ranked,
+        int rows,
+        DateTime updated,
+        bool players = false
+    )
     {
         var text = new StringBuilder();
-        text.Append(Center("FACTION LEADERBOARD")).Append("\n\n");
+        text.Append(Center(players ? "LEADERBOARD" : "FACTION LEADERBOARD")).Append("\n\n");
         text.Append(" #  ")
             .Append("Tag".PadRight(5))
             .Append(' ')
-            .Append("Faction".PadRight(13))
+            .Append((players ? "Name" : "Faction").PadRight(13))
             .Append(' ')
             .Append("Value SC".PadLeft(13))
             .Append(' ')
             .Append("PCU".PadLeft(7))
             .Append('\n');
         if (ranked.Count == 0)
-            text.Append(Center("No factions yet")).Append('\n');
+            text.Append(Center(players ? "Nobody yet" : "No factions yet")).Append('\n');
         for (int i = 0; i < Math.Min(rows, ranked.Count); i++)
         {
             var r = ranked[i];
@@ -141,7 +147,7 @@ public static class LeaderboardMath
     public static Dictionary<string, long> DecodePrices(string text) =>
         Records(text).ToDictionary(f => f[0], f => L(f[1]));
 
-    /// <summary>faction id, value, PCU</summary>
+    /// <summary>faction or OCT player id, value, PCU</summary>
     public static string EncodeGrids(IReadOnlyDictionary<long, FactionGrids> grids) =>
         string.Concat(grids.Select(g => $"{S(g.Key)}\t{S(g.Value.Value)}\t{S(g.Value.Pcu)}\n"));
 

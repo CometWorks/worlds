@@ -25,6 +25,7 @@ namespace ServerPlugin;
 [Section("market", caption: "Station Market")]
 [Section("contracts", caption: "Contracts")]
 [Section("leaderboard", caption: "Leaderboard")]
+[Section("faction", caption: "OCT Faction")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -135,6 +136,27 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = true;
+
+    [BoolOption(
+        "Put every new player into the faction tagged MoneyAuthorityFactionTag, OCT, as a member. Players can leave it.",
+        Parent = "faction"
+    )]
+    public bool NewPlayersJoinOct
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [BoolOption(
+        "Blocks a player in OCT places, welds to working order or gets from a shipyard or contract start as No share instead of "
+            + "shared with the faction, which is every player. Other factions keep the game's faction share.",
+        Parent = "faction"
+    )]
+    public bool OctBuildsPrivate
+    {
+        get;
+        set => SetField(ref field, value);
+    }
 
     [BoolOption("Fill the turrets with ammo.", Parent = "stations")]
     public bool StationReloadTurrets
@@ -1500,6 +1522,16 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = "Curved LCD Panel - Station Lounge Leaderboard";
+
+    [BoolOption(
+        "Rank OCT's players one by one, by name, with their own bank account and grids. Off: OCT is left out with all its players.",
+        Parent = "leaderboard"
+    )]
+    public bool LeaderboardOctPlayers
+    {
+        get;
+        set => SetField(ref field, value);
+    }
 
     [IntOption(
         10,

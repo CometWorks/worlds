@@ -111,9 +111,14 @@ NPC_NAME = "Octahedron Authority"
 # a station needs nothing from its cargo.
 NPC_BALANCE = 1_000_000_000
 NPC_TAG = "OCT"
-# Blocks players use on a station; everything else stays with the owner's faction. Whoever a block
-# is shared with can also change its settings (SE-936), so these stay the faction's with the game's
-# "Anyone can use" on, which lets every player use them without a terminal.
+# OCT's logo (the game's own) on a white background; the game saves colors as HSV offsets
+NPC_ICON = r"Textures\FactionLogo\Others\OtherIcon_8.dds"
+NPC_COLOR = (0.0, -0.8, 0.55)  # white
+NPC_ICON_COLOR = (0.0, -0.8, -0.45)  # black
+# Blocks players use on a station; everything else stays the owner's, shared with nobody: every
+# player joins OCT's faction (the Octahedron plugin's NewPlayersJoinOct), so faction share would be
+# everyone's. Whoever a block is shared with can also change its settings (SE-936), so these stay
+# unshared with the game's "Anyone can use" on, which lets every player use them without a terminal.
 ANYONE_CAN_USE = {
     "StoreBlock", "ContractBlock", "VendingMachine", "Door", "AirtightSlideDoor", "ButtonPanel",
 }  # fmt: skip
@@ -124,7 +129,7 @@ ANYONE_CAN_USE = {
 PUBLIC_BLOCKS = {"MedicalRoom", "Projector", "Cockpit"}
 DOORS = {"Door", "AdvancedDoor", "AirtightSlideDoor", "AirtightHangarDoor"}
 # The one container per station the economy's refill puts loot into, through the Octahedron
-# plugin's StationLootContainerName (config/octahedron.cfg). It stays with the faction on every
+# plugin's StationLootContainerName (config/octahedron.cfg). It is shared with nobody on every
 # station, so the loot it gets each economy tick can't be farmed.
 LOOT_CONTAINER = "Station Loot"
 LOOT_CONTAINER_BLUEPRINT_NAME = "Cargo - Station - Tools Bottles Ammo (shared)"
@@ -155,8 +160,9 @@ SHIPYARD_PLACE = (
 )
 # The pair's block bounds stay this far inside the safe zone's edge
 SAFE_ZONE_MARGIN = 10.0
-# Its refill stations and lights are shared with everyone. Its containers, connectors and welders go
-# to a player for their turn at it, its power never: the Octahedron plugin keeps the reactors at
+# Its refill stations and lights are shared with everyone, the rest with nobody. Its containers,
+# connectors and welders go to a player for their turn at it, its power never: the Octahedron plugin
+# keeps the reactors at
 # SHIPYARD_REACTOR_URANIUM ingots and the batteries charged (RefillContainers in
 # config/octahedron.cfg).
 SHIPYARD_SHARED = {"MedicalRoom", "ReflectorLight"}
@@ -224,6 +230,8 @@ SETTINGS = {
     # dedicated server admits at most MaxPlayers players, so both are set
     "MaxPlayers": MAX_PLAYERS,
     "BlockLimitsEnabled": "PER_PLAYER",
+    # Every player is in OCT, and the game spares allies' characters from rifle fire without it
+    "EnableFriendlyFire": "true",
     "TotalPCU": 1_000_000 * MAX_PLAYERS,
     "MaxFactionsCount": 0,
     "EnableCopyPaste": "false",
@@ -658,6 +666,13 @@ def stock(block, kind, uranium=REACTOR_URANIUM):
         block.find("Queue").clear()
 
 
+def hide(block):
+    """A reactor: no player gets at its uranium, and inventory screens don't list it. It stays on
+    the conveyors, which it shares with the containers."""
+    block.find("ShareMode").text = "None"
+    set_child(block, "ShowInInventory", "false")
+
+
 def clear_program(block):
     """The blueprint's programmable block carries MMaster's Automatic LCDs 2, which the
     stations don't need (SE1-0121). The block stays, empty and off. Older versions of the
@@ -688,23 +703,25 @@ def station(template, ids, name, center, forward, up, owner):
             continue
         block.find("Owner").text = str(owner)
         kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
-        block.find("ShareMode").text = "All" if kind in PUBLIC_BLOCKS else "Faction"
+        block.find("ShareMode").text = "All" if kind in PUBLIC_BLOCKS else "None"
         if kind in ANYONE_CAN_USE:
             set_child(block, "AnyoneCanUse", "true")
         if kind in DOORS and block.findtext("Enabled") == "false":
             # Off in the blueprint, like the engineering section's airlocks: shut to players
-            block.find("ShareMode").text = "Faction"
+            block.find("ShareMode").text = "None"
             set_child(block, "AnyoneCanUse", "false")
         if block.findtext("CustomName") == LOOT_CONTAINER_BLUEPRINT_NAME:
             loot = block
             set_child(block, "CustomName", LOOT_CONTAINER)
-            block.find("ShareMode").text = "Faction"
+            block.find("ShareMode").text = "None"
         if block.findtext("CustomName") == FREE_TOOLS_BLUEPRINT_NAME:
             free_tools += 1
             set_child(block, "CustomName", FREE_TOOLS)
             set_child(block, "ShowInInventory", "true")
             block.find("ShareMode").text = "All"
         stock(block, kind)
+        if kind == "Reactor":
+            hide(block)
         if kind == "MyProgrammableBlock":
             clear_program(block)
         if (
@@ -882,9 +899,10 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
             continue
         block.find("Owner").text = str(owner)
         kind = block.get(XSI_TYPE).replace("MyObjectBuilder_", "")
-        block.find("ShareMode").text = "All" if kind in SHIPYARD_SHARED else "Faction"
+        block.find("ShareMode").text = "All" if kind in SHIPYARD_SHARED else "None"
         if kind == "Reactor":
             set_child(block, "CustomName", SHIPYARD_REACTOR)
+            hide(block)
         if kind == "BatteryBlock":
             set_child(block, "CustomName", SHIPYARD_BATTERY)
         if kind in SHIPYARD_OFF:
@@ -1362,10 +1380,13 @@ def add_npc(checkpoint, ids):
     el(faction, "AutoAcceptMember", "false")
     el(faction, "AutoAcceptPeace", "true")
     el(faction, "AcceptHumans", "false")
-    el(faction, "EnableFriendlyFire", "false")
+    el(faction, "EnableFriendlyFire", "true")
     # A trade faction: the economy stocks its stations' stores and offers contracts there
     el(faction, "FactionType", "Trader")
     el(faction, "FactionTypeString", "Trader")
+    vector(faction, "CustomColor", NPC_COLOR)
+    vector(faction, "IconColor", NPC_ICON_COLOR)
+    el(faction, "FactionIcon", NPC_ICON)
     item = el(factions.find("Players/dictionary"), "item")
     el(item, "Key", identity_id, **{XSI_TYPE: "xsd:long"})
     el(item, "Value", faction_id, **{XSI_TYPE: "xsd:long"})

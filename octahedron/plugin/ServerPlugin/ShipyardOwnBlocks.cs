@@ -83,7 +83,7 @@ internal static class ShipyardOwnBlocks
             return;
 
         var player = tool.OwnerId;
-        var faction = MySession.Static.Factions.GetPlayerFaction(player);
+        var faction = OctFaction.Team(player);
         bool Theirs(long identity) =>
             identity == player || faction != null && faction.IsMember(identity);
         bool Other(IMySlimBlock block)
