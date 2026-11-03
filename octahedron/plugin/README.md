@@ -34,6 +34,17 @@ whether at its start or with a partition it gets later, then every
 `EconomyTickInSeconds`. With `StationRefillEnabled` off, that is the game's own
 refill.
 
+### Station connectors
+
+With `StationConnectorsTrade` on, the connectors of every trade station are kept
+trading and shared with the station owner's faction only. A ship docked to a
+trading connector gets no power, gas or conveyor access from the station. Before,
+the connectors were shared with everyone, so a player could open one's terminal,
+turn trading off and charge and fuel a ship from the station for free. Every 5
+seconds each connector found otherwise is put right, and a ship docked to one that
+didn't trade is let go first. Players dock just the same: that needs no access to
+the connector. On a cluster each node does this for the stations it simulates.
+
 ### Refill containers
 
 `RefillContainers` keeps blocks stocked with fixed items, independent of the

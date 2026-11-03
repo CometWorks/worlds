@@ -108,10 +108,12 @@ NPC_NAME = "Octahedron Authority"
 # a station needs nothing from its cargo.
 NPC_BALANCE = 1_000_000_000
 NPC_TAG = "OCT"
-# Blocks players use on a station, shared with everyone; everything else stays with the owner's faction
+# Blocks players use on a station, shared with everyone; everything else stays with the owner's faction.
+# Not the connectors: they trade, and anyone with access could turn that off and take the station's
+# power and hydrogen (SE-936). Docking needs no access.
 PUBLIC_BLOCKS = {
     "MedicalRoom", "Projector", "StoreBlock", "ContractBlock", "VendingMachine", "Door",
-    "AirtightSlideDoor", "ButtonPanel", "Cockpit", "ShipConnector",
+    "AirtightSlideDoor", "ButtonPanel", "Cockpit",
 }  # fmt: skip
 # The one container per station the economy's refill puts loot into, through the Octahedron
 # plugin's StationLootContainerName (config/octahedron.cfg). It stays with the faction on every
@@ -744,6 +746,8 @@ def station(template, ids, name, center, forward, up, owner):
             set_child(block, "SpawnName", name)
         if kind == "RadioAntenna":
             set_child(block, "HudText", name)
+        if kind == "ShipConnector":
+            set_child(block, "TradingEnabled", "true")
     assert loot is not None, f"no {LOOT_CONTAINER_BLUEPRINT_NAME} for {LOOT_CONTAINER}"
     assert free_tools == FREE_TOOLS_COUNT, f"{free_tools} {FREE_TOOLS_BLUEPRINT_NAME}"
     return as_sector_object(grid)
