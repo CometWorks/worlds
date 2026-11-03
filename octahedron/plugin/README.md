@@ -387,7 +387,11 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   its components the shipyard's containers, and it may have at most
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
   ordered it. The quote checks that; an order that
-  doesn't fit when its turn comes ends with everything given back.
+  doesn't fit when its turn comes ends with everything given back. When a
+  blueprint with subgrids is too big, the message also suggests loading it with
+  the Multigrid Projector plugin of Pulsar or blueprinting the ship again in an
+  offline game: a client without the plugin, or an old blueprint, can have its
+  subgrids out of place.
 - The next order starts when no block of another ship is in the shipyard's free
   space: a ship left there has to fly out first. The space ends at the walls, so
   a ship docked at the connectors outside them is not in the way, and neither the

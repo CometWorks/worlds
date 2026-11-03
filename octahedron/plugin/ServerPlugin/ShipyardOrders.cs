@@ -378,7 +378,14 @@ internal static partial class ShipyardOrders
         var room = space.HalfExtent * 2;
         var size = Size(blueprint, start, outward, room, out _, out var turn);
         if (size.X > room.X || size.Y > room.Y || size.Z > room.Z)
-            return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}.";
+            // A client without Multigrid Projector can send the subgrids out of place, and so can
+            // an old blueprint; a new one made offline has them right
+            return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}."
+                + (
+                    blueprint.Count > 1
+                        ? " Its subgrids may be off: load it with the Multigrid Projector plugin of Pulsar, or blueprint the ship again in an offline game."
+                        : ""
+                );
         var needed = Components(blueprint, skipFirst: !arms)
             .Sum(c => MyDefinitionManager.Static.GetPhysicalItemDefinition(c.Key).Volume * c.Value);
         var capacity = Containers(shipyard).Sum(i => (double)i.MaxVolume);
