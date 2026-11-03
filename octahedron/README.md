@@ -13,6 +13,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `build_trader_ships.py` | builds the offline "Octahedron Trader Ships" showcase save of the SE-948 cargo ships listed in `trader_ships.txt` (SE-985); see its docstring |
 | `make_helix_shipyard.py` | generates the double helix shipyard blueprint (SE-952), not used by the world yet |
+| `make_moon_shipyard.py` | generates the Moon Shipyard blueprint (SE-986), two arcs around the build volume; not used by the world yet |
 | `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Hangar plugin's options (`hangar.cfg`); the Performance plugin's options that differ from its defaults (`performance.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
