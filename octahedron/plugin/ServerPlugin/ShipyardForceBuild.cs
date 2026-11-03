@@ -58,27 +58,15 @@ internal static partial class ShipyardOrders
     // have their components. False if there were none.
     private static bool Force(MyCubeGrid shipyard, Order order)
     {
-        var api = MgpApi();
-        if (api == null)
-            return false;
         var projector = order.Projector;
-        var count = ((Func<long, int>)api[1])(projector.EntityId);
-        var builders = ((Func<long, List<MyObjectBuilder_CubeGrid>>)api[2])(projector.EntityId);
-        if (count == 0 || builders == null)
-            return false;
         if (!forced.TryGetValue(order, out var tried))
             forced[order] = tried = [];
         var parts = new Dictionary<string, int>();
         var placed = new List<MySlimBlock>();
         var why = new Dictionary<string, int>();
         var unbuilt = 0;
-        for (var i = 0; i < count && i < builders.Count; i++)
+        foreach (var (i, blueprint, preview, built) in Projected(projector))
         {
-            var preview =
-                ((Func<long, int, IMyCubeGrid>)api[3])(projector.EntityId, i) as MyCubeGrid;
-            var built = ((Func<long, int, IMyCubeGrid>)api[4])(projector.EntityId, i) as MyCubeGrid;
-            if (preview == null)
-                continue;
             if (built == null)
             {
                 unbuilt++;
@@ -109,7 +97,11 @@ internal static partial class ShipyardOrders
                     continue;
                 }
                 tried.Add((i, block.Min));
-                if (Place(order, builders[i], preview, built, block) is { } slim)
+                Plugin.Log.Info(
+                    $"Shipyard order {order.Id}: placing {block.BlockDefinition.Id.SubtypeName} on {built.DisplayName} "
+                        + $"by force, into {Overlapped(block, built)}"
+                );
+                if (Place(order, blueprint, preview, built, block) is { } slim)
                     placed.Add(slim);
             }
         }
@@ -147,7 +139,8 @@ internal static partial class ShipyardOrders
     }
 
     // The block on the built grid, where the projection has it, from the blueprint's own builder
-    // as Multigrid Projector would build it, at the integrity of a new block
+    // as Multigrid Projector would build it, at the integrity of a new block, without the
+    // collision check
     private static MySlimBlock Place(
         Order order,
         MyObjectBuilder_CubeGrid blueprint,
@@ -199,10 +192,6 @@ internal static partial class ShipyardOrders
         var visuals = new MyCubeGrid.MyBlockVisuals(
             block.ColorMaskHSV.PackHSVToUint(),
             block.SkinSubtypeId
-        );
-        Plugin.Log.Info(
-            $"Shipyard order {order.Id}: placing {block.BlockDefinition.Id.SubtypeName} on {built.DisplayName} "
-                + $"by force, into {Overlapped(block, built)}"
         );
         ShipyardArm.Build(built, location, visuals, builder, order.Player);
         var slim = built.GetCubeBlock(center);

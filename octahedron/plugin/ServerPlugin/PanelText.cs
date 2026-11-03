@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace ServerPlugin;
@@ -38,6 +39,12 @@ public static class PanelText
         lines[maxLines - 1] = last + "...";
         return string.Join("\n", lines.Take(maxLines));
     }
+
+    // A deadline as the minutes left and its UTC time, like "59 min (by 03:38 UTC)". A bare UTC
+    // time reads like a local one, so a player one hour ahead of UTC took it for the start (SE-962)
+    public static string Left(DateTime ends, DateTime now) =>
+        $"{Math.Max(0, (int)Math.Ceiling((ends - now).TotalMinutes))} min "
+        + $"(by {ends.ToString("HH:mm", CultureInfo.InvariantCulture)} UTC)";
 
     // A list item: the prefix, like "1. ", then the text clipped and indented under its first line
     public static string Item(string prefix, string text, int columns, int maxLines) =>

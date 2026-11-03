@@ -38,12 +38,59 @@ refill.
 
 With `StationConnectorsTrade` on, the connectors of every trade station are kept
 trading and shared with the station owner's faction only. A ship docked to a
-trading connector gets no power, gas or conveyor access from the station. Before,
+trading connector gets no gas or conveyor access from the station, and no power
+from the game (see Station charging). Before,
 the connectors were shared with everyone, so a player could open one's terminal,
 turn trading off and charge and fuel a ship from the station for free. Every 5
 seconds each connector found otherwise is put right, and a ship docked to one that
 didn't trade is let go first. Players dock just the same: that needs no access to
 the connector. On a cluster each node does this for the stations it simulates.
+
+### Station charging
+
+With `StationDockCharging` on, a ship docked at a trade station's trading
+connector charges from the station. The game passes no power through a trading
+connection: the grids keep separate resource distributors, and joining them would
+open the station's conveyors and terminal too. So the plugin moves the energy
+itself, once a second. Each battery of the docked ship that is on and not set to
+discharge gets its input power (12 MW for a large battery) until it is full. The
+station pays for it with uranium from its working reactors, at the rate they burn
+it, and then from its batteries.
+
+The station has a fuse. While the docked ships want more power than the station
+has to spare (its sources' maximum output less what its own blocks draw), the ship
+that wants the most stops charging, then the next, until the rest fit. The ship's
+owner gets a chat message. Charging stays off for that ship until every connector
+of the station that held it lets go; docking again resets the fuse. A ship's
+grids on rotors, pistons or its own connectors count as one ship. On a cluster
+each node charges at the stations it simulates.
+
+### Shared NPC blocks
+
+Whoever a block is shared with can also change it: the game's ownership check
+guards a block's settings as well as its use. `build_world.py` keeps a station's
+store, ATM, vending machine, contract block, doors and button panel with OCT's
+faction and turns on their "Anyone can use", which lets every player use them
+without a terminal. A door the blueprint has off, like the engineering section's
+airlocks, gets no "Anyone can use": players can neither open it nor switch it on.
+The medical room, hologram table, seats and Free Tools boxes
+have no such option: the game lets only those it shares them with heal there, load
+a blueprint, sit or reach the inventory. So they are shared with everyone, as are
+the shipyard's medical room and lights.
+
+With `NpcBlocksLocked` on, the server refuses a change to any block an NPC shares
+with everyone from a player outside the NPC's faction: settings and on/off, name,
+custom data, LCD texts, toolbars, button names, a medical room's spawn name, the
+projector's offsets, and new block groups on the NPC's grid. An admin with "Use
+terminals" on (Alt+F10) is let through, as by the game. Everything else stays open:
+the inventories, the medical room's healing and refills and its wardrobe, sitting in
+a seat, and loading a blueprint into a hologram table and switching the table on or
+off. A refused setting of a shared block is sent back to the player's client. A
+refused name or text, and a refused change to a block that isn't shared, for which
+the game sends nothing back, stay on that client only until it reconnects. The
+server logs the first refusal of each kind per player and block. In a world built
+before "Anyone can use", the store, contracts, doors and buttons are still shared
+with everyone, and the option covers them too.
 
 ### Refill containers
 
@@ -225,6 +272,41 @@ game version 1.210.* only; on any other version the patches aren't applied, and 
 says at load which way it went. [SE-882](https://tasks.cometworks.se/tasks/1769) removes
 it and turns the world setting on.
 
+### Clang drives
+
+With `ClangDrivesEnabled` on (the default), the server switches a ship off when its speed
+changes much faster than its thrusters can change it, the way the Y key in its cockpit does:
+the power switch and every battery, reactor, engine and other power producer of the ship go
+off. This stops clang drives, and a ship that brakes by ramming a station or another ship in
+a safe zone. The log names the grid, its owner, the acceleration measured and the one
+allowed, and the owner gets a chat message, at most one a minute. A ship over the limit that
+one of the exceptions below leaves on gets a log line too, with the reason. Nothing switches
+the ship back on; the player can, with Y.
+
+- The ship is the grids joined by rotors, pistons, hinges, connectors and landing gear. Its
+  speed is their common center of mass's, so parts moving inside the ship cancel out.
+- Each simulation frame's acceleration is the speed change from the frame before over 1/60 s
+  of game time. These are averaged over `ClangDriveWindowFrames` (6, 100 ms), so a single
+  spike counts only for its share, and server lag changes nothing.
+- The allowed acceleration is `ClangDriveFactor` (2) times the thrust of the ship's strongest
+  direction at full override, divided by its mass, plus the natural and artificial gravity
+  at its center of mass. Every built thruster counts, on or off, as effective as it is at
+  that place, and as it was up to a second before: a ship ramming a station may lose its
+  thrusters in the hit. A ship without thrusters may only fall.
+- Below `ClangDriveMinAcceleration` (3 m/s²) above gravity nothing counts: a heavy ship
+  bumping into a station while docking stays on. Nor does a ship slower than
+  `ClangDriveMinSpeed` (20 m/s) both before and after the window.
+- Outside safe zones a crash doesn't count: a ship whose grid touched an asteroid, a planet
+  or another grid within the last second is left on. Its own grids touching each other, the
+  clang, count. Inside a safe zone a crash counts, but only for the faster of two ships
+  that hit each other: the one rammed is left on. A ship left on is left alone for five
+  seconds more, the aftermath of its hit: its wreck's pieces keep bumping into each other.
+- Ships with a static grid (one docked or landed on a station), NPC ships, ships in a
+  shipyard's build space and ships already switched off are left alone.
+
+On a cluster each node checks the ships it simulates.
+
+### PCU per ship or station
 ### PCU per ship or station
 
 A ship or station may have at most `GroupPcuLimit` (60,000) PCU: all grids
@@ -443,10 +525,20 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   in during a build (it comes back in range, joins or crosses to this node) still
   turns the tools off before that message comes, and ToolCore tells it only when
   the server's switch changes. So the plugin sends each such client the switch itself
-  at the next 10 s check and once more at the one after (SE-782), and nothing to the
-  clients it already told. ToolCore is the mod's own code: this reaches its session
+  at the next 10 s check and once more at the one after (SE-782). Not every such client
+  shows up as one with a new tool, so every 30 s of a build the switch also goes to the
+  online players within sync distance of the shipyard that have the tools (SE-963).
+  ToolCore is the mod's own code: this reaches its session
   and packet by reflection and does nothing if they are gone.
-- A build whose ship gains no integrity for 60 s stops. A paid build short of
+- A build whose ship gains no integrity for 60 s has stalled. The plugin first
+  places the projected blocks that only a collision with another part of the ship
+  keeps the welders from, welds them from the containers and watches the physics
+  for 10 s: a ship that shakes (clang) is removed and refunded, else the build goes
+  on (SE-940). Then it finishes the blocks the welders left though the containers
+  hold their components, which happens on big ships: it welds the built ones and
+  places and welds the projected ones that pass the build check, up to 200 at each
+  10 s check while the welders make no progress, and the build goes on (SE-953).
+  When nothing is left to finish, the build stops. A paid build short of
   components in the shipyard first waits `ShipyardTopUpMinutes` (5) for a top-up and
   tells the player. Plain blocks, armor and decorations, are those of the plain
   `CubeBlock` type; every block of its own type, lights, panels and conveyors included,
@@ -1233,6 +1325,15 @@ head, each stopped by the cap, next to a copy built by nobody that isn't.
 `tests/test_gravity_drive.py` pilots ships with a gravity drive, and with
 `--game-version` checks the other side of the version gate.
 `tests/gravity_drive_cluster.py` pilots them on a cluster node.
+`tests/test_clang_drive.py` runs one server without a client, with tests/clang-probe pushing
+ships beyond their thrust as a clang drive would: pushed at 3x and 1.5x, an NPC's ship,
+one-frame speed jumps of 3 s, 0.1 s and 0.3 s of thrust, a ship at full override, ramming a
+wall at 50 m/s in a safe zone and outside, a ship without thrusters ramming, a ship at rest
+rammed in the zone, a heavy ship falling toward the planet, Viktor's "Clang with Piston"
+contraption with a thruster added, and with `CLANG_BLUEPRINTS` two clang drives from the
+Workshop, a sliding door one and a merge block one.
+`tests/clang_drive_cluster.py` checks a speed jump, a ram in a safe zone and a crash
+outside on a cluster node, without a client.
 `tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
 with the client, welding them through shipyard orders, with the rule off too, and a
 test mod's turret whose definition has it on. It buys ships at a store block and

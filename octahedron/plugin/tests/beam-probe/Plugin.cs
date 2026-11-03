@@ -17,7 +17,9 @@ namespace BeamProbe;
 
 // Test only, for tests/test_shipyard_beams.py: one line a second with what ToolCore's own
 // state says about the tools of shipyard grids, read by reflection as they are the mod's
-// internals, and one line per safe zone event about a shipyard grid.
+// internals, and one line per safe zone event about a shipyard grid. A beam-probe.off file
+// next to the log switches the shipyard's tools off here alone, as a zone that holds the grid
+// makes ToolCore do, and goes away.
 // ReSharper disable once UnusedType.Global
 public class Plugin : IPlugin
 {
@@ -148,6 +150,19 @@ public class Plugin : IPlugin
         }
         if (yard == null)
             return;
+        var off = Path.Combine(MyFileSystem.UserDataPath, "beam-probe.off");
+        if (File.Exists(off))
+        {
+            File.Delete(off);
+            var switched = 0;
+            foreach (var comp in (IEnumerable)Get(Get(instance, "ToolMap"), "Values"))
+                if (IsShipyard(Get(comp, "Grid") as MyCubeGrid))
+                {
+                    AccessTools.Property(comp.GetType(), "Activated").SetValue(comp, false);
+                    switched++;
+                }
+            Write($"OFF {switched}");
+        }
         var allowed = MySessionComponentSafeZones.IsActionAllowed(yard, MySafeZoneAction.Welding);
         Write(
             $"TOOLS tools={tools} activated={activated} track={track} powered={powered} "

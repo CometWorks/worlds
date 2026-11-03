@@ -84,9 +84,11 @@ station and shipyard blueprints are in `blueprints/`.
   still tilted against the Sun. Each station sits in a 250 m admin safe zone, Moon Station
   in a 500 m one that also holds its longer shipyard, owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
-  zone allows only drilling and landing gear locks: no welding, grinding or
-  block placing, also not by the shipyard's welders until the Octahedron plugin
-  makes an exception for them (SE1-0204). The stations start empty, apart from
+  zone allows no action: no welding, grinding or block placing, also not by the
+  shipyard's welders until the Octahedron plugin makes an exception for them
+  (SE1-0204), and no drilling or landing gear and magnetic plate locks
+  ([SE-974](https://tasks.cometworks.se/tasks/1865)). A gear locked before the
+  zone forbade it stays locked until it is released. The stations start empty, apart from
   10,000 kg of uranium ingots in each large reactor, a full safe zone block (75
   zone chips) and the gas in the tanks. The station's programmable block is
   emptied and off: the blueprint's Automatic LCDs 2 script isn't needed
@@ -318,10 +320,20 @@ game update that changes the planet or voxel material definitions or maps.
   server reads the file as `Octahedron.cfg` from its instance folder; the
   options it leaves out keep their defaults.
 - The stations' 8 connectors trade and are shared with OCT's faction only, so a
-  docked ship gets no power, hydrogen or conveyor access from the station and
-  no player can turn trading off. Trading needs no access to them. On the
-  server the Octahedron plugin keeps them that way (`StationConnectorsTrade`),
-  in a world from before the rule too.
+  docked ship gets no hydrogen or conveyor access from the station and no
+  player can turn trading off. Trading needs no access to them. On the server
+  the Octahedron plugin keeps them that way (`StationConnectorsTrade`), in a
+  world from before the rule too, and charges a docked ship's batteries from
+  the station (`StationDockCharging`).
+- A station's store, ATM, vending machine, contract block, doors and button
+  panel stay with OCT's faction, with the game's "Anyone can use" on: every
+  player uses them, nobody outside the faction can change them. A door the
+  blueprint has off, like the engineering section's airlocks, stays off and shut
+  to players. The medical
+  room, hologram table, seats and Free Tools boxes have no such option, so they
+  are shared with everyone, and on the server the Octahedron plugin refuses
+  players' changes to them (`NpcBlocksLocked`): no settings, names, texts or
+  toolbars.
 - Every station has 4 "Free Tools" cargo terminals (the blueprint's hidden
   toolboxes by its "Free tools!" signs, renamed and shown in inventory screens)
   shared with all players. On the server, the Octahedron plugin's

@@ -10,16 +10,21 @@ using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
+using Sandbox.Game.Entities.Character.Components;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
+using Sandbox.Game.GameSystems;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.SessionComponents;
+using Sandbox.Game.Weapons;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using SpaceEngineers.Game.Definitions.SafeZone;
+using SpaceEngineers.Game.Entities.Blocks;
 using VRage;
 using VRage.Game;
 using VRage.Game.ModAPI;
+using VRage.Game.ObjectBuilders.Components;
 using VRage.ObjectBuilders;
 using VRage.Plugins;
 using VRageMath;
@@ -106,7 +111,7 @@ public sealed class ProbeCommands : CommandModule
     [Command(
         "dock",
         "Builds a ship with a cargo container at a free connector of the station and connects it: SHIP grid-id",
-        "!sprobe dock <station> <mine|stranger> [Type/Subtype=amount ...]"
+        "!sprobe dock <station> <mine|stranger> [Type/Subtype=amount,...,AT=x;y;z]"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Dock(
@@ -119,10 +124,18 @@ public sealed class ProbeCommands : CommandModule
             owner == "mine"
                 ? Context.Caller.IdentityId
                 : MySession.Static.Players.CreateNewIdentity("Dock Stranger").IdentityId;
+        // AT=x,y,z: the station connector at that cell, else the first free one
+        var at = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("AT="));
+        var cell = at == null ? null : at.Substring(3).Replace(';', ',');
         var free = StationGrids(station)
             .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
             .FirstOrDefault(c =>
-                !c.Connected && c.Other == null && connecting.All(x => x.Station != c)
+                !c.Connected
+                && c.Other == null
+                && connecting.All(x => x.Station != c)
+                && (cell == null || $"{c.Min.X},{c.Min.Y},{c.Min.Z}" == cell)
             );
         if (free == null)
             return "NOCONNECTOR";
@@ -203,15 +216,18 @@ public sealed class ProbeCommands : CommandModule
             }
             grid.CubeBlocks.Add(tank);
         }
-        // BAT=<MWh>: a battery holding that much, the ship's only power
+        // BAT=<MWh>: a battery holding that much, the ship's only power. BATS=<n>: n of them in a row.
         var bat = items
             .Split(',', StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault(p => p.StartsWith("BAT="));
-        if (bat != null)
+        var bats = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("BATS="));
+        for (int i = 0; bat != null && i < (bats == null ? 1 : int.Parse(bats.Substring(5))); i++)
         {
             var battery = Block<MyObjectBuilder_BatteryBlock>(
                 "LargeBlockBatteryBlock",
-                new Vector3I(1, 0, 1),
+                new Vector3I(1, 0, 1 + i),
                 ownerId
             );
             battery.CurrentStoredPower = float.Parse(
@@ -224,7 +240,13 @@ public sealed class ProbeCommands : CommandModule
         var cargo = entity.GetFatBlocks<MyCargoContainer>().First();
         foreach (var pair in items.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
-            if (pair.StartsWith("H2=") || pair.StartsWith("BAT=") || pair == "STOCKPILE")
+            if (
+                pair.StartsWith("H2=")
+                || pair.StartsWith("BAT=")
+                || pair.StartsWith("BATS=")
+                || pair.StartsWith("AT=")
+                || pair == "STOCKPILE"
+            )
                 continue;
             var f = pair.Split('=');
             if (!MyDefinitionId.TryParse("MyObjectBuilder_" + f[0], out var id))
@@ -1388,6 +1410,63 @@ public sealed class ProbeCommands : CommandModule
             .SelectMany(g => g.GetFatBlocks<MyCargoContainer>())
             .Where(b => b.CustomName?.ToString().Trim() == "Free Tools");
 
+    [Command(
+        "power",
+        "The station's spare power and its reactors' uranium, after turning its reactors on or off if asked, and with off, all but the given number of its batteries: POWER station spare=MW uranium=kg reactors=n",
+        "!sprobe power <station> [on|off [batteries]]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Power(string station, string state = "", int batteries = int.MaxValue)
+    {
+        var grid = StationGrids(station).First();
+        var reactors = grid.GetFatBlocks<MyReactor>().ToList();
+        if (state != "")
+        {
+            foreach (var reactor in reactors)
+                reactor.Enabled = state == "on";
+            int left = state == "on" ? int.MaxValue : batteries;
+            foreach (var battery in grid.GetFatBlocks<MyBatteryBlock>())
+                battery.Enabled = left-- > 0;
+        }
+        var distributor = grid.GridSystems.ResourceDistributor;
+        var electricity = MyResourceDistributorComponent.ElectricityId;
+        var spare =
+            distributor.MaxAvailableResourceByType(electricity, grid)
+            - distributor.TotalRequiredInputByType(electricity, grid);
+        var uranium = reactors.Sum(r =>
+            (double)r.GetInventory().GetItemAmount(r.BlockDefinition.FuelInfos[0].FuelId)
+        );
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "POWER {0} spare={1:0.###} uranium={2:0.####} reactors={3}",
+            station,
+            spare,
+            uranium,
+            reactors.Count
+        );
+    }
+
+    [Command(
+        "redock",
+        "Disconnects the ship from the station and connects it again once the connector lets it: REDOCK grid-id",
+        "!sprobe redock <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Redock(string gridId)
+    {
+        if (
+            !long.TryParse(gridId, out long id)
+            || !MyEntities.TryGetEntityById(id, out MyCubeGrid grid)
+        )
+            return $"REDOCK {gridId} gone";
+        var c = grid.GetFatBlocks<MyShipConnector>().First();
+        var station = c.Other;
+        c.TryDisconnect();
+        // A trading connector won't lock again for a while after letting go
+        connecting.Add((c, station, -1800));
+        return $"REDOCK {gridId}";
+    }
+
     [Command("undock", "Disconnects and deletes the probe's ships", "!sprobe undock")]
     [Permission(MyPromoteLevel.Admin)]
     public string Undock()
@@ -1469,6 +1548,251 @@ public sealed class ProbeCommands : CommandModule
     }
 
     // Connectors lock once the new grid's physics is in
+    [Command(
+        "gear",
+        "A ship of one landing gear or magnetic plate with its lock face on a static armor block, 60% of the radius into the station's safe zone or 100 m out of it: GEAR grid-id inzone=yes|no gravity=m/s2",
+        "!sprobe gear <station> <in|out> <LargeBlockLandingGear|LargeBlockMagneticPlate> [auto]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Gear(string station, string where, string subtype, string auto = "")
+    {
+        var zone = StationZone(station);
+        if (zone == null)
+            return "NOZONE";
+        var center = zone.PositionComp.GetPosition();
+        var distance = where == "in" ? zone.Radius * 0.6 : zone.Radius + 100;
+        var spot = FreeSpot(center, distance, 25);
+        if (spot == null)
+            return "NOSPOT";
+        var owner = Context.Caller.IdentityId;
+        var ship = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = false,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = $"Gear {subtype}",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                spot.Value,
+                Vector3.Forward,
+                Vector3.Up
+            ),
+        };
+        var block = Block<MyObjectBuilder_LandingGear>(subtype, Vector3I.Zero, owner);
+        block.AutoLock = auto == "auto";
+        ship.CubeBlocks.Add(block);
+        var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(ship);
+        var gear = grid.GetFatBlocks<MyLandingGear>().First();
+        // The lock box: its Y axis is the face's normal, pointing away from the block
+        gear.GetBoxFromMatrix(gear.LockPositions[0], out var half, out var pivot, out var turn);
+        var normal = Vector3D.Transform(Vector3D.Up, turn);
+        if (Vector3D.Dot(normal, pivot - gear.PositionComp.WorldAABB.Center) < 0)
+            normal = -normal;
+        var pad = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = true,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = $"Gear Pad {grid.EntityId}",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                pivot + normal * (MyDefinitionManager.Static.GetCubeSize(MyCubeSize.Large) / 2),
+                (Vector3)normal,
+                (Vector3)Vector3D.CalculatePerpendicularVector(normal)
+            ),
+        };
+        pad.CubeBlocks.Add(
+            new MyObjectBuilder_CubeBlock
+            {
+                SubtypeName = "LargeBlockArmorBlock",
+                Min = Vector3I.Zero,
+                BlockOrientation = new SerializableBlockOrientation(
+                    Base6Directions.Direction.Forward,
+                    Base6Directions.Direction.Up
+                ),
+            }
+        );
+        MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(pad);
+        return $"GEAR {grid.EntityId} inzone={(zone.Contains(grid.PositionComp.WorldAABB.Center) ? "yes" : "no")} "
+            + $"gravity={MyGravityProviderSystem.CalculateNaturalGravityInPoint(spot.Value).Length():0.###} "
+            + $"half={V(half)}";
+    }
+
+    [Command(
+        "gearstate",
+        "The ship's landing gear: GEARSTATE grid-id mode=Unlocked|ReadyToLock|Locked auto=yes|no to=entity-id|none",
+        "!sprobe gearstate <grid-id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string GearState(long id)
+    {
+        var gear = ShipGear(id);
+        if (gear == null)
+            return $"NOGEAR {id}";
+        var to = ((SpaceEngineers.Game.ModAPI.IMyLandingGear)gear).GetAttachedEntity();
+        return $"GEARSTATE {id} mode={gear.LockMode} auto={(gear.AutoLock ? "yes" : "no")} "
+            + $"to={(to == null ? "none" : to.EntityId.ToString())}";
+    }
+
+    [Command(
+        "gearlock",
+        "Locks or unlocks the ship's landing gear, as its Lock and Unlock actions do",
+        "!sprobe gearlock <grid-id> <on|off>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string GearLock(long id, string state)
+    {
+        var gear = ShipGear(id);
+        if (gear == null)
+            return $"NOGEAR {id}";
+        var api = (SpaceEngineers.Game.ModAPI.Ingame.IMyLandingGear)gear;
+        if (state == "on")
+            api.Lock();
+        else
+            api.Unlock();
+        return $"GEARLOCK {id} {state}";
+    }
+
+    [Command(
+        "zone",
+        "Shows or sets the station's safe zone allowed actions, as the admin menu does: ZONE actions",
+        "!sprobe zone <station> [Drilling+LandingGearLock+...|None]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Zone(string station, string actions = "")
+    {
+        var zone = StationZone(station);
+        if (zone == null)
+            return "NOZONE";
+        if (actions != "")
+            zone.AllowedActions =
+                actions == "None" ? 0 : Enum.Parse<MySafeZoneAction>(actions.Replace('+', ','));
+        return zone.AllowedActions == 0
+            ? "ZONE None"
+            : $"ZONE {zone.AllowedActions.ToString().Replace(", ", "+")}";
+    }
+
+    // The first of 200 directions spread over a sphere around the center where no block of any
+    // grid is within the clearance
+    private static Vector3D? FreeSpot(Vector3D center, double distance, double clearance)
+    {
+        var blocks = new HashSet<MySlimBlock>();
+        for (int i = 0; i < 200; i++)
+        {
+            var y = 1 - (i + 0.5) / 100;
+            var r = Math.Sqrt(1 - y * y);
+            var a = i * Math.PI * (3 - Math.Sqrt(5));
+            var sphere = new BoundingSphereD(
+                center + new Vector3D(r * Math.Cos(a), y, r * Math.Sin(a)) * distance,
+                clearance
+            );
+            var clear = true;
+            foreach (
+                var g in MyEntities.GetTopMostEntitiesInSphere(ref sphere).OfType<MyCubeGrid>()
+            )
+            {
+                blocks.Clear();
+                g.GetBlocksInsideSphere(ref sphere, blocks);
+                clear &= blocks.Count == 0;
+            }
+            if (clear)
+                return sphere.Center;
+        }
+        return null;
+    }
+
+    [Command(
+        "drill",
+        "A static grid of a switched on ship drill and a battery inside a small asteroid, 60% of the radius into the station's safe zone or 100 m out of it: DRILL grid-id inzone=yes|no",
+        "!sprobe drill <station> <in|out>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Drill(string station, string where)
+    {
+        var zone = StationZone(station);
+        if (zone == null)
+            return "NOZONE";
+        var center = zone.PositionComp.GetPosition();
+        var spot = FreeSpot(center, where == "in" ? zone.Radius * 0.6 : zone.Radius + 100, 45);
+        if (spot == null)
+            return "NOSPOT";
+        MyWorldGenerator.AddAsteroidPrefabCentered(
+            "DeformedSphere1_64x64x64",
+            spot.Value,
+            $"Drill Rock {where}"
+        );
+        var owner = Context.Caller.IdentityId;
+        var ship = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = true,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = $"Drill {where}",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                spot.Value,
+                Vector3.Forward,
+                Vector3.Up
+            ),
+        };
+        var drill = Block<MyObjectBuilder_Drill>("LargeBlockDrill", Vector3I.Zero, owner);
+        drill.Enabled = true;
+        ship.CubeBlocks.Add(drill);
+        var size = MyDefinitionManager
+            .Static.GetCubeBlockDefinition(
+                new MyDefinitionId(typeof(MyObjectBuilder_Drill), "LargeBlockDrill")
+            )
+            .Size;
+        var battery = Block<MyObjectBuilder_BatteryBlock>(
+            "LargeBlockBatteryBlock",
+            new Vector3I(0, size.Y, 0),
+            owner
+        );
+        battery.CurrentStoredPower = 1;
+        ship.CubeBlocks.Add(battery);
+        var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(ship);
+        return $"DRILL {grid.EntityId} inzone={(zone.Contains(spot.Value) ? "yes" : "no")}";
+    }
+
+    [Command(
+        "drillstate",
+        "What the drill has dug: DRILLSTATE grid-id ore=kg on=yes|no",
+        "!sprobe drillstate <grid-id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string DrillState(long id)
+    {
+        if (!MyEntities.TryGetEntityById(id, out MyCubeGrid grid))
+            return $"NODRILL {id}";
+        var drill = grid.GetFatBlocks<MyShipDrill>().FirstOrDefault();
+        if (drill == null)
+            return $"NODRILL {id}";
+        var ore = drill.GetInventory().GetItems().Sum(i => (double)i.Amount);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "DRILLSTATE {0} ore={1:0.###} on={2}",
+            id,
+            ore,
+            drill.Enabled && drill.IsWorking ? "yes" : "no"
+        );
+    }
+
+    // The admin safe zone around the station
+    private static MySafeZone StationZone(string station)
+    {
+        var grid = StationGrids(station).FirstOrDefault();
+        return grid == null
+            ? null
+            : MySessionComponentSafeZones.SafeZones.FirstOrDefault(z =>
+                z.SafeZoneBlockId == 0 && z.Contains(grid.PositionComp.GetPosition())
+            );
+    }
+
+    private static MyLandingGear ShipGear(long id) =>
+        MyEntities.TryGetEntityById(id, out MyCubeGrid grid)
+            ? grid.GetFatBlocks<MyLandingGear>().FirstOrDefault()
+            : null;
+
     public static void Update()
     {
         for (int i = connecting.Count - 1; i >= 0; i--)
@@ -1501,6 +1825,321 @@ public sealed class ProbeCommands : CommandModule
             ShareMode = MyOwnershipShareModeEnum.None,
         };
         return block;
+    }
+
+    // The NPC's blocks of the station and its shipyard
+    private static IEnumerable<MyTerminalBlock> NpcBlocks(string station) =>
+        StationGrids(station)
+            .Append(Yard(station))
+            .Where(g => g != null)
+            .SelectMany(g => g.GetFatBlocks<MyTerminalBlock>())
+            .Where(b => MySession.Static.Players.IdentityIsNpc(b.OwnerId));
+
+    private static string Kind(MyCubeBlock block) =>
+        $"{block.BlockDefinition.Id.TypeId.ToString().Replace("MyObjectBuilder_", "")}/{block.BlockDefinition.Id.SubtypeName}";
+
+    // The game's "Anyone can use": every player uses the block without access to it
+    private static bool Anyone(MyTerminalBlock block) =>
+        block switch
+        {
+            MyStoreBlock b => b.AnyoneCanUse,
+            MyContractBlock b => b.AnyoneCanUse,
+            MyDoorBase b => b.AnyoneCanUse,
+            SpaceEngineers.Game.Entities.Blocks.MyButtonPanel b => b.AnyoneCanUse,
+            _ => false,
+        };
+
+    [Command(
+        "uses",
+        "The NPC's blocks of the station that anyone can use: one USE line each, then USES count",
+        "!sprobe uses <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Uses(string station)
+    {
+        long me = Context.Caller.IdentityId;
+        var lines = NpcBlocks(station)
+            .Where(Anyone)
+            .Select(b =>
+                $"USE {b.EntityId} {b.CubeGrid.EntityId} {b.Min.X},{b.Min.Y},{b.Min.Z} {Kind(b)} "
+                + $"share={b.IDModule.ShareMode} access={(b.HasPlayerAccess(me) ? "yes" : "no")} name={b.CustomName}"
+            )
+            .ToList();
+        lines.Add($"USES {lines.Count}");
+        return string.Join("\n", lines);
+    }
+
+    [Command(
+        "doors",
+        "The station's doors: DOOR id grid x,y,z kind enabled=yes|no open=yes|no working=yes|no powered=yes|no anyone=yes|no share=mode access=yes|no name=name",
+        "!sprobe doors <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Doors(string station)
+    {
+        long me = Context.Caller.IdentityId;
+        string Yes(bool b) => b ? "yes" : "no";
+        return string.Join(
+            "\n",
+            StationGrids(station)
+                .SelectMany(g => g.GetFatBlocks<MyDoorBase>())
+                .Select(d =>
+                    $"DOOR {d.EntityId} {d.CubeGrid.EntityId} {d.Min.X},{d.Min.Y},{d.Min.Z} {Kind(d)} enabled={Yes(d.Enabled)} "
+                    + $"open={Yes(d.Open)} working={Yes(d.IsWorking)} powered={Yes(d.ResourceSink?.IsPoweredByType(MyResourceDistributorComponent.ElectricityId) == true)} anyone={Yes(d.AnyoneCanUse)} share={d.IDModule.ShareMode} "
+                    + $"access={Yes(d.HasPlayerAccess(me))} name={d.CustomName}"
+                )
+        );
+    }
+
+    [Command("open", "Whether a door is open: OPEN id yes|no", "!sprobe open <entity id>")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Open(long entityId) =>
+        MyEntities.TryGetEntityById(entityId, out MyDoorBase door)
+            ? $"OPEN {entityId} {(door.Open ? "yes" : "no")}"
+            : $"NODOOR {entityId}";
+
+    [Command(
+        "access",
+        "The NPC's blocks of the station and its shipyard that the caller's terminal can work: one BLOCK line each, then ACCESS count NOACCESS count",
+        "!sprobe access <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Access(string station)
+    {
+        long me = Context.Caller.IdentityId;
+        var lines = new List<string>();
+        var none = 0;
+        foreach (var block in NpcBlocks(station))
+        {
+            if (!block.HasPlayerAccess(me))
+            {
+                none++;
+                continue;
+            }
+            var inventory = block.HasInventory ? (block.ShowInInventory ? "yes" : "hidden") : "-";
+            lines.Add(
+                $"BLOCK {block.EntityId} {block.CubeGrid.EntityId} {block.Min.X},{block.Min.Y},{block.Min.Z} {Kind(block)} "
+                    + $"share={block.IDModule.ShareMode} terminal={(block.ShowInTerminal ? "yes" : "hidden")} inventory={inventory} name={block.CustomName}"
+            );
+        }
+        lines.Add($"ACCESS {lines.Count} NOACCESS {none}");
+        return string.Join("\n", lines);
+    }
+
+    private static readonly Dictionary<long, Dictionary<string, string>> saved = [];
+
+    // Everything the block saves but its inventories, as path=value
+    private static Dictionary<string, string> Settings(MyCubeBlock block)
+    {
+        var builder = block.GetObjectBuilderCubeBlock(copy: true);
+        builder.ComponentContainer = null;
+        using var stream = new System.IO.MemoryStream();
+        VRage.ObjectBuilders.Private.MyObjectBuilderSerializerKeen.SerializeXML(stream, builder);
+        stream.Position = 0;
+        var values = new Dictionary<string, string>();
+        void Walk(System.Xml.Linq.XElement element, string path)
+        {
+            if (!element.HasElements)
+            {
+                values[path] = element.Value;
+                return;
+            }
+            var seen = new Dictionary<string, int>();
+            foreach (var child in element.Elements())
+            {
+                var name = child.Name.LocalName;
+                seen[name] = seen.TryGetValue(name, out var n) ? n + 1 : 0;
+                Walk(child, $"{path}/{name}[{seen[name]}]");
+            }
+        }
+        Walk(System.Xml.Linq.XDocument.Load(stream).Root, "");
+        return values;
+    }
+
+    [Command(
+        "settings",
+        "save keeps the settings of the NPC's blocks the caller has access to or anyone can use; diff lists what changed since: CHANGED id kind path old -> new, then SAME count CHANGED count",
+        "!sprobe settings <station> <save|diff>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string SettingsCommand(string station, string what)
+    {
+        long me = Context.Caller.IdentityId;
+        var blocks = NpcBlocks(station).Where(b => b.HasPlayerAccess(me) || Anyone(b)).ToList();
+        if (what == "save")
+        {
+            saved.Clear();
+            foreach (var block in blocks)
+                saved[block.EntityId] = Settings(block);
+            return $"SAVED {saved.Count}";
+        }
+        var lines = new List<string>();
+        int same = 0,
+            changed = 0;
+        foreach (var block in blocks)
+        {
+            if (!saved.TryGetValue(block.EntityId, out var before))
+                continue;
+            var after = Settings(block);
+            var diffs = before
+                .Keys.Union(after.Keys)
+                .Where(k => before.GetValueOrDefault(k) != after.GetValueOrDefault(k))
+                .ToList();
+            if (diffs.Count == 0)
+            {
+                same++;
+                continue;
+            }
+            changed++;
+            foreach (var k in diffs.Take(5))
+                lines.Add(
+                    $"CHANGED {block.EntityId} {Kind(block)} {k} {before.GetValueOrDefault(k)} -> {after.GetValueOrDefault(k)}"
+                );
+        }
+        lines.Add($"SAME {same} CHANGED {changed}");
+        return string.Join("\n", lines);
+    }
+
+    [Command(
+        "groups",
+        "The block groups of the station's grids: GROUPS count names",
+        "!sprobe groups <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Groups(string station)
+    {
+        var names = StationGrids(station)
+            .SelectMany(g => g.GridSystems.TerminalSystem.BlockGroups)
+            .Select(g => g.Name.ToString())
+            .Distinct()
+            .ToList();
+        return $"GROUPS {names.Count} {string.Join("|", names)}";
+    }
+
+    [Command(
+        "suit",
+        "The caller's health, suit energy, oxygen and hydrogen: SUIT health energy o2 h2; drain sets them to 50, 0.1, 0.1 and 0",
+        "!sprobe suit [drain]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Suit(string what = "")
+    {
+        var character = MySession
+            .Static.Players.TryGetIdentity(Context.Caller.IdentityId)
+            ?.Character;
+        if (character?.OxygenComponent == null || character.StatComp?.Health == null)
+            return "NOCHARACTER";
+        var oxygen = character.OxygenComponent;
+        var hydrogen = MyCharacterOxygenComponent.HydrogenId;
+        if (what == "drain")
+        {
+            character.StatComp.Health.Value = 50;
+            character.SuitBattery.ResourceSource.SetRemainingCapacityByType(
+                MyResourceDistributorComponent.ElectricityId,
+                MyEnergyConstants.BATTERY_MAX_CAPACITY * 0.1f
+            );
+            oxygen.SuitOxygenAmount = oxygen.OxygenCapacity * 0.1f;
+            oxygen.UpdateStoredGasLevel(ref hydrogen, 0);
+        }
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "SUIT {0:0.###} {1:0.###} {2:0.###} {3:0.###}",
+            character.StatComp.Health.Value,
+            character.SuitEnergyLevel,
+            oxygen.SuitOxygenLevel,
+            oxygen.GetGasFillLevel(hydrogen)
+        );
+    }
+
+    [Command(
+        "medical",
+        "The station's medical room and where its use detectors are: MEDICAL id x y z FORWARD x y z UP x y z, then DETECTOR name x y z",
+        "!sprobe medical <station>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Medical(string station)
+    {
+        var room = StationGrids(station)
+            .SelectMany(g => g.GetFatBlocks<SpaceEngineers.Game.Entities.Blocks.MyMedicalRoom>())
+            .FirstOrDefault();
+        if (room == null)
+            return "NOMEDICAL";
+        var m = room.WorldMatrix;
+        var lines = new List<string>
+        {
+            $"MEDICAL {room.EntityId} {V(m.Translation)} FORWARD {V(m.Forward)} UP {V(m.Up)}",
+        };
+        foreach (var dummy in room.Model.Dummies)
+            if (dummy.Key.StartsWith("detector", StringComparison.OrdinalIgnoreCase))
+                lines.Add(
+                    $"DETECTOR {dummy.Key} {V(Vector3D.Transform(dummy.Value.Matrix.Translation, room.WorldMatrix))}"
+                );
+        return string.Join("\n", lines);
+    }
+
+    [Command(
+        "enabled",
+        "Whether a block is switched on: ENABLED id yes|no",
+        "!sprobe enabled <entity id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Enabled(long entityId) =>
+        MyEntities.TryGetEntityById(entityId, out MyFunctionalBlock block)
+            ? $"ENABLED {entityId} {(block.Enabled ? "yes" : "no")}"
+            : $"NOBLOCK {entityId}";
+
+    [Command(
+        "owner",
+        "Who owns a block: OWNER id npc|player|other share",
+        "!sprobe owner <entity id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Owner(long entityId)
+    {
+        if (!MyEntities.TryGetEntityById(entityId, out MyCubeBlock block))
+            return $"NOBLOCK {entityId}";
+        var who =
+            block.OwnerId == Context.Caller.IdentityId ? "player"
+            : MySession.Static.Players.IdentityIsNpc(block.OwnerId) ? "npc"
+            : "other";
+        return $"OWNER {entityId} {who} {block.IDModule?.ShareMode}";
+    }
+
+    [Command(
+        "where",
+        "Where a block is and its use detectors: WHERE id x y z FORWARD x y z UP x y z, then DETECTOR name x y z",
+        "!sprobe where <entity id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Where(long entityId)
+    {
+        if (!MyEntities.TryGetEntityById(entityId, out MyCubeBlock block))
+            return $"NOBLOCK {entityId}";
+        var m = block.WorldMatrix;
+        var lines = new List<string>
+        {
+            $"WHERE {entityId} {V(m.Translation)} FORWARD {V(m.Forward)} UP {V(m.Up)}",
+        };
+        foreach (var dummy in block.Model.Dummies)
+            if (dummy.Key.StartsWith("detector", StringComparison.OrdinalIgnoreCase))
+                lines.Add(
+                    $"DETECTOR {dummy.Key} {V(Vector3D.Transform(dummy.Value.Matrix.Translation, m))}"
+                );
+        return string.Join("\n", lines);
+    }
+
+    [Command(
+        "item",
+        "How many of an item a block holds: ITEM entity-id amount",
+        "!sprobe item <block entity id> <Type/Subtype>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Item(long entityId, string item)
+    {
+        if (!MyEntities.TryGetEntityById(entityId, out MyCubeBlock block) || !block.HasInventory)
+            return $"NOBLOCK {entityId}";
+        var id = MyDefinitionId.Parse("MyObjectBuilder_" + item);
+        return $"ITEM {entityId} {(double)block.GetInventory().GetItemAmount(id)}";
     }
 
     private static IEnumerable<MyCubeGrid> StationGrids(string station)

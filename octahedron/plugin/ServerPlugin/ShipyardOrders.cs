@@ -684,7 +684,7 @@ internal static partial class ShipyardOrders
                     Begin(table, mine, tell);
                 else if (mine?.Phase == BuildPhase.After)
                     tell(
-                        $"Your turn at this shipyard ends at {Clock(mine.TurnEnds)} UTC. "
+                        $"Your turn at this shipyard ends in {Left(mine.TurnEnds)}. "
                             + "Load a blueprint and press to build with what is in the containers, or end the turn with !oct shipyard done."
                     );
                 else
@@ -1354,7 +1354,7 @@ internal static partial class ShipyardOrders
                 WriteTable(
                     table,
                     $"{Name(order.Player)}'s turn for '{order.Ship}'.\n\n"
-                        + $"Load the parts by {Clock(order.TurnEnds)} UTC, then press the button: it buys what is missing."
+                        + $"Load the parts within {Left(order.TurnEnds)}, then press the button: it buys what is missing."
                 );
             }
         );
@@ -1618,10 +1618,10 @@ internal static partial class ShipyardOrders
             var state = o.Phase switch
             {
                 BuildPhase.Building when running != null =>
-                    $"building, done by {running.Ends:HH:mm} UTC at the latest",
+                    $"building, done within {PanelText.Left(running.Ends, DateTime.UtcNow)}",
                 BuildPhase.Building => o.Grid != 0 ? "breaking down" : "building",
-                BuildPhase.Loading => $"loading parts until {Clock(o.TurnEnds)} UTC",
-                BuildPhase.After => $"taking what is left until {Clock(o.TurnEnds)} UTC",
+                BuildPhase.Loading => $"loading parts within {Left(o.TurnEnds)}",
+                BuildPhase.After => $"taking what is left within {Left(o.TurnEnds)}",
                 _ when o.Grid != 0 => "waiting, to break down",
                 _ when o.Free => "waiting, free",
                 _ => "waiting, paid",
@@ -1964,6 +1964,10 @@ internal static partial class ShipyardOrders
         orders.Remove(shipyard.EntityId);
         trials.Remove(order);
         forced.Remove(order);
+        if (finished.Remove(order, out var count))
+            Plugin.Log.Info(
+                $"Shipyard order {order.Id} at {shipyard.DisplayName}: the shipyard finished {count} blocks itself"
+            );
         Welders(shipyard, false);
         if (order.Arm.Count > 0)
         {
@@ -2013,11 +2017,10 @@ internal static partial class ShipyardOrders
             NoteFreeEnd(order, name);
         var stalled =
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
-        var message =
-            order.Canceled
-                ? missing != null
-                    ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
-                    : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
+        var message = order.Canceled
+            ? missing != null
+                ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
+                : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
             : order.Clang != null
                 ? $"{shipyard.DisplayName} stopped building '{name}': {order.Clang} placed where another part of the ship is made it shake. The ship was removed, "
                     + (
@@ -2025,23 +2028,23 @@ internal static partial class ShipyardOrders
                             ? "and the free build doesn't count."
                             : "its components are in the containers."
                     )
-            : order.Refund
-                ? $"{stalled}, with {order.Missing} missing. The ship was removed, "
-                    + (
-                        order.Free
-                            ? "and the free build doesn't count."
-                            : "its components are in the containers."
-                    )
-                : order.Missing != null && !gone
-                    ? $"{stalled}. The ship is yours without {order.Missing}."
-                    : missing == "unbuilt"
-                        ? $"{shipyard.DisplayName} stopped after {OrderMinutes(shipyard)} min with {why} of '{name}', no ship was built."
-                        : gone
-                            ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
-                            : why == null
-                                ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
-                                : $"{shipyard.DisplayName} stopped after {OrderMinutes(shipyard)} min with {why} of '{name}'. "
-                                    + "The unfinished ship is yours.";
+                : order.Refund
+                    ? $"{stalled}, with {order.Missing} missing. The ship was removed, "
+                        + (
+                            order.Free
+                                ? "and the free build doesn't count."
+                                : "its components are in the containers."
+                        )
+                    : order.Missing != null && !gone
+                        ? $"{stalled}. The ship is yours without {order.Missing}."
+                        : missing == "unbuilt"
+                            ? $"{shipyard.DisplayName} stopped after {OrderMinutes(shipyard)} min with {why} of '{name}', no ship was built."
+                            : gone
+                                ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
+                                : why == null
+                                    ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
+                                    : $"{shipyard.DisplayName} stopped after {OrderMinutes(shipyard)} min with {why} of '{name}'. "
+                                        + "The unfinished ship is yours.";
         if (!order.Free)
         {
             if (order.Hydrogen > 0 && !gone)
@@ -2410,14 +2413,15 @@ internal static partial class ShipyardOrders
                 .Where(b => !(b.FatBlock is MyTerminalBlock t && IsScaffold(t)));
 
     // The welders stopped. Blocks only a collision keeps them from are placed by force first
-    // (ShipyardForceBuild), and the build goes on. A paid build short of components waits for
-    // them. A ship missing only blocks no welder can place is delivered without them. Else its
+    // (ShipyardForceBuild), and the build goes on. Then the shipyard finishes the blocks the
+    // welders left as far as the containers have their components (ShipyardFinish), and the build
+    // goes on. A paid build short of components waits for them. A ship missing only blocks no welder can place is delivered without them. Else its
     // main grid decides: missing only armor and other plain blocks, at most MaxMissingPlain of
     // them, the ship is delivered; missing a functional block or more of the plain ones, it is
     // removed and refunded. What a subgrid misses never removes a ship.
     private static void Stall(MyCubeGrid shipyard, Order order)
     {
-        if (Force(shipyard, order))
+        if (Force(shipyard, order) || Finish(shipyard, order))
             return;
         var projected = (
             (MyObjectBuilder_ProjectorBase)order.Projector.GetObjectBuilderCubeBlock(true)
@@ -2458,7 +2462,7 @@ internal static partial class ShipyardOrders
             if (!waited)
                 Tell(
                     order.Player,
-                    $"{shipyard.DisplayName} waits for {shortOf} for '{order.Name}', until {until:HH:mm} UTC. "
+                    $"{shipyard.DisplayName} waits for {shortOf} for '{order.Name}', up to {PanelText.Left(until, DateTime.UtcNow)}. "
                         + "You and your faction can load them into its containers."
                 );
             return;
@@ -2576,6 +2580,8 @@ internal static partial class ShipyardOrders
                 $"{prefix} welders hold {string.Join(", ", held.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value:0}"))}, "
                     + $"{beams.Sum(b => (double)b.GetInventory().CurrentVolume):0.##} of {beams.Sum(b => (double)b.GetInventory().MaxVolume):0.##} m³"
             );
+            foreach (var beam in beams)
+                Plugin.Log.Info($"{prefix} welder {beam.Position}: {AimOf(beam)}");
             foreach (var block in blocks.Where(b => !b.IsFullIntegrity).Take(20))
             {
                 var needs = new Dictionary<string, int>();
@@ -2597,6 +2603,51 @@ internal static partial class ShipyardOrders
         {
             Plugin.Log.Error("Logging a stalled order failed", e);
         }
+    }
+
+    // What a ToolCore turret aims at, read from its component: diagnostics only
+    private static string AimOf(MyFunctionalBlock beam)
+    {
+        try
+        {
+            return Aim(beam);
+        }
+        catch (Exception e)
+        {
+            return $"unknown, {e.GetType().Name}";
+        }
+    }
+
+    private static string Aim(MyFunctionalBlock beam)
+    {
+        object comp = null;
+        foreach (var c in beam.Components)
+            if (c.GetType().Name == "ToolComp")
+                comp = c;
+        if (comp == null)
+            return "no ToolComp";
+        var tool = Traverse.Create(comp);
+        var mode = tool.Field("Mode").GetValue();
+        var data = ((System.Collections.IDictionary)tool.Field("ModeMap").GetValue())[mode];
+        var turret = Traverse.Create(Traverse.Create(data).Field("Turret").GetValue());
+        var targets = turret.Field("Targets").GetValue<List<IMySlimBlock>>()?.Count ?? -1;
+        var aim =
+            $"targets {targets}, aligned {turret.Field("Aligned").GetValue()}, "
+            + $"out of bounds {turret.Field("Part1").Field("OutOfBounds").GetValue()}/"
+            + $"{turret.Field("Part2").Field("OutOfBounds").GetValue()}";
+        if (
+            !turret.Field("HasTarget").GetValue<bool>()
+            || turret.Field("ActiveTarget").GetValue() is not MySlimBlock target
+        )
+            return $"no target, {aim}";
+        var projector = target.CubeGrid.Projector;
+        var state =
+            projector == null
+                ? $"integrity {target.Integrity:0}/{target.MaxIntegrity:0}"
+                : $"projected, {ShipyardZoneWelding.Unzoned(() => projector.CanBuild(target, true))}";
+        var at = target.CubeGrid.GridIntegerToWorld(target.Position);
+        return $"{target.BlockDefinition.Id.SubtypeName} on {target.CubeGrid.DisplayName} {state}, "
+            + $"{Vector3D.Distance(beam.PositionComp.GetPosition(), at):0} m, {aim}";
     }
 
     // A ship missing more than this share of its plain blocks is not delivered
@@ -3543,6 +3594,21 @@ internal static partial class ShipyardOrders
                 return true;
         }
         return false;
+    }
+
+    // Whether the grid's center is in the build space of a shipyard, which builds, moves and tows
+    // what is there
+    internal static bool InBuildSpace(MyCubeGrid grid)
+    {
+        var center = grid.PositionComp.WorldAABB.Center;
+        var sphere = new BoundingSphereD(center, 1000);
+        var entities = MyEntities.GetTopMostEntitiesInSphere(ref sphere);
+        var inside = entities
+            .OfType<MyCubeGrid>()
+            .Where(ShipyardZoneWelding.IsShipyard)
+            .Any(s => FreeSpace(s).Contains(ref center));
+        entities.Clear();
+        return inside;
     }
 
     private static List<MyCubeGrid> GridsIn(MyOrientedBoundingBoxD box)

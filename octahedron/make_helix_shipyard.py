@@ -11,13 +11,15 @@ Writes bp.sbc and thumb.png into the folder, as a local blueprint folder
 (Blueprints/local/<name>) has them, and prints the checks: block counts, PCU,
 open conveyor ports, the build volume and how far the welders reach into it.
 
-Two strands of industrial conveyor pipe wind around a build volume 71 blocks
-across and 200 blocks long. Every quarter turn an OmniArc beam welder sits
-inline in each strand, the conveyor passing through it. A ring of pipe at
-each end joins the strands. Four towers point outward from each ring, every 90
-degrees, each with a docking connector at its tip and a refill station beside
-it. The towers at the strands' ends also hold the cargo and the reactors, with a
-row of batteries along each container.
+Two strands of industrial conveyor pipe make three turns around a build volume
+77 blocks across and 150 blocks long, narrow enough that the welders reach
+every point of its axis. Every quarter turn an OmniArc beam welder sits inline
+in each strand, the conveyor passing through it. A ring of pipe at each end
+joins the strands. Each ring has a docking connector and a refill station every
+90 degrees. Where the strands end, the connector sits at the tip of a tower
+pointing along the axis, and the tower holds the cargo, the reactors and the
+batteries. The other connectors point away from the axis, one pipe out from
+the ring.
 Block types, templates and colors come from the current shipyard
 (blueprints/omni-arc-beam-shipyard.sbc).
 """
@@ -40,13 +42,15 @@ NAME = "Double Helix Shipyard"
 
 # Radius of the strands and the rings, in blocks from the axis. Every pipe cell
 # is more than CLEAR blocks from the axis, so the build volume is 2 * CLEAR + 1 =
-# 71 blocks (177.5 m) across around a center block. At 40 blocks the welders
-# didn't reach the axis in game (SE-959).
-RADIUS = 36
-CLEAR = 35
-# Blocks between the rings: the build volume's length (500 m)
-LENGTH = 200
-TURNS = 4
+# 77 blocks (192.5 m) across around a center block. The radius is the largest
+# at which every welder-free point of the axis is within 100 m of a welder.
+RADIUS = 39
+CLEAR = 38
+# Whole turns of the strands, each PITCH blocks long. Blocks between the rings
+# are the build volume's length: 150 (375 m), 320 m rounded up to whole turns.
+TURNS = 3
+PITCH = 50
+LENGTH = TURNS * PITCH
 # Welders per strand and turn: one every 90 degrees, from ring to ring
 WELDERS_PER_TURN = 4
 # The current shipyard's welders, cargo and reactors. Cargo and reactors scale by
@@ -55,17 +59,20 @@ TEMPLATE_WELDERS = 24
 TEMPLATE_CARGO = 8
 TEMPLATE_REACTORS = 4
 STRAND_ENDS = 4
-# Pipe from a ring to the connector at a tower's tip, in blocks
+# Batteries, spread evenly beside the cargo
+BATTERIES = 72
+# Pipe from a ring to the connector at the tip of a tower that holds cargo, in
+# blocks
 TOWER = 13
 # The welder's reach (ToolCore definition of OmniArcBeam and its models): it
-# targets blocks whose center is within 100 m of a point 1 m past its emitter,
-# where the turret points then, not where it will aim. The emitter sits 1.18 m
-# from the ball and the ball 1.75 m from the block's center, so a block within
-# REACH of the welder block's center is in reach in any pose. The ball turns all
-# the way around the block's Up and tilts at most 45 degrees out of that plane.
-# The Octahedron plugin's free build space counts the same (ShipyardOrders).
+# targets blocks within 100 m of its emitter. The emitter sits 1.18 m from the
+# ball toward the target, and the ball 1.75 m from the block's center on the
+# ring, which turns all the way around the block's Up. The ball tilts at most
+# 45 degrees out of the ring's plane.
 GRID = 2.5
-REACH = 100 - 1 - 1.18 - 1.75
+RANGE = 100
+REACH = RANGE + 1.18
+BALL = 1.75
 TILT = 45
 
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
@@ -75,7 +82,7 @@ ET.register_namespace("xsd", "http://www.w3.org/2001/XMLSchema")
 
 # The current shipyard's colors: (ColorMaskHSV, skin)
 YELLOW = ((0.12222222, -0.1, 0.26), "Hazard_Armor")  # pipes, welders, connectors
-RED = ((1.0, 0.2, 0.55), "Clean_Armor")  # frame, cargo, reactors, batteries
+RED = ((1.0, 0.2, 0.55), "Clean_Armor")  # frame, cargo, reactors
 DARK = ((0.0, -0.8, -0.3), "Battered_Armor")  # caps, refill stations
 
 # Subtype: (object builder type, size, conveyor ports as (local cell, direction),
@@ -401,11 +408,17 @@ def build():
             def at(du, dv, dw):
                 return add(origin, scale(u, du), scale(v, dv), scale(w, dw))
 
-            yard.path([at(0, 0, i) for i in range(TOWER + 1)], YELLOW)
-            yard.block("Connector", w, v, at(0, 0, TOWER + 1), YELLOW)
-            yard.block("InsetRefillStation", u, w, at(1, 0, TOWER), DARK)
             if quarter % 2 == 0:
+                # Where a strand ends: a tower along the axis with the storage
+                yard.path([at(0, 0, i) for i in range(TOWER + 1)], YELLOW)
+                yard.block("Connector", w, v, at(0, 0, TOWER + 1), YELLOW)
+                yard.block("InsetRefillStation", u, w, at(1, 0, TOWER), DARK)
                 storage(yard, at, v, w, cargo, reactors)
+            else:
+                # One pipe out from the ring to a connector facing away from the axis
+                yard.path([at(0, 0, 0), at(1, 0, 0)], YELLOW)
+                yard.block("Connector", u, w, at(2, 0, 0), YELLOW)
+                yard.block("InsetRefillStation", u, w, at(1, 0, 1), DARK)
     blocked = yard.finish()
     return yard, blocked, 2 * welders
 
@@ -414,7 +427,6 @@ def storage(yard, at, v, w, cargo, reactors):
     """Reactors and cargo in two stacks either side of a tower, from 2 blocks out.
 
     Each block's Bottom port faces the tower; the blocks in a stack join end to end.
-    A row of batteries runs along each container's outer side, which has no ports.
     """
     stacks = [[], []]
     for subtype in ["LargeBlockBulkContainerB"] * cargo + [
@@ -435,13 +447,15 @@ def storage(yard, at, v, w, cargo, reactors):
             # A reactor's Front and Back ports and a container's long axis run along the stack
             right = cross(w, up) if subtype == "LargeBlockLargeGenerator" else w
             yard.box(subtype, right, up, cells, RED)
-            if subtype == "LargeBlockBulkContainerB":
-                for dw in range(start, start + length):
-                    yard.block(
-                        "LargeBlockBatteryBlock", w, up, at(0, side * 4, dw), RED
-                    )
             start += length
         assert start - 1 <= TOWER
+    # The batteries in rows of three on each stack's outer side, beside its first
+    # container
+    assert all(s[0] == "LargeBlockBulkContainerB" for s in stacks)
+    for side in (1, -1):
+        for i in range(BATTERIES // (STRAND_ENDS * 2)):
+            cell = at(i % 3 - 1, side * 4, 3 + i // 3)
+            yard.block("LargeBlockBatteryBlock", w, v, cell, RED)
 
 
 def entity_ids(seed=952):
@@ -465,7 +479,7 @@ def blueprint_xml(yard):
     for subtype, forward, up, cells, _, (hsv, skin) in yard.blocks:
         if subtype in templates:
             b = copy.deepcopy(templates[subtype])
-            for tag in ("NumberInGrid", "CustomName"):
+            for tag in ("Owner", "ShareMode", "NumberInGrid", "CustomName"):
                 for e in b.findall(tag):
                     b.remove(e)
         else:
@@ -579,14 +593,37 @@ def reach(yard):
         best = np.full(len(cells), -np.inf)
         for center, up in welders:
             d = (cells - center) * GRID
-            distance = np.linalg.norm(d, axis=1)
-            tilt = np.degrees(np.arcsin(np.abs(d @ up) / distance))
+            level = d - np.outer(d @ up, up)
+            ball = (
+                level / np.maximum(np.linalg.norm(level, axis=1), 1e-9)[:, None] * BALL
+            )
+            aim = d - ball
+            distance = np.linalg.norm(aim, axis=1)
+            tilt = np.degrees(np.arcsin(np.abs(aim @ up) / distance))
             best = np.maximum(best, np.where(tilt <= TILT, REACH - distance, -np.inf))
         margins.append(best)
     margins = np.array(margins)
     missed = (margins < 0).any(0)
     covered = radius[missed].min() if missed.any() else CLEAR + 1
     return margins[:, radius == 0].min(), covered, (margins >= 0).mean()
+
+
+def center_line(yard):
+    """The least margin in meters by which a welder reaches the blocks on the axis,
+    measured from the welder block's center, without the ball's and the emitter's
+    offsets, and only where the ball can tilt toward the block."""
+    least = math.inf
+    for z in range(1, LENGTH + 1):
+        best = -math.inf
+        for subtype, _, up, cells, _, _ in yard.blocks:
+            if subtype == "OmniArcBeam":
+                d = [GRID * (t - c) for t, c in zip((0, 0, z), cells[0])]
+                distance = math.hypot(*d)
+                tilt = math.asin(abs(sum(a * b for a, b in zip(d, up))) / distance)
+                if math.degrees(tilt) <= TILT:
+                    best = max(best, RANGE - distance)
+        least = min(least, best)
+    return least
 
 
 def report(yard, blocked, welders):
@@ -603,6 +640,10 @@ def report(yard, blocked, welders):
     print(
         f"build volume {LENGTH} blocks long between the rings, no block within {clear:.2f} blocks of the axis"
     )
+    center = center_line(yard)
+    print(
+        f"every block on the axis is within {RANGE} m of a welder's center, with {center:.2f} m to spare"
+    )
     axis, covered, share = reach(yard)
     print(
         f"welders reach the axis with {axis:.2f} m to spare, every block within {covered:.1f} blocks of the axis, {100 * share:.1f}% of the volume"
@@ -618,7 +659,7 @@ def report(yard, blocked, welders):
     )
     for b in open_ports + blocked:
         print("  ", b)
-    return not open_ports and not blocked and clear > CLEAR and axis >= 0
+    return not open_ports and not blocked and clear > CLEAR and center >= 0
 
 
 def main():

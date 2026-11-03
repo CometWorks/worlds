@@ -106,7 +106,10 @@ def kept(a) -> None:
 
 
 def trading(a) -> None:
-    """A docked ship stays empty"""
+    """A docked ship stays empty: the game passes nothing through a trading connector. The
+    plugin's own charging there (SE-972) is off for this, test_station_charging.py covers it.
+    """
+    with_config(a, StationDockCharging="false")
     ship = docked(a)
     gas, stored, link = readings(a, ship)
     check("trading=no,yes" in link, f"the station's connector trades: {link}")
@@ -121,6 +124,7 @@ def trading(a) -> None:
         f"no conveyor link to the station: {link}",
     )
     log(probe(a, "undock"))
+    with_config(a)
 
 
 def control(a) -> None:

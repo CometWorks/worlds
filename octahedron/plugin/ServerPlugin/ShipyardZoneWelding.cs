@@ -43,7 +43,9 @@ namespace ServerPlugin;
 // in range, joins or crosses to this node (SE-782). The zone it gets holds the grid until the
 // next ShowBeams, its ToolCore switches the tools off for good, and only a change of the
 // server's switch would tell it otherwise. So ShowShooting sends such a client the switch, as
-// ToolCore does when it changes; a client whose tool is on takes no notice.
+// ToolCore does when it changes; a client whose tool is on takes no notice. Not every such
+// client shows as one with a new tool, so every 30 s of a build the switch also goes to all
+// clients in sync range that have the tool (SE-963).
 internal static class ShipyardZoneWelding
 {
     private const string Owner = "Octahedron Authority";
@@ -148,20 +150,30 @@ internal static class ShipyardZoneWelding
     // Told twice, as the first packet may come before the zone's message of the same check
     private const int Tellings = 2;
 
+    // Every client in sync range gets the switch this often during a build
+    private static readonly TimeSpan Repeat = TimeSpan.FromSeconds(30);
+
     // Per ToolCore component, so a shipyard that comes back to this node starts clean: each
     // client in its list, how many entries it has there, and how often it was told since that
     // number changed. ToolCore's list is a plain one: a tool that appears on a client adds an
     // entry, one that goes removes one, and a client that quits removes none. So a change of
     // the number, not being in the list, tells that the client has a new tool. A client whose
-    // tool goes and comes back between two checks keeps its number and isn't told.
-    private static readonly ConditionalWeakTable<
-        object,
-        Dictionary<ulong, (int Entries, int Told)>
-    > told = new();
+    // tool goes and comes back between two checks keeps its number, and waits for Again.
+    private sealed class Telling
+    {
+        public readonly Dictionary<ulong, (int Entries, int Told)> Clients = [];
+
+        // When all clients in range are told next. The start of a build has ToolCore's own
+        // packets and the new tools' tellings.
+        public DateTime Again = DateTime.UtcNow + Repeat;
+    }
+
+    private static readonly ConditionalWeakTable<object, Telling> told = new();
 
     // Per call, on the game thread
     private static readonly Dictionary<ulong, int> entries = [];
     private static readonly List<ulong> toTell = [];
+    private static readonly HashSet<ulong> inRange = [];
 
     /// <summary>
     /// Sends the tools' switch to the clients with a new tool, or forgets them as the build ends.
@@ -178,6 +190,8 @@ internal static class ShipyardZoneWelding
             return;
         var map = (IDictionary)core.Tools.GetValue(instance);
         var networking = core.Networking.GetValue(instance);
+        var now = DateTime.UtcNow;
+        var ranged = false;
         foreach (var tool in tools)
         {
             if (map[tool.EntityId] is not { } comp)
@@ -187,7 +201,19 @@ internal static class ShipyardZoneWelding
                 told.Remove(comp);
                 continue;
             }
-            ClientsToTell((List<ulong>)core.Clients.GetValue(comp), told.GetOrCreateValue(comp));
+            var telling = told.GetOrCreateValue(comp);
+            var clients = (List<ulong>)core.Clients.GetValue(comp);
+            ClientsToTell(clients, telling.Clients);
+            if (now >= telling.Again)
+            {
+                telling.Again = now + Repeat;
+                if (!ranged)
+                    InRange(tool.CubeGrid);
+                ranged = true;
+                foreach (var client in clients.Distinct())
+                    if (inRange.Contains(client) && !toTell.Contains(client))
+                        toTell.Add(client);
+            }
             if (toTell.Count > 0)
                 core.Send.Invoke(
                     networking,
@@ -198,6 +224,21 @@ internal static class ShipyardZoneWelding
                     ]
                 );
         }
+    }
+
+    // The online players within sync distance of the grid. ToolCore's list may still hold
+    // clients that quit, or joined again far away; they'd log the packet as invalid.
+    private static void InRange(MyCubeGrid grid)
+    {
+        inRange.Clear();
+        var box = grid.PositionComp.WorldAABB;
+        double range = MySession.Static.Settings.SyncDistance;
+        foreach (var player in MySession.Static.Players.GetOnlinePlayers())
+            if (
+                player.Controller.ControlledEntity?.Entity is { } entity
+                && box.Distance(entity.PositionComp.GetPosition()) <= range
+            )
+                inRange.Add(player.Id.SteamId);
     }
 
     private static void ClientsToTell(
