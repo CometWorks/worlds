@@ -11,6 +11,7 @@ Prints one line per check; exit code 0 = all passed.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 import time
@@ -94,7 +95,7 @@ def main() -> int:
         check("is in the queue" in reply, f"ordered: {reply}")
         if "is in the queue" not in reply:
             return 1
-        deadline = time.time() + 1500
+        deadline = time.time() + float(os.environ.get("OCT_BLUEPRINT_SECONDS", 1500))
         line = None
         ended = None
         while time.time() < deadline and not line and not ended:

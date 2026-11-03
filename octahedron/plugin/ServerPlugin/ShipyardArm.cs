@@ -703,6 +703,17 @@ internal static class ShipyardArm
             ((Vector3)block.ColorMaskHSV).PackHSVToUint(),
             MyStringHash.GetOrCompute(block.SkinSubtypeId)
         );
+        Build(grid, location, visuals, block, owner);
+    }
+
+    internal static void Build(
+        MyCubeGrid grid,
+        MyCubeGrid.MyBlockLocation location,
+        MyCubeGrid.MyBlockVisuals visuals,
+        MyObjectBuilder_CubeBlock block,
+        long owner
+    )
+    {
         object[] args =
         [
             ColorExtensions.UnpackHSVFromUint(visuals.ColorMaskHSV),

@@ -316,6 +316,20 @@ internal static class ShipyardZoneWelding
         private static void Finalizer() => modCanBuild = false;
     }
 
+    // A check of the shipyard's own, past the zone's box check as the shipyard's welders are
+    internal static T Unzoned<T>(Func<T> check)
+    {
+        modCanBuild = true;
+        try
+        {
+            return check();
+        }
+        finally
+        {
+            modCanBuild = false;
+        }
+    }
+
     // A mod tool past ModCanBuild may still be refused here, by the zone among others, and
     // ToolCore took the block's first component before it asked: it gets the component back,
     // as in ProjectionLimits. Runs last, so a request ProjectionLimits refused (and refunded)

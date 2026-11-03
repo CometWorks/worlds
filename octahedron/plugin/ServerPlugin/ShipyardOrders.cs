@@ -127,6 +127,9 @@ internal static partial class ShipyardOrders
         public string Missing;
         public bool Refund;
 
+        // The blocks placed by force that made the ship clang, which removed it
+        public string Clang;
+
         // The arm's grid, which the projector leaves when it stays on an unfinished ship
         public MyCubeGrid ArmGrid;
 
@@ -1198,6 +1201,8 @@ internal static partial class ShipyardOrders
         ShipyardArm.Update();
         if (docks.Count > 0)
             UpdateDocks();
+        if (trials.Count > 0)
+            WatchTrials();
         if (ticks % QuoteTicks == 0 && loaded.Count > 0)
         {
             foreach (var (tableId, player) in loaded.ToList())
@@ -1462,6 +1467,8 @@ internal static partial class ShipyardOrders
                 );
             }
         }
+        if (trials.ContainsKey(order))
+            return;
         if (Complete(shipyard, order) >= order.Blocks)
             End(shipyard, order, null);
         else if (DateTime.UtcNow >= order.Ends)
@@ -1940,6 +1947,8 @@ internal static partial class ShipyardOrders
     private static void End(MyCubeGrid shipyard, Order order, string why)
     {
         orders.Remove(shipyard.EntityId);
+        trials.Remove(order);
+        forced.Remove(order);
         Welders(shipyard, false);
         if (order.Arm.Count > 0)
         {
@@ -1994,6 +2003,13 @@ internal static partial class ShipyardOrders
                 ? missing != null
                     ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
                     : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
+            : order.Clang != null
+                ? $"{shipyard.DisplayName} stopped building '{name}': {order.Clang} placed where another part of the ship is made it shake. The ship was removed, "
+                    + (
+                        order.Free
+                            ? "and the free build doesn't count."
+                            : "its components are in the containers."
+                    )
             : order.Refund
                 ? $"{stalled}, with {order.Missing} missing. The ship was removed, "
                     + (
@@ -2377,13 +2393,16 @@ internal static partial class ShipyardOrders
                 .SelectMany(g => ((MyCubeGrid)g).GetBlocks())
                 .Where(b => !(b.FatBlock is MyTerminalBlock t && IsScaffold(t)));
 
-    // The welders stopped. A paid build short of components waits for them. A ship missing only
-    // blocks no welder can place is delivered without them. Else its main grid decides: missing
-    // only armor and other plain blocks, at most MaxMissingPlain of them, the ship is delivered;
-    // missing a functional block or more of the plain ones, it is removed and refunded. What a
-    // subgrid misses never removes a ship: its hitboxes may just intersect the ship's blocks.
+    // The welders stopped. Blocks only a collision keeps them from are placed by force first
+    // (ShipyardForceBuild), and the build goes on. A paid build short of components waits for
+    // them. A ship missing only blocks no welder can place is delivered without them. Else its
+    // main grid decides: missing only armor and other plain blocks, at most MaxMissingPlain of
+    // them, the ship is delivered; missing a functional block or more of the plain ones, it is
+    // removed and refunded. What a subgrid misses never removes a ship.
     private static void Stall(MyCubeGrid shipyard, Order order)
     {
+        if (Force(shipyard, order))
+            return;
         var projected = (
             (MyObjectBuilder_ProjectorBase)order.Projector.GetObjectBuilderCubeBlock(true)
         ).ProjectedGrids;
