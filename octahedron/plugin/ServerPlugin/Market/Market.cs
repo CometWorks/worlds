@@ -512,6 +512,8 @@ internal static class Market
     private static string minStockKey;
     private static List<KeyValuePair<string, long>> minStock = new();
     private static string profilesKey;
+    private static string playerMinedKey;
+    private static HashSet<string> playerMined;
     private static Dictionary<string, List<KeyValuePair<string, long>>> profiles = new();
     private static string pricesKey;
     private static Dictionary<string, long> prices = new();
@@ -557,9 +559,50 @@ internal static class Market
             MarketBook.ParseProfiles,
             "MarketStationStock"
         );
-        if (!own.TryGetValue(station, out var extra))
-            return common;
-        return common.Where(c => extra.All(e => e.Key != c.Key)).Concat(extra).ToList();
+        var merged = own.TryGetValue(station, out var extra)
+            ? common.Where(c => extra.All(e => e.Key != c.Key)).Concat(extra)
+            : common;
+        return merged.Where(c => !PlayerMined(c.Key)).ToList();
+    }
+
+    /// <summary>
+    /// The ores and ingots of MarketPlayerMinedMetals and the components whose blueprint needs those
+    /// ingots: players must mine them, so OCT never restocks them or asks for them in its
+    /// acquisition contracts, whatever the stock lists say. It still buys them from players and
+    /// sells what it bought.
+    /// </summary>
+    public static bool PlayerMined(string item)
+    {
+        var metals = Config.MarketPlayerMinedMetals ?? "";
+        if (metals != playerMinedKey)
+        {
+            var names = metals
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var items = names.SelectMany(m => new[] { "Ore/" + m, "Ingot/" + m }).ToHashSet();
+            // Each component by the blueprint that makes it: a recycling blueprint with many
+            // results would drag in steel plates and the like
+            foreach (
+                var component in MyDefinitionManager
+                    .Static.GetPhysicalItemDefinitions()
+                    .OfType<MyComponentDefinition>()
+            )
+                if (
+                    MyDefinitionManager.Static.TryGetBlueprintDefinitionByResultId(component.Id)
+                        is { } blueprint
+                    && blueprint.Prerequisites.Any(p =>
+                        p.Id.TypeId == typeof(MyObjectBuilder_Ingot)
+                        && names.Contains(p.Id.SubtypeName)
+                    )
+                )
+                    items.Add(Stations.ItemName(component.Id));
+            playerMined = items;
+            playerMinedKey = metals;
+            Plugin.Log.Info(
+                $"Market: players must mine {string.Join(", ", items.OrderBy(i => i, StringComparer.Ordinal))}"
+            );
+        }
+        return playerMined.Contains(item);
     }
 
     /// <summary>

@@ -1117,6 +1117,18 @@ public class OctahedronConfig : PluginConfig
         + "Ingot/Cobalt=300,Ore/Ice=100000";
 
     [StringOption(
+        description: "Metals players must mine, comma separated: OCT never restocks their ores and ingots, nor the components "
+            + "made from those ingots, and asks for none of them in its acquisition contracts, whatever MarketMinStock and "
+            + "MarketStationStock say. It still buys them from players and sells what it bought.",
+        Parent = "market"
+    )]
+    public string MarketPlayerMinedMetals
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Gold,Silver,Platinum,Uranium";
+
+    [StringOption(
         description: "The stations' profiles: what a station stocks besides or instead of MarketMinStock, "
             + "as Station name=Type/Subtype=units,..., stations separated by ;.",
         Parent = "market"
