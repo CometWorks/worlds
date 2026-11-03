@@ -16,6 +16,7 @@ using Sandbox.Game.EntityComponents;
 using Sandbox.Game.GameSystems;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.SessionComponents;
+using Sandbox.Game.Weapons;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using SpaceEngineers.Game.Definitions.SafeZone;
@@ -1560,30 +1561,7 @@ public sealed class ProbeCommands : CommandModule
             return "NOZONE";
         var center = zone.PositionComp.GetPosition();
         var distance = where == "in" ? zone.Radius * 0.6 : zone.Radius + 100;
-        // The first of 200 directions spread over a sphere with no block of any grid within 25 m
-        Vector3D? spot = null;
-        var blocks = new HashSet<MySlimBlock>();
-        for (int i = 0; i < 200 && spot == null; i++)
-        {
-            var y = 1 - (i + 0.5) / 100;
-            var r = Math.Sqrt(1 - y * y);
-            var a = i * Math.PI * (3 - Math.Sqrt(5));
-            var sphere = new BoundingSphereD(
-                center + new Vector3D(r * Math.Cos(a), y, r * Math.Sin(a)) * distance,
-                25
-            );
-            var clear = true;
-            foreach (
-                var g in MyEntities.GetTopMostEntitiesInSphere(ref sphere).OfType<MyCubeGrid>()
-            )
-            {
-                blocks.Clear();
-                g.GetBlocksInsideSphere(ref sphere, blocks);
-                clear &= blocks.Count == 0;
-            }
-            if (clear)
-                spot = sphere.Center;
-        }
+        var spot = FreeSpot(center, distance, 25);
         if (spot == null)
             return "NOSPOT";
         var owner = Context.Caller.IdentityId;
@@ -1689,7 +1667,114 @@ public sealed class ProbeCommands : CommandModule
         if (actions != "")
             zone.AllowedActions =
                 actions == "None" ? 0 : Enum.Parse<MySafeZoneAction>(actions.Replace('+', ','));
-        return $"ZONE {zone.AllowedActions.ToString().Replace(", ", "+")}";
+        return zone.AllowedActions == 0
+            ? "ZONE None"
+            : $"ZONE {zone.AllowedActions.ToString().Replace(", ", "+")}";
+    }
+
+    // The first of 200 directions spread over a sphere around the center where no block of any
+    // grid is within the clearance
+    private static Vector3D? FreeSpot(Vector3D center, double distance, double clearance)
+    {
+        var blocks = new HashSet<MySlimBlock>();
+        for (int i = 0; i < 200; i++)
+        {
+            var y = 1 - (i + 0.5) / 100;
+            var r = Math.Sqrt(1 - y * y);
+            var a = i * Math.PI * (3 - Math.Sqrt(5));
+            var sphere = new BoundingSphereD(
+                center + new Vector3D(r * Math.Cos(a), y, r * Math.Sin(a)) * distance,
+                clearance
+            );
+            var clear = true;
+            foreach (
+                var g in MyEntities.GetTopMostEntitiesInSphere(ref sphere).OfType<MyCubeGrid>()
+            )
+            {
+                blocks.Clear();
+                g.GetBlocksInsideSphere(ref sphere, blocks);
+                clear &= blocks.Count == 0;
+            }
+            if (clear)
+                return sphere.Center;
+        }
+        return null;
+    }
+
+    [Command(
+        "drill",
+        "A static grid of a switched on ship drill and a battery inside a small asteroid, 60% of the radius into the station's safe zone or 100 m out of it: DRILL grid-id inzone=yes|no",
+        "!sprobe drill <station> <in|out>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Drill(string station, string where)
+    {
+        var zone = StationZone(station);
+        if (zone == null)
+            return "NOZONE";
+        var center = zone.PositionComp.GetPosition();
+        var spot = FreeSpot(center, where == "in" ? zone.Radius * 0.6 : zone.Radius + 100, 45);
+        if (spot == null)
+            return "NOSPOT";
+        MyWorldGenerator.AddAsteroidPrefabCentered(
+            "DeformedSphere1_64x64x64",
+            spot.Value,
+            $"Drill Rock {where}"
+        );
+        var owner = Context.Caller.IdentityId;
+        var ship = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = true,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = $"Drill {where}",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                spot.Value,
+                Vector3.Forward,
+                Vector3.Up
+            ),
+        };
+        var drill = Block<MyObjectBuilder_Drill>("LargeBlockDrill", Vector3I.Zero, owner);
+        drill.Enabled = true;
+        ship.CubeBlocks.Add(drill);
+        var size = MyDefinitionManager
+            .Static.GetCubeBlockDefinition(
+                new MyDefinitionId(typeof(MyObjectBuilder_Drill), "LargeBlockDrill")
+            )
+            .Size;
+        var battery = Block<MyObjectBuilder_BatteryBlock>(
+            "LargeBlockBatteryBlock",
+            new Vector3I(0, size.Y, 0),
+            owner
+        );
+        battery.CurrentStoredPower = 1;
+        ship.CubeBlocks.Add(battery);
+        var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(ship);
+        return $"DRILL {grid.EntityId} inzone={(zone.Contains(spot.Value) ? "yes" : "no")}";
+    }
+
+    [Command(
+        "drillstate",
+        "What the drill has dug: DRILLSTATE grid-id ore=kg on=yes|no",
+        "!sprobe drillstate <grid-id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string DrillState(long id)
+    {
+        if (!MyEntities.TryGetEntityById(id, out MyCubeGrid grid))
+            return $"NODRILL {id}";
+        var drill = grid.GetFatBlocks<MyShipDrill>().FirstOrDefault();
+        if (drill == null)
+            return $"NODRILL {id}";
+        var ore = drill.GetInventory().GetItems().Sum(i => (double)i.Amount);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "DRILLSTATE {0} ore={1:0.###} on={2}",
+            id,
+            ore,
+            drill.Enabled && drill.IsWorking ? "yes" : "no"
+        );
     }
 
     // The admin safe zone around the station
