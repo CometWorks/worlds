@@ -16,7 +16,8 @@ across and 200 blocks long. Every quarter turn an OmniArc beam welder sits
 inline in each strand, the conveyor passing through it. A ring of pipe at
 each end joins the strands. Four towers point outward from each ring, every 90
 degrees, each with a docking connector at its tip and a refill station beside
-it. The towers at the strands' ends also hold the cargo and the reactors.
+it. The towers at the strands' ends also hold the cargo and the reactors, with a
+row of batteries along each container.
 Block types, templates and colors come from the current shipyard
 (blueprints/omni-arc-beam-shipyard.sbc).
 """
@@ -74,7 +75,7 @@ ET.register_namespace("xsd", "http://www.w3.org/2001/XMLSchema")
 
 # The current shipyard's colors: (ColorMaskHSV, skin)
 YELLOW = ((0.12222222, -0.1, 0.26), "Hazard_Armor")  # pipes, welders, connectors
-RED = ((1.0, 0.2, 0.55), "Clean_Armor")  # frame, cargo, reactors
+RED = ((1.0, 0.2, 0.55), "Clean_Armor")  # frame, cargo, reactors, batteries
 DARK = ((0.0, -0.8, -0.3), "Battered_Armor")  # caps, refill stations
 
 # Subtype: (object builder type, size, conveyor ports as (local cell, direction),
@@ -130,6 +131,7 @@ BLOCKS = {
         25,
         None,
     ),
+    "LargeBlockBatteryBlock": ("BatteryBlock", (1, 1, 1), [], 15, None),
     "LargeBlockBulkContainerB": (
         "CargoContainer",
         (6, 3, 3),
@@ -412,6 +414,7 @@ def storage(yard, at, v, w, cargo, reactors):
     """Reactors and cargo in two stacks either side of a tower, from 2 blocks out.
 
     Each block's Bottom port faces the tower; the blocks in a stack join end to end.
+    A row of batteries runs along each container's outer side, which has no ports.
     """
     stacks = [[], []]
     for subtype in ["LargeBlockBulkContainerB"] * cargo + [
@@ -432,6 +435,11 @@ def storage(yard, at, v, w, cargo, reactors):
             # A reactor's Front and Back ports and a container's long axis run along the stack
             right = cross(w, up) if subtype == "LargeBlockLargeGenerator" else w
             yard.box(subtype, right, up, cells, RED)
+            if subtype == "LargeBlockBulkContainerB":
+                for dw in range(start, start + length):
+                    yard.block(
+                        "LargeBlockBatteryBlock", w, up, at(0, side * 4, dw), RED
+                    )
             start += length
         assert start - 1 <= TOWER
 

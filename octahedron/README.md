@@ -126,7 +126,7 @@ station and shipyard blueprints are in `blueprints/`.
     ends 2.2 km outside the Moon's gravity (`build_world.py` checks every zone
     against the planets' gravity).
   - Its blocks are shared with everyone but its 4 large reactors and 72
-    batteries (the double helix shipyard: 8 large reactors, no batteries). Those
+    batteries (the double helix shipyard: 8 large reactors and 72 batteries). Those
     start with 10 uranium ingots each and full charge, and on
     the server the Octahedron plugin tops them back up every 10 minutes
     (`config/octahedron.cfg`). Only 10 ingots, since players get at the reactors
