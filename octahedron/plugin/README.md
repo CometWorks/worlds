@@ -379,7 +379,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   being built included, one per player: more don't fit the queue panel above the
   table. A full queue shows on the table's screen and refuses the press. The
   station's queue panels (`ShipyardQueuePanelName`, `Text Panel - Station
-  ShipyardQueue`) show it, and which ship blocks the shipyard.
+  ShipyardQueue`) show it, and which ship blocks the shipyard. Each entry wraps to
+  two lines of 46 columns and is cut after that, so a full queue keeps font size 0.57.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
   shipyard or, when it only fits another way, by right angles from there,
@@ -1241,6 +1242,9 @@ integrity is left. `OCT_BEAM_MIX=1` builds functional blocks too, `OCT_BEAM_ZONE
 is the control with zones that allow welding, and `OCT_BEAM_OFFLINE=1` stops the server
 mid-build and loads its save offline. `tests/shipyard_beams_cluster.py` does the same
 check on a test cluster, with a trip to a station on the other node.
+`tests/panel-text/PanelTextTests` checks the queue panel's layout without the game
+(`dotnet run -c Release --project tests/panel-text/PanelTextTests`) and
+`tests/test_queue_panel.py` on a real station.
 `tests/builds/BuildTests` checks the queues without the game
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
 from OCT's stock, paid orders and their turns, the purchase at the start all or none,
