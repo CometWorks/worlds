@@ -3658,8 +3658,10 @@ internal static partial class ShipyardOrders
 
     private static MyObjectBuilder_BatteryBlock Battery(MyCubeSize size, Vector3I cell, long npc)
     {
+        // 1x1x1 on both grid sizes: the small grid's big battery is 3x2x3 and could reach back
+        // over the start block
         var subtype =
-            size == MyCubeSize.Large ? "LargeBlockBatteryBlock" : "SmallBlockBatteryBlock";
+            size == MyCubeSize.Large ? "LargeBlockBatteryBlock" : "SmallBlockSmallBatteryBlock";
         var battery = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_BatteryBlock>(
             subtype
         );

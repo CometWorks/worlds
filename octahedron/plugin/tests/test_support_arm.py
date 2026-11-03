@@ -416,6 +416,26 @@ def wait_state(remote, station: str, pattern: str, timeout: float) -> str | None
     return None
 
 
+@functools.cache
+def armless(station: str) -> bool:
+    """The station's shipyard has no arm rotors, so it builds from the ship's first block and a
+    scaffold: Moon Station's double helix shipyard (SE-959)"""
+    root = ET.parse(rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").getroot()
+    yard = next(
+        e
+        for e in root.iter("MyObjectBuilder_EntityBase")
+        if e.findtext("DisplayName") == f"{station} Station Shipyard"
+    )
+    return "MotorAdvancedStator" not in ET.tostring(yard, encoding="unicode")
+
+
+@functools.cache
+def arm_rotors() -> int:
+    """The arm rotors of the world's shipyards"""
+    text = (rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    return len(re.findall(r"<CustomName>Advanced Rotor \w+ Arm \w+</CustomName>", text))
+
+
 def order(remote, case: str) -> tuple:
     station, ship, blocks, paid, _, _ = CASES[case]
     exempt = case == "exempt"
@@ -479,6 +499,10 @@ def order(remote, case: str) -> tuple:
     if case in STALLS:
         # Before the arm is complete and the projection starts
         log(admin(remote, f"!oct shipyard strip {station} {STALLS[case][0]}"))
+    if armless(station):
+        line = wait_state(remote, station, rf"'{ship}'.*without an arm", 30)
+        check(line is not None, f"{case}: built without an arm: {line}")
+        return mark
     arm = wait_state(remote, station, rf"'{ship}'.*: arm \d+/\d+", 30)
     # The welders may complete a small arm's projector before this looks
     check(arm is not None, f"{case}: the arm is placed: {arm}")
@@ -534,6 +558,9 @@ def finish(remote, case: str, mark: int, restarted: bool = False) -> None:
         )
         line = wait_log(rf"'{ship}' of .* (ended|built or broken down)", 60)
         ready = line if line and f"'{ship}' is ready" in line else None
+    elif armless(station):
+        follow(remote, case, lambda _: False)
+        ready = wait_chat(remote, f"'{ship}' is ready", 60, mark)
     else:
         line = watch_build(remote, case)
         check(
@@ -681,6 +708,8 @@ def arms_gone(remote, case: str) -> list[str]:
     """The arm comes down at once after the build: waits up to 10 s for the case's rotor
     heads to be alone and dynamic. Returns the shipyard's lines."""
     station, size = CASES[case][0], CASES[case][5]
+    if armless(station):
+        return shipyard(remote, station)
     deadline = time.monotonic() + 10
     while True:
         lines = shipyard(remote, station)
@@ -928,9 +957,10 @@ def saved(cases: list[str]) -> None:
         if re.match(r"Advanced Rotor \w+ Arm \w+", b.findtext("CustomName") or "")
     ]
     attached = [b for b in stators if (b.findtext("TopBlockId") or "") not in ("", "0")]
+    rotors = arm_rotors()
     check(
-        len(stators) == 28 and len(attached) == 28,
-        f"saved: all 28 arm rotors keep their heads: {len(attached)}/{len(stators)}",
+        len(stators) == rotors and len(attached) == rotors,
+        f"saved: all {rotors} arm rotors keep their heads: {len(attached)}/{len(stators)}",
     )
     # Every head grid is named "Subgrid": list them all, not by name
     heads = [
@@ -944,8 +974,8 @@ def saved(cases: list[str]) -> None:
         and len(list(e.find("CubeBlocks"))) == 1
     ]
     check(
-        len(heads) == 28 and all(e.findtext("IsStatic") != "true" for e in heads),
-        f"saved: the 28 rotor heads are alone on their grids and dynamic: {len(heads)}",
+        len(heads) == rotors and all(e.findtext("IsStatic") != "true" for e in heads),
+        f"saved: the {rotors} rotor heads are alone on their grids and dynamic: {len(heads)}",
     )
 
 

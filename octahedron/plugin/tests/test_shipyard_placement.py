@@ -43,6 +43,9 @@ from test_client import log  # noqa: E402
 PLATE = "Component/SteelPlate"
 # The free space along the shipyard: its grid's cells -57 to 57 along Z, across x 0, y -16.5
 LENGTH = 287.5
+# Shipyards of another model: the free space's middle in grid cells and its length in m.
+# Moon's double helix: cells 10 to 191 along its axis, the welders' reach (SE-959).
+SPACES = {"Moon": ((0, 0, 100.5), 455.0)}
 CUBE = {"Large": 2.5, "Small": 0.5}
 
 
@@ -148,7 +151,10 @@ def check_place(root: ET.Element, case: str) -> None:
         for i in range(3)
     )
     pos, right, up, back = frame(yard)
-    mid = tuple(pos[i] - 2.5 * 16.5 * up[i] for i in range(3))
+    (x, y, z), length = SPACES.get(station, ((0, -16.5, 0), LENGTH))
+    mid = tuple(
+        pos[i] + 2.5 * (x * right[i] + y * up[i] + z * back[i]) for i in range(3)
+    )
     away = sub(center, mid)
     along, across, above = dot(away, back), dot(away, right), dot(away, up)
     pos, right, up, back = frame(grids[f"{station} Station"])
@@ -175,8 +181,8 @@ def check_place(root: ET.Element, case: str) -> None:
         sa.check(abs(along) <= 2.5, f"{case}: in the middle: {along:.1f}")
     else:
         sa.check(
-            abs(abs(along) - LENGTH / 6) <= 2.5,
-            f"{case}: at the 1/3 point, {LENGTH / 6:.1f} m from the middle: {along:.1f}",
+            abs(abs(along) - length / 6) <= 2.5,
+            f"{case}: at the 1/3 point, {length / 6:.1f} m from the middle: {along:.1f}",
         )
         sa.check(
             along * dot(near, back) > 0, f"{case}: nearer the station: {along:.1f}"
@@ -277,15 +283,17 @@ def main() -> int:
         sa.CASES[case] = (station, ship, blocks, False, False, SIZES.get(case, "Large"))
     rig.stop_client()
     rig.stop_server()
-    # One free order after the other
+    # One free order after the other, each ship left where it was built until the final save
     config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
     assert "FreeBuildCooldownMinutes" not in config
+    assert "ShipyardClearMinutes" not in config
     patched = rig.WORLD.parent / "placement-octahedron.cfg"
     patched.parent.mkdir(parents=True, exist_ok=True)
     patched.write_text(
         config.replace(
             "</OctahedronConfig>",
-            "<FreeBuildCooldownMinutes>0</FreeBuildCooldownMinutes></OctahedronConfig>",
+            "<FreeBuildCooldownMinutes>0</FreeBuildCooldownMinutes>"
+            "<ShipyardClearMinutes>600</ShipyardClearMinutes></OctahedronConfig>",
         ),
         encoding="utf-8",
     )

@@ -92,16 +92,23 @@ def octs(state: dict) -> bool:
     return all(state[k] == f"{OCT}/Faction" for k in ("cargo", "welders", "connectors"))
 
 
+# False where a turn hands the player more blocks than OCT keeps: the double helix shipyard's
+# 54 cargo containers, welders and connectors against its 8 reactors
+OCT_BIG_OWNER = True
+
+
 def power_stays(state: dict, what: str) -> None:
+    batteries = state.get("batteries", "")
     check(
         state["reactors"].startswith(OCT + "/")
-        and state["batteries"].startswith(OCT + "/"),
-        f"{what}: reactors and batteries stay OCT's: {state['reactors']}, {state['batteries']}",
+        and (not batteries or batteries.startswith(OCT + "/")),
+        f"{what}: reactors and batteries stay OCT's: {state['reactors']}, {batteries}",
     )
-    check(
-        state["bigowner"] == OCT,
-        f"{what}: OCT stays the big owner: {state['bigowner']}",
-    )
+    if OCT_BIG_OWNER:
+        check(
+            state["bigowner"] == OCT,
+            f"{what}: OCT stays the big owner: {state['bigowner']}",
+        )
     check(state["elsewhere"] == "0", f"{what}: no uranium out of the reactors: {state}")
 
 

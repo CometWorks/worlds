@@ -1259,7 +1259,7 @@ keeps the grid's forward. It checks how they lie in the saved world. `OCT_ALIGN_
 `tests/test_shipyard_placement.py` checks in the saved world where ships end up
 along the shipyard: short ones at the 1/3 point nearer the station, at pole and
 equatorial stations, the widest small grid ship among them, and a ship of 1/4 of
-the length in the middle. With the arm's time limit forced to 0 it checks that a
+the length in the middle; at Moon Station, a small grid ship built without an arm. With the arm's time limit forced to 0 it checks that a
 press is refused and that a queued paid order ends with its reason and everything
 given back.
 `tests/test_shipyard_sight.py` loads a world built by `build_world.py` with the sight
@@ -1290,7 +1290,8 @@ check on a test cluster, with a trip to a station on the other node.
 from OCT's stock, paid orders and their turns, the purchase at the start all or none,
 hydrogen, the sale of what a turn leaves, towed grids, free orders, the queue, the
 formats, blueprints in parts, and that no money is made or lost. `tests/test_shipyard_turn.py` checks a
-player's turn in game at Alpha Station: who owns what, the window, the purchase, the
+player's turn in game at Alpha Station, or with `OCT_TURN_STATION=Moon` at the double
+helix shipyard: who owns what, the window, the purchase, the
 sale, overflow, a ship in the way, a tow reaching the shipyard, restarts;
 `tests/shipyard_turn_cluster.py` does the same on a cluster with moves of the station's
 partition. `tests/test_shipyard_docked.py` checks what is in a shipyard's way: a ship docked

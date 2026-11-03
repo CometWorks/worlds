@@ -45,8 +45,10 @@ from test_table_rules import (
     settled,
 )  # noqa: E402
 
-# OCT_TURN_STATION=Moon runs it at the double helix shipyard (SE-959)
-STATION = os.environ.get("OCT_TURN_STATION", "Alpha")
+# OCT_TURN_STATION=Moon runs it at the double helix shipyard (SE-959). The shipyard helpers of
+# test_repair_slot.py and test_table_rules.py go by their own STATION.
+STATION = rs.STATION = tr.STATION = os.environ.get("OCT_TURN_STATION", "Alpha")
+rs.OCT_BIG_OWNER = STATION != "Moon"
 PLATE = "Component/SteelPlate"
 GOLD = "Ingot/Gold"
 STONE = "Ore/Stone"
@@ -366,6 +368,8 @@ def build_and_deadline(a) -> None:
     check(state["elsewhere"] == "0", f"no uranium elsewhere: {state['elsewhere']}")
     left = stock(a)
     check(left.get(GOLD) == 50, f"what they loaded on top is there: {left}")
+    # Plates the build didn't take: the double helix shipyard has no arm to use them on
+    plates = left.get(PLATE, 0) * market(a, PLATE)[0]
     docked = re.search(r"SHIP (\d+)", probe(a, f"yardship {STATION}"))
     check(docked is not None, f"a ship docks to take it: {docked}")
     ship = docked[1] if docked else "0"
@@ -381,7 +385,7 @@ def build_and_deadline(a) -> None:
     check(took <= WINDOW * 60 + 30, f"at its time: {took:.0f} s of {WINDOW * 60}")
     check("sold" in (told or "") or "SC" in (told or ""), f"the sale in chat: {told}")
     free_at_end(a, "deadline")
-    want = 50 * gold[0]
+    want = 50 * gold[0] + plates
     got = money(a) - money2
     check(got == want, f"sold at OCT's bid, tax in it: {got}, want {want:.0f}")
     now = market(a, GOLD)
