@@ -79,6 +79,7 @@ public class Plugin : IPlugin
             BinocularsInZones.Update();
             TableHologram.Update();
             ShipyardOrders.Update();
+            ShipyardOwnBlocks.Update();
             FreePrints.Update();
             Market.Update();
             Builds.Update();

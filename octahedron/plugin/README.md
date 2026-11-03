@@ -475,6 +475,12 @@ chat messages find the player on any node. One who is logged off misses them.
   not trading. The reactors and batteries stay OCT's, and conveyors can't pull
   uranium out of a reactor. OCT keeps most of the blocks, so it stays the grid's big
   owner and the grid a shipyard.
+- While the welders are the player's they work only on the player's blocks and their
+  faction's: a block's owner, or for a block without one who built it, and for a
+  projection the projector's owner. The order's own projector counts as theirs. Another
+  player's ship in the shipyard is neither targeted nor welded, and its projection isn't
+  built. The plugin patches ToolCore on the server for this, so a client may still draw
+  a beam at such a block (`ShipyardOwnBlocks`).
 - They get `ShipyardTurnMinutes` (10) to load components, and a chat message saying
   so. The details screen lists what is missing. The press starts the build: the
   Store supplies what is missing, into the containers, and the labor fee is paid. The press is refused when the player can't pay all of it, when
@@ -1218,6 +1224,10 @@ same zone a player's hand welder and grinder, ship welder and grinder, and an
 OmniArc welder on a player's grid named like a shipyard do nothing, and that the
 player's tools work outside the zone. It runs with the plugin's rules on, on
 with the zones holding every test grid from the start, and off.
+`tests/test_shipyard_own_blocks.py` gives one player a repair slot with a ship of theirs and
+one of another player's in the shipyard, each with a damaged block and a projection: the
+welders repair the slot's player's ship and leave the other alone until that player joins
+their faction.
 `tests/test_shipyard_align.py` orders 150 m ships that only fit along the shipyard,
 one behind a cryo chamber facing sideways and one with its only cockpit sideways,
 and short ones that fit: one with its cockpit along the shipyard, which stays so, one

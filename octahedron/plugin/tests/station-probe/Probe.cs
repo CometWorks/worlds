@@ -858,11 +858,11 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "yardtarget",
-        "Builds a ship to repair in the middle of the station's shipyard: a projector, a battery, an armor block at 30% and two more, or the given number, only in the projection: TARGET grid-id",
-        "!kprobe yardtarget <station> [projected blocks]"
+        "Builds the caller a ship to repair in the middle of the station's shipyard, or shifted along it by the given meters: a projector, a battery, an armor block at 30% and two more, or the given number, only in the projection: TARGET grid-id",
+        "!kprobe yardtarget <station> [projected blocks] [shift m]"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string YardTarget(string station, int projected = 2)
+    public string YardTarget(string station, int projected = 2, double shift = 0)
     {
         var yard = Yard(station);
         var beams = Beams(yard).ToList();
@@ -870,6 +870,13 @@ public sealed class ProbeCommands : CommandModule
         foreach (var beam in beams)
             center += beam.PositionComp.GetPosition();
         center /= beams.Count;
+        // Along the shipyard: the axis its welders spread the farthest on
+        var along = new[] { yard.WorldMatrix.Forward, yard.WorldMatrix.Right, yard.WorldMatrix.Up }
+            .OrderByDescending(axis =>
+                beams.Max(b => Math.Abs(Vector3D.Dot(b.PositionComp.GetPosition() - center, axis)))
+            )
+            .First();
+        center += along * shift;
         long me = Context.Caller.IdentityId;
         var battery = Block<MyObjectBuilder_BatteryBlock>(
             "LargeBlockBatteryBlock",
@@ -1019,7 +1026,7 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "info",
-        "A grid's blocks, complete blocks, steel plates in its cargo and owners: INFO id blocks full plates owners",
+        "A grid's blocks, complete blocks, steel plates in its cargo, integrity and owners: INFO id blocks full plates integrity owners",
         "!kprobe info <grid id|grid name>"
     )]
     [Permission(MyPromoteLevel.Admin)]
@@ -1037,6 +1044,7 @@ public sealed class ProbeCommands : CommandModule
             .Sum(c => (double)c.GetInventory().GetItemAmount(plate));
         return $"INFO {found.EntityId} blocks={found.BlocksCount} "
             + $"full={found.GetBlocks().Count(b => b.IsFullIntegrity)} plates={plates} "
+            + $"integrity={found.GetBlocks().Sum(b => b.Integrity):0} "
             + $"owners={string.Join(";", found.BigOwners)}";
     }
 
