@@ -19,14 +19,16 @@ using VRage.Sync;
 
 namespace ServerPlugin;
 
-// Players use what an NPC shares with everyone, like a station's medical room, store, contracts,
-// doors, buttons, seats, hologram table and Free Tools boxes, but don't change it (SE-936). Sharing
-// with everyone lets anyone past the game's ownership check, which guards every setting, name,
-// text and toolbar of a block as well as its use. With NpcBlocksLocked the server refuses those
-// changes from a player who isn't in the NPC's faction, unless an admin with "Use terminals" on,
-// as the game's own check would for a block not shared. Inventories, the uses below, switching a
-// hologram table on or off and whatever the game checks for access alone (pressing a button,
-// opening a door, the medical room's healing and refills, buying, contracts) stay open.
+// Players use what an NPC shares with everyone but don't change it (SE-936). The game's ownership
+// check guards a block's settings as well as its use, and sharing with everyone lets anyone past
+// it. build_world.py keeps the blocks that have "Anyone can use" (store, contracts, doors, buttons)
+// with the station's faction instead. The medical room (MyMedicalRoom.RequestSupport), the
+// hologram table (MyProjectorBase.OnNewBlueprintSuccess), seats (MyUseObjectCockpitDoor) and the
+// Free Tools boxes' inventories (MyInventoryReplicable.HasRights) take the same check as the
+// settings, so they stay shared, and with NpcBlocksLocked the server refuses the changes from a
+// player who isn't in the NPC's faction, unless an admin with "Use terminals" on, as the game's
+// own check would for a block not shared. Inventories, the uses below, switching a hologram table
+// on or off and whatever the game checks for access alone stay open.
 internal static class NpcBlocks
 {
     // The game checks these for ownership too, but they use the block rather than change it
