@@ -2,7 +2,8 @@
 off: connectors and welders off, cargo containers and terminals OCT's, and it goes off again if found on,
 as in a world from before the rule. A free build turns on only the welders, the blocks stay OCT's. A
 paid build's turn gives the slot's player and their faction the blocks, and nobody else. The reactors,
-batteries and refill stations stay on and open throughout. A player who leaves doesn't stop the build:
+batteries and refill stations stay on and open throughout, the OmniArc deconstructors off and
+OCT's (SE-983). A player who leaves doesn't stop the build:
 a paid build whose DLC blocks the server no longer knows they own, one with a server restart while
 they are away, and a repair slot with the slot's whole end. On a world built by build_world.py. The
 presses are !oct order: see test_table_rules.py.
@@ -70,9 +71,19 @@ def access(remote, player: str) -> dict[str, str]:
     return dict(re.findall(r"(\w+)=(\w+)", reply.split(" access ")[1]))
 
 
+def idle_deconstructors(state: dict[str, str]) -> bool:
+    """The OmniArc deconstructors: OCT's, off and not shooting, whatever the shipyard does (SE-983)"""
+    return (
+        state["destros"] == f"{rs.OCT}/Faction"
+        and state["destroson"] == "0/24"
+        and state["destroshoot"] == "0"
+    )
+
+
 def off(state: dict[str, str]) -> bool:
     return (
         rs.octs(state)
+        and idle_deconstructors(state)
         and state["welderson"] == "0"
         and state["connectorson"] == "0"
         and state["connected"] == "0"
@@ -91,6 +102,11 @@ def stays_on(remote, what: str) -> None:
             access(remote, player)["refill"] == "True",
             f"{what}: the refill stations are open to {player}",
         )
+        check(
+            access(remote, player)["destros"] == "False",
+            f"{what}: {player} has no access to the deconstructors",
+        )
+    check(idle_deconstructors(state), f"{what}: the deconstructors stay idle: {state}")
 
 
 def locked(remote, player: str, what: str) -> None:
