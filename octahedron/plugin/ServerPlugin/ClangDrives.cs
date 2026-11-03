@@ -28,8 +28,12 @@ namespace ServerPlugin;
 // fall. Ships slower than ClangDriveMinSpeed are left alone. Outside safe zones a ship that touched
 // anything outside the group within the last second isn't punished: a crash. Inside one, only the
 // faster of two colliding ships is switched off. A ship left on is left alone for five seconds
-// more, the aftermath of its hit: its wreck's pieces keep bumping into each other. Skipped: groups with a static grid (docked to a station), owned by an NPC,
-// in a shipyard's build space or switched off already. Each cluster node checks what it simulates.
+// more, the aftermath of its hit: its wreck's pieces keep bumping into each other. A velocity set
+// from code, by a mod (a Trade Lane pulling the ship in or dropping it out), a teleport, a jump or a
+// grid split, isn't the ship's doing: no window with such a write in it counts. The server never
+// sets a ship's velocity from a client, so contacts and thrusters, a clang drive's means, are never
+// writes. Skipped: groups with a static grid (docked to a station), owned by an NPC, in a
+// shipyard's build space or switched off already. Each cluster node checks what it simulates.
 internal static class ClangDrives
 {
     private const double FramesPerSecond = 60;
@@ -63,6 +67,9 @@ internal static class ClangDrives
     // Havok's threads.
     private static readonly ConcurrentDictionary<(long Grid, long Other), int> contacts = new();
 
+    // The last frame each grid's velocity was set from code. Written on any thread a mod runs on.
+    private static readonly ConcurrentDictionary<long, int> writes = new();
+
     // The last frame each owner was told
     private static readonly Dictionary<long, int> told = new();
 
@@ -77,6 +84,7 @@ internal static class ClangDrives
         {
             tracks.Clear();
             contacts.Clear();
+            writes.Clear();
             return;
         }
         // Once per simulation frame, whatever the wall clock does
@@ -87,9 +95,14 @@ internal static class ClangDrives
 
         var window = Math.Max(1, config.ClangDriveWindowFrames);
         if (frame % 60 == 0)
+        {
             foreach (var contact in contacts)
                 if (frame - contact.Value > ContactFrames)
                     contacts.TryRemove(contact.Key, out _);
+            foreach (var write in writes)
+                if (frame - write.Value > window)
+                    writes.TryRemove(write.Key, out _);
+        }
 
         var visited = new HashSet<MyCubeGrid>();
         foreach (var grid in MyEntities.GetEntities().OfType<MyCubeGrid>())
@@ -139,6 +152,7 @@ internal static class ClangDrives
             track.AccelFrame = frame;
         }
         var velocity = momentum / mass;
+        var written = Written(group, window);
         track.Samples.Enqueue((frame, velocity));
         while (frame - track.Samples.Peek().Frame > window)
             track.Samples.Dequeue();
@@ -149,6 +163,7 @@ internal static class ClangDrives
         if (
             Math.Max(track.Speed, velocity.Length()) < config.ClangDriveMinSpeed
             || frame - track.Spared < SparedFrames
+            || written
         )
             return;
 
@@ -236,6 +251,22 @@ internal static class ClangDrives
         return sums.Max();
     }
 
+    // Whether code set a grid's velocity within the window. A write at frame w changes the velocity
+    // sampled at w or w + 1, whichever side of the plugin's update the writer ran; the window's
+    // oldest sample is at frame - window. Disabled physics reads as zero velocity: a write too.
+    private static bool Written(List<MyCubeGrid> group, int window)
+    {
+        var written = false;
+        foreach (var grid in group)
+        {
+            if (!grid.Physics.Enabled)
+                writes[grid.EntityId] = frame;
+            if (writes.TryGetValue(grid.EntityId, out var at) && frame - at <= window)
+                written = true;
+        }
+        return written;
+    }
+
     // The largest acceleration between two frames in the window
     private static double PeakFrame(Track track)
     {
@@ -286,6 +317,25 @@ internal static class ClangDrives
                 grid.SwitchPower();
             grid.ChangePowerProducerStateInternal(MyMultipleEnabledEnum.AllDisabled, -1);
         }
+    }
+
+    // Every velocity setter of a body ends here: LinearVelocity, LinearVelocityUnsafe, SetSpeeds
+    [HarmonyPatch(typeof(MyPhysicsBody), "SetLinearVelocity")]
+    private static class SetVelocity
+    {
+        private static void Postfix(MyPhysicsBody __instance) => Note(__instance);
+    }
+
+    [HarmonyPatch(typeof(MyPhysicsBody), nameof(MyPhysicsBody.ClearSpeed))]
+    private static class ClearSpeed
+    {
+        private static void Postfix(MyPhysicsBody __instance) => Note(__instance);
+    }
+
+    private static void Note(MyPhysicsBody body)
+    {
+        if (active && body.Entity is MyCubeGrid grid)
+            writes[grid.EntityId] = MySession.Static?.GameplayFrameCounter ?? frame;
     }
 
     [HarmonyPatch(typeof(MyGridPhysics), "RigidBody_ContactPointCallback")]

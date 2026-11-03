@@ -2,13 +2,14 @@
 their thrust as a clang drive would and reports what the server has for them; the octahedron.cfg defaults apply
 (factor 2, 6 frames, 3 m/s² above gravity, 20 m/s).
 
-Switched off, with a log line: a ship pushed at 3x its thrust over mass, one whose speed jumps by 3 s of its
-thrust in one frame, a heavy ship flying at 50 m/s into Alpha Station's safe zone and onto a wall there, the
+Pushes and jumps are forces and impulses, as a clang drive's contacts are. Switched off, with a log line: a
+ship pushed at 3x its thrust over mass, one whose speed jumps by 3 s of its thrust in one frame, a heavy ship flying at 50 m/s into Alpha Station's safe zone and onto a wall there, the
 same without thrusters, and one ramming a ship at rest there. Left on: a ship pushed at 1.5x, one at 30 m/s
 jumping by 0.1 s of its thrust in one frame (the window takes the spike), one jumping by 0.3 s of it from
 rest (too slow to count), one at full thrust override, an NPC's ship pushed at 3x, the ramming ship hitting
-a wall outside safe zones, the ship it rams in the zone (hit by a faster one), and a heavy ship falling
-toward the planet faster than twice its thrust allows.
+a wall outside safe zones, the ship it rams in the zone (hit by a faster one), a heavy ship falling
+toward the planet faster than twice its thrust allows, and the push at 3x and the jump by 3 s made by setting
+the velocity, as a mod moving the ship does (a Trade Lane pulling it in or dropping it out, SE-977, SE-978).
 
 Two clang drives from the Workshop are switched off once started, a sliding door one and a merge block one,
 when CLANG_BLUEPRINTS names a steamcmd folder that has them (see DRIVES):
@@ -69,6 +70,8 @@ SHIPS = {
     "CL Spike 0.1": (False, True, False),
     "CL Spike 0.3 Slow": (False, True, False),
     "CL Thrust": (False, True, False),
+    "CL Drag 3": (False, True, False),
+    "CL Set 3": (False, True, False),
     "CL Ram Zone": (True, True, False),
     "CL Ram Crash": (False, True, False),
     "CL Ram Bare": (True, False, False),
@@ -232,6 +235,8 @@ def world_grids() -> list[str]:
         "CL Spike 0.1",
         "CL Spike 0.3 Slow",
         "CL Thrust",
+        "CL Drag 3",
+        "CL Set 3",
     ]
     for i, name in enumerate(spaced):
         # The spike that is to be absorbed comes on a ship already moving: a slow one doesn't count

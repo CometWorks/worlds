@@ -1,7 +1,8 @@
 """Clang drives and ramming on a local test cluster (SE-966), as tests/test_clang_drive.py checks them on one
 server, without a client: the nodes' own test routes give the ships their speed. A heavy ship whose speed jumps
-by 50 m/s in one write (no collision) is switched off, and so is one that flies into Alpha Station's safe zone at
-50 m/s and rams a static wall there, with the line in the log of the node that simulates them. The same ship
+by 50 m/s in one write (no collision) stays on: a velocity set from code, as a Trade Lane sets it, isn't the
+ship's doing (SE-978). One that flies into Alpha Station's safe zone at 50 m/s and rams a static wall there is
+switched off, with the line in the log of the node that simulates them. The same ship
 crashing into a wall outside safe zones stays on. The rams get their speed bit by bit, below twice their
 thrust, so that only the hit counts.
 
@@ -41,7 +42,7 @@ BELOW = 19.0
 STEP = 0.3
 STEP_SECONDS = 0.15
 CASES = {
-    "CL Spike": ((cd.SPACE[0], cd.SPACE[1], cd.SPACE[2]), None, True, False),
+    "CL Spike": ((cd.SPACE[0], cd.SPACE[1], cd.SPACE[2]), None, False, False),
     "CL Ram Zone": (
         (cd.ZONE[0], cd.ZONE[1], cd.ZONE[2] + 895),
         (cd.ZONE[0], cd.ZONE[1], cd.ZONE[2] + 195),
