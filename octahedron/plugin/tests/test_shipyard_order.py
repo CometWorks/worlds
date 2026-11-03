@@ -16,6 +16,8 @@ headless client.
 - "helix": the "complete" ship at Moon Station, whose double helix shipyard has no arm
   rotors, so the build starts from the ship's first block and a scaffold (SE-959). Needs
   OCT_WORLD_SOURCE, a world built by build_world.py.
+- "helix-long": the same with a 400 m line of armor along the shipyard's axis, which its
+  welders, 90 m out, have to reach along most of its length.
 
     uv run --no-project --with httpx python tests/test_shipyard_order.py [case ...]
 
@@ -70,14 +72,30 @@ BIG = rig.grid(
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
+# A line of armor 400 m long behind the control station: the welders have to reach the
+# double helix shipyard's axis along most of its length
+LONG = rig.grid(
+    "Order Long",
+    777000151000300,
+    [
+        rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 1, 0)),
+        rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (0, 0, 1)),
+    ]
+    + [
+        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, z))
+        for z in [0, *range(2, 160)]
+    ],
+    tag="MyObjectBuilder_CubeGrid",
+)
 # name: (blueprint, its blocks, ShipyardOrderMinutes)
 CASES = {
     "complete": (SMALL, 10, 60),
     "expire": (BIG, 1536, 2),
     "helix": (SMALL, 10, 60),
+    "helix-long": (LONG, 161, 60),
 }
 # The station of a case's table, by its name's first word; else the nearest table
-STATIONS = {"helix": "Moon"}
+STATIONS = {"helix": "Moon", "helix-long": "Moon"}
 
 SHOTS = os.environ.get("OCT_SHOTS")
 started = time.monotonic()

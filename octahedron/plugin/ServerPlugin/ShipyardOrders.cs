@@ -3348,14 +3348,19 @@ internal static partial class ShipyardOrders
         return shipyard;
     }
 
-    // How far a ship may reach past the outermost welders along the shipyard, in cells: as far
-    // as the Omni Arc Beam Shipyard's frame goes. The double helix shipyard's end towers reach
-    // farther out, its welders don't (SE-959).
-    private const int WelderEndCells = 6;
+    // An OmniArc welder targets a block whose center is within ToolCore's TargetRadius, 100 m,
+    // of a point 1 m past its emitter, where the turret points then. The emitter is 1.18 m from
+    // the ball, the ball 1.75 m from the block's center: a block this close to the welder
+    // block's center is in reach in any pose (SE-959).
+    private const double WelderReach = 100 - 1 - 1.18 - 1.75;
 
-    // The largest box free of the shipyard's blocks, grown from the middle of its welders
-    // one layer at a time and kept within its grid's bounds and, along the shipyard,
-    // WelderEndCells past its welders, in world coordinates
+    // The turret turns all the way around the block's Up and tilts 45 degrees out of that plane
+    private static readonly double WelderTilt = Math.Sin(MathHelper.ToRadians(45));
+
+    // The largest box free of the shipyard's blocks and in its welders' reach, grown from the
+    // middle of its welders one layer at a time and kept within its grid's bounds, in world
+    // coordinates. The Omni Arc Beam Shipyard's whole frame is in reach; the double helix
+    // shipyard's round volume isn't, between the welders near its wall and its ends (SE-959).
     private static MyOrientedBoundingBoxD FreeSpace(MyCubeGrid shipyard)
     {
         if (!freeBoxes.TryGetValue(shipyard.EntityId, out var box))
@@ -3365,13 +3370,14 @@ internal static partial class ShipyardOrders
             foreach (var beam in beams)
                 start += beam.Position;
             start /= Math.Max(1, beams.Count);
-            var min = shipyard.Min;
-            var max = shipyard.Max;
-            if (beams.Count > 0)
-            {
-                min.Z = Math.Max(min.Z, beams.Min(b => b.Min.Z) - WelderEndCells);
-                max.Z = Math.Min(max.Z, beams.Max(b => b.Max.Z) + WelderEndCells);
-            }
+            var welders = beams
+                .Select(b =>
+                    (
+                        Center: (Vector3D)b.Position,
+                        Up: (Vector3D)Base6Directions.GetIntVector(b.Orientation.Up)
+                    )
+                )
+                .ToList();
             box = new BoundingBoxI(start, start);
             for (var grew = true; grew; )
             {
@@ -3389,9 +3395,10 @@ internal static partial class ShipyardOrders
                     else
                         layer.Max = box.Max + (box.Max - box.Min + Vector3I.One) * d;
                     if (
-                        Vector3I.Min(grown.Min, min) != min
-                        || Vector3I.Max(grown.Max, max) != max
+                        Vector3I.Min(grown.Min, shipyard.Min) != shipyard.Min
+                        || Vector3I.Max(grown.Max, shipyard.Max) != shipyard.Max
                         || !Free(shipyard, layer)
+                        || !Reached(welders, layer, shipyard.GridSize)
                     )
                         continue;
                     box = grown;
@@ -3439,6 +3446,41 @@ internal static partial class ShipyardOrders
             .FirstOrDefault();
         entities.Clear();
         return table?.CubeGrid;
+    }
+
+    // Every cell of the box in some welder's reach; any cell without ToolCore, which has no
+    // welders to tell
+    private static bool Reached(
+        List<(Vector3D Center, Vector3D Up)> welders,
+        BoundingBoxI box,
+        double cube
+    )
+    {
+        if (welders.Count == 0)
+            return true;
+        for (var x = box.Min.X; x <= box.Max.X; x++)
+        for (var y = box.Min.Y; y <= box.Max.Y; y++)
+        for (var z = box.Min.Z; z <= box.Max.Z; z++)
+        {
+            var cell = new Vector3D(x, y, z);
+            var reached = false;
+            foreach (var (center, up) in welders)
+            {
+                var offset = (cell - center) * cube;
+                var distance = offset.Length();
+                if (
+                    distance <= WelderReach
+                    && Math.Abs(Vector3D.Dot(offset, up)) <= WelderTilt * distance
+                )
+                {
+                    reached = true;
+                    break;
+                }
+            }
+            if (!reached)
+                return false;
+        }
+        return true;
     }
 
     private static bool Free(MyCubeGrid grid, BoundingBoxI box)

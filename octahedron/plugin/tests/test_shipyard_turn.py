@@ -14,6 +14,7 @@ of 10 is in BuildTests.
         uv run --no-project --with httpx python tests/test_shipyard_turn.py
 
 Prints one line per check and a pass/fail summary; exit code 0 = all passed. About an hour.
+At Alpha Station; OCT_TURN_STATION names another, Moon for the double helix shipyard.
 Not covered: a cluster (tests/shipyard_turn_cluster.py), and a player moving items by hand: the
 probe plugin puts them in and takes them out.
 """
@@ -44,7 +45,8 @@ from test_table_rules import (
     settled,
 )  # noqa: E402
 
-STATION = "Alpha"
+# OCT_TURN_STATION=Moon runs it at the double helix shipyard (SE-959)
+STATION = os.environ.get("OCT_TURN_STATION", "Alpha")
 PLATE = "Component/SteelPlate"
 GOLD = "Ingot/Gold"
 STONE = "Ore/Stone"

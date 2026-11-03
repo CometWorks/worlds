@@ -395,11 +395,12 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   ShipyardQueue`) show it, and which ship blocks the shipyard. Each entry wraps to
   two lines of 46 columns and is cut after that, so a full queue keeps font size 0.57.
 - The ship must fit the shipyard's free space, the largest box between its
-  welders free of its blocks, along the shipyard at most 6 cells (15 m) past its
-  outermost welders: the double helix shipyard's end towers reach farther out,
-  its welders don't. That box is 72.5 x 75 x 282.5 m in the Omni Arc Beam
-  Shipyard and 142.5 x 137.5 x 530 m in the double helix one, whose round build
-  volume holds no wider box. The ship is turned so that its main cockpit points along the
+  welders free of its blocks whose every block is in some welder's reach: within
+  96 m of the welder block's center, ToolCore's 100 m less how far the turret's
+  emitter can be from it, and at most 45 degrees out of the plane its turret turns
+  in. That box is 72.5 x 75 x 282.5 m in the Omni Arc Beam Shipyard, all of its
+  frame, and 112.5 x 117.5 x 455 m in the double helix one: its round volume's
+  edges and ends are out of reach between the welders (SE-959). The ship is turned so that its main cockpit points along the
   shipyard or, when it only fits another way, by right angles from there,
   its components the shipyard's containers, and it may have at most
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits

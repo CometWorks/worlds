@@ -97,7 +97,7 @@ station and shipyard blueprints are in `blueprints/`.
   ([SE-945](https://tasks.cometworks.se/tasks/1832)). Moon Station has the
   double helix shipyard instead (`blueprints/double-helix-shipyard.sbc` from
   `make_helix_shipyard.py`, 34 welders on two strands of conveyor pipe around a
-  build volume 197.5 m across and 500 m long, no arm rotors;
+  build volume 177.5 m across and 500 m long, no arm rotors;
   [SE-959](https://tasks.cometworks.se/tasks/1846)).
   - Every shipyard starts where Viktor put Gamma Station's on the live cluster
     (`SHIPYARD_PLACE`, in the station's own axes): 180 m from the station, 140 m
@@ -112,9 +112,9 @@ station and shipyard blueprints are in `blueprints/`.
   - Moon Station's double helix shipyard is 575 m long with its end towers, too
     long to stand on end in the zone. It takes the same place and orientation,
     turned by as little as lays its length and its block bounds' sides square to
-    the Sun's axis (`HELIX_STATIONS`), then moves the same way: 152 m along the
-    Sun's axis, ending 240 m from the station, above the lobby's dome. The
-    station sits about 220 m from its axis, off its middle toward one end.
+    the Sun's axis (`HELIX_STATIONS`), then moves the same way: 142 m along the
+    Sun's axis, ending 233 m from the station, above the lobby's dome. The
+    station sits about 217 m from its axis, off its middle toward one end.
   - The station and its shipyard are centered on the safe zone together. Where a
     gate would still shade the station's hangar deck or lobby, the pair moves
     together by as little as clears them with both block bounds 10 m inside the

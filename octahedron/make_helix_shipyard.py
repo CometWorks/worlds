@@ -11,7 +11,7 @@ Writes bp.sbc and thumb.png into the folder, as a local blueprint folder
 (Blueprints/local/<name>) has them, and prints the checks: block counts, PCU,
 open conveyor ports, the build volume and how far the welders reach into it.
 
-Two strands of industrial conveyor pipe wind around a build volume 79 blocks
+Two strands of industrial conveyor pipe wind around a build volume 71 blocks
 across and 200 blocks long. Every quarter turn an OmniArc beam welder sits
 inline in each strand, the conveyor passing through it. A ring of pipe at
 each end joins the strands. Four towers point outward from each ring, every 90
@@ -39,9 +39,10 @@ NAME = "Double Helix Shipyard"
 
 # Radius of the strands and the rings, in blocks from the axis. Every pipe cell
 # is more than CLEAR blocks from the axis, so the build volume is 2 * CLEAR + 1 =
-# 79 blocks (197.5 m) across around a center block.
-RADIUS = 40
-CLEAR = 39
+# 71 blocks (177.5 m) across around a center block. At 40 blocks the welders
+# didn't reach the axis in game (SE-959).
+RADIUS = 36
+CLEAR = 35
 # Blocks between the rings: the build volume's length (500 m)
 LENGTH = 200
 TURNS = 4
@@ -56,13 +57,14 @@ STRAND_ENDS = 4
 # Pipe from a ring to the connector at a tower's tip, in blocks
 TOWER = 13
 # The welder's reach (ToolCore definition of OmniArcBeam and its models): it
-# targets blocks within 100 m of its emitter. The emitter sits 1.18 m from the
-# ball toward the target, and the ball 1.75 m from the block's center on the
-# ring, which turns all the way around the block's Up. The ball tilts at most
-# 45 degrees out of the ring's plane.
+# targets blocks whose center is within 100 m of a point 1 m past its emitter,
+# where the turret points then, not where it will aim. The emitter sits 1.18 m
+# from the ball and the ball 1.75 m from the block's center, so a block within
+# REACH of the welder block's center is in reach in any pose. The ball turns all
+# the way around the block's Up and tilts at most 45 degrees out of that plane.
+# The Octahedron plugin's free build space counts the same (ShipyardOrders).
 GRID = 2.5
-REACH = 100 + 1.18
-BALL = 1.75
+REACH = 100 - 1 - 1.18 - 1.75
 TILT = 45
 
 XSI = "http://www.w3.org/2001/XMLSchema-instance"
@@ -569,13 +571,8 @@ def reach(yard):
         best = np.full(len(cells), -np.inf)
         for center, up in welders:
             d = (cells - center) * GRID
-            level = d - np.outer(d @ up, up)
-            ball = (
-                level / np.maximum(np.linalg.norm(level, axis=1), 1e-9)[:, None] * BALL
-            )
-            aim = d - ball
-            distance = np.linalg.norm(aim, axis=1)
-            tilt = np.degrees(np.arcsin(np.abs(aim @ up) / distance))
+            distance = np.linalg.norm(d, axis=1)
+            tilt = np.degrees(np.arcsin(np.abs(d @ up) / distance))
             best = np.maximum(best, np.where(tilt <= TILT, REACH - distance, -np.inf))
         margins.append(best)
     margins = np.array(margins)
