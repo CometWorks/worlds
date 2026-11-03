@@ -134,6 +134,17 @@ station and shipyard blueprints are in `blueprints/`.
   The entries name no safe zone (`SafeZoneEntityId` 0); with one, the economy
   would delete the station grid when no player is near. That leaves the
   Services Terminal's repair and salvage without grids to list.
+- Adds two player factions anyone can join without asking, Sheep [SHP] and
+  Wolves [WOL] (`STARTING_FACTIONS`). Players relate to each other only through
+  factions: a player without one is everyone's enemy, and two factions are
+  enemies until they make peace
+  ([SE-975](https://tasks.cometworks.se/tasks/1866)). Sheep and Wolves start as
+  enemies of each other and accept every peace request, so a player who makes
+  their own faction and sends peace to both is neutral to them. Each is founded
+  by an NPC of its name, so it never empties and players who join it are plain
+  members. The game makes an admin leader when they join while only the NPC is
+  in it: Viktor joins Sheep and Owen Wolves first, after a wipe. No bank
+  account, since only a leader could take money out.
 - Places 11 Trade Lanes: one along each edge of the equatorial square
   (Alpha-Beta-Gamma-Delta), from Beta and Delta Station to both North and South
   Station, and from Moon Station to the three stations of the face toward the

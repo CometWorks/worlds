@@ -111,6 +111,22 @@ NPC_NAME = "Octahedron Authority"
 # a station needs nothing from its cargo.
 NPC_BALANCE = 1_000_000_000
 NPC_TAG = "OCT"
+# Factions anyone can join (tag, name, description). Players relate to each other only through
+# factions, so a player without one is everyone's enemy (SE-975). These two start as enemies of
+# each other and accept peace from any faction.
+STARTING_FACTIONS = (
+    (
+        "SHP",
+        "Sheep",
+        "We prefer peaceful gameplay and defense. We want to socialize and build together.",
+    ),
+    (
+        "WOL",
+        "Wolves",
+        "We are warriors and great hunters. We want to train, hunt, salvage and occasionally"
+        " play with the sheep.",
+    ),
+)
 # Blocks players use on a station; everything else stays with the owner's faction. Whoever a block
 # is shared with can also change its settings (SE-936), so these stay the faction's with the game's
 # "Anyone can use" on, which lets every player use them without a terminal.
@@ -1341,31 +1357,55 @@ def apply_settings(root, ore_mod):
 
 def add_npc(checkpoint, ids):
     """The stations' owner: an NPC identity and its faction."""
+    # A trade faction: the economy stocks its stations' stores and offers contracts there
+    return npc_faction(
+        checkpoint,
+        ids,
+        NPC_TAG,
+        NPC_NAME,
+        "Keeps the Octahedron stations and Trade Lanes running.",
+        "Trader",
+    )
+
+
+def add_starting_factions(checkpoint, ids):
+    """The factions players can join from the start, each founded and led by an NPC of its name.
+    They are player factions, so players in them relate by faction relations. A player who
+    auto-joins becomes a member, not a leader. Only an admin who joins while every member is an
+    NPC is promoted to leader: Viktor joins Sheep and Owen Wolves first. No bank account: only a
+    leader could take money out of it."""
+    for tag, name, description in STARTING_FACTIONS:
+        npc_faction(checkpoint, ids, tag, name, description, "PlayerMade")
+
+
+def npc_faction(checkpoint, ids, tag, name, description, faction_type):
+    """A faction founded and led by a new NPC identity named after it. It accepts peace from
+    anyone, and players can join without asking only if it is a PlayerMade one."""
+    player_made = faction_type == "PlayerMade"
     identity_id, faction_id = ids.new(2), ids.new(3)
     identity = el(checkpoint.find("Identities"), "MyObjectBuilder_Identity")
     el(identity, "IdentityId", identity_id)
-    el(identity, "DisplayName", NPC_NAME)
+    el(identity, "DisplayName", name)
     el(identity, "CharacterEntityId", 0)
     el(checkpoint.find("NonPlayerIdentities"), "long", identity_id)
     factions = checkpoint.find("Factions")
     faction = el(factions.find("Factions"), "MyObjectBuilder_Faction")
     el(faction, "FactionId", faction_id)
-    el(faction, "Tag", NPC_TAG)
-    el(faction, "Name", NPC_NAME)
-    el(faction, "Description", "Keeps the Octahedron stations and Trade Lanes running.")
+    el(faction, "Tag", tag)
+    el(faction, "Name", name)
+    el(faction, "Description", description)
     el(faction, "PrivateInfo")
     member = el(el(faction, "Members"), "MyObjectBuilder_FactionMember")
     el(member, "PlayerId", identity_id)
     el(member, "IsLeader", "true")
     el(member, "IsFounder", "true")
     el(faction, "JoinRequests")
-    el(faction, "AutoAcceptMember", "false")
+    el(faction, "AutoAcceptMember", str(player_made).lower())
     el(faction, "AutoAcceptPeace", "true")
-    el(faction, "AcceptHumans", "false")
+    el(faction, "AcceptHumans", str(player_made).lower())
     el(faction, "EnableFriendlyFire", "false")
-    # A trade faction: the economy stocks its stations' stores and offers contracts there
-    el(faction, "FactionType", "Trader")
-    el(faction, "FactionTypeString", "Trader")
+    el(faction, "FactionType", faction_type)
+    el(faction, "FactionTypeString", faction_type)
     item = el(factions.find("Players/dictionary"), "item")
     el(item, "Key", identity_id, **{XSI_TYPE: "xsd:long"})
     el(item, "Value", faction_id, **{XSI_TYPE: "xsd:long"})
@@ -1563,6 +1603,8 @@ def main():
                 yard, ids, f"{name} Shipyard", *placement, owner, STATION_COLORS[name]
             )
         )
+    # Last, so the ids drawn before stay as they were
+    add_starting_factions(checkpoint, ids)
 
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),

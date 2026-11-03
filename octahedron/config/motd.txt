@@ -4,6 +4,11 @@ Free ship: at a station's shipyard, load a blueprint into the hologram table, ch
 
 Trade lanes: stop just in front of a tunnel's entrance ring and turn off your dampeners (Z). The gate takes your ship to the far end. Dampeners back on cancels the trip.
 
+Factions: open the terminal (K), Factions tab, and join one. Anyone is accepted.
+- Sheep [SHP]: We prefer peaceful gameplay and defense. We want to socialize and build together.
+- Wolves [WOL]: We are warriors and great hunters. We want to train, hunt, salvage and occasionally play with the sheep.
+Sheep and Wolves are enemies. You can also make your own faction and send peace to both; they accept it, and you are neutral to everyone in them. Without a faction, everybody shows up as an enemy.
+
 Limits: 60,000 PCU per ship or station, 1,000,000 PCU per player.
 World: 500 km radius from the planet's center. Ships slow down past 450 km.
 
