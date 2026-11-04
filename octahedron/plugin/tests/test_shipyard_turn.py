@@ -1,7 +1,8 @@
 """A player's turn at a real station shipyard (SE-840), with two players on one server. A free build
 has no turn. A paid build gets its turn at the queue's front: the containers, welders and connectors
-are the player's and shared with their faction, connectors on and not trading, reactors OCT's. The
-press buys what isn't loaded, from the player's own account. A window nobody uses drops the order;
+are the player's, shared with nobody in OCT (SE-975) and with their faction in one of their own,
+connectors on and not trading, reactors OCT's. The press buys what isn't loaded, from the player's
+own account. A window nobody uses drops the order;
 after the build the deadline, the chat command or empty containers end the turn, what is left is sold
 to the station, and a docked ship floats free. Also: a ship in the way, a build running
 short, a press that hands the ship over unfinished, a blueprint loaded in the window, hydrogen from
@@ -269,25 +270,30 @@ def turn_starts_and_expires(a, b) -> None:
     check(state["trading"] == "0", f"the connectors don't trade: {state['trading']}")
     check(state["disabled"] == "0", f"the connectors are on: {state['disabled']}")
     yard_id = rs.shipyard_id(a)
-    wait_for(lambda: rs.client_owner(b, yard_id, state["cell"])[1] == "Faction", 30, 1)
+    wait_for(lambda: rs.client_owner(b, yard_id, state["cell"])[1] == "None", 30, 1)
     seen = rs.client_owner(b, yard_id, state["cell"])
-    check(seen[1] == "Faction", f"the other client sees it shared: {seen}")
+    check(
+        seen[1] == "None",
+        f"the other client sees it shared with nobody, the players being in OCT: {seen}",
+    )
     reply = " ".join(rig.chat(a, f"!sprobe yard {STATION} OctOther", 3))
     check(
         "access cargo=False welders=False connectors=False reactors=False" in reply,
-        f"another player has no access: {reply}",
+        f"another player, an ally in OCT, has no access: {reply}",
     )
     probe(a, "faction KRS founder")
     with Second():
         probe(b, "faction KRS member")
+    # Shared with nobody when the turn began in OCT, so a faction made later doesn't open it
     reply = " ".join(rig.chat(a, f"!sprobe yard {STATION} OctOther", 3))
     check(
-        "access cargo=True welders=True connectors=True reactors=False" in reply,
-        f"their faction has access, but to the reactors: {reply}",
+        "access cargo=False welders=False connectors=False reactors=False" in reply,
+        f"not even their new faction has access: {reply}",
     )
+    # Back to OCT, where every player starts, or later turns are shared with no faction
     with Second():
-        probe(b, "faction KRS none")
-    probe(a, "faction KRS none")
+        probe(b, "faction OCT member")
+    probe(a, "faction OCT member")
     text = settled(a, "details", "Missing from the containers")
     check("Missing from the containers" in text, f"the screen says it: {text!r}")
     check("Steel Plate" in text, f"the plates are missing: {text!r}")
@@ -571,6 +577,11 @@ def own_account(a) -> None:
     probe(a, "faction KFP leader")
     mine = money(a)
     turn(a)
+    state = yard(a)
+    check(
+        rs.theirs(state, "OctTester", "Faction"),
+        f"in a faction other than OCT, the blocks are shared with it: {state}",
+    )
     log(probe(a, f"yardload {STATION} {GOLD} 5"))
     start(a)
     mine1 = money(a)
@@ -580,7 +591,7 @@ def own_account(a) -> None:
     free_at_end(a, "in a faction")
     mine2 = money(a)
     check(mine2 > mine1, f"the sale goes to the player: {mine1} -> {mine2}")
-    probe(a, "faction KFP none")
+    probe(a, "faction OCT member")
     ship_gone(a)
     tr.remove(a)
 

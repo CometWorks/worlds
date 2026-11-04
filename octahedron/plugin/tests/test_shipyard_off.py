@@ -1,12 +1,12 @@
 """A shipyard is off unless someone has a job at it (SE-887), with two players on one server. It starts
 off: connectors and welders off, cargo containers and terminals OCT's, and it goes off again if found on,
 as in a world from before the rule. A free build turns on only the welders, the blocks stay OCT's. A
-paid build's turn gives the slot's player and their faction the blocks, and nobody else. The reactors,
-batteries and refill stations stay on and open throughout, the OmniArc deconstructors on (conveyor
-links), OCT's and never shooting (SE-983). A player who leaves doesn't stop the build:
-a paid build whose DLC blocks the server no longer knows they own, one with a server restart while
-they are away, and a repair slot with the slot's whole end. On a world built by build_world.py. The
-presses are !oct order: see test_table_rules.py.
+paid build's turn gives the slot's player the blocks, and their faction if it isn't OCT (SE-975), and
+nobody else. The reactors, batteries and refill stations stay on and open throughout, the OmniArc
+deconstructors on (conveyor links), OCT's and never shooting (SE-983). A player who leaves doesn't
+stop the build: a paid build whose DLC blocks the server no longer knows they own, one with a server
+restart while they are away, and a repair slot with the slot's whole end. On a world built by
+build_world.py. The presses are !oct order: see test_table_rules.py.
 
     OCT_TASK=SE-887 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_shipyard_off.py
@@ -129,8 +129,10 @@ def is_off(remote, what: str, wait: int = 30) -> None:
 
 def starts_off(a) -> None:
     is_off(a, "at the start")
-    log(st.probe(a, f"yardon {STATION}"))
-    check(yard(a)["welderson"] == "24", "the probe turned them on")
+    # The reply, not a yard reading: the plugin can turn them off again before that
+    on = st.probe(a, f"yardon {STATION}")
+    log(on)
+    check(on == "ON 32", f"the probe turned them on: {on}")
     is_off(a, "found on, as in an old world")
 
 
@@ -158,9 +160,14 @@ def free_build(a) -> None:
 def turn_access(a, b) -> None:
     with_config(a, **stt.PAY, ShipyardTurnMinutes=2)
     log(st.probe(a, "balance 300000"))
+    # A faction of their own: OCT, which every player is in, would share them with nobody
+    st.probe(a, "faction KRO founder")
     stt.turn(a)
     state = yard(a)
-    check(rs.theirs(state, "OctTester"), f"the slot's player has the blocks: {state}")
+    check(
+        rs.theirs(state, "OctTester", "Faction"),
+        f"the slot's player has the blocks, shared with their faction: {state}",
+    )
     check(
         state["welderson"] == "24" and state["connectorson"] == "8",
         f"on for a slot: {state}",
@@ -171,9 +178,8 @@ def turn_access(a, b) -> None:
         f"the slot's player has access: {seen}",
     )
     check(seen["reactors"] == "False", f"but not to the reactors: {seen}")
-    locked(a, "OctOther", "another player in a slot")
+    locked(a, "OctOther", "another player, in OCT, in a slot")
     stays_on(a, "in a slot")
-    st.probe(a, "faction KRO founder")
     with Second():
         st.probe(b, "faction KRO member")
     seen = access(a, "OctOther")
@@ -183,9 +189,9 @@ def turn_access(a, b) -> None:
     )
     check(seen["reactors"] == "False", f"but not to the reactors: {seen}")
     with Second():
-        st.probe(b, "faction KRO none")
-    st.probe(a, "faction KRO none")
+        st.probe(b, "faction OCT member")
     locked(a, "OctOther", "out of the faction")
+    st.probe(a, "faction OCT member")
     rig.chat(a, "!oct shipyard done", 4)
     is_off(a, "after a slot")
     tr.remove(a)
