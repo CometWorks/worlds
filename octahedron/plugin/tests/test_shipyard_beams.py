@@ -240,7 +240,7 @@ def allow_welding() -> None:
     sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
     # A saved world lists them in its own order
     text, count = re.subn(
-        r"<AllowedActions>([^<]*)</AllowedActions>",
+        r"<AllowedActions(?: />|>([^<]*)</AllowedActions>)",
         r"<AllowedActions>\1 Welding BuildingProjections</AllowedActions>",
         sector.read_text(encoding="utf-8"),
     )

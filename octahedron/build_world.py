@@ -168,6 +168,9 @@ SAFE_ZONE_MARGIN = 10.0
 SHIPYARD_SHARED = {"MedicalRoom", "ReflectorLight"}
 # Off until someone's job turns them on: the connectors and the OmniArc welders
 SHIPYARD_OFF = {"ShipConnector", "ConveyorSorter"}
+# The OmniArc deconstructors stay on: each is a link of its welder's conveyor line, which an off
+# conveyor sorter cuts. Nothing makes them shoot, so they never grind (SE-983).
+SHIPYARD_ON = {"OmniArcDestro"}
 # Delta Station turned so its up leans this far toward EarthLike from the ring's axis, which
 # leans 25 degrees away from it there: the lobby sees the planet and the deck is as tilted
 # against the Sun as Beta Station's (SE-720)
@@ -905,7 +908,7 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
             hide(block)
         if kind == "BatteryBlock":
             set_child(block, "CustomName", SHIPYARD_BATTERY)
-        if kind in SHIPYARD_OFF:
+        if kind in SHIPYARD_OFF and block.findtext("SubtypeName") not in SHIPYARD_ON:
             set_child(block, "Enabled", "false")
         stock(block, kind, SHIPYARD_REACTOR_URANIUM)
     return [as_sector_object(g) for g in (grid, *heads)]

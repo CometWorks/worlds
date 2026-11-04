@@ -322,7 +322,7 @@ def prepare(enabled, zones_last, yard, beams, inside, outside) -> None:
     sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
     text = sector.read_text(encoding="utf-8")
     text, count = re.subn(
-        r"<AllowedActions>[^<]*</AllowedActions>",
+        r"<AllowedActions(?: />|>[^<]*</AllowedActions>)",
         f"<AllowedActions>{ZONE_ACTIONS}</AllowedActions>",
         text,
     )

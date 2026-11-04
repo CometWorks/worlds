@@ -277,15 +277,17 @@ def main() -> int:
         sa.CASES[case] = (station, ship, blocks, False, False, SIZES.get(case, "Large"))
     rig.stop_client()
     rig.stop_server()
-    # One free order after the other
+    # One free order after the other, each ship left where it was built until the final save
     config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
     assert "FreeBuildCooldownMinutes" not in config
+    assert "ShipyardClearMinutes" not in config
     patched = rig.WORLD.parent / "placement-octahedron.cfg"
     patched.parent.mkdir(parents=True, exist_ok=True)
     patched.write_text(
         config.replace(
             "</OctahedronConfig>",
-            "<FreeBuildCooldownMinutes>0</FreeBuildCooldownMinutes></OctahedronConfig>",
+            "<FreeBuildCooldownMinutes>0</FreeBuildCooldownMinutes>"
+            "<ShipyardClearMinutes>600</ShipyardClearMinutes></OctahedronConfig>",
         ),
         encoding="utf-8",
     )

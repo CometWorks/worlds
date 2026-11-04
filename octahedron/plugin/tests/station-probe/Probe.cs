@@ -19,6 +19,7 @@ using Sandbox.Game.SessionComponents;
 using Sandbox.Game.Weapons;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
+using Sandbox.ModAPI.Interfaces;
 using SpaceEngineers.Game.Definitions.SafeZone;
 using SpaceEngineers.Game.Entities.Blocks;
 using VRage;
@@ -274,6 +275,18 @@ public sealed class ProbeCommands : CommandModule
     private static IEnumerable<MyCubeBlock> Beams(MyCubeGrid yard) =>
         yard.GetFatBlocks<MyCubeBlock>()
             .Where(b => b.BlockDefinition.Id.SubtypeName == "OmniArcBeam");
+
+    private static IEnumerable<MyCubeBlock> Deconstructors(MyCubeGrid yard) =>
+        yard.GetFatBlocks<MyCubeBlock>()
+            .Where(b => b.BlockDefinition.Id.SubtypeName == "OmniArcDestro");
+
+    // ToolCore's switch; false without ToolCore
+    private static bool Shooting(MyCubeBlock block)
+    {
+        var terminal = (IMyTerminalBlock)block;
+        return terminal.GetProperty("ToolCore_Shoot") != null
+            && terminal.GetValueBool("ToolCore_Shoot");
+    }
 
     [Command(
         "yardship",
@@ -1020,6 +1033,7 @@ public sealed class ProbeCommands : CommandModule
         var cargo = yard.GetFatBlocks<MyCargoContainer>().Cast<MyCubeBlock>().ToList();
         var connectors = yard.GetFatBlocks<MyShipConnector>().ToList();
         var beams = Beams(yard).ToList();
+        var destros = Deconstructors(yard).ToList();
         var reactors = yard.GetFatBlocks<MyReactor>().Cast<MyCubeBlock>().ToList();
         var batteries = yard.GetFatBlocks<MyBatteryBlock>().Cast<MyCubeBlock>().ToList();
         var refills = yard.GetFatBlocks<MyCubeBlock>()
@@ -1037,6 +1051,9 @@ public sealed class ProbeCommands : CommandModule
             + $"disabled={connectors.Count(c => !c.Enabled)} "
             + $"connectorson={connectors.Count(c => c.Enabled)} "
             + $"welderson={beams.Count(b => ((MyFunctionalBlock)b).Enabled)} "
+            + $"destros={Summary(destros)} "
+            + $"destroson={destros.Count(b => ((MyFunctionalBlock)b).Enabled)}/{destros.Count} "
+            + $"destroshoot={destros.Count(Shooting)} "
             + $"reactorson={reactors.Count(b => b.IsWorking)}/{reactors.Count} "
             + $"batterieson={batteries.Count(b => b.IsWorking)}/{batteries.Count} "
             + $"refill={refills.Count(b => b.IsWorking)}/{refills.Count} "
@@ -1052,6 +1069,7 @@ public sealed class ProbeCommands : CommandModule
                 blocks.All(b => ((MyTerminalBlock)b).HasPlayerAccess(who));
             text +=
                 $" access cargo={All(cargo)} welders={All(beams)} connectors={All(connectors)} reactors={All(reactors)} "
+                + $"destros={All(destros)} "
                 + $"refill={refills.All(b => b.GetUserRelationToOwner(who).IsFriendly())}";
         }
         return text;

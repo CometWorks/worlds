@@ -94,7 +94,8 @@ station and shipyard blueprints are in `blueprints/`.
   emptied and off: the blueprint's Automatic LCDs 2 script isn't needed
   (SE1-0121).
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
-  24 OmniArc beam welders around an open frame), in view of the station's
+  24 OmniArc beam welders around an open frame, each with an OmniArc
+  deconstructor beside it), in view of the station's
   lobby, its pressurized back half
   ([SE-945](https://tasks.cometworks.se/tasks/1832)).
   - Every shipyard starts where Viktor put Gamma Station's on the live cluster
@@ -120,7 +121,10 @@ station and shipyard blueprints are in `blueprints/`.
     (`config/octahedron.cfg`). Only 10 ingots, since players get at the reactors
     while renting the shipyard.
   - Its connectors and welders start off (`SHIPYARD_OFF`): the plugin turns them
-    on for a job. The reactors, batteries and refill stations stay on.
+    on for a job. The deconstructors stay on, since each is a link in its
+    welder's conveyor line, but nothing makes them shoot, so they can't grind a
+    ship being built or docked. The reactors, batteries and refill stations
+    stay on.
   - Each station has its own color (`STATION_COLORS`): the shipyard's red frame
     gets a skin and color, the station's purple walls and furniture only the
     color, at 70 % brightness. North red, South blue, Beta green and Delta
