@@ -12,6 +12,7 @@ The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regul
 headless admin client, a second admin client for the leader, with the station probe on the nodes.
 
 Run on polaris on 2026-11-04 on cluster 0.2.1: 12/12 checks in 5 minutes; 8/12 without the fix.
+With the leader (SE-1015): 16/16 on polaris, 2026-11-04.
 """
 
 from __future__ import annotations
