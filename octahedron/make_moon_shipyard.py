@@ -78,18 +78,24 @@ SHELL = 0.3  # the thinnest wall that stays closed
 BLEND = 1.0
 TURRET = 2.2
 OPENING = GRID / 2 * math.sqrt(2) + 0.25
-# The base rotors' head displacement: moves the tube's grid along the rotor's
-# axis so that the stud on the cap ends inside the magnetic plate's lock box
-DISPLACEMENT = -0.09
-# The lock box of LargeBlockSmallMagneticPlate along its Up from the block's
-# center (gear_lock dummy of SimpleMagneticPlate.mwm), its pad in the middle
-LOCK_BOX = (0.544, 0.936)
-LOCK_PAD = 0.74
+# How far above the arc's end the tube's cap is centered, so the far rotor
+# standing on the last conveyor block fits inside it
+CAP_ABOVE_END = 3.5
+# The far rotors' head displacement: their tube segment's grid then sits 9 cm
+# along the axis from the base segment's, the gap where the segments meet
+FAR_DISPLACEMENT = -0.11
+# Most blocks a tube segment may have: a grid's collision takes up to 65,535
+# shapes, and nearly every block of the tube is a shape of its own
+MAX_SEGMENT_BLOCKS = 45000
+# How far from the middle the storage cover reaches: past the storage, along
+# the conveyor toward the arcs, so that the base segments stay under that
+COVER_END = 50.0
 # Samples per small block edge when fitting the armor shapes to the tube
 SAMPLES = 4
-# One light per this many meters of tube, and the holes beside them
+# One light per this many meters of tube, and the holes around each
 LIGHT_SPACING = 5.0
 HOLE_RADIUS = (0.45, 0.8)
+HOLES_PER_LIGHT = 3
 SEED = 986
 
 BLACK = ((0.0, -0.96, -0.5), "CarbonFibre_Armor")  # the game's default black
@@ -322,11 +328,12 @@ def build():
             yard.block("Connector", forward, up, add(junction, forward), BLACK, arc)
             conveyor[junction].add(forward)
 
-        # Locked advanced rotors facing the axis: the tube's at the base, on the
-        # side facing the other arc, and the arm base in the middle. A rotor
-        # whose Up is -X must not face +Z, its head drifts off on paste.
+        # Locked advanced rotors: the tube's at the base, on the side facing the
+        # other arc, the arm base in the middle facing the axis, and the far
+        # tube segment's past the arc's end. A rotor whose Up is -X must not
+        # face +Z, its head drifts off on paste.
         def rotor(cell, up, head, displacement=0.0):
-            forward = Z if up == X else NZ
+            forward = {X: Z, NX: NZ}.get(up, X)
             assert all(free(add(cell, scale(up, k))) for k in (1, 2, 3))
             conveyor[cell].add(up)
             index = yard.block(
@@ -335,7 +342,6 @@ def build():
             return dict(index=index, head=head, displacement=displacement)
 
         base = rotor((sign * R, 0, BASE_ROTOR_Z), inward, "SmallAdvancedRotor")
-        base["displacement"] = DISPLACEMENT
 
         def straight(j):
             return add(line[j], neg(line[j - 1])) == add(line[j + 1], neg(line[j]))
@@ -354,15 +360,8 @@ def build():
                 arm = rotor(line[j], up, ARM_HEADS[arc])
                 arm["cell"], arm["up"] = line[j], up
                 break
-        # The magnetic plate beside the arc's last conveyor block, a junction,
-        # on the side the base rotor faces: the tube's grid steps along that
-        # axis from the plate's lattice by the head's offset
         end = line[-1]
-        plate_cell = add(end, inward)
-        assert free(plate_cell)
-        plate = yard.block(
-            "LargeBlockSmallMagneticPlate", Z, out, plate_cell, BLACK, arc
-        )
+        far = rotor(end, Z, "SmallAdvancedRotor", FAR_DISPLACEMENT)
         arcs.append(
             dict(
                 sign=sign,
@@ -371,7 +370,7 @@ def build():
                 base=base,
                 arm=arm,
                 end=end,
-                plate=plate,
+                far=far,
                 tools=[],
             )
         )
@@ -394,6 +393,16 @@ def build():
                 port = ((xs[1], side, BRIDGE_Z), (0, -side, 0))
                 assert port in yard.blocks[index][4], (subtype, yard.blocks[index][4])
                 conveyor[(xs[1], 0, BRIDGE_Z)].add((0, side, 0))
+
+    # A locked rotor in the middle of the storage holds its cover
+    middle = (0, 0, BRIDGE_Z)
+    assert all(add(middle, (0, k, 0)) not in yard.cells for k in (1, 2, 3))
+    conveyor[middle].add(Y)
+    yard.bridge = dict(
+        index=yard.block("LargeAdvancedStator", X, Y, add(middle, Y), BLACK),
+        head="SmallAdvancedRotor",
+        displacement=0.0,
+    )
 
     # The tools inline, on straight conveyor cells where they add the most
     # reach: welders and deconstructors in turn, the arcs in turn
@@ -431,13 +440,10 @@ def build():
                 tools[cell] = (tool, forward, step)
                 arc["tools"].append(cell)
 
-    ends = {arc["end"] for arc in arcs}
     for cell, dirs in sorted(conveyor.items()):
         if cell in tools:
             subtype, forward, up = tools[cell]
             assert dirs == {up, neg(up)}
-        elif cell in ends:
-            subtype, forward, up = "LargeBlockConveyor", Z, Y
         else:
             subtype, forward, up = tube_piece(dirs)
         yard.block(subtype, forward, up, cell, BLACK, owner[cell])
@@ -515,38 +521,74 @@ def masks():
 
 
 class Tube:
-    """The grid on an arc's base rotor head: a tube of small armor around the
-    arc, closed at the far end, and half the cover of the storage."""
+    """One segment of the tube of small armor around an arc, a grid on the head
+    of a locked rotor. The base segment, on the rotor at the arc's base, covers
+    the arc up to its arm base and half the storage; the far segment, on the
+    rotor past the arc's end, covers the rest and closes the end with a cap."""
 
-    def __init__(self, yard, arcs, a, every):
+    def __init__(self, yard, arcs, a, part, x_seams=None):
         self.arc = arc = arcs[a]
         self.sign = arc["sign"]
-        _, forward, up, cells, _, _ = yard.blocks[arc["base"]["index"]]
-        self.base_cells = set(cells)
+        self.part = part
+        rotor = yard.bridge if part == "bridge" else arc[part]
+        self.rotor = rotor
+        _, forward, up, cells, _, _ = yard.blocks[rotor["index"]]
+        self.rotor_cells = set(cells)
         right = cross(forward, up)
-        du, df, dr = head_offset("SmallAdvancedRotor", arc["base"]["displacement"])
+        du, df, dr = head_offset("SmallAdvancedRotor", rotor["displacement"])
         self.origin = GRID * np.array(cells[0], float) + np.array(
             add(scale(up, du), scale(forward, df), scale(right, dr)), float
         )
         self.axes = np.array([right, up, neg(forward)], float)  # the grid's X, Y, Z
-        # The inside bulges around the large blocks it holds, but not around the
-        # arm base, which stands out through a hole
-        own = [
-            c
-            for c, i in yard.cells.items()
-            if yard.owner[i] in (a, None) and i != arc["arm"]["index"]
-        ]
-        self.own = Boxes(own)
-        self.tools = cKDTree(GRID * np.array(arc["tools"], float))
-        # The center line: the arc, down to the junction, across to the middle
-        t = np.linspace(0, 1, 40000)
-        helix_points = GRID * np.stack(center_line(STARTS[a], t), axis=1)
+        # The arc's segments meet on a face of the base segment's grid at the
+        # arm base; the base segment and the storage cover on one of its faces
+        # at the end of the storage
+        self.seam = GRID * arc["arm"]["cell"][2] + SMALL / 2
+        if part == "base":
+            k = round((COVER_END - self.sign * (self.origin[0] + SMALL / 2)) / SMALL)
+            self.x_seams = [self.origin[0] + SMALL / 2 + self.sign * k * SMALL]
+        else:
+            self.x_seams = x_seams
         j = GRID * np.array(arc["junction"], float)
-        top = helix_points[0]
-        s = np.linspace(0, 1, 400)[:, None]
-        self.path = np.concatenate(
-            [j * s + top * (1 - s), j * (1 - s) + j * [0, 1, 1] * s, helix_points]
-        )
+        if part == "bridge":
+            own = [c for c in yard.cells if c[2] <= BRIDGE_Z + 1 and abs(c[0]) < R - 1]
+            self.tools = cKDTree([[1e6, 1e6, 1e6]])
+            s = np.linspace(-1, 1, 800)[:, None]
+            self.path = j * [0, 1, 1] + s * [R * GRID, 0, 0]
+            self.corridors = []
+        else:
+            # The inside bulges around the large blocks it holds, but not around
+            # the arm base, which stands out through a hole
+            own = [
+                c
+                for c, i in yard.cells.items()
+                if yard.owner[i] in (a, None) and i != arc["arm"]["index"]
+            ]
+            self.tools = cKDTree(GRID * np.array(arc["tools"], float))
+            # The center line: the arc, down to the junction, across to the
+            # middle, and up from the arc's end to the cap's center
+            t = np.linspace(0, 1, 40000)
+            helix_points = GRID * np.stack(center_line(STARTS[a], t), axis=1)
+            self.end = helix_points[-1]
+            self.cap = self.end + [0, 0, CAP_ABOVE_END]
+            s = np.linspace(0, 1, 400)[:, None]
+            self.path = np.concatenate(
+                [
+                    j * s + helix_points[0] * (1 - s),
+                    j * (1 - s) + j * [0, 1, 1] * s,
+                    helix_points,
+                    self.end + (self.cap - self.end) * s,
+                ]
+            )
+            # Holes for the connectors and the arm base's head, from the
+            # conveyor through the wall
+            arm = arc["arm"]
+            self.corridors = [
+                (j, np.array([self.sign, 0, 0], float)),
+                (j, np.array([0, 0, -1], float)),
+                (np.array(arm["cell"], float) * GRID, np.array(arm["up"], float)),
+            ]
+        self.own = Boxes(own)
         self.line = cKDTree(self.path)
         self.length = np.linalg.norm(np.diff(self.path, axis=0), axis=1).sum()
         # Inside radius: the arc's conveyor blocks with their corners in it
@@ -562,17 +604,10 @@ class Tube:
             .max(1)
         )
         self.deviation = far
-        self.inner = float(np.percentile(far, 95)) + TUBE_GAP
-        self.corridors = []
-        # Holes for the connectors and the arm base's head, from the conveyor
-        # through the wall
-        junction = np.array(arc["junction"], float) * GRID
-        self.corridors.append((junction, np.array([self.sign, 0, 0], float)))
-        self.corridors.append((junction, np.array([0, 0, -1], float)))
-        arm = arc["arm"]
-        self.corridors.append(
-            (np.array(arm["cell"], float) * GRID, np.array(arm["up"], float))
-        )
+        if part == "bridge":
+            self.inner = arcs[0]["inner"]
+        else:
+            self.inner = arc["inner"] = float(np.percentile(far, 95)) + TUBE_GAP
 
     def world(self, cells):
         return self.origin + SMALL * np.asarray(cells, float) @ self.axes
@@ -609,8 +644,7 @@ class Tube:
             along = d @ direction
             side = np.linalg.norm(d - np.outer(along, direction), axis=1)
             s = np.maximum(s, -np.maximum(side - OPENING, -along))
-        # Each tube covers its own half of the storage
-        return np.where(p[:, 2] < 0, np.maximum(s, -self.sign * p[:, 0]), s)
+        return s
 
     def candidates(self):
         """Keys of the small cells near the tube's wall."""
@@ -631,14 +665,31 @@ class Tube:
         near(self.path[:: max(1, int(len(self.path) / (self.length / 0.5)))], reach)
         near(self.own.centers, GRID / 2 * math.sqrt(3) + TUBE_GAP + SHELL + 1.5)
         near(self.tools.data, TURRET + SHELL + 1.5)
-        x = np.arange(0, (3 * BRIDGE_SLOTS + 2) * GRID, 1.0) * self.sign
+        x = np.arange(
+            -(3 * BRIDGE_SLOTS + 2) * GRID, (3 * BRIDGE_SLOTS + 2) * GRID, 1.0
+        )
         pod = np.stack(np.meshgrid(x, np.arange(-10, 11, 1.0), [BRIDGE_Z * GRID]), -1)
         near(pod.reshape(-1, 3), 5.5)
-        return np.unique(np.concatenate(keys))
+        keys = np.unique(np.concatenate(keys))
+        return keys[self.mine(self.world(unpack(keys)))]
+
+    def mine(self, points):
+        """Which points belong to this segment."""
+        x, z = points[:, 0], points[:, 2]
+        if self.part == "far":
+            return z > self.seam
+        if self.part == "bridge":
+            # whole blocks only: the base segments' blocks end on the seams
+            inside = (x > min(self.x_seams) + SMALL / 2) & (
+                x < max(self.x_seams) - SMALL / 2
+            )
+            return (z < 0) & inside
+        storage = (z < 0) & (self.sign * x < self.sign * self.x_seams[0])
+        return (z < self.seam) & ~storage
 
     def build(self, every, rng):
-        """Fits the armor shapes to the wall, then adds the neck, the stud, the
-        lights and the holes. Returns the stats."""
+        """Fits the armor shapes to the wall, then adds the neck, the lights and
+        the holes. Returns the stats."""
         offsets, shapes = masks()
         keys = self.candidates()
         cells = unpack(keys)
@@ -665,17 +716,13 @@ class Tube:
         cut_any = filled.any(1) & ~filled.all(1)
         fit = wrong[cut_any].sum() / max(1, cut_any.sum() * len(offsets))
 
-        # No small block within HARD_GAP of a large one, and none past the middle
-        # of the storage
+        # No small block within HARD_GAP of a large one
         placed = np.array(sorted(chosen), np.int64)
         centers = self.world(unpack(placed))
         gap = every.distance(centers, half=GRID / 2 + SMALL / 2)
-        wrong_side = (centers[:, 2] < 0) & (
-            self.sign * centers[:, 0] < SMALL / 2 + 0.05
-        )
-        for k in placed[(gap < HARD_GAP) | wrong_side]:
+        for k in placed[gap < HARD_GAP]:
             del chosen[int(k)]
-        dropped = int(((gap < HARD_GAP) | wrong_side).sum())
+        dropped = int((gap < HARD_GAP).sum())
 
         # The neck: 3x3 cubes from the head's top along the rotor's axis up to
         # the wall, the head taking cells 0-2 x 0-1 x 0-2
@@ -708,62 +755,34 @@ class Tube:
                 break
         else:
             raise AssertionError("the neck doesn't reach the wall")
-        # The stud: 3x3 cubes from the wall to the magnetic plate's pad, its end
-        # in the lock box
-        plate_center = GRID * np.array(self.arc["end"], float) - GRID * np.array(
-            [self.sign, 0, 0], float
-        )
-        lc = (plate_center - self.origin) @ self.axes.T / SMALL
-        assert np.allclose(lc[[0, 2]], np.rint(lc[[0, 2]]), atol=1e-6), lc
-        n = -self.axes[1]  # the plate's Up, against the rotor's
-        assert np.allclose(n, [self.sign, 0, 0])
-        top = None
-        for j in range(math.floor(lc[1]) - 4, math.ceil(lc[1]) + 4):
-            face = -(j - lc[1]) * SMALL + SMALL / 2
-            if LOCK_BOX[0] + 0.02 <= face <= LOCK_PAD - 0.05:
-                top, self.stud_face = j, face
-        assert top is not None, lc
-        stud = []
-        i0, k0 = round(lc[0]), round(lc[2])
-        for j in range(top, top + 80):
-            layer = [
-                int(k)
-                for k in pack(
-                    np.array(
-                        [
-                            (i0 + di, j, k0 + dk)
-                            for di in (-1, 0, 1)
-                            for dk in (-1, 0, 1)
-                        ]
-                    )
-                )
-            ]
-            stud += layer
-            if min(is_hollow(layer)) >= 0:
-                break
-        else:
-            raise AssertionError("the stud doesn't reach the wall")
-        for k in neck + stud:
+        for k in neck:
             chosen[k] = shapes[0]
-        self.neck, self.stud = set(neck), set(stud)
-        # Those may come close only to the rotor and the plate they meet
-        plate_cell = add(self.arc["end"], (-self.sign, 0, 0))
-        others = Boxes(
-            [c for c in every.cells if c not in self.base_cells and c != plate_cell]
-        )
-        for group in (neck, stud):
-            points = self.world(unpack(np.array(group, np.int64)))
-            gap = others.distance(points, half=GRID / 2 + SMALL / 2).min()
-            assert gap >= HARD_GAP, ("neck or stud too close", gap)
+        self.neck = set(neck)
+        # The neck may come close only to its own rotor
+        others = Boxes([c for c in every.cells if c not in self.rotor_cells])
+        points = self.world(unpack(np.array(neck, np.int64)))
+        gap = others.distance(points, half=GRID / 2 + SMALL / 2).min()
+        assert gap >= HARD_GAP, ("neck too close", gap)
 
-        leaks = self.leaks(chosen, cells, keys)
+        # Seal the wall where it lets the outside in: where it is thinner than
+        # a block and falls between two layers of them, the fit leaves it empty
+        sealed = 0
+        for _ in range(6):
+            leaks, breach = self.leaks(chosen, cells)
+            if not leaks or not len(breach):
+                break
+            gap = every.distance(self.world(unpack(breach)), half=GRID / 2 + SMALL / 2)
+            breach = breach[gap >= HARD_GAP]
+            for k in breach:
+                chosen[int(k)] = shapes[0]
+            sealed += len(breach)
 
         # Lights on the inside of the wall, each with a hole beside it
         lights = []
         spots = []
         chosen_keys = set(chosen)
         for k, (subtype, forward, up, mask, full) in chosen.items():
-            if k in self.neck or k in self.stud:
+            if k in self.neck:
                 continue
             cell = unpack(np.array([k]))[0]
             for d in ALL:
@@ -799,68 +818,90 @@ class Tube:
             chosen_keys.add(light)
             if len(picked) >= want:
                 break
-        holes = 0
+        holes = cut_blocks = 0
+        box = np.stack(np.meshgrid(*[np.arange(-1.0, 1.01, 0.5)] * 3), -1).reshape(
+            -1, 3
+        )
         for light, wall, p in picked:
             w = np.array(wall, float) @ self.axes  # the wall's direction, world
-            lateral = np.cross(w, rng.choice([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-            if np.linalg.norm(lateral) < 0.5:
-                lateral = np.cross(w, [0, 0, 1] if abs(w[2]) < 0.5 else [1, 0, 0])
+            lateral = np.cross(w, [0, 0, 1] if abs(w[2]) < 0.5 else [1, 0, 0])
             lateral /= np.linalg.norm(lateral)
-            angle = rng.uniform(0, 2 * math.pi)
-            lateral = lateral * math.cos(angle) + np.cross(w, lateral) * math.sin(angle)
-            center = p + w * (SMALL + SHELL / 2) + lateral * rng.uniform(0.8, 1.2)
-            radius = rng.uniform(*HOLE_RADIUS)
             mount = int(pack((unpack(np.array([light]))[0] + np.array(wall))[None])[0])
-            near_keys = pack(
-                np.unique(
-                    self.local(
-                        center
-                        + np.stack(
-                            np.meshgrid(*[np.arange(-1.0, 1.01, 0.5)] * 3), -1
-                        ).reshape(-1, 3)
-                    ),
-                    axis=0,
+            # Holes around the light, each its own direction and size
+            first = rng.uniform(0, 2 * math.pi)
+            for n in range(HOLES_PER_LIGHT):
+                angle = (
+                    first + 2 * math.pi * n / HOLES_PER_LIGHT + rng.uniform(-0.5, 0.5)
                 )
-            )
-            for k in near_keys:
-                k = int(k)
-                if (
-                    k in chosen
-                    and k != mount
-                    and k not in self.neck
-                    and k not in self.stud
-                    and np.linalg.norm(self.world(unpack(np.array([k])))[0] - center)
-                    <= radius
-                ):
-                    del chosen[k]
-                    holes += 1
+                side = lateral * math.cos(angle) + np.cross(w, lateral) * math.sin(
+                    angle
+                )
+                center = p + w * (SMALL + SHELL / 2) + side * rng.uniform(0.8, 1.6)
+                radius = rng.uniform(*HOLE_RADIUS)
+                cut = 0
+                for k in pack(np.unique(self.local(center + box), axis=0)):
+                    k = int(k)
+                    if (
+                        k in chosen
+                        and k != mount
+                        and k not in self.neck
+                        and np.linalg.norm(
+                            self.world(unpack(np.array([k])))[0] - center
+                        )
+                        <= radius
+                    ):
+                        del chosen[k]
+                        cut += 1
+                holes += cut > 0
+                cut_blocks += cut
             lights.append((light, wall))
         self.blocks = chosen
         self.lights = lights
-        return dict(fit=fit, dropped=dropped, leaks=leaks, holes=holes)
+        return dict(
+            fit=fit,
+            dropped=dropped,
+            leaks=leaks,
+            sealed=sealed,
+            holes=holes,
+            cut=cut_blocks,
+        )
 
-    def leaks(self, chosen, cells, keys):
+    def leaks(self, chosen, cells):
         """Cells inside the tube that an outside path reaches past its wall,
-        not counting the openings and the middle of the storage."""
+        not counting the openings and the seams; and the keys of the empty wall
+        cells such a path goes through."""
         low, high = cells.min(0) - 1, cells.max(0) + 1
         blocked = np.zeros(high - low + 1, bool)
         placed = unpack(np.array(sorted(chosen), np.int64))
         blocked[tuple((placed - low).T)] = True
         points = self.world(cells)
-        opening = np.zeros(len(cells), bool)
+        opening = np.abs(points[:, 2] - self.seam) < 1.0
+        for x in self.x_seams or []:
+            opening |= (points[:, 2] < 0) & (np.abs(points[:, 0] - x) < 1.0)
         for start, direction in self.corridors:
             d = points - start
             along = d @ direction
             side = np.linalg.norm(d - np.outer(along, direction), axis=1)
             opening |= (side < OPENING + 1) & (along > -1)
-        opening |= (points[:, 2] < 0) & (self.sign * points[:, 0] < 1.0)
         blocked[tuple((cells[opening] - low).T)] = True
         labels, _ = ndimage.label(~blocked)
         outside = labels[0, 0, 0]
-        inner = chunked(self.hollow, points) < 0
-        inner &= ~opening
-        index = cells[inner] - low
-        return int((labels[tuple(index.T)] == outside).sum())
+        if not hasattr(self, "_hollow") or len(self._hollow) != len(cells):
+            self._hollow = chunked(self.hollow, points)
+        h = self._hollow
+        index = tuple((cells - low).T)
+        reached = (labels[index] == outside) & ~blocked[index]
+        inner = reached & (h < 0) & ~opening
+        # Empty wall cells on the path, next to a reached inside cell
+        dense = np.zeros(blocked.shape, bool)
+        dense[tuple((cells[inner] - low).T)] = True
+        beside = np.zeros(len(cells), bool)
+        for d in ALL:
+            shifted = cells - low + d
+            ok = ((shifted >= 0) & (shifted < blocked.shape)).all(1)
+            beside[ok] |= dense[tuple(shifted[ok].T)]
+        wall = reached & (h >= 0) & (h <= SHELL + SMALL) & beside & ~opening
+        return int(inner.sum()), pack(cells[wall])
 
 
 def build_tubes(yard, arcs):
@@ -868,9 +909,14 @@ def build_tubes(yard, arcs):
     rng = random.Random(SEED)
     tubes, stats = [], []
     for a in range(len(arcs)):
-        tube = Tube(yard, arcs, a, every)
-        stats.append(tube.build(every, rng))
-        tubes.append(tube)
+        for part in ("base", "far"):
+            tube = Tube(yard, arcs, a, part)
+            stats.append(tube.build(every, rng))
+            tubes.append(tube)
+    x_seams = [tubes[0].x_seams[0], tubes[2].x_seams[0]]
+    tube = Tube(yard, arcs, 0, "bridge", x_seams)
+    stats.append(tube.build(every, rng))
+    tubes.append(tube)
     return tubes, stats
 
 
@@ -1006,49 +1052,54 @@ def blueprint_xml(yard, arcs, tubes):
             pose.find(f"Orientation/{axis}").text = str(value)
 
     place(grid, NAME, (0, 0, 0), NZ, Y)
+    mounted = [(yard.bridge, tubes[4], f"{NAME} storage cover")]
     for a, arc in enumerate(arcs):
-        for rotor, tube in ((arc["base"], tubes[a]), (arc["arm"], None)):
-            _, forward, up, cells, _, _ = yard.blocks[rotor["index"]]
-            stator = elements[rotor["index"]]
-            g = copy.deepcopy(heads[rotor["head"]])
-            top = g.find("CubeBlocks")[0]
-            top.find("EntityId").text = str(next(ids))
-            top.find("ParentEntityId").text = stator.findtext("EntityId")
-            stator.find("TopBlockId").text = top.findtext("EntityId")
-            stator.find("RotorLock").text = "true"
-            if rotor["displacement"]:
-                e = ET.Element("DummyDisplacement")
-                e.text = str(rotor["displacement"])
-                stator.insert(list(stator).index(stator.find("RotorLock")), e)
-            for tag in ("ColorMaskHSV", "SkinSubtypeId"):
-                for e in top.findall(tag):
-                    top.remove(e)
-            color = ET.Element("ColorMaskHSV")
-            set_vector(color, BLACK[0])
-            top.insert(2, color)
-            skin = ET.Element("SkinSubtypeId")
-            skin.text = BLACK[1]
-            top.insert(3, skin)
-            du, df, dr = head_offset(rotor["head"], rotor["displacement"])
-            right = cross(forward, up)
-            position = [
-                GRID * cells[0][i] + du * up[i] + df * forward[i] + dr * right[i]
-                for i in range(3)
-            ]
-            name = f"{NAME} {'tube' if tube else 'arm base'} {a + 1}"
-            place(g, name, position, forward, up)
-            if tube:
-                small = g.find("CubeBlocks")
-                for key, (subtype, f, u, _, _) in sorted(tube.blocks.items()):
-                    corner = unpack(np.array([key]))[0].tolist()
-                    small.append(element(subtype, f, u, corner, {}, ids))
-                for key, wall in tube.lights:
-                    corner = unpack(np.array([key]))[0].tolist()
-                    up_ = Y if wall[1] == 0 else X
-                    small.append(
-                        element("SmallBlockSmallLight", neg(wall), up_, corner, {}, ids)
-                    )
-            grids.append(g)
+        mounted += [
+            (arc["base"], tubes[2 * a], f"{NAME} tube {a + 1} base"),
+            (arc["far"], tubes[2 * a + 1], f"{NAME} tube {a + 1} far"),
+            (arc["arm"], None, f"{NAME} arm base {a + 1}"),
+        ]
+    for rotor, tube, name in mounted:
+        _, forward, up, cells, _, _ = yard.blocks[rotor["index"]]
+        stator = elements[rotor["index"]]
+        g = copy.deepcopy(heads[rotor["head"]])
+        top = g.find("CubeBlocks")[0]
+        top.find("EntityId").text = str(next(ids))
+        top.find("ParentEntityId").text = stator.findtext("EntityId")
+        stator.find("TopBlockId").text = top.findtext("EntityId")
+        stator.find("RotorLock").text = "true"
+        for tag in ("ColorMaskHSV", "SkinSubtypeId"):
+            for e in top.findall(tag):
+                top.remove(e)
+        color = ET.Element("ColorMaskHSV")
+        set_vector(color, BLACK[0])
+        top.insert(2, color)
+        skin = ET.Element("SkinSubtypeId")
+        skin.text = BLACK[1]
+        top.insert(3, skin)
+        du, df, dr = head_offset(rotor["head"], rotor["displacement"])
+        if rotor["displacement"]:
+            e = ET.Element("DummyDisplacement")
+            e.text = str(rotor["displacement"])
+            stator.insert(list(stator).index(stator.find("RotorLock")), e)
+        right = cross(forward, up)
+        position = [
+            GRID * cells[0][i] + du * up[i] + df * forward[i] + dr * right[i]
+            for i in range(3)
+        ]
+        place(g, name, position, forward, up)
+        if tube:
+            small = g.find("CubeBlocks")
+            for key, (subtype, f, u, _, _) in sorted(tube.blocks.items()):
+                corner = unpack(np.array([key]))[0].tolist()
+                small.append(element(subtype, f, u, corner, {}, ids))
+            for key, wall in tube.lights:
+                corner = unpack(np.array([key]))[0].tolist()
+                up_ = Y if wall[1] == 0 else X
+                small.append(
+                    element("SmallBlockSmallLight", neg(wall), up_, corner, {}, ids)
+                )
+        grids.append(g)
 
     bp.find("Id").set("Subtype", NAME)
     for e in bp.findall("DLC"):
@@ -1118,7 +1169,8 @@ def report(yard, arcs, tubes, stats):
     ok = True
     arm_cells = [GRID * np.array(arc["arm"]["cell"]) for arc in arcs]
     clear = []
-    for a, (tube, s) in enumerate(zip(tubes, stats)):
+    for tube, s in zip(tubes, stats):
+        a = (tube.sign < 0) * 1
         small = Counter(v[0] for v in tube.blocks.values())
         small["SmallBlockSmallLight"] = len(tube.lights)
         small["SmallAdvancedRotor"] = 1
@@ -1127,26 +1179,37 @@ def report(yard, arcs, tubes, stats):
         total_blocks += n
         total_pcu += p
         print(
-            f"tube {a + 1}: blocks {n}, PCU {p}, inside radius {tube.inner:.2f} m"
+            f"{'storage cover' if tube.part == 'bridge' else f'tube {a + 1} {tube.part}'}:"
+            f" blocks {n}, PCU {p}, inside radius {tube.inner:.2f} m"
             f" (conveyor corners up to {tube.deviation.max():.2f} m from the center"
-            f" line), wall {SHELL} m, {len(tube.lights)} lights, {s['holes']} blocks"
-            f" cut for holes, neck {len(tube.neck) // 9} and stud {len(tube.stud) // 9}"
-            f" layers, stud face {tube.stud_face:.2f} m along the plate (lock box"
-            f" {LOCK_BOX[0]}-{LOCK_BOX[1]}, pad about {LOCK_PAD})"
+            f" line), wall {SHELL} m, {len(tube.lights)} lights, {s['holes']} holes"
+            f" ({s['cut']} blocks), neck {len(tube.neck) // 9} layers"
         )
+        ok &= n <= MAX_SEGMENT_BLOCKS
         print(
             f"   shapes get {100 * s['fit']:.2f}% of the wall's samples wrong;"
             f" {s['dropped']} blocks left out for the gap to large blocks;"
-            f" {s['leaks']} inside cells open to the outside"
+            f" {s['sealed']} sealed in; {s['leaks']} inside cells open to the outside"
         )
         print("  ", ", ".join(f"{k} {v}" for k, v in sorted(small.items())))
+        # The cap is a half sphere as wide as the tube
+        centers = tube.world(unpack(np.array(sorted(tube.blocks), np.int64)))
+        outside = np.median(tube.line.query(centers, workers=-1)[0]) + SMALL / 2
+        if tube.part == "far":
+            near = np.linalg.norm(centers - tube.cap, axis=1) < tube.inner + 2
+            cap = tube.line.query(centers[near], workers=-1)[0].max() + SMALL / 2
+            print(f"   tube {outside:.2f} m, cap {cap:.2f} m from the center line")
+            ok &= cap <= outside + SMALL
         ok &= s["leaks"] == 0
         keys = np.array(sorted(tube.blocks), np.int64)
         points = tube.world(unpack(keys))
         inside = (points[:, 2] >= 0) & (points[:, 2] <= SPAN * GRID)
         for arm in arm_cells:
             inside &= np.linalg.norm(points - arm, axis=1) > 8
-        clear.append(np.hypot(points[inside, 0], points[inside, 1]).min() - SMALL)
+        if inside.any():
+            clear.append(np.hypot(points[inside, 0], points[inside, 1]).min() - SMALL)
+        if tube.part == "bridge":
+            continue
         # The arm base stands on the arc's conveyor and out through a hole in
         # the tube: no tube block near it, its top beyond the tube's surface
         arm = arcs[a]["arm"]
@@ -1165,6 +1228,32 @@ def report(yard, arcs, tubes, stats):
             f" nearest tube block, its top {stands:.2f} m beyond the tube around it"
         )
         ok &= gap >= HARD_GAP and stands > 0
+    # Where an arc's segments meet: a gap, but no more than the grids' offset
+    for base, far in zip(tubes[::2], tubes[1::2]):
+        a = base.world(unpack(np.array(sorted(base.blocks), np.int64)))
+        b = far.world(unpack(np.array(sorted(far.blocks), np.int64)))
+        a = a[np.abs(a[:, 2] - base.seam) < 2]
+        b = b[np.abs(b[:, 2] - base.seam) < 2]
+        _, i = cKDTree(a).query(b, k=8)
+        gap = np.linalg.norm(np.maximum(np.abs(b[:, None] - a[i]) - SMALL, 0), axis=2)
+        print(
+            f"segments meet {gap.min():.2f} m apart at {base.seam:.2f} m along the axis"
+        )
+        ok &= 0.02 <= gap.min() <= 0.15
+    # And where the storage cover meets the base segments
+    cover = tubes[4]
+    c = cover.world(unpack(np.array(sorted(cover.blocks), np.int64)))
+    for base in tubes[0:4:2]:
+        x = base.x_seams[0]
+        a = base.world(unpack(np.array(sorted(base.blocks), np.int64)))
+        a = a[(a[:, 2] < 0) & (np.abs(a[:, 0] - x) < 2)]
+        b = c[np.abs(c[:, 0] - x) < 2]
+        _, i = cKDTree(a).query(b, k=8)
+        gap = np.linalg.norm(np.maximum(np.abs(b[:, None] - a[i]) - SMALL, 0), axis=2)
+        print(
+            f"storage cover meets the base segment {gap.min():.2f} m apart at x {x:.2f} m"
+        )
+        ok &= 0.02 <= gap.min() <= 0.35
     print(f"all grids: blocks {total_blocks}, PCU {total_pcu}")
     cells = list(yard.cells)
     size = [
