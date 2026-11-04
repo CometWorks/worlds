@@ -41,8 +41,12 @@ import test_shipyard_order as so  # noqa: E402
 from test_client import log  # noqa: E402
 
 PLATE = "Component/SteelPlate"
-# The free space along the shipyard: its grid's cells -57 to 57 along Z, across x 0, y -16.5
+# The free space along a shipyard, as ShipyardOrders.FreeSpace grows it from the welders: its
+# length, and its middle in the grid's cells. The Omni Arc Beam Shipyard's runs -57 to 57 along Z
+# at x 0, y -16.5; the Moon Shipyard's is as long, -2 to 112 along Z (SE-1069).
 LENGTH = 287.5
+MIDDLE = {"Moon": (0.0, -0.5, 55.0)}
+OMNI_ARC_MIDDLE = (0.0, -16.5, 0.0)
 CUBE = {"Large": 2.5, "Small": 0.5}
 
 
@@ -148,7 +152,11 @@ def check_place(root: ET.Element, case: str) -> None:
         for i in range(3)
     )
     pos, right, up, back = frame(yard)
-    mid = tuple(pos[i] - 2.5 * 16.5 * up[i] for i in range(3))
+    cell = MIDDLE.get(station, OMNI_ARC_MIDDLE)
+    mid = tuple(
+        pos[i] + 2.5 * (cell[0] * right[i] + cell[1] * up[i] + cell[2] * back[i])
+        for i in range(3)
+    )
     away = sub(center, mid)
     along, across, above = dot(away, back), dot(away, right), dot(away, up)
     pos, right, up, back = frame(grids[f"{station} Station"])
