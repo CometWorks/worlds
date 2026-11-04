@@ -23,13 +23,16 @@ containers and eight large reactors on either side of it. In the middle of each
 arc an advanced rotor faces the axis, the base of an arm that holds the ship:
 one with a large head, the other with the medium head.
 
-Each arc is covered by a round tube of small armor blocks, a grid of its own
-on the medium head of a locked advanced rotor at the arc's base, on the side
-facing the other arc. The tube follows the arc, ends in a round cap beyond its
-far end and covers half the storage between the arcs. It keeps clear of every
-large block, so the grids never touch. A magnetic plate at the far end of each
-arc locks the tube when its cap is in place. Dark blue lights shine through
-holes in the tubes. Everything is black carbon fiber.
+Each arc is covered by a round tube of small armor blocks in two segments,
+each a grid of its own on the medium head of a locked advanced rotor, so that
+no grid gets more blocks than its collision takes. The base segment's rotor is
+at the arc's base, on the side facing the other arc; the far segment's goes on
+from the arc's far end, inside the tube's cap, a half sphere as wide as the
+tube. The segments meet at the arm base, a few centimeters apart. The storage
+between the arcs has a cover of its own on a third rotor. The tubes keep clear
+of every large block, so the grids never touch, and a small magnetic plate
+inside each segment locks it to a conveyor junction. Dark blue lights shine
+through holes in the tubes. Everything is black carbon fiber.
 Reuses the SE-952 helpers and its template blueprint for the block XML.
 """
 
@@ -78,12 +81,14 @@ SHELL = 0.3  # the thinnest wall that stays closed
 BLEND = 1.0
 TURRET = 2.2
 OPENING = GRID / 2 * math.sqrt(2) + 0.25
-# How far above the arc's end the tube's cap is centered, so the far rotor
-# standing on the last conveyor block fits inside it
-CAP_ABOVE_END = 3.5
-# The far rotors' head displacement: their tube segment's grid then sits 9 cm
-# along the axis from the base segment's, the gap where the segments meet
-FAR_DISPLACEMENT = -0.11
+# The least gap where an arc's tube segments meet; the far rotor's head
+# displacement, within the medium head's range, sets it
+SEAM_GAP = 0.02
+DISPLACEMENT = 0.11
+# A small magnetic plate locks each tube segment to a conveyor junction where
+# the segment's grid puts the junction's face this far (m) along the plate's
+# Up from its center, the range it locks in on a pasted plate
+PLATE_FACE = (0.05, 0.2)
 # Most blocks a tube segment may have: a grid's collision takes up to 65,535
 # shapes, and nearly every block of the tube is a shape of its own
 MAX_SEGMENT_BLOCKS = 45000
@@ -132,8 +137,8 @@ BLOCKS = {
         None,
     ),
     "LargeAdvancedStator": ("MotorAdvancedStator", (1, 2, 1), [(O, NY)], 100, None),
-    "LargeBlockSmallMagneticPlate": ("LandingGear", (1, 1, 1), [], 35, None),
     # Small grid
+    "SmallBlockSmallMagneticPlate": ("LandingGear", (1, 1, 1), [], 35, None),
     "SmallAdvancedRotor": ("MotorAdvancedRotor", (3, 2, 3), [], 1, None),
     "SmallBlockSmallLight": ("InteriorLight", (1, 1, 1), [], 20, None),
 }
@@ -331,9 +336,9 @@ def build():
         # Locked advanced rotors: the tube's at the base, on the side facing the
         # other arc, the arm base in the middle facing the axis, and the far
         # tube segment's past the arc's end. A rotor whose Up is -X must not
-        # face +Z, its head drifts off on paste.
+        # face +Z, nor one whose Up is -Y face +X: its head turns over on paste.
         def rotor(cell, up, head, displacement=0.0):
-            forward = {X: Z, NX: NZ}.get(up, X)
+            forward = {X: Z, NX: NZ, NY: NX}.get(up, X)
             assert all(free(add(cell, scale(up, k))) for k in (1, 2, 3))
             conveyor[cell].add(up)
             index = yard.block(
@@ -360,8 +365,34 @@ def build():
                 arm = rotor(line[j], up, ARM_HEADS[arc])
                 arm["cell"], arm["up"] = line[j], up
                 break
+        # The far segment's rotor goes on from the arc's end along its last
+        # direction, so its head sits inside the cap. At the arm base the arc
+        # runs the other way along Y: the segments meet there on a Y face of
+        # the base segment's grid, and the far rotor's displacement brings the
+        # far segment's grid as close to it as it goes.
         end = line[-1]
-        far = rotor(end, Z, "SmallAdvancedRotor", FAR_DISPLACEMENT)
+        a_ = start + 2 * math.pi
+        tangent = (-math.sin(a_), math.cos(a_), SPAN / (2 * math.pi * R))
+        up = axis_toward(tangent, [Z])
+        arm_cell = arm["cell"]
+        travel = math.cos(start + math.pi) * 2 * math.pi * R
+        seam = dict(
+            x=GRID * arm_cell[0],
+            y=GRID * arm_cell[1] + SMALL / 2,
+            z=GRID * arm_cell[2],
+            dir=1 if travel > 0 else -1,
+        )
+
+        def seam_gap(d):
+            y0 = GRID * (end[1] + up[1]) + (0.2 + d) * up[1]
+            return ((y0 + SMALL / 2 - seam["y"]) * seam["dir"]) % SMALL
+
+        displacement = min(
+            (round(d, 3) for d in np.linspace(-DISPLACEMENT, DISPLACEMENT, 221)),
+            key=lambda d: (seam_gap(d) < SEAM_GAP, seam_gap(d)),
+        )
+        seam["gap"] = seam_gap(displacement)
+        far = rotor(end, up, "SmallAdvancedRotor", displacement)
         arcs.append(
             dict(
                 sign=sign,
@@ -370,7 +401,9 @@ def build():
                 base=base,
                 arm=arm,
                 end=end,
+                tangent=np.array(tangent) / np.linalg.norm(tangent),
                 far=far,
+                seam=seam,
                 tools=[],
             )
         )
@@ -527,6 +560,7 @@ class Tube:
     rotor past the arc's end, covers the rest and closes the end with a cap."""
 
     def __init__(self, yard, arcs, a, part, x_seams=None):
+        self.yard = yard
         self.arc = arc = arcs[a]
         self.sign = arc["sign"]
         self.part = part
@@ -540,10 +574,9 @@ class Tube:
             add(scale(up, du), scale(forward, df), scale(right, dr)), float
         )
         self.axes = np.array([right, up, neg(forward)], float)  # the grid's X, Y, Z
-        # The arc's segments meet on a face of the base segment's grid at the
-        # arm base; the base segment and the storage cover on one of its faces
-        # at the end of the storage
-        self.seam = GRID * arc["arm"]["cell"][2] + SMALL / 2
+        # The base segment and the storage cover meet on a face of the base
+        # segment's grid at the end of the storage
+        self.seam = arc["seam"]
         if part == "base":
             k = round((COVER_END - self.sign * (self.origin[0] + SMALL / 2)) / SMALL)
             self.x_seams = [self.origin[0] + SMALL / 2 + self.sign * k * SMALL]
@@ -559,25 +592,27 @@ class Tube:
         else:
             # The inside bulges around the large blocks it holds, but not around
             # the arm base, which stands out through a hole
+            # nor around the far stator's top, where its head and nothing else is
+            far_top = yard.blocks[arc["far"]["index"]][3][1]
             own = [
                 c
                 for c, i in yard.cells.items()
-                if yard.owner[i] in (a, None) and i != arc["arm"]["index"]
+                if yard.owner[i] in (a, None)
+                and i != arc["arm"]["index"]
+                and c != far_top
             ]
             self.tools = cKDTree(GRID * np.array(arc["tools"], float))
             # The center line: the arc, down to the junction, across to the
-            # middle, and up from the arc's end to the cap's center
+            # middle, and on from the arc's end to the cap's center
             t = np.linspace(0, 1, 40000)
             helix_points = GRID * np.stack(center_line(STARTS[a], t), axis=1)
             self.end = helix_points[-1]
-            self.cap = self.end + [0, 0, CAP_ABOVE_END]
             s = np.linspace(0, 1, 400)[:, None]
             self.path = np.concatenate(
                 [
                     j * s + helix_points[0] * (1 - s),
                     j * (1 - s) + j * [0, 1, 1] * s,
                     helix_points,
-                    self.end + (self.cap - self.end) * s,
                 ]
             )
             # Holes for the connectors and the arm base's head, from the
@@ -606,8 +641,29 @@ class Tube:
         self.deviation = far
         if part == "bridge":
             self.inner = arcs[0]["inner"]
+            return
+        self.inner = arc["inner"] = float(np.percentile(far, 95)) + TUBE_GAP
+        # The cap: a half sphere as wide as the tube, centered on the arc's
+        # last direction just far enough out that the far stator's block is
+        # well inside it
+        corners = GRID * (
+            np.array(yard.blocks[arc["far"]["index"]][3][0], float) + corners / 2
+        )
+        for length in np.arange(0, 10, 0.25):
+            self.cap = self.end + arc["tangent"] * length
+            axis = self.end + np.outer(np.linspace(0, 1, 100), self.cap - self.end)
+            room = self.inner - TUBE_GAP - BLEND / 2
+            if (
+                cKDTree(np.concatenate([self.path, axis])).query(corners)[0].max()
+                <= room
+            ):
+                break
         else:
-            self.inner = arc["inner"] = float(np.percentile(far, 95)) + TUBE_GAP
+            raise AssertionError("the far stator doesn't fit into the cap")
+        self.cap_length = length
+        self.path = np.concatenate([self.path, axis])
+        self.line = cKDTree(self.path)
+        self.length = np.linalg.norm(np.diff(self.path, axis=0), axis=1).sum()
 
     def world(self, cells):
         return self.origin + SMALL * np.asarray(cells, float) @ self.axes
@@ -673,11 +729,21 @@ class Tube:
         keys = np.unique(np.concatenate(keys))
         return keys[self.mine(self.world(unpack(keys)))]
 
+    def beyond(self, points):
+        """Which points are past the seam at the arm base, along the arc."""
+        s = self.seam
+        near = (np.abs(points[:, 2] - s["z"]) < 10) & (
+            np.abs(points[:, 0] - s["x"]) < 10
+        )
+        return np.where(
+            near, (points[:, 1] - s["y"]) * s["dir"] > 0, points[:, 2] > s["z"]
+        )
+
     def mine(self, points):
-        """Which points belong to this segment."""
+        """Which points belong to this segment, whole blocks on the seam."""
         x, z = points[:, 0], points[:, 2]
         if self.part == "far":
-            return z > self.seam
+            return self.beyond(points - [0, SMALL / 2 * self.seam["dir"], 0])
         if self.part == "bridge":
             # whole blocks only: the base segments' blocks end on the seams
             inside = (x > min(self.x_seams) + SMALL / 2) & (
@@ -685,7 +751,8 @@ class Tube:
             )
             return (z < 0) & inside
         storage = (z < 0) & (self.sign * x < self.sign * self.x_seams[0])
-        return (z < self.seam) & ~storage
+        near = self.beyond(points + [0, SMALL / 2 * self.seam["dir"], 0])
+        return ~near & ~storage
 
     def build(self, every, rng):
         """Fits the armor shapes to the wall, then adds the neck, the lights and
@@ -777,6 +844,8 @@ class Tube:
                 chosen[int(k)] = shapes[0]
             sealed += len(breach)
 
+        self.plate = self.place_plate(chosen, every, shapes[0])
+
         # Lights on the inside of the wall, each with a hole beside it
         lights = []
         spots = []
@@ -866,6 +935,83 @@ class Tube:
             cut=cut_blocks,
         )
 
+    def place_plate(self, chosen, every, cube):
+        """Puts a small magnetic plate on the face of a conveyor block of the
+        segment, turned into a junction, where the segment's grid puts the
+        face PLATE_FACE along the plate's Up from its center; cubes from the
+        plate's back to the wall hold it. Picks the block farthest from the
+        segment's rotor. Returns (plate key, its Up in the grid, the block's
+        index, the face's distance, the cubes holding it)."""
+        yard = self.yard
+        best = None
+        rejected = Counter()
+        for i, (subtype, _, _, cells, ports, _) in enumerate(yard.blocks):
+            if subtype not in TUBES:
+                continue
+            cell = cells[0]
+            center = GRID * np.array(cell, float)
+            if not self.mine(center[None])[0]:
+                continue
+            used = {d for _, d in ports}
+            for d in ALL:
+                if d in used or add(cell, d) in yard.cells:
+                    continue
+                d_ = np.array(d, float)
+                face = center + GRID / 2 * d_
+                key = self.local((face - np.mean(PLATE_FACE) * d_)[None])[0]
+                plate = self.world(key[None])[0]
+                f = (face - plate) @ d_
+                if not PLATE_FACE[0] - 1e-6 <= f <= PLATE_FACE[1] + 1e-6:
+                    rejected["face"] += 1
+                    continue
+                if not self.mine(plate[None])[0]:
+                    rejected["not mine"] += 1
+                    continue
+                up = np.rint(self.axes @ d_).astype(int)
+                stud = []
+                for k in range(1, 12):
+                    k_ = int(pack((key + k * up)[None])[0])
+                    if k_ in chosen:
+                        break
+                    stud.append(k_)
+                else:
+                    rejected["no wall"] += 1
+                    continue
+                keys = np.array([int(pack(key[None])[0])] + stud, np.int64)
+                if set(keys.tolist()) & (self.head_cells | self.neck):
+                    rejected["neck"] += 1
+                    continue
+                if stud:
+                    points = self.world(unpack(np.array(stud, np.int64)))
+                    others = Boxes([c for c in every.cells if c != cell])
+                    # the stud starts 0.25 - f from the face it stands over
+                    if (
+                        every.distance(points, half=GRID / 2 + SMALL / 2).min() < 0.05
+                        or others.distance(points, half=GRID / 2 + SMALL / 2).min()
+                        < HARD_GAP
+                    ):
+                        rejected["gap"] += 1
+                        continue
+                reach = np.linalg.norm(plate - self.origin)
+                if best is None or reach > best[0]:
+                    best = (reach, keys, tuple(up.tolist()), i, f)
+        assert best, ("no place for the magnetic plate", self.part, self.sign, rejected)
+        _, keys, up, i, f = best
+        chosen.pop(int(keys[0]), None)
+        for k in keys[1:]:
+            chosen[int(k)] = cube
+        self.neck |= set(int(k) for k in keys)
+        _, _, _, cells, _, color = yard.blocks[i]
+        yard.blocks[i] = (
+            "LargeBlockConveyor",
+            Z,
+            Y,
+            cells,
+            [(cells[0], d) for d in ALL],
+            color,
+        )
+        return int(keys[0]), up, i, f, len(keys) - 1
+
     def leaks(self, chosen, cells):
         """Cells inside the tube that an outside path reaches past its wall,
         not counting the openings and the seams; and the keys of the empty wall
@@ -875,7 +1021,14 @@ class Tube:
         placed = unpack(np.array(sorted(chosen), np.int64))
         blocked[tuple((placed - low).T)] = True
         points = self.world(cells)
-        opening = np.abs(points[:, 2] - self.seam) < 1.0
+        opening = np.zeros(len(points), bool)
+        if self.part != "bridge":
+            s = self.seam
+            opening = (
+                (np.abs(points[:, 1] - s["y"]) < 1.0)
+                & (np.abs(points[:, 2] - s["z"]) < 10)
+                & (np.abs(points[:, 0] - s["x"]) < 10)
+            )
         for x in self.x_seams or []:
             opening |= (points[:, 2] < 0) & (np.abs(points[:, 0] - x) < 1.0)
         for start, direction in self.corridors:
@@ -905,7 +1058,10 @@ class Tube:
 
 
 def build_tubes(yard, arcs):
-    every = Boxes(yard.cells)
+    # The far stators' top cells are empty, their heads sit lower: the cap's
+    # wall may pass through them
+    tops = {yard.blocks[arc["far"]["index"]][3][1] for arc in arcs}
+    every = Boxes([c for c in yard.cells if c not in tops])
     rng = random.Random(SEED)
     tubes, stats = [], []
     for a in range(len(arcs)):
@@ -996,7 +1152,7 @@ def element(subtype, forward, up, corner, templates, ids):
             ("ColorAlpha", 1),
             ("Intensity", LIGHT_INTENSITY),
         ),
-        "LargeBlockSmallMagneticPlate": (("Enabled", "true"), ("AutoLock", "true")),
+        "SmallBlockSmallMagneticPlate": (("Enabled", "true"), ("AutoLock", "true")),
     }
     for tag, value in extra.get(subtype, ()):
         ET.SubElement(b, tag).text = str(value)
@@ -1099,6 +1255,12 @@ def blueprint_xml(yard, arcs, tubes):
                 small.append(
                     element("SmallBlockSmallLight", neg(wall), up_, corner, {}, ids)
                 )
+            key, up_, _, _, _ = tube.plate
+            corner = unpack(np.array([key]))[0].tolist()
+            forward_ = Y if up_[1] == 0 else X
+            small.append(
+                element("SmallBlockSmallMagneticPlate", forward_, up_, corner, {}, ids)
+            )
         grids.append(g)
 
     bp.find("Id").set("Subtype", NAME)
@@ -1173,6 +1335,7 @@ def report(yard, arcs, tubes, stats):
         a = (tube.sign < 0) * 1
         small = Counter(v[0] for v in tube.blocks.values())
         small["SmallBlockSmallLight"] = len(tube.lights)
+        small["SmallBlockSmallMagneticPlate"] = 1
         small["SmallAdvancedRotor"] = 1
         n = sum(small.values())
         p = sum(BLOCKS[k][3] * v for k, v in small.items())
@@ -1192,13 +1355,21 @@ def report(yard, arcs, tubes, stats):
             f" {s['sealed']} sealed in; {s['leaks']} inside cells open to the outside"
         )
         print("  ", ", ".join(f"{k} {v}" for k, v in sorted(small.items())))
+        _, _, i, f, stud = tube.plate
+        print(
+            f"   magnetic plate on the conveyor junction at {yard.blocks[i][3][0]},"
+            f" its face {f:.3f} m along the plate's Up, {stud} cubes holding it"
+        )
         # The cap is a half sphere as wide as the tube
         centers = tube.world(unpack(np.array(sorted(tube.blocks), np.int64)))
         outside = np.median(tube.line.query(centers, workers=-1)[0]) + SMALL / 2
         if tube.part == "far":
             near = np.linalg.norm(centers - tube.cap, axis=1) < tube.inner + 2
             cap = tube.line.query(centers[near], workers=-1)[0].max() + SMALL / 2
-            print(f"   tube {outside:.2f} m, cap {cap:.2f} m from the center line")
+            print(
+                f"   tube {outside:.2f} m, cap {cap:.2f} m from the center line,"
+                f" centered {tube.cap_length:.2f} m past the arc's end"
+            )
             ok &= cap <= outside + SMALL
         ok &= s["leaks"] == 0
         keys = np.array(sorted(tube.blocks), np.int64)
@@ -1232,14 +1403,23 @@ def report(yard, arcs, tubes, stats):
     for base, far in zip(tubes[::2], tubes[1::2]):
         a = base.world(unpack(np.array(sorted(base.blocks), np.int64)))
         b = far.world(unpack(np.array(sorted(far.blocks), np.int64)))
-        a = a[np.abs(a[:, 2] - base.seam) < 2]
-        b = b[np.abs(b[:, 2] - base.seam) < 2]
+        s = base.seam
+
+        def at_seam(p):
+            return p[
+                (np.abs(p[:, 1] - s["y"]) < 2)
+                & (np.abs(p[:, 2] - s["z"]) < 10)
+                & (np.abs(p[:, 0] - s["x"]) < 10)
+            ]
+
+        a, b = at_seam(a), at_seam(b)
         _, i = cKDTree(a).query(b, k=8)
         gap = np.linalg.norm(np.maximum(np.abs(b[:, None] - a[i]) - SMALL, 0), axis=2)
         print(
-            f"segments meet {gap.min():.2f} m apart at {base.seam:.2f} m along the axis"
+            f"segments meet {gap.min():.2f} m apart at y {s['y']:.2f} m at the arm"
+            f" base (far rotor displacement {far.rotor['displacement']})"
         )
-        ok &= 0.02 <= gap.min() <= 0.15
+        ok &= SEAM_GAP <= gap.min() <= 0.25
     # And where the storage cover meets the base segments
     cover = tubes[4]
     c = cover.world(unpack(np.array(sorted(cover.blocks), np.int64)))
