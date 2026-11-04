@@ -5,6 +5,7 @@ using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.Multiplayer;
 using Sandbox.Game.World;
 using VRage.Game;
+using VRageMath;
 
 namespace ServerPlugin;
 
@@ -19,9 +20,17 @@ namespace ServerPlugin;
 // the server tells the clients about the block only after building it, and a client drops a change
 // to a block it doesn't have yet. Welding a block to working order sets its owner on the server
 // only, so the share is changed before that.
+//
+// On a cluster the World Authority makes a new player's identity when the Gateway admits them,
+// and the node they land on gets it ready-made, so the game's RealPlayerIdentityCreated, which
+// fires only for an identity a server makes for a joining player itself, fires nowhere. The World
+// Authority joins them instead (SE-1012).
 internal static class OctFaction
 {
     private static MyPlayerCollection bound;
+
+    // Identities the World Authority made for new players this frame
+    private static readonly List<long> created = [];
 
     // Blocks placed this frame, with who placed them
     private static readonly List<(MySlimBlock Block, long Owner)> placed = [];
@@ -76,6 +85,10 @@ internal static class OctFaction
 
     public static void Update()
     {
+        // A frame later, when the identity has reached the nodes
+        foreach (var identity in created)
+            Join(identity);
+        created.Clear();
         foreach (var (block, owner) in placed)
             Private(block, owner);
         placed.Clear();
@@ -98,6 +111,28 @@ internal static class OctFaction
         )
             return;
         fat.CubeGrid.ChangeOwnerRequest(fat.CubeGrid, fat, owner, MyOwnershipShareModeEnum.None);
+    }
+
+    // The Gateway's admission asks for an initial player's identity, which nothing else on the World
+    // Authority does. A node asks it for the identities it makes, so only the World Authority counts.
+    [HarmonyPatch(
+        typeof(MyPlayerCollection),
+        nameof(MyPlayerCollection.CreateNewIdentity),
+        [typeof(string), typeof(string), typeof(Vector3?), typeof(bool), typeof(bool)]
+    )]
+    private static class Created
+    {
+        private static void Postfix(MyIdentity __result, bool initialPlayer, bool addToNpcs)
+        {
+            if (
+                initialPlayer
+                && !addToNpcs
+                && __result != null
+                && Plugin.Cluster != null
+                && Stations.IsAuthority
+            )
+                created.Add(__result.IdentityId);
+        }
     }
 
     // A block placed by hand or welded from a projection, and many placed at once
