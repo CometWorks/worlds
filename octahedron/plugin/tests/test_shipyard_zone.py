@@ -104,11 +104,18 @@ def cells_to_world(grid, cells):
     ]
 
 
-def block_cells(grid, subtype=None):
+# A shipyard's welders: OmniArc's, or the OctahedronFilaments mod's copy of it (SE-1067)
+WELDERS = ("OmniArcBeam", "OctahedronFilamentWelder")
+
+
+def block_cells(grid, subtypes=None):
+    """The Min cells of the grid's blocks of subtypes, a subtype or a tuple of them"""
+    if isinstance(subtypes, str):
+        subtypes = (subtypes,)
     return [
         vec(b.find("Min"))
         for b in grid.find("CubeBlocks")
-        if subtype is None or b.findtext("SubtypeName") == subtype
+        if subtypes is None or b.findtext("SubtypeName") in subtypes
     ]
 
 
@@ -135,7 +142,7 @@ def layout():
             blocks += world
         if grid.findtext("DisplayName") == SHIPYARD:
             yard = grid
-    beams = cells_to_world(yard, block_cells(yard, "OmniArcBeam"))
+    beams = cells_to_world(yard, block_cells(yard, WELDERS))
     directions = [
         (x, y, z)
         for x in (-1, 0, 1)
@@ -353,7 +360,7 @@ def prepare(enabled, zones_last, yard, beams, inside, outside) -> None:
     grid_end = text.index("</MyObjectBuilder_EntityBase>", yard_start)
     yard_text, count = re.subn(
         r"<MyObjectBuilder_CubeBlock xsi:type=\"MyObjectBuilder_ConveyorSorter\">\s*"
-        r"<SubtypeName>OmniArcBeam</SubtypeName>.*?</MyObjectBuilder_CubeBlock>",
+        rf"<SubtypeName>(?:{'|'.join(WELDERS)})</SubtypeName>.*?</MyObjectBuilder_CubeBlock>",
         activate,
         text[grid_start:grid_end],
         flags=re.S,
@@ -438,7 +445,7 @@ def drive(yard, inside, outside) -> None:
     remote.character_teleport(*add(inside, (0, 12.5, -10)))
     yard_id = int(yard.findtext("EntityId"))
     wait_grids(remote, [TOOLS[0], HAND[0], SHIP_ID, yard_id])
-    beam = tuple(int(c) for c in block_cells(yard, "OmniArcBeam")[0])
+    beam = tuple(int(c) for c in block_cells(yard, WELDERS)[0])
     shoot = remote.get_property(yard_id, beam, "ToolCore_Shoot")
     log(f"client: shipyard beam ToolCore_Shoot {shoot}")
 

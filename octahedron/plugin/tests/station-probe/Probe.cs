@@ -274,11 +274,17 @@ public sealed class ProbeCommands : CommandModule
 
     private static IEnumerable<MyCubeBlock> Beams(MyCubeGrid yard) =>
         yard.GetFatBlocks<MyCubeBlock>()
-            .Where(b => b.BlockDefinition.Id.SubtypeName == "OmniArcBeam");
+            .Where(b =>
+                b.BlockDefinition.Id.SubtypeName is "OmniArcBeam" or "OctahedronFilamentWelder"
+            );
 
     private static IEnumerable<MyCubeBlock> Deconstructors(MyCubeGrid yard) =>
         yard.GetFatBlocks<MyCubeBlock>()
-            .Where(b => b.BlockDefinition.Id.SubtypeName == "OmniArcDestro");
+            .Where(b =>
+                b.BlockDefinition.Id.SubtypeName
+                    is "OmniArcDestro"
+                        or "OctahedronFilamentDeconstructor"
+            );
 
     // ToolCore's switch; false without ToolCore
     private static bool Shooting(MyCubeBlock block)

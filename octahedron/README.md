@@ -9,6 +9,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 |---|---|
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
+| `make_filament_mod.py` | builds the OctahedronFilaments mod, the shipyards' welders and deconstructors that draw filaments instead of laser beams (SE-1067); `filament-tools/` is its script |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `build_trader_ships.py` | builds the offline "Octahedron Trader Ships" showcase save of the SE-948 cargo ships listed in `trader_ships.txt` (SE-985); see its docstring |
@@ -44,7 +45,7 @@ there don't lead them to the server's.
 
 ```bash
 uv run make_ore_mod.py --seed 42
-python3 build_world.py server --seed 42 [--ore-mod <Workshop id>]
+python3 build_world.py server --seed 42 [--ore-mod <Workshop id>] [--filament-mod <Workshop id>]
 uv run ore_stats.py server OctahedronOres ORES.md --seed 42
 ```
 
@@ -99,7 +100,8 @@ station and shipyard blueprints are in `blueprints/`.
   (SE1-0121).
 - Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame, each with an OmniArc
-  deconstructor beside it), in view of the station's
+  deconstructor beside it; with `--filament-mod` they become the
+  OctahedronFilaments mod's filament welders and deconstructors), in view of the station's
   lobby, its pressurized back half
   ([SE-945](https://tasks.cometworks.se/tasks/1832)).
   - Every shipyard starts where Viktor put Gamma Station's on the live cluster
@@ -277,6 +279,33 @@ maps and changes only these:
 
 The mod is about 14 MB, nearly all of it EarthLike's ore maps. Rerun it after a
 game update that changes the planet or voxel material definitions or maps.
+
+## OctahedronFilaments
+
+The shipyards' tools look alien, like the shipyard of Laconia Station in The
+Expanse: thin filaments reach out from them to the blocks they build or take
+apart, instead of laser beams (SE-1067). `make_filament_mod.py` writes the mod
+into `OctahedronFilaments/` (ignored here, like OctahedronOres) from the
+OmniArc welder and deconstructor definitions of the Workshop copy:
+
+- `OctahedronFilamentWelder` and `OctahedronFilamentDeconstructor` are copies of
+  `OmniArcBeam` and `OmniArcDestro` with the same stats, reach, turret,
+  animations and sound. ToolCore draws a bundle of filaments from all over the
+  tool to the block it hits, and a few idle strands across the tool while it is
+  on. No laser glow and no sparks.
+- The mod ships none of OmniArc's files. Its blocks name a vanilla model, and
+  its script (`filament-tools/`) hands them the models and icons of their
+  OmniArc originals when a world loads. A world with this mod needs ToolCore and
+  OmniArc too.
+- The blocks are not public: players can't build them, and their own OmniArc
+  tools keep the laser beams. `build_world.py --filament-mod <id>` lists the mod
+  and swaps them in for the OmniArc tools of every shipyard it places
+  (`FILAMENT_TOOLS`); without the option the shipyards keep OmniArc's tools.
+
+OmniArc is licensed CC BY-NC-ND 4.0 by its author; the mod is our own block
+definitions on top of it and needs it installed, it doesn't copy its models,
+textures or sounds. Rerun the script after an OmniArc update that changes these
+two blocks.
 
 ## Notes
 
