@@ -9,7 +9,7 @@ leader (SE-1015).
         <Test>/.venv/bin/python tests/oct_faction_cluster.py <Test>     (from plugin/)
 
 The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one
-headless admin client, a second client for the leader, with the station probe on the nodes.
+headless admin client, a second admin client for the leader, with the station probe on the nodes.
 
 Run on polaris on 2026-11-04 on cluster 0.2.1: 12/12 checks in 5 minutes; 8/12 without the fix.
 """
@@ -141,7 +141,9 @@ def run(bench) -> None:
         )
 
 
-run.administrators = [CLIENT_ID]
+# Both admins: the station probe answers admins only, and OCT no longer has only NPCs when the
+# second joins, so the game would not make them leader
+run.administrators = [CLIENT_ID, CLIENT2_ID]
 
 
 def main() -> int:
