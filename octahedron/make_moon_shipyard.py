@@ -19,14 +19,18 @@ clear of the large blocks.
 
 Two arcs, each a helix making one full turn around a build volume about 140 m
 across, the second the first turned 180 degrees around the axis. The base of
-the arcs is the end where they are joined. Each arc is a line of conveyor tubes
-with OmniArc welders and deconstructors inline, placed where they reach most of
-the build volume, and dark blue lights. Below the base each arc's line turns
-down to a junction with two connectors. A conveyor between the junctions joins
-the arcs, eight cargo containers and eight large reactors on either side of
-it. In the middle of each arc a locked advanced rotor faces the axis, the base
-of an arm that holds the ship: one with a large head, the other with the
-medium head. Everything is black carbon fiber.
+the arcs is the end where they are joined. Each arc is a line of industrial
+conveyor pipes with OmniArc welders and deconstructors inline, placed where
+they reach most of the build volume, and dark blue lights on T pipes. Below
+the base each arc's line turns down to a junction; two pipes run out of it to
+connectors past the rock's surface. A conveyor between the junctions joins the
+arcs, eight cargo containers and eight large reactors on either side of it,
+all under a half block thick armor cover with wedges on its edges and corners.
+A row of five 5x5 landing pads, each with a connector, sits in the cover's
+outside face, fed from that conveyor. In the middle of each arc a locked
+advanced rotor faces the axis, the base of an arm that holds the ship: one with
+a large head, the other with the medium head. The pipes and the cover are
+matte black, everything else black carbon fiber.
 
 Each arc runs in a tunnel through a rock that follows it from the junction to
 a round end past the arc's far end. The rock's surface is rough with scattered
@@ -40,6 +44,7 @@ Reuses the SE-952 helpers and its template blueprint for the block XML.
 import argparse
 import base64
 import copy
+import itertools
 import json
 import math
 import random
@@ -71,6 +76,9 @@ BRIDGE_SLOTS = 4
 BRIDGE_KINDS = ("LargeBlockLargeContainer", "LargeBlockLargeGenerator")
 # How far the tool turrets swing from their block's center (m)
 TURRET = 2.2
+# How many blocks out from its junction each connector sits, past the rock's
+# surface so that ships can dock on it
+CONNECTOR_OUT = 4
 # The radius of the openings around the connectors, the conveyor between the
 # arcs and the arm bases (m)
 OPENING = GRID / 2 * math.sqrt(2) + 0.75
@@ -98,11 +106,12 @@ ROCK_MATERIAL = "Uraninite_01"
 SEED = 986
 
 BLACK = ((0.0, -0.96, -0.5), "CarbonFibre_Armor")  # the game's default black
+MATTE = ((0.0, -0.96, -0.5), None)  # the same black, no skin
 # Lights on the conveyor, one per this many meters of arc
 LIGHT_SPACING = 10.0
 LIGHT_RGB = (0.05, 0.15, 0.85)  # dark blue
-LIGHT_RADIUS = 6
-LIGHT_INTENSITY = 4
+LIGHT_RADIUS = 12
+LIGHT_INTENSITY = 8
 # The OmniArc tools' ToolCore settings (its ToolRepo, protobuf): activated,
 # no beam drawing, the mode below, primary action, every relation targeted, no
 # work colour, the turret tracking targets. Without Activated and TrackTargets
@@ -116,20 +125,47 @@ ALL = [X, NX, Y, NY, Z, NZ]
 # Subtype: (object builder type, size, conveyor ports as (local cell,
 # direction), PCU, DLC), local X the block's Right, Y its Up, Z its Backward,
 # as in make_helix_shipyard.BLOCKS
+PIPES = (
+    "LargeBlockConveyorPipeSeamless",
+    "LargeBlockConveyorPipeCorner",
+    "LargeBlockConveyorPipeT",
+    "LargeBlockConveyorPipeIntersection",
+)
 BLOCKS = {
-    "ConveyorTube": ("ConveyorConnector", (1, 1, 1), [(O, Y), (O, NY)], 10, None),
-    "ConveyorTubeCurved": (
+    **{pipe: helix.BLOCKS[pipe] for pipe in PIPES + ("LargeBlockConveyorPipeCap",)},
+    # Its port at its Bottom
+    "LargeBlockConveyorPipeEnd": (
         "ConveyorConnector",
         (1, 1, 1),
-        [(O, NY), (O, X)],
+        [(O, NY)],
         10,
-        None,
+        "HeavyIndustry",
     ),
-    "ConveyorTubeT": ("Conveyor", (1, 1, 1), [(O, NY), (O, X), (O, NX)], 10, None),
-    "LargeBlockConveyor": ("Conveyor", (1, 1, 1), [(O, d) for d in ALL], 10, None),
+    "LargeBlockConveyorPipeJunction": (
+        "Conveyor",
+        (1, 1, 1),
+        [(O, d) for d in ALL],
+        10,
+        "HeavyIndustry",
+    ),
     "OmniArcBeam": ("ConveyorSorter", (1, 1, 1), [(O, Y), (O, NY)], 250, None),
     "OmniArcDestro": ("ConveyorSorter", (1, 1, 1), [(O, Y), (O, NY)], 250, None),
     "Connector": ("ShipConnector", (1, 1, 1), [(O, Z)], 125, None),
+    # A 5x5 landing pad, a connector in the middle of its top, the conveyor
+    # port under it
+    "LargeBlockStructural_PlatformConnector": (
+        "ShipConnector",
+        (5, 1, 5),
+        [((2, 0, 2), NY)],
+        125,
+        None,
+    ),
+    # The cover: half blocks against what they cover (their Front), the
+    # half slope a wedge along its Front and Bottom, the half slope corner a
+    # corner of one at its Right, Back and Bottom
+    "LargeHalfArmorBlock": ("CubeBlock", (1, 1, 1), [], 1, None),
+    "LargeHalfSlopeArmorBlock": ("CubeBlock", (1, 1, 1), [], 1, None),
+    "LargeBlockArmorHalfSlopeCorner": ("CubeBlock", (1, 1, 1), [], 1, None),
     "LargeBlockLargeGenerator": helix.BLOCKS["LargeBlockLargeGenerator"],
     "LargeBlockLargeContainer": (
         "CargoContainer",
@@ -151,6 +187,7 @@ DEVICES = {
     "LargeBlockLargeGenerator",
     "LargeBlockLargeContainer",
     "Connector",
+    "LargeBlockStructural_PlatformConnector",
     "LargeAdvancedStator",
 }
 # The leading elements of a block in a blueprint, in their order
@@ -162,7 +199,9 @@ HEAD_TAGS = (
     "ColorMaskHSV",
     "SkinSubtypeId",
 )
-TUBES = {"ConveyorTube", "ConveyorTubeCurved", "ConveyorTubeT"}
+TUBES = {*PIPES, "LargeBlockConveyorPipeJunction", "LargeBlockConveyorPipeEnd"}
+# What may sit on a tube's port that leads nowhere
+PORT_COVERS = {"SmallLight", "LargeBlockConveyorPipeCap"}
 # Heads of the arm bases in the middle of the arcs, first arc then second
 ARM_HEADS = ("LargeAdvancedRotor", "SmallAdvancedRotor")
 STARTS = (0.0, math.pi)
@@ -226,22 +265,14 @@ class Yard:
 
 
 def tube_piece(dirs):
-    """(subtype, forward, up) of the conveyor tube that connects to dirs."""
+    """(subtype, forward, up) of the conveyor pipe that connects to dirs."""
+    if len(dirs) == 1:
+        (d,) = dirs
+        return "LargeBlockConveyorPipeEnd", helix.perpendicular(neg(d)), neg(d)
     try:
-        subtype, forward, up = helix.pipe_piece(dirs)
+        return helix.pipe_piece(dirs)
     except ValueError:
-        return "LargeBlockConveyor", Z, Y
-    if subtype == "LargeBlockConveyorPipeIntersection":
-        return "LargeBlockConveyor", Z, Y
-    return (
-        {
-            "LargeBlockConveyorPipeSeamless": "ConveyorTube",
-            "LargeBlockConveyorPipeCorner": "ConveyorTubeCurved",
-            "LargeBlockConveyorPipeT": "ConveyorTubeT",
-        }[subtype],
-        forward,
-        up,
-    )
+        return "LargeBlockConveyorPipeJunction", Z, Y
 
 
 def center_line(start, t):
@@ -314,10 +345,14 @@ def build():
         down = [(sign * R, 0, z) for z in range(BRIDGE_Z + 1, 0)]
         across = [(x, 0, BRIDGE_Z) for x in range(0, sign * R, sign)]
         connect(across + [junction] + down + line, arc)
+        # The connectors on pipes out of the junction, clear of the rock
         for forward, up in ((out, Z), (NZ, out)):
-            assert free(add(junction, forward))
-            yard.block("Connector", forward, up, add(junction, forward), BLACK, arc)
-            conveyor[junction].add(forward)
+            stub = [add(junction, scale(forward, k)) for k in range(CONNECTOR_OUT)]
+            connect(stub, arc)
+            tip = add(junction, scale(forward, CONNECTOR_OUT))
+            assert free(tip)
+            yard.block("Connector", forward, up, tip, BLACK, arc)
+            conveyor[stub[-1]].add(forward)
 
         # The arm base: a locked advanced rotor in the middle, facing the axis.
         # A rotor whose Up is -X must not face +Z, nor one whose Up is -Y face
@@ -382,6 +417,44 @@ def build():
                 assert port in yard.blocks[index][4], (subtype, yard.blocks[index][4])
                 conveyor[(xs[1], 0, BRIDGE_Z)].add((0, side, 0))
 
+    # Landing pads in a row under the storage, on the base's outside, each on a
+    # pipe down from the conveyor between the arcs; a cap closes the port a
+    # pad's pipe leaves open where the storage joins the conveyor too
+    span = BRIDGE_SLOTS * 3
+    pad_z = BRIDGE_Z - 2
+    for px in range(-span + 2, span, 5):
+        side = 0 if px > 0 else 1 if px < 0 else None
+        connect([(px, 0, BRIDGE_Z), (px, 0, BRIDGE_Z - 1)], side)
+        conveyor[(px, 0, BRIDGE_Z - 1)].add(NZ)
+        cells = [(px + i, j, pad_z) for i in range(-2, 3) for j in range(-2, 3)]
+        yard.box("LargeBlockStructural_PlatformConnector", X, NZ, cells, BLACK, side)
+        if len(conveyor[(px, 0, BRIDGE_Z)]) == 5:
+            yard.block("LargeBlockConveyorPipeCap", NZ, X, (px, 0, BRIDGE_Z + 1), MATTE)
+            conveyor[(px, 0, BRIDGE_Z)].add(Z)
+    # A half block thick armor cover around the storage, wedges on its edges
+    # and corners
+    inside = [(-span, span), (-3, 3), (BRIDGE_Z - 1, BRIDGE_Z + 1)]
+    for cell in itertools.product(*(range(lo - 1, hi + 2) for lo, hi in inside)):
+        normal = [(cell[a] > hi) - (cell[a] < lo) for a, (lo, hi) in enumerate(inside)]
+        out = [
+            tuple(n if b == a else 0 for b in range(3))
+            for a, n in enumerate(normal)
+            if n
+        ]
+        if not out or not free(cell):
+            continue
+        if len(out) == 1:
+            up = next(d for d in ALL if d not in (out[0], neg(out[0])))
+            yard.block("LargeHalfArmorBlock", neg(out[0]), up, cell, MATTE)
+        elif len(out) == 2:
+            yard.block("LargeHalfSlopeArmorBlock", neg(out[0]), out[1], cell, MATTE)
+        else:
+            # Right, Back and Bottom against the storage
+            a, b, c = next(
+                q for q in itertools.permutations(out) if cross(q[1], q[2]) == neg(q[0])
+            )
+            yard.block("LargeBlockArmorHalfSlopeCorner", b, c, cell, MATTE)
+
     # The tools inline, on straight conveyor cells where they add the most
     # reach: welders and deconstructors in turn, the arcs in turn
     targets = np.concatenate(volume(R * GRID - 5))
@@ -418,16 +491,10 @@ def build():
                 tools[cell] = (tool, forward, step)
                 arc["tools"].append(cell)
 
-    for cell, dirs in sorted(conveyor.items()):
-        if cell in tools:
-            subtype, forward, up = tools[cell]
-            assert dirs == {up, neg(up)}
-        else:
-            subtype, forward, up = tube_piece(dirs)
-        yard.block(subtype, forward, up, cell, BLACK, owner[cell])
-
-    # Dark blue lights on the arcs' conveyor, one every LIGHT_SPACING, each
-    # on a free side of a tube, facing away from it in a random direction
+    # Dark blue lights on the arcs' conveyor, one every LIGHT_SPACING, each on
+    # the branch of a T pipe, facing away from it in a random direction
+    taken = set(yard.cells) | set(conveyor)
+    branch = {}
     rng = random.Random(SEED)
     for a, arc in enumerate(arcs):
         line = arc["line"]
@@ -437,26 +504,46 @@ def build():
         for j in range(2, len(line) - 2):
             walked += GRID
             cell = line[j]
-            i = yard.cells[cell]
-            if yard.blocks[i][0] not in TUBES or walked - last < LIGHT_SPACING:
+            dirs = conveyor[cell]
+            if cell in tools or len(dirs) != 2 or walked - last < LIGHT_SPACING:
                 continue
-            used = {d for _, d in yard.blocks[i][4]}
-            sides = [d for d in ALL if d not in used]
+            # a T's branch: square to a straight run, or opposite one end of
+            # a corner
+            sides = [
+                d
+                for d in ALL
+                if d not in dirs
+                and tube_piece(dirs | {d})[0] == "LargeBlockConveyorPipeT"
+            ]
             rng.shuffle(sides)
             for d in sides:
                 spot = add(cell, d)
                 # clear of other blocks and of the turrets' swing
-                if any(add(spot, e) in yard.cells for e in ALL if e != neg(d)):
-                    continue
-                if spot in yard.cells or any(
-                    math.dist(spot, t) * GRID < TURRET + GRID for t in arc["tools"]
+                if spot in taken or any(
+                    add(spot, e) in taken for e in ALL if e != neg(d)
                 ):
                     continue
-                up = next(e for e in ALL if e not in (d, neg(d)))
-                yard.block("SmallLight", d, up, spot, BLACK, a)
+                if any(math.dist(spot, t) * GRID < TURRET + GRID for t in arc["tools"]):
+                    continue
+                branch[cell] = d
                 arc["lights"].append((spot, d))
+                taken.add(spot)
                 last = walked
                 break
+
+    for cell, dirs in sorted(conveyor.items()):
+        if cell in tools:
+            subtype, forward, up = tools[cell]
+            assert dirs == {up, neg(up)}
+        else:
+            subtype, forward, up = tube_piece(
+                dirs | {branch[cell]} if cell in branch else dirs
+            )
+        yard.block(subtype, forward, up, cell, MATTE, owner[cell])
+    for a, arc in enumerate(arcs):
+        for spot, d in arc["lights"]:
+            up = next(e for e in ALL if e not in (d, neg(d)))
+            yard.block("SmallLight", d, up, spot, BLACK, a)
     return yard, arcs
 
 
@@ -685,7 +772,9 @@ def networks(yard):
             j = yard.cells.get(add(cell, d))
             if j is not None and (add(cell, d), neg(d)) in yard.blocks[j][4]:
                 parent[find(i)] = find(j)
-            elif subtype in TUBES:
+            elif subtype in TUBES and (
+                j is None or yard.blocks[j][0] not in PORT_COVERS
+            ):
                 open_ports.append((subtype, cell, d))
     groups = {}
     for i, b in enumerate(yard.blocks):
@@ -711,7 +800,7 @@ def set_vector(e, v):
     e.attrib = dict(zip("xyz", map(str, v)))
 
 
-def element(subtype, forward, up, corner, templates, ids):
+def element(subtype, forward, up, corner, templates, ids, color=BLACK):
     """The blueprint element of a block, from the template's block of its type
     where there is one."""
     if subtype in templates:
@@ -754,8 +843,11 @@ def element(subtype, forward, up, corner, templates, ids):
         "Forward": helix.DIRECTION_NAMES[forward],
         "Up": helix.DIRECTION_NAMES[up],
     }
-    set_vector(b.find("ColorMaskHSV"), BLACK[0])
-    b.find("SkinSubtypeId").text = BLACK[1]
+    set_vector(b.find("ColorMaskHSV"), color[0])
+    if color[1]:
+        b.find("SkinSubtypeId").text = color[1]
+    else:
+        b.remove(b.find("SkinSubtypeId"))
     return b
 
 
@@ -782,9 +874,9 @@ def blueprint_xml(yard, arcs):
 
     elements = []
     blocks.clear()
-    for subtype, forward, up, cells, _, _ in yard.blocks:
+    for subtype, forward, up, cells, _, color in yard.blocks:
         corner = [min(c[a] for c in cells) for a in range(3)]
-        b = element(subtype, forward, up, corner, templates, ids)
+        b = element(subtype, forward, up, corner, templates, ids, color)
         blocks.append(b)
         elements.append(b)
     for tag in ("ConveyorLines", "BlockGroups"):

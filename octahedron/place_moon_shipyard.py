@@ -51,7 +51,7 @@ ACTIONS = (
 ).split()
 # The shipyard's extent in its grid's frame (m): the rock's radius around the
 # axis, and from below the junctions to past the rock's far end
-RADIUS = 84.0
+RADIUS = 88.0
 LENGTH = (-22.0, 290.0)
 
 
@@ -196,7 +196,14 @@ def shipyard_grids(folder, ids, origin, forward, up, owner):
         bw.set_child(g, "DestructibleBlocks", "false")
         for block in g.find("CubeBlocks"):
             kind = block.get(bw.XSI_TYPE).replace("MyObjectBuilder_", "")
-            at = list(block).index(block.find("SkinSubtypeId")) + 1
+            # after the paint (and the skin, where there is one)
+            head = block.find("SkinSubtypeId")
+            at = (
+                list(block).index(
+                    head if head is not None else block.find("ColorMaskHSV")
+                )
+                + 1
+            )
             for k, (tag, value) in enumerate(
                 (("Owner", owner), ("BuiltBy", owner), ("ShareMode", "Faction"))
             ):
