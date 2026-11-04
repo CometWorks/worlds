@@ -18,9 +18,10 @@ seed gives the same world. Build the OctahedronOres mod with the same seed
 
 --ore-mod is the Workshop id of the OctahedronOres mod; 0 (default) lists it as
 a local mod, which needs the mod folder in the game's Mods folder.
---filament-mod gives the shipyards the OctahedronFilaments mod's tools
+--filament-mod gives the Moon Shipyard the OctahedronFilaments mod's tools
 (make_filament_mod.py) instead of OmniArc's: the mod's Workshop id, or 0 for a
-local mod. Without it the shipyards keep OmniArc's tools.
+local mod. Without it the Moon Shipyard keeps OmniArc's tools; the other
+shipyards keep them either way.
 """
 
 import argparse
@@ -135,6 +136,9 @@ ANYONE_CAN_USE = {
 # (NpcBlocksLocked). Not the connectors: they trade, and anyone with access could turn that off
 # and take the station's power and hydrogen. Docking needs no access.
 PUBLIC_BLOCKS = {"MedicalRoom", "Projector", "Cockpit"}
+# Players don't spawn here: the station's medical room is shared with nobody, so the spawn
+# screen lists it only for an admin with "Use terminals" on. It heals only them too.
+NO_SPAWN_STATIONS = {"Moon Station"}
 DOORS = {"Door", "AdvancedDoor", "AirtightSlideDoor", "AirtightHangarDoor"}
 # The one container per station the economy's refill puts loot into, through the Octahedron
 # plugin's StationLootContainerName (config/octahedron.cfg). It is shared with nobody on every
@@ -202,15 +206,16 @@ SHIPYARD_OFF = {"ShipConnector", "ConveyorSorter"}
 # The OmniArc deconstructors stay on: each is a link of its welder's conveyor line, which an off
 # conveyor sorter cuts. Nothing makes them shoot, so they never grind (SE-983).
 SHIPYARD_ON = {"OmniArcDestro", "OctahedronFilamentDeconstructor"}
-# With --filament-mod the shipyards' OmniArc tools become the OctahedronFilaments mod's copies of
-# them, which draw thin filaments to the blocks they work on instead of laser beams (SE-1067).
-# Players' own OmniArc tools keep their beams.
+# With --filament-mod the Moon Shipyard's OmniArc tools become the OctahedronFilaments mod's
+# copies of them, which draw thin filaments to the blocks they work on instead of laser beams
+# (SE-1067). The other shipyards and players' own OmniArc tools keep their beams.
 FILAMENT_TOOLS = {
     "OmniArcBeam": "OctahedronFilamentWelder",
     "OmniArcDestro": "OctahedronFilamentDeconstructor",
 }
-# The tool subtypes the shipyards get instead of the blueprint's: FILAMENT_TOOLS with --filament-mod
-SHIPYARD_TOOLS = {}
+# The tool subtypes the Moon Shipyard gets instead of the blueprint's: FILAMENT_TOOLS with
+# --filament-mod
+MOON_SHIPYARD_TOOLS = {}
 # Delta Station turned so its up leans this far toward EarthLike from the ring's axis, which
 # leans 25 degrees away from it there: the lobby sees the planet and the deck is as tilted
 # against the Sun as Beta Station's (SE-720)
@@ -776,6 +781,8 @@ def station(template, ids, name, center, forward, up, owner):
             # The spawn selector lists the room by its name: plain "Delta Station"
             set_child(block, "CustomName", name)
             set_child(block, "SpawnName", name)
+            if name in NO_SPAWN_STATIONS:
+                block.find("ShareMode").text = "None"
         if kind == "RadioAntenna":
             set_child(block, "HudText", name)
         if kind == "ShipConnector":
@@ -941,7 +948,8 @@ def moon_shipyard_grids():
     """The Moon Shipyard blueprint's grids made a station's shipyard like the others: the arm
     rotors named for the plugin, matte black rotor heads, an owner on every terminal block for
     shipyard() to set, and the OmniArc tools' ToolCore settings those of the Omni Arc Beam
-    Shipyard's, which leave them idle until a job turns them on."""
+    Shipyard's, which leave them idle until a job turns them on. The tools are then
+    MOON_SHIPYARD_TOOLS' subtypes."""
     grids = ET.parse(MOON_SHIPYARD_BLUEPRINT).getroot().findall(".//CubeGrid")
     settings = {
         b.findtext("SubtypeName"): b.findtext(".//Storage//Value")
@@ -974,6 +982,8 @@ def moon_shipyard_grids():
             )
             for k, tag in enumerate(("Owner", "ShareMode"), at + 1):
                 block.insert(k, ET.Element(tag))
+        if subtype in MOON_SHIPYARD_TOOLS:
+            block.find("SubtypeName").text = MOON_SHIPYARD_TOOLS[subtype]
     return grids
 
 
@@ -1011,8 +1021,6 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
-    for subtype in grid.iter("SubtypeName"):
-        subtype.text = SHIPYARD_TOOLS.get(subtype.text, subtype.text)
     for block in grid.find("CubeBlocks"):
         if color:
             recolor(block, color, skin=True)
@@ -1609,12 +1617,12 @@ def main():
     parser.add_argument(
         "--filament-mod",
         type=int,
-        help="Workshop id of OctahedronFilaments, 0 = local mod; the shipyards get its tools",
+        help="Workshop id of OctahedronFilaments, 0 = local mod; the Moon Shipyard gets its tools",
     )
     args = parser.parse_args()
 
     if args.filament_mod is not None:
-        SHIPYARD_TOOLS.update(FILAMENT_TOOLS)
+        MOON_SHIPYARD_TOOLS.update(FILAMENT_TOOLS)
 
     out = args.output
     shutil.rmtree(out, ignore_errors=True)
