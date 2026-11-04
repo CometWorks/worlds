@@ -137,6 +137,9 @@ def run(bench) -> None:
     first = found[1] if found else "0"
     time.sleep(5)
     to_table(api)
+    # The world's blueprint off the table first: the server refuses a player's removal of it
+    # from an OCT table (SE-936), and the client's load would keep it
+    tr.remove(api)
     mark = tp.latest(api)
     tr.load(api, TANKED)
     tr.settled(api, "table", "Press the button")
