@@ -82,6 +82,11 @@ public class Plugin : IPlugin
 
     private static bool IsShipyard(MyCubeGrid grid) => grid?.DisplayName == Yard;
 
+    // The shipyard's welders, not its deconstructors, which never shoot (SE-983)
+    private static bool IsWelder(object comp) =>
+        IsShipyard(Get(comp, "Grid") as MyCubeGrid)
+        && (Get(comp, "BlockTool") as IMyCubeBlock)?.BlockDefinition.SubtypeName == "OmniArcBeam";
+
     private static void ZoneEvent(MethodBase __originalMethod, long entityId)
     {
         if (MyEntities.GetEntityById(entityId) is MyCubeGrid grid && IsShipyard(grid))
@@ -128,10 +133,9 @@ public class Plugin : IPlugin
         MyCubeGrid yard = null;
         foreach (var comp in (IEnumerable)Get(Get(instance, "ToolMap"), "Values"))
         {
-            var grid = Get(comp, "Grid") as MyCubeGrid;
-            if (!IsShipyard(grid))
+            if (!IsWelder(comp))
                 continue;
-            yard = grid;
+            yard = (MyCubeGrid)Get(comp, "Grid");
             tools++;
             activated += (bool)Get(comp, "_activated") ? 1 : 0;
             track += (bool)Get(comp, "_trackTargets") ? 1 : 0;
@@ -156,7 +160,7 @@ public class Plugin : IPlugin
             File.Delete(off);
             var switched = 0;
             foreach (var comp in (IEnumerable)Get(Get(instance, "ToolMap"), "Values"))
-                if (IsShipyard(Get(comp, "Grid") as MyCubeGrid))
+                if (IsWelder(comp))
                 {
                     AccessTools.Property(comp.GetType(), "Activated").SetValue(comp, false);
                     switched++;
