@@ -3758,16 +3758,22 @@ internal static partial class ShipyardOrders
     private static IEnumerable<MyInventory> Containers(MyCubeGrid shipyard) =>
         shipyard.GetFatBlocks<MyCargoContainer>().Select(c => c.GetInventory());
 
-    // The shipyard's OmniArc welders. Not its other ToolCore tools: its OmniArc deconstructors
-    // stay OCT's and never shoot, so they can't grind a ship being built (SE-983). They stay on
-    // as links of the welders' conveyor lines (build_world.py).
+    // The shipyard's welders. Not its other ToolCore tools: its deconstructors stay OCT's and
+    // never shoot, so they can't grind a ship being built (SE-983). They stay on as links of
+    // the welders' conveyor lines (build_world.py).
     internal static IEnumerable<MyFunctionalBlock> Beams(MyCubeGrid shipyard) =>
         shipyard
             .GetFatBlocks<MyFunctionalBlock>()
             .Where(b => ((IMyTerminalBlock)b).GetProperty(ShootProperty) != null)
-            .Where(b => b.BlockDefinition.Id.SubtypeName == WelderSubtype);
+            .Where(b => WelderSubtypes.Contains(b.BlockDefinition.Id.SubtypeName));
 
-    private const string WelderSubtype = "OmniArcBeam";
+    // The OctahedronFilaments mod's welder (SE-1067), and the OmniArc welder it copies, which
+    // worlds built before it have
+    private static readonly HashSet<string> WelderSubtypes = new HashSet<string>
+    {
+        "OctahedronFilamentWelder",
+        "OmniArcBeam",
+    };
 
     // Through the tools' terminal switches, which ToolCore also sends to the clients. In a
     // no-welding zone the clients would turn the tools off again and show no beams (SE-441):

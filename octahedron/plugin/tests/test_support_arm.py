@@ -325,7 +325,7 @@ def litter(station: str) -> None:
     beams = [
         [int(b.find("Min").get(a)) for a in "xyz"]
         for b in yard.iter("MyObjectBuilder_CubeBlock")
-        if b.findtext("SubtypeName") == "OmniArcBeam"
+        if b.findtext("SubtypeName") in ("OmniArcBeam", "OctahedronFilamentWelder")
     ]
     cell = [sum(c[i] for c in beams) / len(beams) * 2.5 for i in range(3)]
     po = yard.find("PositionAndOrientation")

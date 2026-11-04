@@ -186,7 +186,7 @@ def shipyard_grid(shipyard_id: int) -> ET.Element:
 
 def beam_shoot(remote, shipyard_id: int) -> object:
     cell = tuple(
-        int(c) for c in sz.block_cells(shipyard_grid(shipyard_id), "OmniArcBeam")[0]
+        int(c) for c in sz.block_cells(shipyard_grid(shipyard_id), sz.WELDERS)[0]
     )
     return remote.get_property(shipyard_id, cell, "ToolCore_Shoot")
 
@@ -195,7 +195,7 @@ def screenshots(remote, shipyard_id: int, case: str) -> None:
     """From the free space, 70% of the way from the welders' middle (the ship) to the
     farthest welder, looking at the ship"""
     grid = shipyard_grid(shipyard_id)
-    beams = sz.cells_to_world(grid, sz.block_cells(grid, "OmniArcBeam"))
+    beams = sz.cells_to_world(grid, sz.block_cells(grid, sz.WELDERS))
     middle = tuple(sum(c) / len(beams) for c in zip(*beams))
     far = max(beams, key=lambda b: math.dist(b, middle))
     remote.character_teleport(*(m + 0.7 * (f - m) for m, f in zip(middle, far)))

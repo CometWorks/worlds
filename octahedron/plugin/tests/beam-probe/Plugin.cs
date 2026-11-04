@@ -85,7 +85,10 @@ public class Plugin : IPlugin
     // The shipyard's welders, not its deconstructors, which never shoot (SE-983)
     private static bool IsWelder(object comp) =>
         IsShipyard(Get(comp, "Grid") as MyCubeGrid)
-        && (Get(comp, "BlockTool") as IMyCubeBlock)?.BlockDefinition.SubtypeName == "OmniArcBeam";
+        && Welders.Contains((Get(comp, "BlockTool") as IMyCubeBlock)?.BlockDefinition.SubtypeName);
+
+    // OmniArc's welder, or the OctahedronFilaments mod's copy of it (SE-1067)
+    private static readonly string[] Welders = { "OmniArcBeam", "OctahedronFilamentWelder" };
 
     private static void ZoneEvent(MethodBase __originalMethod, long entityId)
     {

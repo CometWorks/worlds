@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds the Octahedron starting world from the game's Star System scenario.
 
-    build_world.py <output folder> [--seed N] [--ore-mod ID]
+    build_world.py <output folder> [--seed N] [--ore-mod ID] [--filament-mod ID]
 
 Keeps EarthLike and the Moon, applies the world settings and mods, places the
 7 stations, the Trade Lanes endpoints, the safe zones and the asteroid ring, and
@@ -18,6 +18,9 @@ seed gives the same world. Build the OctahedronOres mod with the same seed
 
 --ore-mod is the Workshop id of the OctahedronOres mod; 0 (default) lists it as
 a local mod, which needs the mod folder in the game's Mods folder.
+--filament-mod gives the shipyards the OctahedronFilaments mod's tools
+(make_filament_mod.py) instead of OmniArc's: the mod's Workshop id, or 0 for a
+local mod. Without it the shipyards keep OmniArc's tools.
 """
 
 import argparse
@@ -198,7 +201,16 @@ SHIPYARD_SHARED = {"MedicalRoom", "ReflectorLight", "InteriorLight"}
 SHIPYARD_OFF = {"ShipConnector", "ConveyorSorter"}
 # The OmniArc deconstructors stay on: each is a link of its welder's conveyor line, which an off
 # conveyor sorter cuts. Nothing makes them shoot, so they never grind (SE-983).
-SHIPYARD_ON = {"OmniArcDestro"}
+SHIPYARD_ON = {"OmniArcDestro", "OctahedronFilamentDeconstructor"}
+# With --filament-mod the shipyards' OmniArc tools become the OctahedronFilaments mod's copies of
+# them, which draw thin filaments to the blocks they work on instead of laser beams (SE-1067).
+# Players' own OmniArc tools keep their beams.
+FILAMENT_TOOLS = {
+    "OmniArcBeam": "OctahedronFilamentWelder",
+    "OmniArcDestro": "OctahedronFilamentDeconstructor",
+}
+# The tool subtypes the shipyards get instead of the blueprint's: FILAMENT_TOOLS with --filament-mod
+SHIPYARD_TOOLS = {}
 # Delta Station turned so its up leans this far toward EarthLike from the ring's axis, which
 # leans 25 degrees away from it there: the lobby sees the planet and the deck is as tilted
 # against the Sun as Beta Station's (SE-720)
@@ -999,6 +1011,8 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
+    for subtype in grid.iter("SubtypeName"):
+        subtype.text = SHIPYARD_TOOLS.get(subtype.text, subtype.text)
     for block in grid.find("CubeBlocks"):
         if color:
             recolor(block, color, skin=True)
@@ -1431,7 +1445,7 @@ def asteroid_ring(seed, earth, axis, places, lane_list):
     return asteroids
 
 
-def mod_items(ore_mod):
+def mod_items(ore_mod, filament_mod):
     mods = ET.Element("Mods")
     for workshop_id, name in MODS:
         item = el(mods, "ModItem", FriendlyName=name)
@@ -1439,14 +1453,21 @@ def mod_items(ore_mod):
         el(item, "PublishedFileId", workshop_id)
         el(item, "PublishedServiceName", "Steam")
     mods.extend(ET.parse(MES_MODS).getroot())
-    item = el(mods, "ModItem", FriendlyName="OctahedronOres")
-    el(item, "Name", f"{ore_mod}.sbm" if ore_mod else "OctahedronOres")
-    el(item, "PublishedFileId", ore_mod)
-    el(item, "PublishedServiceName", "Steam")
+    # Ours: a Workshop id, or 0 for a local mod of that name; None leaves it out
+    for name, workshop_id in (
+        ("OctahedronOres", ore_mod),
+        ("OctahedronFilaments", filament_mod),
+    ):
+        if workshop_id is None:
+            continue
+        item = el(mods, "ModItem", FriendlyName=name)
+        el(item, "Name", f"{workshop_id}.sbm" if workshop_id else name)
+        el(item, "PublishedFileId", workshop_id)
+        el(item, "PublishedServiceName", "Steam")
     return mods
 
 
-def apply_settings(root, ore_mod):
+def apply_settings(root, ore_mod, filament_mod):
     settings = root.find("Settings")
     for key, value in SETTINGS.items():
         set_child(settings, key, value)
@@ -1462,7 +1483,7 @@ def apply_settings(root, ore_mod):
     old = root.find("Mods")
     index = list(root).index(old)
     root.remove(old)
-    root.insert(index, mod_items(ore_mod))
+    root.insert(index, mod_items(ore_mod, filament_mod))
 
 
 def add_npc(checkpoint, ids):
@@ -1585,7 +1606,15 @@ def main():
         default=0,
         help="Workshop id of OctahedronOres, 0 = local mod",
     )
+    parser.add_argument(
+        "--filament-mod",
+        type=int,
+        help="Workshop id of OctahedronFilaments, 0 = local mod; the shipyards get its tools",
+    )
     args = parser.parse_args()
+
+    if args.filament_mod is not None:
+        SHIPYARD_TOOLS.update(FILAMENT_TOOLS)
 
     out = args.output
     shutil.rmtree(out, ignore_errors=True)
@@ -1608,8 +1637,8 @@ def main():
     checkpoint = checkpoint_tree.getroot()
     config_tree = ET.parse(out / "Sandbox_config.sbc")
     clean_checkpoint(checkpoint)
-    apply_settings(checkpoint, args.ore_mod)
-    apply_settings(config_tree.getroot(), args.ore_mod)
+    apply_settings(checkpoint, args.ore_mod, args.filament_mod)
+    apply_settings(config_tree.getroot(), args.ore_mod, args.filament_mod)
 
     # Entity and identity ids come from one generator, in the order they are drawn below
     ids = Ids(random.Random(args.seed))
