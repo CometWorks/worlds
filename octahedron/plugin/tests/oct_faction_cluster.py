@@ -25,7 +25,6 @@ from pathlib import Path
 
 os.environ.setdefault("OCT_TASK", "SE-1012C")
 import wa_economy_cluster as wa  # noqa: E402  (takes the bench's folder from argv)
-from scenarios_core import CLIENT2_ID  # noqa: E402
 from wa_economy_cluster import (  # noqa: E402
     CLIENT_ID,
     Client,
@@ -39,6 +38,8 @@ import station_tests as st  # noqa: E402
 NODES = ("node-1", "node-2")
 JOINED = re.compile(r"New player (\d+) joins OCT")
 RANK = re.compile(r"New player \d+ joins OCT as (\w+)")
+# The bench's second client, as in its own scenarios
+CLIENT2_ID = CLIENT_ID + 1
 LEADER_PORT = 24160
 
 wa.ROOT = Path.home() / f"cluster-runs/oct-faction-{os.environ['OCT_TASK']}"
