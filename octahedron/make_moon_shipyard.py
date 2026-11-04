@@ -26,8 +26,8 @@ the base each arc's line turns down to a junction; two pipes run out of it to
 connectors past the rock's surface. A conveyor between the junctions joins the
 arcs, eight cargo containers and eight large reactors on either side of it,
 all under a half block thick armor cover with wedges on its edges and corners.
-A row of five 5x5 landing pads, each with a connector, sits in the cover's
-outside face, fed from that conveyor. In the middle of each arc a locked
+A row of 5x5 platforms sits in the cover's outside face: three landing pads,
+each with a connector fed from that conveyor, and plain ones between them. In the middle of each arc a locked
 advanced rotor faces the axis, the base of an arm that holds the ship: one with
 a large head, the other with the medium head. The pipes and the cover are
 matte black, everything else black carbon fiber.
@@ -163,9 +163,14 @@ BLOCKS = {
     # The cover: half blocks against what they cover (their Front), the
     # half slope a wedge along its Front and Bottom, the half slope corner a
     # corner of one at its Right, Back and Bottom
+    "LargeBlockStructural_Platform": ("CubeBlock", (5, 1, 5), [], 1, None),
     "LargeHalfArmorBlock": ("CubeBlock", (1, 1, 1), [], 1, None),
     "LargeHalfSlopeArmorBlock": ("CubeBlock", (1, 1, 1), [], 1, None),
     "LargeBlockArmorHalfSlopeCorner": ("CubeBlock", (1, 1, 1), [], 1, None),
+    # Ramps from the cover up to the landing pads: the 2:1 slope's base, full
+    # at its Front and half at its Back, and its tip, half at its Front
+    "LargeBlockArmorSlope2Base": ("CubeBlock", (1, 1, 1), [], 1, None),
+    "LargeBlockArmorSlope2Tip": ("CubeBlock", (1, 1, 1), [], 1, None),
     "LargeBlockLargeGenerator": helix.BLOCKS["LargeBlockLargeGenerator"],
     "LargeBlockLargeContainer": (
         "CargoContainer",
@@ -182,6 +187,8 @@ BLOCKS = {
     "SmallAdvancedRotor": ("MotorAdvancedRotor", (3, 2, 3), [], 1, None),
 }
 TOOLS = ("OmniArcBeam", "OmniArcDestro")
+# The landing pad and the plain platform of the same size
+PLATFORMS = ("LargeBlockStructural_PlatformConnector", "LargeBlockStructural_Platform")
 DEVICES = {
     *TOOLS,
     "LargeBlockLargeGenerator",
@@ -417,22 +424,22 @@ def build():
                 assert port in yard.blocks[index][4], (subtype, yard.blocks[index][4])
                 conveyor[(xs[1], 0, BRIDGE_Z)].add((0, side, 0))
 
-    # Landing pads in a row under the storage, on the base's outside, each on a
-    # pipe down from the conveyor between the arcs; a cap closes the port a
-    # pad's pipe leaves open where the storage joins the conveyor too
+    # A row of 5x5 platforms under the storage, on the base's outside: landing
+    # pads, each on a pipe down from the conveyor between the arcs, with plain
+    # platforms between them
     span = BRIDGE_SLOTS * 3
     pad_z = BRIDGE_Z - 2
-    for px in range(-span + 2, span, 5):
+    for k, px in enumerate(range(-span + 2, span, 5)):
         side = 0 if px > 0 else 1 if px < 0 else None
+        cells = [(px + i, j, pad_z) for i in range(-2, 3) for j in range(-2, 3)]
+        if k % 2:
+            yard.box(PLATFORMS[1], X, NZ, cells, BLACK, side)
+            continue
         connect([(px, 0, BRIDGE_Z), (px, 0, BRIDGE_Z - 1)], side)
         conveyor[(px, 0, BRIDGE_Z - 1)].add(NZ)
-        cells = [(px + i, j, pad_z) for i in range(-2, 3) for j in range(-2, 3)]
-        yard.box("LargeBlockStructural_PlatformConnector", X, NZ, cells, BLACK, side)
-        if len(conveyor[(px, 0, BRIDGE_Z)]) == 5:
-            yard.block("LargeBlockConveyorPipeCap", NZ, X, (px, 0, BRIDGE_Z + 1), MATTE)
-            conveyor[(px, 0, BRIDGE_Z)].add(Z)
+        yard.box(PLATFORMS[0], X, NZ, cells, BLACK, side)
     # A half block thick armor cover around the storage, wedges on its edges
-    # and corners
+    # and corners, ramps up to the full block thick pads beside them
     inside = [(-span, span), (-3, 3), (BRIDGE_Z - 1, BRIDGE_Z + 1)]
     for cell in itertools.product(*(range(lo - 1, hi + 2) for lo, hi in inside)):
         normal = [(cell[a] > hi) - (cell[a] < lo) for a, (lo, hi) in enumerate(inside)]
@@ -443,7 +450,24 @@ def build():
         ]
         if not out or not free(cell):
             continue
-        if len(out) == 1:
+        pad = [
+            d
+            for d in (X, NX, Y, NY)
+            if yard.blocks[yard.cells.get(add(cell, d), -1)][0] in PLATFORMS
+            and add(cell, d) in yard.cells
+        ]
+        if pad and len(out) == 1:
+            yard.block("LargeBlockArmorSlope2Base", pad[0], out[0], cell, MATTE)
+        elif pad and len(out) == 2:
+            beside = next(o for o in out if o in (pad[0], neg(pad[0])))
+            yard.block(
+                "LargeBlockArmorSlope2Tip",
+                neg(next(o for o in out if o != beside)),
+                beside,
+                cell,
+                MATTE,
+            )
+        elif len(out) == 1:
             up = next(d for d in ALL if d not in (out[0], neg(out[0])))
             yard.block("LargeHalfArmorBlock", neg(out[0]), up, cell, MATTE)
         elif len(out) == 2:
