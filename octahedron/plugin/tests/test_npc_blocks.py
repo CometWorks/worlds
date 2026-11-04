@@ -1,13 +1,13 @@
-"""A player uses a station's blocks but can't change them (SE-936). As a player outside OCT's
-faction, without the admin "Use terminals": the terminal reaches only the blocks the station
-shares with everyone (medical rooms, hologram table, seats, Free Tools, the shipyard's lights).
-The store, ATM, vending machine, contracts, airlocks and button panel are the faction's, with
-the game's "Anyone can use" on, but for the doors that are off. The player's changes to all of them,
-name, custom data, on/off and every switch and slider, don't hold on the server. The engineering
-section's doors are off and stay off and shut. A door opens for the player, the hologram table
-still switches on and off and takes a blueprint, a Free Tools box gives an item, and the medical
-room charges the suit and fills its O2 and H2. The control, NpcBlocksLocked off: the changes to
-a shared block hold. On a world built by build_world.py.
+"""A player uses a station's blocks but can't change them (SE-936). As a player in OCT's faction,
+which every new player joins (SE-975), without the admin "Use terminals": the terminal reaches
+only the blocks the station shares with everyone (medical rooms, hologram table, seats, Free
+Tools, the shipyard's lights). The store, ATM, vending machine, contracts, airlocks and button
+panel are shared with nobody, not even OCT's faction, with the game's "Anyone can use" on, but
+for the doors that are off. The player's changes to all of them, name, custom data, on/off and
+every switch and slider, don't hold on the server. The engineering section's doors are off and
+stay off and shut. A door opens for the player, the hologram table still switches on and off and
+takes a blueprint, a Free Tools box gives an item, and the medical room charges the suit and fills
+its O2 and H2. The control, NpcBlocksLocked off: the changes to a shared block hold. On a world built by build_world.py.
 
     OCT_TASK=SE-936 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_npc_blocks.py
@@ -42,7 +42,7 @@ STATION = "Alpha"
 MODS = {1359954841: "Rotary Airlock"}
 # What build_world.py shares with everyone on a station and its shipyard
 SHARED = {"MedicalRoom", "Projector", "Cockpit", "ReflectorLight"}
-# What it keeps with the faction, with "Anyone can use" on
+# What it shares with nobody, with "Anyone can use" on
 ANYONE = {
     "StoreBlock",
     "ContractBlock",
@@ -129,8 +129,8 @@ def usable(a) -> list[dict]:
         f"the store, ATM, vending machine, contracts, airlocks and button panel are for anyone to use: {sorted(kinds)}",
     )
     check(
-        all(b["share"] == "Faction" and b["access"] == "no" for b in found),
-        f"none of them shared with the player: {[b for b in found if b['share'] != 'Faction' or b['access'] != 'no'][:3]}",
+        all(b["share"] == "None" and b["access"] == "no" for b in found),
+        f"none of them shared, not even with OCT: {[b for b in found if b['share'] != 'None' or b['access'] != 'no'][:3]}",
     )
     return found
 
@@ -380,11 +380,11 @@ def shut(a) -> None:
         and all(
             d["enabled"] == "no"
             and d["anyone"] == "no"
-            and d["share"] == "Faction"
+            and d["share"] == "None"
             and d["access"] == "no"
             for d in engineering
         ),
-        f"the engineering section's 2 doors are off, the faction's, and not for anyone to use: {len(engineering)}",
+        f"the engineering section's 2 doors are off, shared with nobody, and not for anyone to use: {len(engineering)}",
     )
     for d in engineering:
         at = (d["grid"], d["min"])
@@ -478,7 +478,8 @@ def main() -> int:
         a = rig.start_client()
         rig.ensure_character(a)
         sa.at_table(a, STATION)
-        log(probe(a, "whoami"))
+        me = probe(a, "whoami")
+        check(me.startswith("ME OCT "), f"the player is in OCT's faction: {me}")
         found = reached(a)
         uses = usable(a)
         # Before the tampering: the game doesn't send a refused change of a block the player
