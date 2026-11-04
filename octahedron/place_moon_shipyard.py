@@ -59,7 +59,7 @@ SAFE_ZONE_RADIUS = 300.0
 SAFE_ZONE_MARGIN = 20.0
 CLEARANCE = 40.0
 # Ships dock at the shipyard's base, away from the station
-STATION_GAP = 10.0
+STATION_GAP = 18.0
 URANIUM = 100
 # What the safe zone has to allow for the shipyard's tools to work
 TOOL_ACTIONS = ("Welding", "Grinding")
@@ -75,9 +75,10 @@ LENGTH = (-22.0, 290.0)
 # How far the shipyard's center is from the lounge (m): close enough that from
 # the lounge all of the rock renders at LOD 1 or better with Medium voxel
 # quality. LOD 1 reaches 192 m along each of the voxel map's axes
-# (MyVoxelClipmapSettingsPresets.NormalSettings[1]), snapped to 64 m cells;
-# within 124 m it holds all of the rock. At LOD 2 the far parts open up.
-DISTANCE = 120.0
+# (MyVoxelClipmapSettingsPresets.NormalSettings[1]), snapped to 64 m cells.
+# At 126 m it holds all of the rock from the lounge's window spots, and the
+# station keeps STATION_GAP. At LOD 2 the far parts open up.
+DISTANCE = 126.0
 
 
 def vec(e):

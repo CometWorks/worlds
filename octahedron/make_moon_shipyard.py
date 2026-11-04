@@ -88,8 +88,9 @@ OPENING = GRID / 2 * math.sqrt(2) + 0.75
 # The rock, in meters (a voxel is 1 m): the room it leaves around the large
 # blocks, the wall's thickness, how round its inner bulges are, how rough its
 # surface is (noise amplitude and scale), the lumps on it (radius range, one
-# per this many square meters of surface), the holes over the lights (radius,
-# a second one tilted up to this many degrees)
+# per this many square meters of surface), the holes over the lights (radius at
+# the light, how much it grows per meter out so that the coarser voxel LODs
+# don't close it, a second one tilted up to this many degrees)
 ROCK_GAP = 1.0
 ROCK_WALL = 4.0
 BLEND = 1.5
@@ -97,6 +98,7 @@ ROUGH = (0.5, 2.5)
 LUMP_RADIUS = (0.6, 1.6)
 LUMP_AREA = 5.0
 HOLE_RADIUS = 0.9
+HOLE_WIDENING = 0.3
 HOLE_TILT = 35
 # The rock's storage: its edge (voxels), the voxel of the grid's origin, the
 # chunks the content goes out in, the asteroid's name and its material
@@ -112,8 +114,8 @@ MATTE = ((0.0, -0.96, -0.5), None)  # the same black, no skin
 # Lights on the conveyor, one per this many meters of arc
 LIGHT_SPACING = 10.0
 LIGHT_RGB = (0.05, 0.15, 0.85)  # dark blue
-LIGHT_RADIUS = 18
-LIGHT_INTENSITY = 1.5
+LIGHT_RADIUS = 20
+LIGHT_INTENSITY = 2.5
 # The OmniArc tools' ToolCore settings (its ToolRepo, protobuf): activated,
 # no beam drawing, the mode below, primary action, every relation targeted, no
 # work colour, the turret tracking targets. Without Activated and TrackTargets
@@ -709,11 +711,19 @@ class Rock:
         r = self.lump_radius[np.minimum(i, self.lump_count - 1)]
         lumps = np.where(valid, near - r, 1e3).min(1)
         s = np.maximum(np.minimum(outer, lumps), -self.hollow(p))
-        for start, direction, radius in self.openings + self.holes:
+        for start, direction, radius in self.openings:
             d = p - start
             along = d @ direction
             side = np.linalg.norm(d - np.outer(along, direction), axis=1)
             s = np.maximum(s, -np.maximum(side - radius, -along))
+        for start, direction, radius in self.holes:
+            d = p - start
+            along = d @ direction
+            side = np.linalg.norm(d - np.outer(along, direction), axis=1)
+            wide = radius + np.maximum(along, 0) * HOLE_WIDENING
+            # through the wall and the lumps on it, no farther
+            end = along - self.outer - LUMP_RADIUS[1] - ROUGH[0] - 1
+            s = np.maximum(s, -np.maximum(np.maximum(side - wide, -along), end))
         return s
 
     def chunks(self):
