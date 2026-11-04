@@ -82,8 +82,11 @@ def client_owner(remote, grid: int, cell: str) -> tuple[str, str]:
     return owner[1] if owner else "0", share[1] if share else "None"
 
 
-def theirs(state: dict, name: str) -> bool:
-    return all(state[k] == f"{name}/None" for k in ("cargo", "welders", "connectors"))
+def theirs(state: dict, name: str, share: str = "None") -> bool:
+    """The player's, shared with nobody in OCT, with their faction in one of their own"""
+    return all(
+        state[k] == f"{name}/{share}" for k in ("cargo", "welders", "connectors")
+    )
 
 
 def octs(state: dict) -> bool:

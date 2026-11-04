@@ -166,9 +166,11 @@ def run(bench) -> None:
     def yard(api) -> dict[str, str]:
         return dict(re.findall(r"(\w+)=(\S+)", probe(api, f"yard {STATION}")))
 
+    # The player's, whatever the share: no share in OCT, the faction's otherwise (SE-975, tested in
+    # the plain tests). The bench player doesn't join OCT on a cluster (SE-1012).
     def theirs(state: dict) -> bool:
         return all(
-            state.get(k, "").endswith("/Faction") and not state[k].startswith(OCT)
+            state.get(k, "").split("/")[0] not in ("", OCT)
             for k in ("cargo", "welders", "connectors")
         )
 
