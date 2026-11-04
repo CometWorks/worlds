@@ -111,7 +111,7 @@ MATTE = ((0.0, -0.96, -0.5), None)  # the same black, no skin
 LIGHT_SPACING = 10.0
 LIGHT_RGB = (0.05, 0.15, 0.85)  # dark blue
 LIGHT_RADIUS = 12
-LIGHT_INTENSITY = 8
+LIGHT_INTENSITY = 1
 # The OmniArc tools' ToolCore settings (its ToolRepo, protobuf): activated,
 # no beam drawing, the mode below, primary action, every relation targeted, no
 # work colour, the turret tracking targets. Without Activated and TrackTargets
