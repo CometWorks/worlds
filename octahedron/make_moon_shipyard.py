@@ -9,29 +9,34 @@
 
 Writes bp.sbc and thumb.png into the folder, as a local blueprint folder
 (Blueprints/local/<name>) has them, and prints the checks: block counts, PCU,
-open conveyor ports, the conveyor network, the build volume and how much of it
-the welders and the deconstructors reach.
+open conveyor ports, the conveyor network, the build volume, how much of it the
+welders and the deconstructors reach, and how the tubes keep clear of the
+large blocks.
 
 Two arcs, each a helix making one full turn around a build volume about 140 m
-across, the second the first turned 180 degrees around the axis. Each arc is a
-round tube 5 blocks across around a line of conveyor tubes, its surface fitted
-with armor slopes, corners and half blocks. Stations along the arcs branch off
-that line through a T junction toward the axis, to a second T that stands on
-the arc's inner face between an OmniArc welder and an OmniArc deconstructor, so
-their turrets see the build volume. Each arc ends in a rounded pod along the
-axis: two large reactors and two large cargo containers beside the conveyor
-line, and a connector at the tip. Two thin beams join the pods at one end, so
-the shipyard is a single grid, and a bare industrial pipe between them joins
-the arcs' conveyors. In the middle of each arc an advanced rotor faces the
-axis, the base of an arm that holds the ship: one with a large head, the other
-with the small head. Dark blue interior lights sit in notches of the inner
-faces. Everything is black carbon fiber.
+across, the second the first turned 180 degrees around the axis. The base of
+the arcs is the end where they are joined. Each arc is a line of conveyor tubes
+with OmniArc welders and deconstructors inline, placed where they reach most of
+the build volume. Below the base each arc's line turns down to a junction with
+two connectors. A conveyor between the junctions joins the arcs, eight cargo
+containers and eight large reactors on either side of it. In the middle of each
+arc an advanced rotor faces the axis, the base of an arm that holds the ship:
+one with a large head, the other with the medium head.
+
+Each arc is covered by a round tube of small armor blocks, a grid of its own
+on the medium head of a locked advanced rotor at the arc's base, on the side
+facing the other arc. The tube follows the arc, ends in a round cap beyond its
+far end and covers half the storage between the arcs. It keeps clear of every
+large block, so the grids never touch. A magnetic plate at the far end of each
+arc locks the tube when its cap is in place. Dark blue lights shine through
+holes in the tubes. Everything is black carbon fiber.
 Reuses the SE-952 helpers and its template blueprint for the block XML.
 """
 
 import argparse
 import copy
 import math
+import random
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -39,6 +44,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
+from scipy import ndimage
 from scipy.spatial import cKDTree
 
 import make_helix_shipyard as helix
@@ -46,38 +52,50 @@ from make_helix_shipyard import NX, NY, NZ, O, X, Y, Z, add, cross, neg, scale
 
 NAME = "Moon Shipyard"
 GRID = helix.GRID
+SMALL = 0.5
 
 # Radius of the arcs' center lines in blocks (75 m, 150 m across)
 R = 30
-# Radius of each arc's tube in blocks, the one the armor shapes fit best
-TUBE_RADIUS = 2.5
-# Blocks along the axis that the arcs' center lines span, one full turn
+# Blocks along the axis that the arcs span, one full turn
 SPAN = 112
-# Blocks each pod reaches past the end of its arc, the connector at the tip:
-# overall 2 * POD + SPAN + 1 = 127 blocks (317.5 m)
-POD = 7
-# The pods are boxes with rounded edges: half their size away from the axis and
-# around it, and the radius of the edges, in blocks
-POD_HALF = (2.5, 4.5)
-POD_ROUND = 2.0
-# Samples per block edge when fitting the armor shapes to the surface
-SAMPLES = 6
-# Stations per arc, evenly spaced along it, each a welder and a deconstructor
+# Welders and deconstructors per arc
 STATIONS = 14
-# The tools' Up, the axis their turret turns around, in order of preference:
-# around the axis, or along it
-TOOL_UP = ("around", "along")
-# A light every this many conveyor cells along an arc
-LIGHT_EVERY = 14
-# Beams joining the two pods at the bottom end: their offsets across the pod
-# and their depth into it
-BEAM_OFFSETS = (-2, 2)
-BEAM_DEPTH = 3
+# Height of the conveyor between the arcs' bases, below the build volume
+BRIDGE_Z = -5
+# Height of the base rotors on the lines down to it
+BASE_ROTOR_Z = -2
+# Cargo containers and reactors on either side of that conveyor, per arc
+BRIDGE_SLOTS = 4
+BRIDGE_KINDS = ("LargeBlockLargeContainer", "LargeBlockLargeGenerator")
+
+# The tubes, in meters: least space between a small and a large block, the
+# space the tube's inside keeps around the large blocks, the wall's thickness,
+# how round the bulges are, how far the tool turrets swing from their block's
+# center, and the radius of the holes around the connectors and arm bases
+HARD_GAP = 0.1
+TUBE_GAP = 0.35
+SHELL = 0.3  # the thinnest wall that stays closed
+BLEND = 1.0
+TURRET = 2.2
+OPENING = GRID / 2 * math.sqrt(2) + 0.25
+# The base rotors' head displacement: moves the tube's grid along the rotor's
+# axis so that the stud on the cap ends inside the magnetic plate's lock box
+DISPLACEMENT = -0.09
+# The lock box of LargeBlockSmallMagneticPlate along its Up from the block's
+# center (gear_lock dummy of SimpleMagneticPlate.mwm), its pad in the middle
+LOCK_BOX = (0.544, 0.936)
+LOCK_PAD = 0.74
+# Samples per small block edge when fitting the armor shapes to the tube
+SAMPLES = 4
+# One light per this many meters of tube, and the holes beside them
+LIGHT_SPACING = 5.0
+HOLE_RADIUS = (0.45, 0.8)
+SEED = 986
 
 BLACK = ((0.0, -0.96, -0.5), "CarbonFibre_Armor")  # the game's default black
 LIGHT_RGB = (0.05, 0.15, 0.85)  # dark blue
-LIGHT_RADIUS = 10
-LIGHT_INTENSITY = 4
+LIGHT_RADIUS = 4
+LIGHT_INTENSITY = 3
 # ToolCore settings the deconstructors carry in Viktor's Omni Arc Beam Shipyard
 DESTRO_STORAGE = "CAAQABgQIAAoDzAAOg8NAAAAACUAAAAAPQAAAABAAA=="
 
@@ -86,7 +104,6 @@ ALL = [X, NX, Y, NY, Z, NZ]
 # direction), PCU, DLC), local X the block's Right, Y its Up, Z its Backward,
 # as in make_helix_shipyard.BLOCKS
 BLOCKS = {
-    "LargeBlockArmorBlock": ("CubeBlock", (1, 1, 1), [], 1, None),
     "ConveyorTube": ("ConveyorConnector", (1, 1, 1), [(O, Y), (O, NY)], 10, None),
     "ConveyorTubeCurved": (
         "ConveyorConnector",
@@ -109,27 +126,28 @@ BLOCKS = {
         None,
     ),
     "LargeAdvancedStator": ("MotorAdvancedStator", (1, 2, 1), [(O, NY)], 100, None),
-    "SmallLight": ("InteriorLight", (1, 1, 1), [], 20, None),
-    "LargeGridBeamBlock": ("CubeBlock", (1, 1, 1), [], 1, "HeavyIndustry"),
-    "LargeGridBeamBlockEnd": ("CubeBlock", (1, 1, 1), [], 1, "HeavyIndustry"),
-    "LargeBlockConveyorPipeSeamless": helix.BLOCKS["LargeBlockConveyorPipeSeamless"],
+    "LargeBlockSmallMagneticPlate": ("LandingGear", (1, 1, 1), [], 35, None),
+    # Small grid
+    "SmallAdvancedRotor": ("MotorAdvancedRotor", (3, 2, 3), [], 1, None),
+    "SmallBlockSmallLight": ("InteriorLight", (1, 1, 1), [], 20, None),
 }
-# The armor shapes the surface is fitted with: which points of the block, in
+# The armor shapes the tubes are fitted with: which points of the block, in
 # local coordinates from 0 to 1 (x its Right, y its Up, z its Backward), are
 # solid. Read off their mount points: a slope's Front and Bottom are full.
 SHAPES = {
-    "LargeBlockArmorBlock": lambda x, y, z: x == x,
-    "LargeBlockArmorRoundSlope": lambda x, y, z: y * y + z * z <= 1,
-    "LargeBlockArmorSlope": lambda x, y, z: y + z <= 1,
-    "LargeBlockArmorCorner": lambda x, y, z: 1 - x + y + z <= 1,
-    "LargeBlockArmorCornerInv": lambda x, y, z: 1 - x + y + z >= 1,
-    "LargeBlockArmorSlope2Base": lambda x, y, z: y <= 1 - z / 2,
-    "LargeBlockArmorSlope2Tip": lambda x, y, z: y <= (1 - z) / 2,
-    "LargeHalfArmorBlock": lambda x, y, z: z <= 0.5,
-    "LargeHalfSlopeArmorBlock": lambda x, y, z: y + z <= 0.5,
+    "SmallBlockArmorBlock": lambda x, y, z: x == x,
+    "SmallBlockArmorRoundSlope": lambda x, y, z: y * y + z * z <= 1,
+    "SmallBlockArmorSlope": lambda x, y, z: y + z <= 1,
+    "SmallBlockArmorCorner": lambda x, y, z: 1 - x + y + z <= 1,
+    "SmallBlockArmorCornerInv": lambda x, y, z: 1 - x + y + z >= 1,
+    "SmallBlockArmorSlope2Base": lambda x, y, z: y <= 1 - z / 2,
+    "SmallBlockArmorSlope2Tip": lambda x, y, z: y <= (1 - z) / 2,
+    "HalfArmorBlock": lambda x, y, z: z <= 0.5,
+    "HalfSlopeArmorBlock": lambda x, y, z: y + z <= 0.5,
 }
 for _shape in SHAPES:
     BLOCKS.setdefault(_shape, ("CubeBlock", (1, 1, 1), [], 1, None))
+CUBE = "SmallBlockArmorBlock"
 TOOLS = ("OmniArcBeam", "OmniArcDestro")
 DEVICES = {
     *TOOLS,
@@ -148,21 +166,27 @@ HEAD_TAGS = (
     "SkinSubtypeId",
 )
 TUBES = {"ConveyorTube", "ConveyorTubeCurved", "ConveyorTubeT"}
-# Head grids of the arm bases, first arc then second: (head subtype, the head
-# grid's origin from the stator's base cell along its (Up, Forward, Right) in
-# meters), as measured on the rotors of the Omni Arc Beam Shipyard
-HEADS = [
-    ("LargeAdvancedRotor", (0.2, 0.0, 0.0)),
-    ("SmallAdvancedRotor", (0.2, 0.5, -0.5)),
-]
+# Heads of the arm bases in the middle of the arcs, first arc then second
+ARM_HEADS = ("LargeAdvancedRotor", "SmallAdvancedRotor")
+STARTS = (0.0, math.pi)
+
+
+def head_offset(head, displacement=0.0):
+    """The head grid's origin from its stator's base cell along the stator's
+    (Up, Forward, Right) in meters, as measured on pasted rotors."""
+    up = 0.2 + displacement
+    return (up, 0.0, 0.0) if head == "LargeAdvancedRotor" else (up, 0.5, -0.5)
 
 
 class Yard:
+    """The blocks of one grid; cells are the grid's own."""
+
     def __init__(self):
         self.blocks = []  # (subtype, forward, up, cells, ports, color)
+        self.owner = []  # the arc a block belongs to, None for both
         self.cells = {}  # cell: index into blocks
 
-    def block(self, subtype, forward, up, corner, color):
+    def block(self, subtype, forward, up, corner, color, owner=None):
         """Places a block with its local origin cell at corner; returns its index."""
         _, size, ports, _, _ = BLOCKS[subtype]
         right, backward = cross(forward, up), neg(forward)
@@ -189,22 +213,27 @@ class Yard:
                 color,
             )
         )
+        self.owner.append(owner)
         return len(self.blocks) - 1
 
-    def box(self, subtype, right, up, cells, color):
+    def box(self, subtype, right, up, cells, color, owner=None):
         """Places a block on the box of cells, its Right and Up along right and up."""
         forward = cross(up, right)
         toward = add(right, up, neg(forward))
         corner = tuple(
             (min if toward[a] > 0 else max)(c[a] for c in cells) for a in range(3)
         )
-        self.block(subtype, forward, up, corner, color)
+        index = self.block(subtype, forward, up, corner, color, owner)
         assert sorted(self.blocks[-1][3]) == sorted(cells), subtype
+        return index
 
 
 def tube_piece(dirs):
     """(subtype, forward, up) of the conveyor tube that connects to dirs."""
-    subtype, forward, up = helix.pipe_piece(dirs)
+    try:
+        subtype, forward, up = helix.pipe_piece(dirs)
+    except ValueError:
+        return "LargeBlockConveyor", Z, Y
     if subtype == "LargeBlockConveyorPipeIntersection":
         return "LargeBlockConveyor", Z, Y
     return (
@@ -218,51 +247,255 @@ def tube_piece(dirs):
     )
 
 
-STARTS = (0.0, math.pi)
-
-
 def center_line(start, t):
     angle = start + 2 * np.pi * t
     return (R * np.cos(angle), R * np.sin(angle), SPAN * t)
 
 
-class Solid:
-    """Signed distance in blocks to the surface the armor follows, negative
-    inside: the arcs' tubes and the pods, each pod given as (end, u, v, w)."""
+def axis_toward(v, exclude):
+    """The grid direction closest to v, not along any of exclude."""
+    return max(
+        (d for d in ALL if d not in exclude and neg(d) not in exclude),
+        key=lambda d: sum(a * b for a, b in zip(d, v)),
+        default=None,
+    )
 
-    def __init__(self, pods):
-        t = np.linspace(0, 1, 20000)
-        self.curves = [
-            cKDTree(np.stack(center_line(start, t), axis=1)) for start in STARTS
-        ]
-        self.pods = pods
 
-    def tube(self, p):
-        return (
-            np.min(
-                [
-                    c.query(p, distance_upper_bound=TUBE_RADIUS + 3, workers=-1)[0]
-                    for c in self.curves
-                ],
-                axis=0,
+def tool_margin(cell, up, targets):
+    """By how many meters a tool at cell with its Up along up reaches each of the
+    targets (m), -inf where its turret can't tilt to it."""
+    up = np.array(up, float)
+    d = targets - GRID * np.array(cell, float)
+    level = d - np.outer(d @ up, up)
+    ball = level / np.maximum(np.linalg.norm(level, axis=1), 1e-9)[:, None]
+    aim = d - ball * helix.BALL
+    distance = np.maximum(np.linalg.norm(aim, axis=1), 1e-9)
+    tilt = np.degrees(np.arcsin(np.minimum(np.abs(aim @ up) / distance, 1)))
+    return np.where(tilt <= helix.TILT, helix.REACH - distance, -np.inf)
+
+
+def volume(clear, step=3):
+    """Points (m) of the build volume, closer than clear (m) to the axis along the
+    arcs' span, every step-th block; and points along its axis."""
+    n = math.floor(clear / GRID)
+    xs = np.arange(-n, n + 1, step)
+    x, y, z = np.meshgrid(xs, xs, np.arange(0, SPAN + 1, step), indexing="ij")
+    disc = np.hypot(x, y) * GRID < clear
+    points = np.stack([x[disc], y[disc], z[disc]], 1) * GRID
+    axis = np.stack([np.zeros(SPAN + 1), np.zeros(SPAN + 1), np.arange(SPAN + 1)], 1)
+    return points.astype(float), axis * GRID
+
+
+def build():
+    """The large grid: returns (yard, arcs), each arc a dict of its parts."""
+    yard = Yard()
+    conveyor = {}  # cell: directions to connect, turned into tubes at the end
+    owner = {}  # conveyor cell: arc
+
+    def connect(cells, arc):
+        for cell in cells:
+            conveyor.setdefault(cell, set())
+            owner[cell] = arc if owner.get(cell, arc) == arc else None
+        for a, b in zip(cells, cells[1:]):
+            step = add(b, neg(a))
+            assert sum(map(abs, step)) == 1, (a, b)
+            conveyor[a].add(step)
+            conveyor[b].add(neg(step))
+
+    def free(cell):
+        return cell not in yard.cells and cell not in conveyor
+
+    arcs = []
+    length = math.hypot(2 * math.pi * R, SPAN)
+    for arc, start in enumerate(STARTS):
+        sign = 1 - 2 * arc
+        out, inward = (sign, 0, 0), (-sign, 0, 0)
+        line = helix.rasterize(lambda t: center_line(start, t), length)
+        assert line[0] == (sign * R, 0, 0), line[0]
+        # Down from the arc's base to the junction, then across to the middle
+        junction = (sign * R, 0, BRIDGE_Z)
+        down = [(sign * R, 0, z) for z in range(BRIDGE_Z + 1, 0)]
+        across = [(x, 0, BRIDGE_Z) for x in range(0, sign * R, sign)]
+        connect(across + [junction] + down + line, arc)
+        for forward, up in ((out, Z), (NZ, out)):
+            assert free(add(junction, forward))
+            yard.block("Connector", forward, up, add(junction, forward), BLACK, arc)
+            conveyor[junction].add(forward)
+
+        # Locked advanced rotors facing the axis: the tube's at the base, on the
+        # side facing the other arc, and the arm base in the middle. A rotor
+        # whose Up is -X must not face +Z, its head drifts off on paste.
+        def rotor(cell, up, head, displacement=0.0):
+            forward = Z if up == X else NZ
+            assert all(free(add(cell, scale(up, k))) for k in (1, 2, 3))
+            conveyor[cell].add(up)
+            index = yard.block(
+                "LargeAdvancedStator", forward, up, add(cell, up), BLACK, arc
             )
-            - TUBE_RADIUS
+            return dict(index=index, head=head, displacement=displacement)
+
+        base = rotor((sign * R, 0, BASE_ROTOR_Z), inward, "SmallAdvancedRotor")
+        base["displacement"] = DISPLACEMENT
+
+        def straight(j):
+            return add(line[j], neg(line[j - 1])) == add(line[j + 1], neg(line[j]))
+
+        middle = center_line(start, 0.5)
+        sites = sorted(
+            (j for j in range(1, len(line) - 1) if straight(j)),
+            key=lambda j: math.dist(line[j], middle),
+        )
+        for j in sites:
+            step = add(line[j + 1], neg(line[j]))
+            up = axis_toward((-line[j][0], -line[j][1], 0), [step, Z])
+            if up in (X, NX) and all(
+                free(add(line[j], scale(up, k))) for k in (1, 2, 3)
+            ):
+                arm = rotor(line[j], up, ARM_HEADS[arc])
+                arm["cell"], arm["up"] = line[j], up
+                break
+        # The magnetic plate beside the arc's last conveyor block, a junction,
+        # on the side the base rotor faces: the tube's grid steps along that
+        # axis from the plate's lattice by the head's offset
+        end = line[-1]
+        plate_cell = add(end, inward)
+        assert free(plate_cell)
+        plate = yard.block(
+            "LargeBlockSmallMagneticPlate", Z, out, plate_cell, BLACK, arc
+        )
+        arcs.append(
+            dict(
+                sign=sign,
+                line=line,
+                junction=junction,
+                base=base,
+                arm=arm,
+                end=end,
+                plate=plate,
+                tools=[],
+            )
         )
 
-    def __call__(self, p):
-        d = self.tube(p)
-        half = np.array([*POD_HALF, POD / 2 + 0.5]) - POD_ROUND
-        for end, *frame in self.pods:
-            q = (p - end) @ np.array(frame, float).T
-            q = np.abs(q - (0, 0, POD / 2)) - half
-            box = np.linalg.norm(np.maximum(q, 0), axis=1) + np.minimum(q.max(1), 0)
-            d = np.minimum(d, box - POD_ROUND)
-        return d
+    # The storage between the arcs, either side of the conveyor joining them,
+    # each box's port on the conveyor
+    for a, arc in enumerate(arcs):
+        sign = arc["sign"]
+        for k in range(BRIDGE_SLOTS):
+            xs = [sign * (1 + 3 * k + i) for i in range(3)]
+            for side in (1, -1):
+                subtype = BRIDGE_KINDS[(k + (side < 0)) % 2]
+                cells = [
+                    (x, side * dy, BRIDGE_Z + dz)
+                    for x in xs
+                    for dy in (1, 2, 3)
+                    for dz in (-1, 0, 1)
+                ]
+                index = yard.box(subtype, X, (0, side, 0), cells, BLACK, a)
+                port = ((xs[1], side, BRIDGE_Z), (0, -side, 0))
+                assert port in yard.blocks[index][4], (subtype, yard.blocks[index][4])
+                conveyor[(xs[1], 0, BRIDGE_Z)].add((0, side, 0))
+
+    # The tools inline, on straight conveyor cells where they add the most
+    # reach: welders and deconstructors in turn, the arcs in turn
+    targets = np.concatenate(volume(R * GRID - 5))
+    candidates = []
+    for a, arc in enumerate(arcs):
+        line = arc["line"]
+        for j in range(3, len(line) - 4):
+            step = add(line[j + 1], neg(line[j]))
+            if step != add(line[j], neg(line[j - 1])) or conveyor[line[j]] != {
+                step,
+                neg(step),
+            }:
+                continue
+            reach = tool_margin(line[j], step, targets) >= 0
+            candidates.append((a, j, step, reach))
+    counts = {tool: np.zeros(len(targets)) for tool in TOOLS}
+    used = {0: [], 1: []}
+    tools = {}
+    for _ in range(STATIONS):
+        for a, arc in enumerate(arcs):
+            for tool in TOOLS:
+                a_, j, step, reach = max(
+                    (
+                        c
+                        for c in candidates
+                        if c[0] == a and all(abs(c[1] - k) > 1 for k in used[a])
+                    ),
+                    key=lambda c: c[3] @ 0.5 ** (counts[tool] + 1),
+                )
+                used[a].append(j)
+                counts[tool] += reach
+                cell = arc["line"][j]
+                forward = axis_toward((-cell[0], -cell[1], 0), [step])
+                tools[cell] = (tool, forward, step)
+                arc["tools"].append(cell)
+
+    ends = {arc["end"] for arc in arcs}
+    for cell, dirs in sorted(conveyor.items()):
+        if cell in tools:
+            subtype, forward, up = tools[cell]
+            assert dirs == {up, neg(up)}
+        elif cell in ends:
+            subtype, forward, up = "LargeBlockConveyor", Z, Y
+        else:
+            subtype, forward, up = tube_piece(dirs)
+        yard.block(subtype, forward, up, cell, BLACK, owner[cell])
+    return yard, arcs
+
+
+# Small grid tubes
+
+
+def pack(cells):
+    return (
+        ((cells[:, 0] + 2048) << 24)
+        | ((cells[:, 1] + 2048) << 12)
+        | (cells[:, 2] + 2048)
+    )
+
+
+def unpack(keys):
+    return np.stack(
+        [(keys >> 24) - 2048, ((keys >> 12) & 4095) - 2048, (keys & 4095) - 2048], 1
+    )
+
+
+def smin(a, b, k):
+    """Smooth minimum of a and b, blended over k."""
+    h = np.clip(0.5 + 0.5 * (b - a) / k, 0, 1)
+    return b + (a - b) * h - k * h * (1 - h)
+
+
+def chunked(f, points, size=400_000):
+    return np.concatenate(
+        [f(points[i : i + size]) for i in range(0, len(points), size)]
+    )
+
+
+class Boxes:
+    """Distances from points (m) to a set of large grid cells' boxes."""
+
+    def __init__(self, cells):
+        self.cells = sorted(cells)
+        self.centers = GRID * np.array(self.cells, float)
+        self.tree = cKDTree(self.centers)
+
+    def distance(self, points, half=GRID / 2, bound=8.0):
+        def part(p):
+            _, i = self.tree.query(p, k=8, distance_upper_bound=bound, workers=-1)
+            valid = i < len(self.centers)
+            c = self.centers[np.minimum(i, len(self.centers) - 1)]
+            q = np.maximum(np.abs(p[:, None, :] - c) - half, 0)
+            return np.where(valid, np.linalg.norm(q, axis=2), 1e3).min(1)
+
+        return chunked(part, points)
 
 
 def masks():
     """The armor shapes in every orientation, without repeats: (subtype, forward,
-    up, which samples of a block are solid, the directions of its full faces)."""
+    up, which samples of a block are solid, the directions of its full faces);
+    and the samples, from the block's center in blocks."""
     i = (np.arange(SAMPLES) + 0.5) / SAMPLES - 0.5
     offsets = np.stack(np.meshgrid(i, i, i, indexing="ij"), -1).reshape(-1, 3)
     found, seen = [], set()
@@ -281,264 +514,364 @@ def masks():
     return offsets, found
 
 
-def axis_toward(v, exclude):
-    """The grid direction closest to v, not along any of exclude."""
-    return max(
-        (d for d in ALL if d not in exclude and neg(d) not in exclude),
-        key=lambda d: sum(a * b for a, b in zip(d, v)),
-        default=None,
-    )
+class Tube:
+    """The grid on an arc's base rotor head: a tube of small armor around the
+    arc, closed at the far end, and half the cover of the storage."""
 
-
-def build():
-    """Returns the yard and the stators as (block index, head)."""
-    yard = Yard()
-    conveyor = {}  # cell: directions to connect, turned into tubes at the end
-    exposed = set()  # cells that stay open: around the tools, in front of lights
-    shown = set()  # conveyor cells left uncovered: the stations' Ts, the pipe
-    stators = []
-
-    def connect(cells):
-        for cell in cells:
-            conveyor.setdefault(cell, set())
-        for a, b in zip(cells, cells[1:]):
-            step = add(b, neg(a))
-            assert sum(map(abs, step)) == 1, (a, b)
-            conveyor[a].add(step)
-            conveyor[b].add(neg(step))
-
-    def free(cell):
-        return cell not in yard.cells and cell not in conveyor
-
-    # Frames of the pods: u away from the axis, v around it, w away from the arc
-    lines, pods = [], []
-    for start in STARTS:
-        sign = 1 if start == 0 else -1
-        line = helix.rasterize(
-            lambda t: center_line(start, t), math.hypot(2 * math.pi * R, SPAN)
+    def __init__(self, yard, arcs, a, every):
+        self.arc = arc = arcs[a]
+        self.sign = arc["sign"]
+        _, forward, up, cells, _, _ = yard.blocks[arc["base"]["index"]]
+        self.base_cells = set(cells)
+        right = cross(forward, up)
+        du, df, dr = head_offset("SmallAdvancedRotor", arc["base"]["displacement"])
+        self.origin = GRID * np.array(cells[0], float) + np.array(
+            add(scale(up, du), scale(forward, df), scale(right, dr)), float
         )
-        lines.append(line)
-        for end, w in ((line[0], NZ), (line[-1], Z)):
-            pods.append((end, (sign, 0, 0), (0, sign, 0), w))
-    solid = Solid(pods)
-    xs = np.arange(-R - 5, R + 6)
-    zs = np.arange(-POD - 3, SPAN + POD + 4)
-    space = np.stack(np.meshgrid(xs, xs, zs, indexing="ij"), -1).reshape(-1, 3)
-    tube = {tuple(c) for c in space[solid.tube(space) <= 0]}
-    depth = dict(zip(map(tuple, space), solid(space)))
+        self.axes = np.array([right, up, neg(forward)], float)  # the grid's X, Y, Z
+        # The inside bulges around the large blocks it holds, but not around the
+        # arm base, which stands out through a hole
+        own = [
+            c
+            for c, i in yard.cells.items()
+            if yard.owner[i] in (a, None) and i != arc["arm"]["index"]
+        ]
+        self.own = Boxes(own)
+        self.tools = cKDTree(GRID * np.array(arc["tools"], float))
+        # The center line: the arc, down to the junction, across to the middle
+        t = np.linspace(0, 1, 40000)
+        helix_points = GRID * np.stack(center_line(STARTS[a], t), axis=1)
+        j = GRID * np.array(arc["junction"], float)
+        top = helix_points[0]
+        s = np.linspace(0, 1, 400)[:, None]
+        self.path = np.concatenate(
+            [j * s + top * (1 - s), j * (1 - s) + j * [0, 1, 1] * s, helix_points]
+        )
+        self.line = cKDTree(self.path)
+        self.length = np.linalg.norm(np.diff(self.path, axis=0), axis=1).sum()
+        # Inside radius: the arc's conveyor blocks with their corners in it
+        line_cells = np.array(arc["line"], float) * GRID
+        corners = np.array(
+            [[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
+        )
+        far = (
+            self.line.query(
+                (line_cells[:, None, :] + corners * GRID / 2).reshape(-1, 3), workers=-1
+            )[0]
+            .reshape(-1, 8)
+            .max(1)
+        )
+        self.deviation = far
+        self.inner = float(np.percentile(far, 95)) + TUBE_GAP
+        self.corridors = []
+        # Holes for the connectors and the arm base's head, from the conveyor
+        # through the wall
+        junction = np.array(arc["junction"], float) * GRID
+        self.corridors.append((junction, np.array([self.sign, 0, 0], float)))
+        self.corridors.append((junction, np.array([0, 0, -1], float)))
+        arm = arc["arm"]
+        self.corridors.append(
+            (np.array(arm["cell"], float) * GRID, np.array(arm["up"], float))
+        )
 
-    for strand, line in enumerate(lines):
-        tips = []
-        for end, u, v, w in pods[2 * strand : 2 * strand + 2]:
+    def world(self, cells):
+        return self.origin + SMALL * np.asarray(cells, float) @ self.axes
 
-            def at(du, dv, dw):
-                return add(end, scale(u, du), scale(v, dv), scale(w, dw))
+    def local(self, points):
+        return np.rint((np.asarray(points) - self.origin) @ self.axes.T / SMALL).astype(
+            np.int64
+        )
 
-            stem = [at(0, 0, dw) for dw in range(1, POD)]
-            line = stem[::-1] + line if w == NZ else line + stem
-            yard.block("Connector", w, u, at(0, 0, POD), BLACK)
-            tips.append((stem[-1], w))
-            exposed.add(at(0, 0, POD + 1))
-            kinds = ["LargeBlockLargeContainer", "LargeBlockLargeGenerator"]
-            for side in (1, -1):
-                for slot, subtype in enumerate(kinds if side > 0 else kinds[::-1]):
-                    cells = [
-                        at(du, side * dv, 3 * slot + dw)
-                        for du in (-1, 0, 1)
-                        for dv in (1, 2, 3)
-                        for dw in (1, 2, 3)
-                    ]
-                    yard.box(subtype, w, scale(v, side), cells, BLACK)
-                    conveyor.setdefault(at(0, 0, 3 * slot + 2), set()).add(
-                        scale(v, side)
-                    )
-        connect(line)
-        for cell, w in tips:
-            conveyor[cell].add(w)
+    def hollow(self, p):
+        """Signed distance (m) to the tube's inside, negative inside."""
+        h = (
+            self.line.query(p, distance_upper_bound=self.inner + 4, workers=-1)[0]
+            - self.inner
+        )
+        h = np.minimum(h, 1e3)
+        # The storage between the arcs
+        center = np.array([0, 0, BRIDGE_Z * GRID])
+        half = np.array([(3 * BRIDGE_SLOTS + 0.5) * GRID, 3.5 * GRID, 1.5 * GRID])
+        half = half + TUBE_GAP
+        q = np.abs(p - center) - (half - BLEND)
+        pod = np.linalg.norm(np.maximum(q, 0), axis=1) + np.minimum(q.max(1), 0) - BLEND
+        h = smin(h, pod, BLEND)
+        h = smin(h, self.own.distance(p) - TUBE_GAP, BLEND / 2)
+        turret = self.tools.query(p, distance_upper_bound=TURRET + 4, workers=-1)[0]
+        return smin(h, np.minimum(turret, 1e3) - TURRET, BLEND / 2)
 
-        def straight(j):
-            return add(line[j], neg(line[j - 1])) == add(line[j + 1], neg(line[j]))
+    def solid(self, p):
+        """Signed distance (m) to the tube's wall, negative inside it."""
+        h = self.hollow(p)
+        s = np.maximum(-h, h - SHELL)
+        for start, direction in self.corridors:
+            d = p - start
+            along = d @ direction
+            side = np.linalg.norm(d - np.outer(along, direction), axis=1)
+            s = np.maximum(s, -np.maximum(side - OPENING, -along))
+        # Each tube covers its own half of the storage
+        return np.where(p[:, 2] < 0, np.maximum(s, -self.sign * p[:, 0]), s)
 
-        def inward_at(j):
-            along = add(line[j + 1], neg(line[j]))
-            return axis_toward((-line[j][0], -line[j][1], 0), [along, Z]), along
+    def candidates(self):
+        """Keys of the small cells near the tube's wall."""
+        keys = []
 
-        def branch(j, inward, fits):
-            """From line[j] along inward to the arc's inner face: (stub, face cell),
-            or None. fits(face) checks the cells around the face cell."""
-            cell, stub = line[j], []
-            for _ in range(4):
-                cell = add(cell, inward)
-                if not free(cell) or cell not in tube:
-                    return None
-                if add(cell, inward) not in tube:
-                    return (stub, cell) if fits(cell) else None
-                stub.append(cell)
-            return None
+        def near(points, radius):
+            n = math.ceil(radius / SMALL) + 1
+            r = np.arange(-n, n + 1)
+            offsets = np.stack(np.meshgrid(r, r, r, indexing="ij"), -1).reshape(-1, 3)
+            offsets = offsets[np.linalg.norm(offsets, axis=1) * SMALL <= radius + SMALL]
+            centers = np.unique(self.local(points), axis=0)
+            step = max(1, 3_000_000 // len(offsets))
+            for i in range(0, len(centers), step):
+                block = (centers[i : i + step, None, :] + offsets).reshape(-1, 3)
+                keys.append(np.unique(pack(block)))
 
-        def site(t, fits, used):
-            """The straight conveyor cell nearest to the arc at t where a branch
-            fits: (index, inward, stub, face cell, fits' result)."""
-            target = center_line(STARTS[strand], t)
-            order = sorted(
-                range(POD, len(line) - POD), key=lambda j: math.dist(line[j], target)
-            )
-            for j in order[:80]:
-                if not straight(j) or any(abs(j - k) < 3 for k in used):
-                    continue
-                inward, along = inward_at(j)
-                result = []
-                found = branch(
-                    j,
-                    inward,
-                    lambda f: result.append(fits(f, inward, along)) or result[-1],
+        reach = self.inner + SHELL + 1.5
+        near(self.path[:: max(1, int(len(self.path) / (self.length / 0.5)))], reach)
+        near(self.own.centers, GRID / 2 * math.sqrt(3) + TUBE_GAP + SHELL + 1.5)
+        near(self.tools.data, TURRET + SHELL + 1.5)
+        x = np.arange(0, (3 * BRIDGE_SLOTS + 2) * GRID, 1.0) * self.sign
+        pod = np.stack(np.meshgrid(x, np.arange(-10, 11, 1.0), [BRIDGE_Z * GRID]), -1)
+        near(pod.reshape(-1, 3), 5.5)
+        return np.unique(np.concatenate(keys))
+
+    def build(self, every, rng):
+        """Fits the armor shapes to the wall, then adds the neck, the stud, the
+        lights and the holes. Returns the stats."""
+        offsets, shapes = masks()
+        keys = self.candidates()
+        cells = unpack(keys)
+        s = chunked(self.solid, self.world(cells))
+        half = SMALL * math.sqrt(3) / 2
+        inside, cut = s <= -half, np.abs(s) < half
+        points = (cells[cut][:, None, :] + offsets).reshape(-1, 3)
+        filled = (chunked(self.solid, self.world(points)) <= 0).reshape(
+            -1, len(offsets)
+        )
+        m = np.array([sh[3] for sh in shapes], np.float32)
+        f = filled.astype(np.float32)
+        agree = f @ m.T + (1 - f) @ (1 - m).T
+        empty = (~filled).sum(1)
+        best = agree.argmax(1)
+        place = agree[np.arange(len(best)), best] > empty
+        chosen = {}
+        for k in keys[inside]:
+            chosen[int(k)] = shapes[0]
+        for k, b, p in zip(keys[cut], best, place):
+            if p:
+                chosen[int(k)] = shapes[b]
+        wrong = len(offsets) - np.maximum(agree.max(1), empty)
+        cut_any = filled.any(1) & ~filled.all(1)
+        fit = wrong[cut_any].sum() / max(1, cut_any.sum() * len(offsets))
+
+        # No small block within HARD_GAP of a large one, and none past the middle
+        # of the storage
+        placed = np.array(sorted(chosen), np.int64)
+        centers = self.world(unpack(placed))
+        gap = every.distance(centers, half=GRID / 2 + SMALL / 2)
+        wrong_side = (centers[:, 2] < 0) & (
+            self.sign * centers[:, 0] < SMALL / 2 + 0.05
+        )
+        for k in placed[(gap < HARD_GAP) | wrong_side]:
+            del chosen[int(k)]
+        dropped = int(((gap < HARD_GAP) | wrong_side).sum())
+
+        # The neck: 3x3 cubes from the head's top along the rotor's axis up to
+        # the wall, the head taking cells 0-2 x 0-1 x 0-2
+        hollow = {}
+
+        def is_hollow(cell_keys):
+            missing = [k for k in cell_keys if k not in hollow]
+            if missing:
+                h = self.hollow(self.world(unpack(np.array(missing, np.int64))))
+                hollow.update(zip(missing, h))
+            return [hollow[k] for k in cell_keys]
+
+        self.head_cells = {
+            int(k)
+            for k in pack(
+                np.array(
+                    [(i, j, k) for i in range(3) for j in range(2) for k in range(3)]
                 )
-                if found:
-                    used.append(j)
-                    return (j, inward) + found + (result[-1],)
-            raise AssertionError(f"no branch site near t={t}")
-
-        used = []
-
-        # The arm base in the middle of the arc, its head toward the axis, its
-        # conveyor port joined to the line
-        def stator_fits(face, inward, along):
-            return all(free(add(face, scale(inward, k))) for k in (1, 2, 3))
-
-        j, inward, stub, face, _ = site(0.5, stator_fits, used)
-        connect([line[j]] + stub)
-        conveyor[stub[-1] if stub else line[j]].add(inward)
-        index = yard.block("LargeAdvancedStator", Z, inward, face, BLACK)
-        exposed |= {add(face, scale(inward, k)) for k in (2, 3)}
-        stators.append((index, HEADS[strand]))
-
-        # The stations: the stub reaches through the inner face to a T standing on
-        # it between the two tools. Each tool's turret turns around its Up, so
-        # nothing but the face behind it may sit in that plane.
-        def station(face, inward, along):
-            t = add(face, inward)
-            ups = {"around": axis_toward(along, [inward, Z]), "along": Z}
-            for up in (ups[name] for name in TOOL_UP):
-                tools = [add(t, up), add(t, neg(up))]
-                ring = [
-                    add(c, d)
-                    for c in tools
-                    for d in ALL
-                    if d not in (up, neg(up), neg(inward))
-                ]
-                if (
-                    all(free(c) and c not in tube for c in [t] + tools)
-                    and all(free(c) for c in ring)
-                    and all(add(c, neg(inward)) in tube for c in tools)
-                ):
-                    return up
-            return None
-
-        for n in range(STATIONS):
-            j, inward, stub, face, up = site((n + 0.5) / STATIONS, station, used)
-            t = add(face, inward)
-            connect([line[j]] + stub + [face, t])
-            shown.add(t)
-            for subtype, d in zip(TOOLS, (up, neg(up))):
-                conveyor[t].add(d)
-                yard.block(subtype, inward, d, add(t, d), BLACK)
-            # Open around the tools and the T, but for the face they stand on
-            for c in (t, add(t, up), add(t, neg(up))):
-                exposed |= {add(c, d) for d in ALL if d != neg(inward)}
-
-        # Lights in notches of the inner face, between the stations
-        for j in range(POD + LIGHT_EVERY // 2, len(line) - POD, LIGHT_EVERY):
-            for k in range(j, j + LIGHT_EVERY // 2):
-                if any(abs(k - n) < 4 for n in used):
-                    continue
-                steps = [add(line[k], neg(line[k - 1])), add(line[k + 1], neg(line[k]))]
-                inward = axis_toward((-line[k][0], -line[k][1], 0), steps + [Z])
-                found = inward and branch(k, inward, lambda f: True)
-                if found:
-                    face = found[1]
-                    yard.block("SmallLight", inward, Z, face, BLACK)
-                    exposed.add(add(face, inward))
-                    break
-
-    # The beams join the pods at the bottom end, along X between their inner
-    # walls, and a bare industrial pipe between them joins the arcs' conveyors
-    beams = [(x, dy, -BEAM_DEPTH) for dy in BEAM_OFFSETS for x in range(3 - R, R - 2)]
-    across = [(x, 0, -BEAM_DEPTH) for x in range(-R, R + 1)]
-    connect(across)
-    pipe = set(across[1:-1])
-    shown |= {c for c in pipe if depth[c] > 0}
-    exposed |= {add(c, d) for c in shown & pipe for d in ALL} - pipe
-
-    for cell, dirs in sorted(conveyor.items()):
-        subtype, forward, up = tube_piece(dirs)
-        if cell in pipe:
-            subtype = "LargeBlockConveyorPipeSeamless"
-        yard.block(subtype, forward, up, cell, BLACK)
-    for cell in beams:
-        # End pieces at the pods, their flat Front against the pod
-        if abs(cell[0]) == R - 3:
-            forward = (1 if cell[0] > 0 else -1, 0, 0)
-            yard.block("LargeGridBeamBlockEnd", forward, Z, cell, BLACK)
-        else:
-            yard.block("LargeGridBeamBlock", X, Z, cell, BLACK)
-    yard.fit = armor(yard, solid, depth, exposed, shown)
-    return yard, stators
-
-
-def armor(yard, solid, depth, exposed, shown):
-    """Fills the solid with armor shapes, each block the shape and orientation
-    whose solid samples agree most with the surface. A block beside a hidden
-    conveyor or storage block covers it with a full face. Returns the share of
-    samples the shapes get wrong where the surface cuts a block."""
-    offsets, shapes = masks()
-    hidden = {
-        c
-        for c, i in yard.cells.items()
-        if c not in shown
-        and yard.blocks[i][0]
-        in TUBES
-        | {
-            "LargeBlockConveyor",
-            "LargeBlockConveyorPipeSeamless",
-            "LargeBlockLargeContainer",
-            "LargeBlockLargeGenerator",
+            )
         }
-    }
-    need = {}
-    for c in hidden:
-        for d in ALL:
-            need.setdefault(add(c, d), set()).add(neg(d))
-    cells = sorted(
-        c
-        for c in {c for c, v in depth.items() if v < 0.9} | set(need)
-        if c not in yard.cells and c not in exposed
-    )
-    # Only blocks the surface may cut need samples: the rest are all in or all out
-    inside = np.zeros((len(cells), len(offsets)), bool)
-    inside[[depth.get(c, 1) <= -0.87 for c in cells]] = True
-    cut = np.array([-0.87 < depth.get(c, 1) < 0.87 for c in cells])
-    points = (np.array(cells, float)[cut][:, None, :] + offsets).reshape(-1, 3)
-    inside[cut] = (solid(points) <= 0).reshape(-1, len(offsets))
-    m = np.array([s[3] for s in shapes])
-    agree = inside.astype(np.int32) @ m.T + (~inside).astype(np.int32) @ (~m).T
-    empty = (~inside).sum(1)
-    for row, c in enumerate(cells):
-        if c in need:
-            empty[row] = -1
-            agree[row, [not need[c] <= s[4] for s in shapes]] = -1
-    best = agree.argmax(1)
-    place = agree[np.arange(len(cells)), best] > empty
-    chosen = {c: shapes[k] for c, k, p in zip(cells, best, place) if p}
-    # Cubes with cubes all around them stay empty: nothing can see them
-    cube = {c for c, s in chosen.items() if s[0] == "LargeBlockArmorBlock"}
-    for c, (subtype, forward, up, _, _) in chosen.items():
-        if c in cube and all(add(c, d) in cube for d in ALL):
-            continue
-        yard.block(subtype, forward, up, c, BLACK)
-    yard.masks = {c: s[3] for c, s in chosen.items()}
-    cut = inside.any(1) & ~inside.all(1)
-    wrong = len(offsets) - np.maximum(agree.max(1), empty)
-    return wrong[cut].sum() / (cut.sum() * len(offsets))
+        assert not self.head_cells & set(chosen)
+        neck = []
+        for j in range(2, 80):
+            layer = [
+                int(k)
+                for k in pack(np.array([(i, j, k) for i in range(3) for k in range(3)]))
+            ]
+            neck += layer
+            if min(is_hollow(layer)) >= 0:
+                break
+        else:
+            raise AssertionError("the neck doesn't reach the wall")
+        # The stud: 3x3 cubes from the wall to the magnetic plate's pad, its end
+        # in the lock box
+        plate_center = GRID * np.array(self.arc["end"], float) - GRID * np.array(
+            [self.sign, 0, 0], float
+        )
+        lc = (plate_center - self.origin) @ self.axes.T / SMALL
+        assert np.allclose(lc[[0, 2]], np.rint(lc[[0, 2]]), atol=1e-6), lc
+        n = -self.axes[1]  # the plate's Up, against the rotor's
+        assert np.allclose(n, [self.sign, 0, 0])
+        top = None
+        for j in range(math.floor(lc[1]) - 4, math.ceil(lc[1]) + 4):
+            face = -(j - lc[1]) * SMALL + SMALL / 2
+            if LOCK_BOX[0] + 0.02 <= face <= LOCK_PAD - 0.05:
+                top, self.stud_face = j, face
+        assert top is not None, lc
+        stud = []
+        i0, k0 = round(lc[0]), round(lc[2])
+        for j in range(top, top + 80):
+            layer = [
+                int(k)
+                for k in pack(
+                    np.array(
+                        [
+                            (i0 + di, j, k0 + dk)
+                            for di in (-1, 0, 1)
+                            for dk in (-1, 0, 1)
+                        ]
+                    )
+                )
+            ]
+            stud += layer
+            if min(is_hollow(layer)) >= 0:
+                break
+        else:
+            raise AssertionError("the stud doesn't reach the wall")
+        for k in neck + stud:
+            chosen[k] = shapes[0]
+        self.neck, self.stud = set(neck), set(stud)
+        # Those may come close only to the rotor and the plate they meet
+        plate_cell = add(self.arc["end"], (-self.sign, 0, 0))
+        others = Boxes(
+            [c for c in every.cells if c not in self.base_cells and c != plate_cell]
+        )
+        for group in (neck, stud):
+            points = self.world(unpack(np.array(group, np.int64)))
+            gap = others.distance(points, half=GRID / 2 + SMALL / 2).min()
+            assert gap >= HARD_GAP, ("neck or stud too close", gap)
+
+        leaks = self.leaks(chosen, cells, keys)
+
+        # Lights on the inside of the wall, each with a hole beside it
+        lights = []
+        spots = []
+        chosen_keys = set(chosen)
+        for k, (subtype, forward, up, mask, full) in chosen.items():
+            if k in self.neck or k in self.stud:
+                continue
+            cell = unpack(np.array([k]))[0]
+            for d in ALL:
+                if d not in full:
+                    continue
+                light = int(pack((cell + np.array(d))[None])[0])
+                if light not in chosen_keys and light not in self.head_cells:
+                    spots.append((light, neg(d)))
+        rng.shuffle(spots)
+        spot_cells = self.world(unpack(np.array([s[0] for s in spots], np.int64)))
+        ok_gap = every.distance(spot_cells, half=GRID / 2 + SMALL / 2) >= HARD_GAP
+        ok_hollow = self.hollow(spot_cells) < 0
+        picked = []
+        want = int(self.length / LIGHT_SPACING)
+        grid_hash = {}
+        for (light, wall), p, ok1, ok2 in zip(spots, spot_cells, ok_gap, ok_hollow):
+            if not (ok1 and ok2) or light in chosen_keys:
+                continue
+            bucket = tuple((p // LIGHT_SPACING).astype(int))
+            near = [
+                q
+                for dx in (-1, 0, 1)
+                for dy in (-1, 0, 1)
+                for dz in (-1, 0, 1)
+                for q in grid_hash.get(
+                    (bucket[0] + dx, bucket[1] + dy, bucket[2] + dz), []
+                )
+            ]
+            if any(np.linalg.norm(p - q) < LIGHT_SPACING for q in near):
+                continue
+            grid_hash.setdefault(bucket, []).append(p)
+            picked.append((light, wall, p))
+            chosen_keys.add(light)
+            if len(picked) >= want:
+                break
+        holes = 0
+        for light, wall, p in picked:
+            w = np.array(wall, float) @ self.axes  # the wall's direction, world
+            lateral = np.cross(w, rng.choice([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+            if np.linalg.norm(lateral) < 0.5:
+                lateral = np.cross(w, [0, 0, 1] if abs(w[2]) < 0.5 else [1, 0, 0])
+            lateral /= np.linalg.norm(lateral)
+            angle = rng.uniform(0, 2 * math.pi)
+            lateral = lateral * math.cos(angle) + np.cross(w, lateral) * math.sin(angle)
+            center = p + w * (SMALL + SHELL / 2) + lateral * rng.uniform(0.8, 1.2)
+            radius = rng.uniform(*HOLE_RADIUS)
+            mount = int(pack((unpack(np.array([light]))[0] + np.array(wall))[None])[0])
+            near_keys = pack(
+                np.unique(
+                    self.local(
+                        center
+                        + np.stack(
+                            np.meshgrid(*[np.arange(-1.0, 1.01, 0.5)] * 3), -1
+                        ).reshape(-1, 3)
+                    ),
+                    axis=0,
+                )
+            )
+            for k in near_keys:
+                k = int(k)
+                if (
+                    k in chosen
+                    and k != mount
+                    and k not in self.neck
+                    and k not in self.stud
+                    and np.linalg.norm(self.world(unpack(np.array([k])))[0] - center)
+                    <= radius
+                ):
+                    del chosen[k]
+                    holes += 1
+            lights.append((light, wall))
+        self.blocks = chosen
+        self.lights = lights
+        return dict(fit=fit, dropped=dropped, leaks=leaks, holes=holes)
+
+    def leaks(self, chosen, cells, keys):
+        """Cells inside the tube that an outside path reaches past its wall,
+        not counting the openings and the middle of the storage."""
+        low, high = cells.min(0) - 1, cells.max(0) + 1
+        blocked = np.zeros(high - low + 1, bool)
+        placed = unpack(np.array(sorted(chosen), np.int64))
+        blocked[tuple((placed - low).T)] = True
+        points = self.world(cells)
+        opening = np.zeros(len(cells), bool)
+        for start, direction in self.corridors:
+            d = points - start
+            along = d @ direction
+            side = np.linalg.norm(d - np.outer(along, direction), axis=1)
+            opening |= (side < OPENING + 1) & (along > -1)
+        opening |= (points[:, 2] < 0) & (self.sign * points[:, 0] < 1.0)
+        blocked[tuple((cells[opening] - low).T)] = True
+        labels, _ = ndimage.label(~blocked)
+        outside = labels[0, 0, 0]
+        inner = chunked(self.hollow, points) < 0
+        inner &= ~opening
+        index = cells[inner] - low
+        return int((labels[tuple(index.T)] == outside).sum())
+
+
+def build_tubes(yard, arcs):
+    every = Boxes(yard.cells)
+    rng = random.Random(SEED)
+    tubes, stats = [], []
+    for a in range(len(arcs)):
+        tube = Tube(yard, arcs, a, every)
+        stats.append(tube.build(every, rng))
+        tubes.append(tube)
+    return tubes, stats
 
 
 def networks(yard):
@@ -584,7 +917,56 @@ def set_vector(e, v):
     e.attrib = dict(zip("xyz", map(str, v)))
 
 
-def blueprint_xml(yard, stators):
+def element(subtype, forward, up, corner, templates, ids):
+    """The blueprint element of a block, from the template's block of its type
+    where there is one."""
+    if subtype in templates:
+        b = copy.deepcopy(templates[subtype])
+        for tag in ("Owner", "ShareMode", "NumberInGrid", "CustomName"):
+            for e in b.findall(tag):
+                b.remove(e)
+        # The template leaves out what has its default value
+        for i, tag in enumerate(HEAD_TAGS[1:], 1):
+            if b.find(tag) is None and (
+                tag != "EntityId" or BLOCKS[subtype][0] != "CubeBlock"
+            ):
+                b.insert(i, ET.Element(tag))
+    else:
+        b = ET.Element(
+            "MyObjectBuilder_CubeBlock",
+            {helix.XSI_TYPE: f"MyObjectBuilder_{BLOCKS[subtype][0]}"},
+        )
+        for tag in HEAD_TAGS:
+            if tag != "EntityId" or BLOCKS[subtype][0] != "CubeBlock":
+                ET.SubElement(b, tag)
+        b.find("SubtypeName").text = subtype
+    extra = {
+        "SmallBlockSmallLight": (
+            ("Enabled", "true"),
+            ("Radius", LIGHT_RADIUS),
+            ("ColorRed", LIGHT_RGB[0]),
+            ("ColorGreen", LIGHT_RGB[1]),
+            ("ColorBlue", LIGHT_RGB[2]),
+            ("ColorAlpha", 1),
+            ("Intensity", LIGHT_INTENSITY),
+        ),
+        "LargeBlockSmallMagneticPlate": (("Enabled", "true"), ("AutoLock", "true")),
+    }
+    for tag, value in extra.get(subtype, ()):
+        ET.SubElement(b, tag).text = str(value)
+    if b.find("EntityId") is not None:
+        b.find("EntityId").text = str(next(ids))
+    set_vector(b.find("Min"), corner)
+    b.find("BlockOrientation").attrib = {
+        "Forward": helix.DIRECTION_NAMES[forward],
+        "Up": helix.DIRECTION_NAMES[up],
+    }
+    set_vector(b.find("ColorMaskHSV"), BLACK[0])
+    b.find("SkinSubtypeId").text = BLACK[1]
+    return b
+
+
+def blueprint_xml(yard, arcs, tubes):
     root = ET.parse(helix.TEMPLATE_BLUEPRINT).getroot()
     bp = root.find(".//ShipBlueprint")
     grids = bp.find("CubeGrids")
@@ -604,49 +986,11 @@ def blueprint_xml(yard, stators):
 
     elements = []
     blocks.clear()
-    for subtype, forward, up, cells, _, (hsv, skin) in yard.blocks:
-        if subtype in templates:
-            b = copy.deepcopy(templates[subtype])
-            for tag in ("Owner", "ShareMode", "NumberInGrid", "CustomName"):
-                for e in b.findall(tag):
-                    b.remove(e)
-            # The template leaves out what has its default value
-            for i, tag in enumerate(HEAD_TAGS[1:], 1):
-                if b.find(tag) is None and (
-                    tag != "EntityId" or BLOCKS[subtype][0] != "CubeBlock"
-                ):
-                    b.insert(i, ET.Element(tag))
-        else:
-            b = ET.Element(
-                "MyObjectBuilder_CubeBlock",
-                {helix.XSI_TYPE: f"MyObjectBuilder_{BLOCKS[subtype][0]}"},
-            )
-            for tag in HEAD_TAGS:
-                ET.SubElement(b, tag)
-            b.find("SubtypeName").text = subtype
-        if subtype == "SmallLight":
-            for tag, value in (
-                ("Enabled", "true"),
-                ("Radius", LIGHT_RADIUS),
-                ("ColorRed", LIGHT_RGB[0]),
-                ("ColorGreen", LIGHT_RGB[1]),
-                ("ColorBlue", LIGHT_RGB[2]),
-                ("ColorAlpha", 1),
-                ("Intensity", LIGHT_INTENSITY),
-            ):
-                ET.SubElement(b, tag).text = str(value)
-        if b.find("EntityId") is not None:
-            b.find("EntityId").text = str(next(ids))
-        set_vector(b.find("Min"), [min(c[a] for c in cells) for a in range(3)])
-        b.find("BlockOrientation").attrib = {
-            "Forward": helix.DIRECTION_NAMES[forward],
-            "Up": helix.DIRECTION_NAMES[up],
-        }
-        set_vector(b.find("ColorMaskHSV"), hsv)
-        b.find("SkinSubtypeId").text = skin
+    for subtype, forward, up, cells, _, _ in yard.blocks:
+        corner = [min(c[a] for c in cells) for a in range(3)]
+        b = element(subtype, forward, up, corner, templates, ids)
         blocks.append(b)
         elements.append(b)
-
     for tag in ("ConveyorLines", "BlockGroups"):
         for e in grid.findall(tag):
             grid.remove(e)
@@ -662,29 +1006,49 @@ def blueprint_xml(yard, stators):
             pose.find(f"Orientation/{axis}").text = str(value)
 
     place(grid, NAME, (0, 0, 0), NZ, Y)
-    for index, (head, (du, df, dr)) in stators:
-        _, forward, up, cells, _, (hsv, skin) = yard.blocks[index]
-        g = copy.deepcopy(heads[head])
-        top = g.find("CubeBlocks")[0]
-        top.find("EntityId").text = str(next(ids))
-        top.find("ParentEntityId").text = elements[index].findtext("EntityId")
-        elements[index].find("TopBlockId").text = top.findtext("EntityId")
-        for tag in ("ColorMaskHSV", "SkinSubtypeId"):
-            for e in top.findall(tag):
-                top.remove(e)
-        color = ET.Element("ColorMaskHSV")
-        set_vector(color, hsv)
-        top.insert(2, color)
-        skin_element = ET.Element("SkinSubtypeId")
-        skin_element.text = skin
-        top.insert(3, skin_element)
-        right = cross(forward, up)
-        position = [
-            GRID * cells[0][a] + du * up[a] + df * forward[a] + dr * right[a]
-            for a in range(3)
-        ]
-        place(g, f"{NAME} arm base", position, forward, up)
-        grids.append(g)
+    for a, arc in enumerate(arcs):
+        for rotor, tube in ((arc["base"], tubes[a]), (arc["arm"], None)):
+            _, forward, up, cells, _, _ = yard.blocks[rotor["index"]]
+            stator = elements[rotor["index"]]
+            g = copy.deepcopy(heads[rotor["head"]])
+            top = g.find("CubeBlocks")[0]
+            top.find("EntityId").text = str(next(ids))
+            top.find("ParentEntityId").text = stator.findtext("EntityId")
+            stator.find("TopBlockId").text = top.findtext("EntityId")
+            stator.find("RotorLock").text = "true"
+            if rotor["displacement"]:
+                e = ET.Element("DummyDisplacement")
+                e.text = str(rotor["displacement"])
+                stator.insert(list(stator).index(stator.find("RotorLock")), e)
+            for tag in ("ColorMaskHSV", "SkinSubtypeId"):
+                for e in top.findall(tag):
+                    top.remove(e)
+            color = ET.Element("ColorMaskHSV")
+            set_vector(color, BLACK[0])
+            top.insert(2, color)
+            skin = ET.Element("SkinSubtypeId")
+            skin.text = BLACK[1]
+            top.insert(3, skin)
+            du, df, dr = head_offset(rotor["head"], rotor["displacement"])
+            right = cross(forward, up)
+            position = [
+                GRID * cells[0][i] + du * up[i] + df * forward[i] + dr * right[i]
+                for i in range(3)
+            ]
+            name = f"{NAME} {'tube' if tube else 'arm base'} {a + 1}"
+            place(g, name, position, forward, up)
+            if tube:
+                small = g.find("CubeBlocks")
+                for key, (subtype, f, u, _, _) in sorted(tube.blocks.items()):
+                    corner = unpack(np.array([key]))[0].tolist()
+                    small.append(element(subtype, f, u, corner, {}, ids))
+                for key, wall in tube.lights:
+                    corner = unpack(np.array([key]))[0].tolist()
+                    up_ = Y if wall[1] == 0 else X
+                    small.append(
+                        element("SmallBlockSmallLight", neg(wall), up_, corner, {}, ids)
+                    )
+            grids.append(g)
 
     bp.find("Id").set("Subtype", NAME)
     for e in bp.findall("DLC"):
@@ -701,25 +1065,35 @@ def blueprint_xml(yard, stators):
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-def thumbnail(yard, path, size=512):
+def thumbnail(yard, tubes, path, size=512):
     """A view across the axis, turned and tipped; tools, lights and rotors marked."""
     marks = {
         "OmniArcBeam": (120, 220, 255),
         "OmniArcDestro": (255, 140, 60),
-        "SmallLight": (60, 90, 255),
         "LargeAdvancedStator": (255, 255, 255),
     }
+    points, colors = [], []
+    for subtype, _, _, cells, _, _ in yard.blocks:
+        for c in cells:
+            points.append(c)
+            colors.append(marks.get(subtype))
+    for tube in tubes:
+        keys = np.array(sorted(tube.blocks), np.int64)[::7]
+        for p in tube.world(unpack(keys)) / GRID:
+            points.append(p)
+            colors.append(None)
+        for p in tube.world(unpack(np.array([k for k, _ in tube.lights]))) / GRID:
+            points.append(p)
+            colors.append((60, 90, 255))
     yaw, pitch = math.radians(25), math.radians(20)
     dots = []
-    for subtype, _, _, cells, _, _ in yard.blocks:
-        mark = marks.get(subtype)
-        for x, y, z in cells:
-            a = z * math.cos(yaw) - x * math.sin(yaw)
-            b = z * math.sin(yaw) + x * math.cos(yaw)
-            sy = y * math.cos(pitch) - b * math.sin(pitch)
-            depth = y * math.sin(pitch) + b * math.cos(pitch)
-            shade = int(60 + 70 * (R - depth) / (2 * R))
-            dots.append((depth, a, -sy, mark or (shade, shade, shade + 12), mark))
+    for (x, y, z), mark in zip(points, colors):
+        a = z * math.cos(yaw) - x * math.sin(yaw)
+        b = z * math.sin(yaw) + x * math.cos(yaw)
+        sy = y * math.cos(pitch) - b * math.sin(pitch)
+        depth = y * math.sin(pitch) + b * math.cos(pitch)
+        shade = int(50 + 60 * (R - depth) / (2 * R))
+        dots.append((depth, a, -sy, mark or (shade, shade, shade + 12), mark))
     left, right = min(d[1] for d in dots), max(d[1] for d in dots)
     low, high = min(d[2] for d in dots), max(d[2] for d in dots)
     k = (size - 32) / max(right - left, high - low)
@@ -728,95 +1102,79 @@ def thumbnail(yard, path, size=512):
     for _, sx, sy, color, mark in sorted(dots, key=lambda d: -d[0]):
         px = (size - k * (right - left)) / 2 + k * (sx - left)
         py = (size - k * (high - low)) / 2 + k * (sy - low)
-        r = 3 if mark else 1.2
+        r = 2.5 if mark else 0.8
         draw.ellipse((px - r, py - r, px + r, py + r), fill=color)
     image.save(path)
 
 
-def reach(yard, subtype, clear, step=3):
-    """How well the tools of subtype reach the build volume (closer than clear
-    to the axis, along the arcs' span) with a clear line of sight from their
-    turret's ball: the share of its blocks they reach (every step-th block), the
-    share some tool has in range but none sees, and the least margin in meters
-    by which one reaches and sees each block on the axis."""
-    cells = np.array(list(yard.cells))
-    low = cells.min(0)
-    occupied = np.full(cells.max(0) - low + 1, -1, np.int32)  # -2: a full block
-    shapes = []
-    for c, i in yard.cells.items():
-        occupied[tuple(np.subtract(c, low))] = len(shapes) if c in yard.masks else -2
-        if c in yard.masks:
-            shapes.append(yard.masks[c])
-    shapes = np.array(shapes)
-
-    def blocked(points, own):
-        cell = np.floor(points + 0.5).astype(int)
-        index = cell - low
-        inside = ((index >= 0) & (index < occupied.shape)).all(-1)
-        what = np.full(points.shape[:-1], -1)
-        what[inside] = occupied[tuple(index[inside].T)]
-        sub = np.clip(((points - cell + 0.5) * SAMPLES).astype(int), 0, SAMPLES - 1)
-        sub = (sub[..., 0] * SAMPLES + sub[..., 1]) * SAMPLES + sub[..., 2]
-        hit = (what == -2) | ((what >= 0) & shapes[np.maximum(what, 0), sub])
-        return (hit & (cell != own).any(-1)).any(-1)
-
-    xs = np.arange(-math.floor(clear), math.floor(clear) + 1)
-    x, y, z = np.meshgrid(xs, xs, np.arange(0, SPAN + 1), indexing="ij")
-    disc = np.hypot(x, y) < clear
-    volume = np.stack([x[disc], y[disc], z[disc]], 1)
-    volume = volume[(volume % step == 0).all(1)]
-    axis = np.stack([np.zeros(SPAN + 1), np.zeros(SPAN + 1), np.arange(SPAN + 1)], 1)
-    targets = np.concatenate([volume, axis]).astype(float)
-    seen = np.full(len(targets), -np.inf)
-    near = np.zeros(len(targets), bool)
-    for s, _, up, block_cells, _, _ in yard.blocks:
-        if s != subtype:
-            continue
-        center, up = np.array(block_cells[0], float), np.array(up, float)
-        d = (targets - center) * GRID
-        level = d - np.outer(d @ up, up)
-        ball = level / np.maximum(np.linalg.norm(level, axis=1), 1e-9)[:, None]
-        aim = d - ball * helix.BALL
-        distance = np.maximum(np.linalg.norm(aim, axis=1), 1e-9)
-        tilt = np.degrees(np.arcsin(np.abs(aim @ up) / distance))
-        margin = np.where(tilt <= helix.TILT, helix.REACH - distance, -np.inf)
-        ok = margin >= 0
-        near |= ok
-        start = center + ball[ok] * helix.BALL / GRID
-        steps = np.linspace(0, 1, 4 * int(np.ceil(np.abs(distance[ok]).max() / GRID)))
-        line = start[:, None] + (targets[ok] - start)[:, None] * steps[None, :, None]
-        clear_line = ~blocked(line, np.array(block_cells[0]))
-        seen[np.flatnonzero(ok)[clear_line]] = np.maximum(
-            seen[np.flatnonzero(ok)[clear_line]], margin[ok][clear_line]
-        )
-    n = len(volume)
-    reached = seen[:n] >= 0
-    return reached.mean(), (near[:n] & ~reached).mean(), seen[n:].min()
-
-
-def report(yard):
+def report(yard, arcs, tubes, stats):
     """Prints the checks; True when they pass."""
     counts = Counter(b[0] for b in yard.blocks)
     for subtype, n in sorted(counts.items()):
         print(f"{n:6} {subtype}")
     pcu = sum(BLOCKS[s][3] * n for s, n in counts.items())
-    print(f"blocks {len(yard.blocks)}, PCU {pcu} (main grid)")
-    print(f"armor shapes get {100 * yard.fit:.2f}% of the surface's samples wrong")
+    print(f"main grid: blocks {len(yard.blocks)}, PCU {pcu}")
+    total_blocks, total_pcu = len(yard.blocks), pcu
+    ok = True
+    arm_cells = [GRID * np.array(arc["arm"]["cell"]) for arc in arcs]
+    clear = []
+    for a, (tube, s) in enumerate(zip(tubes, stats)):
+        small = Counter(v[0] for v in tube.blocks.values())
+        small["SmallBlockSmallLight"] = len(tube.lights)
+        small["SmallAdvancedRotor"] = 1
+        n = sum(small.values())
+        p = sum(BLOCKS[k][3] * v for k, v in small.items())
+        total_blocks += n
+        total_pcu += p
+        print(
+            f"tube {a + 1}: blocks {n}, PCU {p}, inside radius {tube.inner:.2f} m"
+            f" (conveyor corners up to {tube.deviation.max():.2f} m from the center"
+            f" line), wall {SHELL} m, {len(tube.lights)} lights, {s['holes']} blocks"
+            f" cut for holes, neck {len(tube.neck) // 9} and stud {len(tube.stud) // 9}"
+            f" layers, stud face {tube.stud_face:.2f} m along the plate (lock box"
+            f" {LOCK_BOX[0]}-{LOCK_BOX[1]}, pad about {LOCK_PAD})"
+        )
+        print(
+            f"   shapes get {100 * s['fit']:.2f}% of the wall's samples wrong;"
+            f" {s['dropped']} blocks left out for the gap to large blocks;"
+            f" {s['leaks']} inside cells open to the outside"
+        )
+        print("  ", ", ".join(f"{k} {v}" for k, v in sorted(small.items())))
+        ok &= s["leaks"] == 0
+        keys = np.array(sorted(tube.blocks), np.int64)
+        points = tube.world(unpack(keys))
+        inside = (points[:, 2] >= 0) & (points[:, 2] <= SPAN * GRID)
+        for arm in arm_cells:
+            inside &= np.linalg.norm(points - arm, axis=1) > 8
+        clear.append(np.hypot(points[inside, 0], points[inside, 1]).min() - SMALL)
+        # The arm base stands on the arc's conveyor and out through a hole in
+        # the tube: no tube block near it, its top beyond the tube's surface
+        arm = arcs[a]["arm"]
+        _, _, _, cells, _, _ = yard.blocks[arm["index"]]
+        stator = Boxes(cells)
+        gap = stator.distance(points, half=GRID / 2 + SMALL / 2).min()
+        up = np.array(arm["up"], float)
+        top = (np.array(cells, float) * GRID @ up).max() + GRID / 2
+        start = GRID * np.array(arm["cell"], float)
+        d = points - start
+        side = np.linalg.norm(d - np.outer(d @ up, up), axis=1)
+        surface = (d @ up)[side < OPENING + 2].max() + SMALL / 2
+        stands = top - start @ up - (surface)
+        print(
+            f"   arm base ({arm['head']}) on the arc's conveyor, {gap:.2f} m from the"
+            f" nearest tube block, its top {stands:.2f} m beyond the tube around it"
+        )
+        ok &= gap >= HARD_GAP and stands > 0
+    print(f"all grids: blocks {total_blocks}, PCU {total_pcu}")
     cells = list(yard.cells)
     size = [
         int(max(c[a] for c in cells) - min(c[a] for c in cells) + 1) for a in range(3)
     ]
-    print(f"bounding box {size} blocks, {[GRID * s for s in size]} m")
-    clear = min(
-        math.hypot(c[0], c[1])
-        for b in yard.blocks
-        if b[0] not in (*TOOLS, "LargeAdvancedStator", "ConveyorTubeT")
-        for c in b[3]
-        if 0 <= c[2] <= SPAN
-    )
+    print(f"main grid bounding box {size} blocks, {[GRID * s for s in size]} m")
+    clear = min(clear)
     print(
-        f"build volume {SPAN + 1} blocks long, no block but the stations and the arm"
-        f" bases within {clear:.2f} blocks ({GRID * clear:.1f} m) of the axis"
+        f"build volume {SPAN + 1} blocks long, nothing but the arm bases within"
+        f" {clear:.1f} m of the axis"
     )
     open_ports, groups = networks(yard)
     print(
@@ -825,15 +1183,19 @@ def report(yard):
     )
     for p in open_ports:
         print("  ", p)
-    ok = not open_ports and len(groups) == 1
+    ok &= not open_ports and len(groups) == 1
+    points, axis = volume(clear)
     for subtype in TOOLS:
-        share, hidden, axis = reach(yard, subtype, clear)
+        tools = [b for b in yard.blocks if b[0] == subtype]
+        margins = np.array([tool_margin(b[3][0], b[2], points) for b in tools])
+        reached = (margins >= 0).sum(0)
+        axis_margin = np.array([tool_margin(b[3][0], b[2], axis) for b in tools]).max(0)
         print(
-            f"{counts[subtype]} {subtype} reach and see {100 * share:.1f}% of the"
-            f" build volume ({100 * hidden:.1f}% in range but out of sight), the axis"
-            f" with {axis:.2f} m to spare"
+            f"{len(tools)} {subtype} reach {100 * (reached > 0).mean():.1f}% of the"
+            f" build volume, {reached.mean():.1f} of them each point on average, the"
+            f" axis with {axis_margin.min():.2f} m to spare"
         )
-        ok &= axis >= 0
+        ok &= axis_margin.min() >= 0
     return ok
 
 
@@ -843,11 +1205,12 @@ def main():
     )
     parser.add_argument("folder", type=Path)
     args = parser.parse_args()
-    yard, stators = build()
+    yard, arcs = build()
+    tubes, stats = build_tubes(yard, arcs)
     args.folder.mkdir(parents=True, exist_ok=True)
-    (args.folder / "bp.sbc").write_bytes(blueprint_xml(yard, stators))
-    thumbnail(yard, args.folder / "thumb.png")
-    sys.exit(0 if report(yard) else 1)
+    (args.folder / "bp.sbc").write_bytes(blueprint_xml(yard, arcs, tubes))
+    thumbnail(yard, tubes, args.folder / "thumb.png")
+    sys.exit(0 if report(yard, arcs, tubes, stats) else 1)
 
 
 if __name__ == "__main__":
