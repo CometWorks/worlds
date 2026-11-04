@@ -688,7 +688,10 @@ def arms_gone(remote, case: str) -> list[str]:
             rf"'Advanced Rotor \w+ Arm {size}' head (\d+) blocks( static)?",
             lines[0] if lines else "",
         )
-        alone = len(heads) == 2 and all(n == "1" and not st for n, st in heads)
+        # The Omni Arc Beam Shipyard has two arms of each size, the Moon Shipyard one
+        alone = len(heads) == (1 if station == "Moon" else 2) and all(
+            n == "1" and not st for n, st in heads
+        )
         if alone or time.monotonic() > deadline:
             break
         time.sleep(3)
@@ -928,9 +931,16 @@ def saved(cases: list[str]) -> None:
         if re.match(r"Advanced Rotor \w+ Arm \w+", b.findtext("CustomName") or "")
     ]
     attached = [b for b in stators if (b.findtext("TopBlockId") or "") not in ("", "0")]
+    # As many as the world has: the shipyards' layouts differ (SE-1069)
+    rotors = len(
+        re.findall(
+            r"<CustomName>Advanced Rotor \w+ Arm \w+</CustomName>",
+            (rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8"),
+        )
+    )
     check(
-        len(stators) == 28 and len(attached) == 28,
-        f"saved: all 28 arm rotors keep their heads: {len(attached)}/{len(stators)}",
+        len(stators) == rotors and len(attached) == rotors,
+        f"saved: all {rotors} arm rotors keep their heads: {len(attached)}/{len(stators)}",
     )
     # Every head grid is named "Subgrid": list them all, not by name
     heads = [
@@ -944,8 +954,8 @@ def saved(cases: list[str]) -> None:
         and len(list(e.find("CubeBlocks"))) == 1
     ]
     check(
-        len(heads) == 28 and all(e.findtext("IsStatic") != "true" for e in heads),
-        f"saved: the 28 rotor heads are alone on their grids and dynamic: {len(heads)}",
+        len(heads) == rotors and all(e.findtext("IsStatic") != "true" for e in heads),
+        f"saved: the {rotors} rotor heads are alone on their grids and dynamic: {len(heads)}",
     )
 
 
