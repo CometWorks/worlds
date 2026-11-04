@@ -12,6 +12,7 @@ using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.Entities.Blocks;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.FileSystem;
+using VRage.Game.Components;
 using VRage.Plugins;
 using VRage.Utils;
 using VRageMath;
@@ -23,7 +24,10 @@ namespace ClangProbe;
 // and position; the line of a grid that is gone stays. While its power is on, a grid named
 // "CL Push <k> ..." is pushed forward each frame by k times its thrust over mass, as a clang drive would,
 // "CL Spike <k> ..." gets k times its thrust over mass, times a second, as one frame's speed change once,
-// 5 s after it is first seen, and "CL Thrust ..." has its thrusters at full override. 5 s after a grid is
+// 5 s after it is first seen, and "CL Thrust ..." has its thrusters at full override. Pushes and spikes are
+// forces and impulses, as a clang drive's contacts are. "CL Drag <k> ..." and "CL Set <k> ..." get the
+// same as Push and Spike, but by setting the velocity, as a mod moving the ship does (a Trade Lane pulling
+// it in or dropping it out). 5 s after a grid is
 // first seen, a timer block on it named "CL Start" is triggered and a piston so named is reversed: a
 // clang drive's starter.
 // ReSharper disable once UnusedType.Global
@@ -76,14 +80,25 @@ public class Plugin : IPlugin
                     : 0;
             if (grid.IsPowerSwitchOn)
             {
+                var spike = frame - firstSeen[grid.EntityId] == SpikeFrames;
+                var forward = (Vector3)grid.WorldMatrix.Forward;
+                var mass = grid.Physics.Mass;
                 if (words[1] == "Push")
-                    grid.Physics.LinearVelocity += (Vector3)(
-                        grid.WorldMatrix.Forward * (k * accel / 60)
+                    grid.Physics.AddForce(
+                        MyPhysicsForceType.APPLY_WORLD_FORCE,
+                        forward * (float)(k * accel * mass),
+                        null,
+                        null
                     );
-                else if (words[1] == "Spike" && frame - firstSeen[grid.EntityId] == SpikeFrames)
-                    grid.Physics.LinearVelocity += (Vector3)(
-                        grid.WorldMatrix.Forward * (k * accel)
+                else if (words[1] == "Spike" && spike)
+                    grid.Physics.ApplyImpulse(
+                        forward * (float)(k * accel * mass),
+                        grid.Physics.CenterOfMassWorld
                     );
+                else if (words[1] == "Drag")
+                    grid.Physics.LinearVelocity += forward * (float)(k * accel / 60);
+                else if (words[1] == "Set" && spike)
+                    grid.Physics.LinearVelocity += forward * (float)(k * accel);
                 else if (words[1] == "Thrust")
                     foreach (var t in thrusters)
                         ((IMyThrust)t).ThrustOverridePercentage = 1;

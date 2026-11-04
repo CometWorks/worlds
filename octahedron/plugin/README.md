@@ -327,6 +327,11 @@ the ship back on; the player can, with Y.
   clang, count. Inside a safe zone a crash counts, but only for the faster of two ships
   that hit each other: the one rammed is left on. A ship left on is left alone for five
   seconds more, the aftermath of its hit: its wreck's pieces keep bumping into each other.
+- A velocity set from code isn't the ship's doing: a Trade Lane pulling the ship in or
+  dropping it out, a teleport or jump, a grid splitting off, or any other mod. No window
+  with such a write in it counts, nor one with the ship's physics switched off. The server
+  never takes a ship's velocity from a client, so contacts and thrusters, a clang drive's
+  means, are never writes.
 - Ships with a static grid (one docked or landed on a station), NPC ships, ships in a
   shipyard's build space and ships already switched off are left alone.
 
