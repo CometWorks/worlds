@@ -37,6 +37,9 @@ SCENARIO = STEAM / "common/SpaceEngineers/Content/CustomWorlds/Star System"
 CONFIG = Path(__file__).parent / "config"
 STATION_BLUEPRINT = Path(__file__).parent / "blueprints/octahedron-station.sbc"
 SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/omni-arc-beam-shipyard.sbc"
+# make_moon_shipyard.py's bp.sbc, and the rock around it as the game saved it (SE-986)
+MOON_SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/moon-shipyard.sbc"
+MOON_SHIPYARD_ROCK = Path(__file__).parent / "blueprints/moon-shipyard-rock.vx2"
 MES_MODS = CONFIG / "mes-mods.xml"
 MES_STORAGE = CONFIG / "storage"
 RELATIVE_TOP_SPEED = CONFIG / "relative-top-speed.xml"
@@ -95,8 +98,9 @@ GATE_OFFSET = 220.0
 EQUATOR_LANE_NORTH = 200.0
 # How far north the ends of North Station's Moon lane move, North Station's end and the Moon's,
 # for the same reason: North Station's end goes below the station, whose lobby and shipyard
-# look away from EarthLike (SE-1066). The other lanes needed no move.
-NORTH_MOON_LANE_NORTH = (-350.0, 160.0)
+# look away from EarthLike (SE-1066), the Moon's above Moon Station's decks, which sit higher
+# in the zone with the Moon Shipyard (SE-1069). The other lanes needed no move.
+NORTH_MOON_LANE_NORTH = (-350.0, 190.0)
 # A shipyard's block bounds stay out of the slab of its station's bounding sphere by this much
 SHIPYARD_SUN_CLEARANCE = 15.0
 # The bounding sphere of a block cell. Blocks are counted by their Min cell, so this also covers
@@ -161,12 +165,35 @@ SHIPYARD_PLACE = (
 )
 # The pair's block bounds stay this far inside the safe zone's edge
 SAFE_ZONE_MARGIN = 10.0
+# Moon Station has the Moon Shipyard instead (make_moon_shipyard.py, SE-986), in a Uraninite rock
+# of its own, as Viktor placed them in the design world "Octahedron Design Moon Shipyard"
+# (SE-1069). In the station's (right, up, forward), from the safe zone's center: the station's
+# block bounds center, and the shipyard's, with its forward and up. Their zone is larger.
+MOON_STATION_PLACE = (-50.0666, -97.8166, -77.7938)
+MOON_SHIPYARD_PLACE = (
+    (4.5376, 0.0001, -2.6406),
+    (0.864329, 0.0, -0.502927),
+    (0.370796, 0.67559, 0.63725),
+)
+MOON_SAFE_ZONE_RADIUS = 300.0
+# The rock's voxel storage: its name, its edge and the voxel at the shipyard grid's origin
+# (make_moon_shipyard.py ROCK_NAME, STORAGE, ORIGIN_VOXEL)
+MOON_ROCK = ("MoonShipyard", 512, (256, 256, 112))
+# Names the Octahedron plugin knows the support arms' rotors by (ShipyardArmRotors), by the grid
+# size of the rotor's head: the Moon Shipyard has one of each
+MOON_ARM_ROTORS = {
+    "Large": "Advanced Rotor Top Arm Large",
+    "Small": "Advanced Rotor Top Arm Small",
+}
+# The support arm's blocks take the paint of their rotor head (ShipyardArm), so the heads are matte
+# black like the arcs' industrial conveyor pipes: no skin
+MOON_ARM_COLOR = (0.0, -0.96, -0.5)
 # Its refill stations and lights are shared with everyone, the rest with nobody. Its containers,
 # connectors and welders go to a player for their turn at it, its power never: the Octahedron plugin
 # keeps the reactors at
 # SHIPYARD_REACTOR_URANIUM ingots and the batteries charged (RefillContainers in
 # config/octahedron.cfg).
-SHIPYARD_SHARED = {"MedicalRoom", "ReflectorLight"}
+SHIPYARD_SHARED = {"MedicalRoom", "ReflectorLight", "InteriorLight"}
 # Off until someone's job turns them on: the connectors and the OmniArc welders
 SHIPYARD_OFF = {"ShipConnector", "ConveyorSorter"}
 # The OmniArc deconstructors stay on: each is a link of its welder's conveyor line, which an off
@@ -183,7 +210,7 @@ DELTA_TILT_DEGREES = 50.0
 # least 41 degrees apart, seen from the lobby (SE-1066).
 POLE_TURN_DEGREES = {"North Station": 240.0, "South Station": 60.0}
 # Each station's color: its shipyard's red frame gets the skin and the color, the station's
-# purple walls and furniture only the color. Skin None is the default, painted metal. Colors
+# purple walls and furniture only the color. The Moon Shipyard keeps its own black. Skin None is the default, painted metal. Colors
 # are the game's ColorMaskHSV (hue 0-1, saturation and value offsets -1 to 1); the game adds
 # 0.8 to the saturation and 0.45 to the value, so 0.2 is full saturation and 0.25 is 70 %
 # brightness.
@@ -834,6 +861,21 @@ def station_and_shipyard(station_grid, zone, forward, up, sun, gates):
     return station_center, (add(station_center, offset), yard_forward, yard_up)
 
 
+def moon_station_and_shipyard(zone, forward, up):
+    """(station center, (shipyard center, forward, up)) of Moon Station and the Moon Shipyard in
+    the safe zone around zone: MOON_STATION_PLACE and MOON_SHIPYARD_PLACE."""
+    right = cross(forward, up)
+    local = lambda v: add(add(mul(right, v[0]), mul(up, v[1])), mul(forward, v[2]))
+    offset, yard_forward, yard_up = map(local, MOON_SHIPYARD_PLACE)
+    yard_forward = norm(yard_forward)
+    yard_up = norm(perpendicular_part(yard_up, yard_forward))
+    return add(zone, local(MOON_STATION_PLACE)), (
+        add(zone, offset),
+        yard_forward,
+        yard_up,
+    )
+
+
 def sun_slab(station_grid, forward, up):
     """How far a shipyard's block bounds stay from the station's center along the Sun's axis,
     so no ray of the Sun through them reaches the station's bounding sphere, as
@@ -883,8 +925,65 @@ def shipyard_grids():
     return ET.parse(SHIPYARD_BLUEPRINT).getroot().findall(".//CubeGrid")
 
 
+def moon_shipyard_grids():
+    """The Moon Shipyard blueprint's grids made a station's shipyard like the others: the arm
+    rotors named for the plugin, matte black rotor heads, an owner on every terminal block for
+    shipyard() to set, and the OmniArc tools' ToolCore settings those of the Omni Arc Beam
+    Shipyard's, which leave them idle until a job turns them on."""
+    grids = ET.parse(MOON_SHIPYARD_BLUEPRINT).getroot().findall(".//CubeGrid")
+    settings = {
+        b.findtext("SubtypeName"): b.findtext(".//Storage//Value")
+        for b in shipyard_template().find("CubeBlocks")
+        if b.findtext("SubtypeName") in ("OmniArcBeam", "OmniArcDestro")
+    }
+    heads = {}
+    for head in grids[1:]:
+        for block in head.find("CubeBlocks"):
+            heads[block.findtext("EntityId")] = head.findtext("GridSizeEnum")
+            for k, v in zip("xyz", MOON_ARM_COLOR):
+                block.find("ColorMaskHSV").set(k, repr(v))
+            for skin in block.findall("SkinSubtypeId"):
+                block.remove(skin)
+    for block in grids[0].find("CubeBlocks"):
+        subtype = block.findtext("SubtypeName")
+        if subtype in settings:
+            block.find(".//Storage//Value").text = settings[subtype]
+        if block.findtext("TopBlockId") in heads:
+            set_child(
+                block,
+                "CustomName",
+                MOON_ARM_ROTORS[heads[block.findtext("TopBlockId")]],
+            )
+        if block.find("ShowInTerminal") is not None and block.find("Owner") is None:
+            # After the paint, where the game writes them
+            paint = block.find("SkinSubtypeId")
+            at = list(block).index(
+                paint if paint is not None else block.find("ColorMaskHSV")
+            )
+            for k, tag in enumerate(("Owner", "ShareMode"), at + 1):
+                block.insert(k, ET.Element(tag))
+    return grids
+
+
+def moon_rock(ids, yard):
+    """The Moon Shipyard's rock, MOON_SHIPYARD_ROCK, around the shipyard's main grid yard."""
+    name, size, origin = MOON_ROCK
+    position, forward, up = frame(yard)
+    # From the grid's origin to the storage's middle, along Right, Up, Backward
+    local = [size / 2 - v for v in origin]
+    center = add(
+        add(add(position, mul(cross(forward, up), local[0])), mul(up, local[1])),
+        mul(forward, -local[2]),
+    )
+    # Less the half voxel the game adds along the world's axes on loading
+    # (MyPerGameSettings.OffsetVoxelMapByHalfVoxel)
+    center = sub(center, (0.5, 0.5, 0.5))
+    return voxel_map(ids, name, center, size, forward, up)
+
+
 def shipyard(template, ids, name, center, forward, up, owner, color):
-    """The shipyard's main grid and its rotor heads, from template, shipyard_grids()."""
+    """The shipyard's main grid and its rotor heads, from template, shipyard_grids(). color None
+    keeps the blueprint's paint."""
     grid, *heads = clone_grids(template, ids)
     before = frame(grid)
     place_grid(grid, center, forward, up)
@@ -893,14 +992,16 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
         set_child(head, "CreatePhysics", "true")
         set_child(head, "DestructibleBlocks", "false")
         for block in head.find("CubeBlocks"):
-            recolor(block, color, skin=True)
+            if color:
+                recolor(block, color, skin=True)
     set_child(grid, "DisplayName", name)
     set_child(grid, "IsStatic", "true")
     set_child(grid, "CreatePhysics", "true")
     set_child(grid, "DestructibleBlocks", "false")
     set_child(grid, "Editable", "false")
     for block in grid.find("CubeBlocks"):
-        recolor(block, color, skin=True)
+        if color:
+            recolor(block, color, skin=True)
         if block.find("Owner") is None:
             continue
         block.find("Owner").text = str(owner)
@@ -911,8 +1012,9 @@ def shipyard(template, ids, name, center, forward, up, owner, color):
             hide(block)
         if kind == "BatteryBlock":
             set_child(block, "CustomName", SHIPYARD_BATTERY)
-        if kind in SHIPYARD_OFF and block.findtext("SubtypeName") not in SHIPYARD_ON:
-            set_child(block, "Enabled", "false")
+        if kind in SHIPYARD_OFF:
+            on = block.findtext("SubtypeName") in SHIPYARD_ON
+            set_child(block, "Enabled", str(on).lower())
         stock(block, kind, SHIPYARD_REACTOR_URANIUM)
     return [as_sector_object(g) for g in (grid, *heads)]
 
@@ -1556,14 +1658,19 @@ def main():
             # in the zone, its decks under the shadow of the Moon lanes' end gates
             forward, up = mul(forward, -1), mul(up, -1)
         # The station and its shipyard share the safe zone around the station's place
-        station_center, yard = station_and_shipyard(
-            template, center, forward, up, sun, gates
-        )
+        radius = STATION_SAFE_ZONE_RADIUS
+        if name == "Moon Station":
+            station_center, yard = moon_station_and_shipyard(center, forward, up)
+            radius = MOON_SAFE_ZONE_RADIUS
+        else:
+            station_center, yard = station_and_shipyard(
+                template, center, forward, up, sun, gates
+            )
         shipyards[name] = yard
         grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
-        objects.append(safe_zone(ids, center, STATION_SAFE_ZONE_RADIUS, name))
+        objects.append(safe_zone(ids, center, radius, name))
 
     for lane_id, home, target, start, end in lane_list:
         direction = norm(sub(end, start))
@@ -1579,13 +1686,26 @@ def main():
 
     add_trade_stations(checkpoint, ids, faction, trade_stations)
 
-    yard = shipyard_grids()
+    yard, moon_yard = shipyard_grids(), moon_shipyard_grids()
     for name, placement in shipyards.items():
-        objects.extend(
-            shipyard(
-                yard, ids, f"{name} Shipyard", *placement, owner, STATION_COLORS[name]
+        if name == "Moon Station":
+            grids = shipyard(
+                moon_yard, ids, f"{name} Shipyard", *placement, owner, None
             )
-        )
+            objects.extend(grids)
+            objects.append(moon_rock(ids, grids[0]))
+            shutil.copy(MOON_SHIPYARD_ROCK, out / f"{MOON_ROCK[0]}.vx2")
+        else:
+            objects.extend(
+                shipyard(
+                    yard,
+                    ids,
+                    f"{name} Shipyard",
+                    *placement,
+                    owner,
+                    STATION_COLORS[name],
+                )
+            )
 
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),

@@ -42,7 +42,8 @@ from test_table_rules import (
     wait_for,
 )  # noqa: E402
 
-STATION = "Alpha"
+# OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
+STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 CONFIG = tr.CONFIG
 IDLE_SECONDS = 300
 OCT = "Octahedron_Authority"
@@ -93,16 +94,24 @@ def octs(state: dict) -> bool:
     return all(state[k] == f"{OCT}/None" for k in ("cargo", "welders", "connectors"))
 
 
+# False where a turn hands the player more blocks than OCT keeps: the Moon Shipyard's cargo
+# containers, welders and connectors against its reactors, deconstructors and arm rotors
+OCT_BIG_OWNER = STATION != "Moon"
+
+
 def power_stays(state: dict, what: str) -> None:
+    # The Moon Shipyard has no batteries
+    batteries = state.get("batteries", "")
     check(
         state["reactors"].startswith(OCT + "/")
-        and state["batteries"].startswith(OCT + "/"),
-        f"{what}: reactors and batteries stay OCT's: {state['reactors']}, {state['batteries']}",
+        and (not batteries or batteries.startswith(OCT + "/")),
+        f"{what}: reactors and batteries stay OCT's: {state['reactors']}, {batteries}",
     )
-    check(
-        state["bigowner"] == OCT,
-        f"{what}: OCT stays the big owner: {state['bigowner']}",
-    )
+    if OCT_BIG_OWNER:
+        check(
+            state["bigowner"] == OCT,
+            f"{what}: OCT stays the big owner: {state['bigowner']}",
+        )
     check(state["elsewhere"] == "0", f"{what}: no uranium out of the reactors: {state}")
 
 

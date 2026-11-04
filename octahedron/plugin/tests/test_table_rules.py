@@ -35,7 +35,8 @@ from test_client import log, ship_reply, tables, with_config  # noqa: E402
 
 SHOTS = os.environ.get("OCT_SHOTS")
 FIRST_LINE = "Press the button to confirm build!"
-STATION = "Alpha"
+# OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
+STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 CONFIG = {"FreeBuildCooldownMinutes": 0, "ShipyardTableMinutes": 600}
 OTHER = so.SMALL.replace("Order Test", "Order Other")
 SWAPPED = (

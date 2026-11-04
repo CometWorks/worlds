@@ -35,7 +35,8 @@ import test_table_rules as tr  # noqa: E402
 from test_client import log, with_config  # noqa: E402
 from test_table_rules import Second, check, checks, load, press, settled  # noqa: E402
 
-STATION = "Alpha"
+# OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
+STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 PLATE = "Component/SteelPlate"
 SHIP = "Off Test"
 RUNS = 8 * 32
