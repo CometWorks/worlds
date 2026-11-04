@@ -270,6 +270,9 @@ def run(bench) -> None:
 
     # --- a paid build: the player leaves during the build ---
     probe(api, "balance 300000")
+    # The world's blueprint off the table first: the server refuses a player's removal of it
+    # from an OCT table (SE-936), and the client's load would keep it
+    tr.remove(api)
     mark = tp.latest(api)
     tr.load(api, LONG)
     tr.settled(api, "table", "paid")
