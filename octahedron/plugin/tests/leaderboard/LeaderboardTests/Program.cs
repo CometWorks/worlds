@@ -123,6 +123,12 @@ Check(
     LeaderboardMath.Format([], 15, updated).Contains("No factions yet"),
     "an empty board says so"
 );
+Check(
+    LeaderboardMath
+        .Format([], 15, updated, players: true)
+        .StartsWith("LEADERBOARD".PadLeft((LeaderboardMath.Width + 11) / 2)),
+    "a board with OCT's players is no faction board"
+);
 
 // Wire formats round-trip; tabs and new lines in names can't break a record
 var prices = new Dictionary<string, long> { ["Ingot/Iron"] = 10_000, ["Component/SteelPlate"] = 2 };

@@ -205,7 +205,7 @@ public sealed class Commands : CommandModule
 
     [Command(
         "leaderboard",
-        "Counts the faction leaderboard now and lists it, as the station panels will show it",
+        "Counts the leaderboard now and lists it, as the station panels will show it",
         "!oct leaderboard: on a cluster on a node, which counts its own grids."
     )]
     [Permission(MyPromoteLevel.Admin)]
@@ -221,12 +221,12 @@ public sealed class Commands : CommandModule
                     return;
                 }
                 if (ranked.Count == 0)
-                    context.Respond("No factions on the leaderboard.");
+                    context.Respond("Nobody on the leaderboard.");
                 for (int i = 0; i < ranked.Count; i++)
                 {
                     var r = ranked[i];
                     context.Respond(
-                        $"{i + 1}. [{r.Tag}] {r.Name}: {LeaderboardMath.N(r.Total)} SC "
+                        $"{i + 1}. {(r.Tag == "" ? "" : $"[{r.Tag}] ")}{r.Name}: {LeaderboardMath.N(r.Total)} SC "
                             + $"(cash {LeaderboardMath.N(r.Cash)} SC, grids {LeaderboardMath.N(r.Grids)} SC), "
                             + $"{LeaderboardMath.N(r.Pcu)} PCU"
                     );

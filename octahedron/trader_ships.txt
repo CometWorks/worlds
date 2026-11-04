@@ -1,0 +1,41 @@
+# SE-948 vanilla Workshop cargo ships (Workshop id, name), read by build_trader_ships.py
+3692647288  [COA] <<Loustae>> Resupply ship
+3659769095  Q2S-S1 Knarr class light hauler
+3626570251  Day 19 / 'Fulcrum' - Cargo Tugboat (NO DLC)
+3616303141  MTS-CH Kestrel Medium Cargo Shuttle
+3616302870  STS-CH Sparrow Small Cargo Shuttle
+3561019156  Wayfinder Shuttle
+3526139246  C-260 "Ibis" Medium Cargo Shuttle
+3482049604  [ACD] Quaver: Cargo ship
+3442603059  LG Small Cargo Drone
+3432216256  Craubler - Hauler Ship
+3408600072  UNH - Civil H2 Hauler [Drake]
+3363046676  VME Broddr - Armed Space-Tug
+3346886115  [SSI] Cargo Bee MKII
+3346012516  Red Team Hauler
+3330534626  [ALC] Note - Light freighter
+3329338608  [ALC] Resonance - Cargo transport
+3309204670  [MSS] Narwal Light Cargo
+3238815991  D-04 - Light Freighter
+3104083371  Day 3 - 'Quadratus' - Lunar Hauler (NO DLC)
+2941346276  Orbital Cargo Shuttle
+2935579449  Blue Team Light Freighter Mk.1
+2915053031  [GEN1] Challenger - Light Cargo Shuttle
+2899884415  Day 10 - Areion - Cargo Shuttle (NO DLC)
+2896390175  OC-21 Short Transport Ship
+2862809074  Kotletta - Freighter
+2828720265  Argus - Cargo Ship
+2479594133  OPC ANT-MT - Small Transport Ship
+2385955749  Hektor Inerplanetary Medium Cargo Hauler 1.1
+2300658720  Mini R.U.S.T. Freighter
+2250129021  OPC HM-302M - Cargo hauler
+2238966079  Silkworm - Cargo Lifter
+2150262440  [REC] Manta class cargo shuttle
+2148986680  Scion Light Cargo Shuttle
+2134686121  Icarus - Cargo Handler
+1907656044  Cepheus TX-100 Armed Freighter
+1904588859  Cargo Shuttle
+1877981425  Skuld Light Aerospace Freighter
+1864247090  TT-15 Freighter
+1841629819  Cargo Freighter
+1754053440  Cargo Shuttle type-ST01 Mk.1

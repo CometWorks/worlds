@@ -1,6 +1,6 @@
 """A repair slot at a real station shipyard (SE-850), with two players on one server. A press
 without a blueprint books the slot; the shipyard's containers, welders and connectors are the
-player's and shared with their faction, its reactors stay OCT's; a ship docked to a connector
+player's and shared with nobody, since the players are in OCT (OctFaction), its reactors stay OCT's; a ship docked to a connector
 gives the welders the components to weld a ship in the shipyard from its repair projector; the
 slot ends after the real 5 minutes without building or welding, or at the player's next press,
 and everything is back as before. Also: a slot waits for a running build, which its owner's press
@@ -83,13 +83,11 @@ def client_owner(remote, grid: int, cell: str) -> tuple[str, str]:
 
 
 def theirs(state: dict, name: str) -> bool:
-    return all(
-        state[k] == f"{name}/Faction" for k in ("cargo", "welders", "connectors")
-    )
+    return all(state[k] == f"{name}/None" for k in ("cargo", "welders", "connectors"))
 
 
 def octs(state: dict) -> bool:
-    return all(state[k] == f"{OCT}/Faction" for k in ("cargo", "welders", "connectors"))
+    return all(state[k] == f"{OCT}/None" for k in ("cargo", "welders", "connectors"))
 
 
 def power_stays(state: dict, what: str) -> None:
@@ -154,20 +152,22 @@ def book_and_idle_out(a, b) -> None:
     )
     seen = client_owner(b, yard_id, state["cell"])
     check(
-        seen[1] == "Faction",
-        f"the other client sees it shared with the faction: {seen}",
+        seen[1] == "None",
+        f"the other client sees it shared with nobody, the players being in OCT: {seen}",
     )
     probe(a, "faction KRS founder")
     with Second():
         probe(b, "faction KRS member")
+    # Shared with nobody when the slot began in OCT, so a faction made later doesn't open it
     reply = " ".join(rig.chat(a, f"!sprobe yard {STATION} OctOther", 3))
     check(
-        "access cargo=True welders=True connectors=True reactors=False" in reply,
-        f"their faction has access, but to the reactors: {reply}",
+        "access cargo=False welders=False connectors=False reactors=False" in reply,
+        f"not even their new faction has access: {reply}",
     )
+    # Back to OCT, where every player starts
     with Second():
-        probe(b, "faction KRS none")
-    probe(a, "faction KRS none")
+        probe(b, "faction OCT member")
+    probe(a, "faction OCT member")
 
     # Only work restarts the time: long enough idle that without the restart it ends too early
     check(
@@ -246,8 +246,8 @@ def book_and_idle_out(a, b) -> None:
     check(after_sale > before_sale, f"sold: {before_sale} -> {after_sale}")
     check(wait_for(lambda: sa.shoots(a, yard_id) is False, 20), "the welders are off")
     check(
-        client_owner(a, yard_id, state["cell"])[1] == "Faction",
-        "the client sees them shared with OCT's faction again",
+        client_owner(a, yard_id, state["cell"])[1] == "None",
+        "the client sees them OCT's and shared with nobody again",
     )
     text = settled(a, "queue", "No ships in the queue")
     check("Repair" not in text, f"the slot is off the queue panel: {text!r}")

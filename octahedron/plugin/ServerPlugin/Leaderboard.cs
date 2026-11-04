@@ -18,12 +18,15 @@ using IMyTextSurface = Sandbox.ModAPI.Ingame.IMyTextSurface;
 namespace ServerPlugin;
 
 /// <summary>
-/// The faction leaderboard on the station panels named <see cref="OctahedronConfig.LeaderboardBlockName"/>:
+/// The leaderboard on the station panels named <see cref="OctahedronConfig.LeaderboardBlockName"/>:
 /// the factions ranked by their bank account, with the money held for their market orders, plus
 /// their grids valued at the stations' prices, and their PCU. A grid is its biggest owner's
 /// faction's; its value is its blocks' mounted components and its inventories, each item at the
 /// middle of OCT's bid and ask as the stations' markets show them (a specialty's bid while the day's
-/// quota lasts), averaged over the stations. NPC factions and OCT are left out.
+/// quota lasts), averaged over the stations. Only factions players made are on it: OCT, the NPC
+/// factions and those of mods like MES are left out. With
+/// <see cref="OctahedronConfig.LeaderboardOctPlayers"/> OCT's players, which every player starts as
+/// (OctFaction), are ranked one by one with their own bank account and grids.
 ///
 /// Every <see cref="OctahedronConfig.LeaderboardIntervalSeconds"/> the server counts its grids,
 /// a few per tick, and writes the board on the panels. On a cluster each node counts the grids it
@@ -52,7 +55,7 @@ internal static class Leaderboard
     private static MySession session;
     private static readonly List<Action<IReadOnlyList<LeaderboardRow>, string>> waiting = new();
 
-    // On the authority: the latest totals of every server, by its name
+    // On the authority: the latest totals of every server, by its name, per faction or OCT player
     private static readonly Dictionary<
         string,
         (DateTime At, Dictionary<long, FactionGrids> Grids)
@@ -170,7 +173,12 @@ internal static class Leaderboard
     private static void Show(IReadOnlyList<LeaderboardRow> ranked, List<MyTextPanel> panels)
     {
         busy = false;
-        string text = LeaderboardMath.Format(ranked, Config.LeaderboardRows, DateTime.UtcNow);
+        string text = LeaderboardMath.Format(
+            ranked,
+            Config.LeaderboardRows,
+            DateTime.UtcNow,
+            Config.LeaderboardOctPlayers
+        );
         int written = 0;
         foreach (var panel in panels.Where(p => !p.Closed))
             if (Write(panel, text))
@@ -255,26 +263,41 @@ internal static class Leaderboard
 
         long octId = Market.OctId;
         var rows = new List<LeaderboardRow>();
-        foreach (var faction in MySession.Static.Factions.Select(f => f.Value))
+        LeaderboardRow Row(long key, string tag, string name)
         {
-            if (faction.FactionId == octId || faction.IsEveryoneNpc())
-                continue;
-            sum.TryGetValue(faction.FactionId, out var g);
+            sum.TryGetValue(key, out var g);
             long balance =
-                MyBankingSystem.Static?.TryGetAccountInfo(faction.FactionId, out var account)
-                == true
+                MyBankingSystem.Static?.TryGetAccountInfo(key, out var account) == true
                     ? account.Balance
                     : 0;
-            rows.Add(
-                new LeaderboardRow
-                {
-                    Tag = faction.Tag ?? "",
-                    Name = faction.Name ?? "",
-                    Cash = balance,
-                    Grids = g.Value,
-                    Pcu = g.Pcu,
-                }
-            );
+            return new LeaderboardRow
+            {
+                Tag = tag ?? "",
+                Name = name ?? "",
+                Cash = balance,
+                Grids = g.Value,
+                Pcu = g.Pcu,
+            };
+        }
+        var players = MySession.Static.Players;
+        foreach (var faction in MySession.Static.Factions.Select(f => f.Value))
+        {
+            if (faction.FactionId == octId)
+            {
+                if (Config.LeaderboardOctPlayers)
+                    rows.AddRange(
+                        faction
+                            .Members.Keys.Where(m => !players.IdentityIsNpc(m))
+                            .Select(m => Row(m, "", players.TryGetIdentity(m)?.DisplayName))
+                    );
+            }
+            // Only factions players made: economy and mod (MES) factions come from definitions
+            // and have a type of their own
+            else if (
+                faction.FactionType is MyFactionTypes.PlayerMade or MyFactionTypes.None
+                && !faction.IsEveryoneNpc()
+            )
+                rows.Add(Row(faction.FactionId, faction.Tag, faction.Name));
         }
         return LeaderboardMath.Rank(rows);
     }
@@ -309,6 +332,7 @@ internal static class Leaderboard
     /// <summary>One count of this server's grids, a few per tick.</summary>
     private sealed class Count
     {
+        // By faction, or by player for OCT's players
         public readonly Dictionary<long, FactionGrids> Grids = new();
         public readonly List<MyTextPanel> Panels = new();
         private readonly Dictionary<MyDefinitionId, long> prices = new();
@@ -380,17 +404,21 @@ internal static class Leaderboard
                             value += LeaderboardMath.Value(item.Amount.RawValue, price);
             }
 
-            var faction =
-                grid.BigOwners.Count > 0
-                    ? MySession.Static.Factions.GetPlayerFaction(grid.BigOwners[0])
-                    : null;
+            if (grid.BigOwners.Count == 0)
+                return;
+            long owner = grid.BigOwners[0];
+            var faction = MySession.Static.Factions.GetPlayerFaction(owner);
             if (faction == null)
                 return;
-            Grids.TryGetValue(faction.FactionId, out var g);
+            long key =
+                Config.LeaderboardOctPlayers && OctFaction.Member(owner)
+                    ? owner
+                    : faction.FactionId;
+            Grids.TryGetValue(key, out var g);
             g.Pcu += grid.BlocksPCU;
-            Grids[faction.FactionId] = g;
-            milli.TryGetValue(faction.FactionId, out var had);
-            milli[faction.FactionId] = had + value;
+            Grids[key] = g;
+            milli.TryGetValue(key, out var had);
+            milli[key] = had + value;
         }
 
         // The block's mounted components, milli-SC
