@@ -120,10 +120,11 @@ station and shipyard blueprints are in `blueprints/`.
     the server the Octahedron plugin tops them back up every 10 minutes
     (`config/octahedron.cfg`). Only 10 ingots, since players get at the reactors
     while renting the shipyard.
-  - Its connectors, welders and deconstructors start off (`SHIPYARD_OFF`): the
-    plugin turns the connectors and welders on for a job, never the
-    deconstructors, so they can't grind a ship being built or docked. The
-    reactors, batteries and refill stations stay on.
+  - Its connectors and welders start off (`SHIPYARD_OFF`): the plugin turns them
+    on for a job. The deconstructors stay on, since each is a link in its
+    welder's conveyor line, but nothing makes them shoot, so they can't grind a
+    ship being built or docked. The reactors, batteries and refill stations
+    stay on.
   - Each station has its own color (`STATION_COLORS`): the shipyard's red frame
     gets a skin and color, the station's purple walls and furniture only the
     color, at 70 % brightness. North red, South blue, Beta green and Delta

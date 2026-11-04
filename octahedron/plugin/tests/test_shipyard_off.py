@@ -2,8 +2,8 @@
 off: connectors and welders off, cargo containers and terminals OCT's, and it goes off again if found on,
 as in a world from before the rule. A free build turns on only the welders, the blocks stay OCT's. A
 paid build's turn gives the slot's player and their faction the blocks, and nobody else. The reactors,
-batteries and refill stations stay on and open throughout, the OmniArc deconstructors off and
-OCT's (SE-983). A player who leaves doesn't stop the build:
+batteries and refill stations stay on and open throughout, the OmniArc deconstructors on (conveyor
+links), OCT's and never shooting (SE-983). A player who leaves doesn't stop the build:
 a paid build whose DLC blocks the server no longer knows they own, one with a server restart while
 they are away, and a repair slot with the slot's whole end. On a world built by build_world.py. The
 presses are !oct order: see test_table_rules.py.
@@ -72,10 +72,11 @@ def access(remote, player: str) -> dict[str, str]:
 
 
 def idle_deconstructors(state: dict[str, str]) -> bool:
-    """The OmniArc deconstructors: OCT's, off and not shooting, whatever the shipyard does (SE-983)"""
+    """The OmniArc deconstructors: OCT's and not shooting, whatever the shipyard does, and on
+    as links of the welders' conveyor lines (SE-983)"""
     return (
-        state["destros"] == f"{rs.OCT}/Faction"
-        and state["destroson"] == "0/24"
+        state["destros"] == f"{rs.OCT}/None"
+        and state["destroson"] == "24/24"
         and state["destroshoot"] == "0"
     )
 

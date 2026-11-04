@@ -3759,14 +3759,13 @@ internal static partial class ShipyardOrders
         shipyard.GetFatBlocks<MyCargoContainer>().Select(c => c.GetInventory());
 
     // The shipyard's OmniArc welders. Not its other ToolCore tools: its OmniArc deconstructors
-    // stay OCT's and off, so nothing turns them on to grind a ship being built (SE-983).
+    // stay OCT's and never shoot, so they can't grind a ship being built (SE-983). They stay on
+    // as links of the welders' conveyor lines (build_world.py).
     internal static IEnumerable<MyFunctionalBlock> Beams(MyCubeGrid shipyard) =>
         shipyard
             .GetFatBlocks<MyFunctionalBlock>()
-            .Where(b =>
-                b.BlockDefinition.Id.SubtypeName == WelderSubtype
-                && ((IMyTerminalBlock)b).GetProperty(ShootProperty) != null
-            );
+            .Where(b => ((IMyTerminalBlock)b).GetProperty(ShootProperty) != null)
+            .Where(b => b.BlockDefinition.Id.SubtypeName == WelderSubtype);
 
     private const string WelderSubtype = "OmniArcBeam";
 
