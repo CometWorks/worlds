@@ -11,12 +11,16 @@ The shipyard folder is make_moon_shipyard.py's output with the asteroid's
 MoonShipyard.vx2 added; the game writes that file when it saves a world in
 which the MoonShipyardAsteroid mod built the asteroid.
 
-The shipyard goes inside the Moon Station's safe zone, on the Moon's side:
-seen from the station's lounge, it lies across the view just above the top of
-the Moon, under the lounge's glass dome. It stays SAFE_ZONE_MARGIN inside the
-safe zone and CLEARANCE from the station and every other grid. Its blocks
-belong to the owner (default: the world's first human player), shared with
-the owner's faction, and its reactors get uranium. The safe zone is changed
+The shipyard replaces the Omni Arc Beam Shipyard in the Moon Station's safe
+zone, on the Moon's side: seen from the station's lounge, it lies across the
+view just above the top of the Moon, under the lounge's glass dome,
+DISTANCE from it. The station and the shipyard move together so that they are
+centered in the safe zone, which stays where it is; they keep SAFE_ZONE_MARGIN
+inside it and CLEARANCE from each other and every other grid. The station's
+economy entry moves with it, and players in the safe zone wait in the lounge,
+facing the shipyard. The shipyard's blocks belong to the owner (default: the
+world's first human player), shared with the owner's faction, and its reactors
+get uranium. The safe zone is changed
 to allow welding and grinding, which the shipyard's tools need; that lets
 players weld and grind anywhere in the zone.
 """
@@ -35,10 +39,17 @@ import build_world as bw
 import make_moon_shipyard as m
 
 STATION = "Moon Station"
+# The shipyard this one replaces in the station's safe zone
+REPLACES = ("Omni Arc Beam Shipyard",)
 LOUNGE = "Station Lounge"
+# A spot on the lounge's floor by the couches, where the windows show the whole
+# shipyard (the station's cells)
+LOUNGE_SPOT = (6, 6.6, -1)
 # Seen from the lounge: how far past the top of the Moon the shipyard's
 # center is (degrees)
 ABOVE_MOON = 10.0
+# How far the shipyard's center is from the lounge (m)
+DISTANCE = 520.0
 SAFE_ZONE_MARGIN = 20.0
 CLEARANCE = 40.0
 URANIUM = 100
@@ -116,28 +127,44 @@ def allow_tools(zone):
     return allowed.text
 
 
-def placement(sector, planets):
-    """(origin, forward, up) of the shipyard's main grid."""
-    objects = list(sector.find("SectorObjects"))
-    grids = [e for e in objects if e.get(bw.XSI_TYPE) == "MyObjectBuilder_CubeGrid"]
-    station = next(g for g in grids if g.findtext("DisplayName") == STATION)
-    zone = station_zone(sector)
-    zone_center, zone_radius = frame(zone)[0], float(zone.findtext("Radius"))
-    eye, up = lounge_eye(station)
+def view_of(eye, up, planets):
+    """From eye: the direction just past the top of the Moon (station up is
+    toward the top), and the way it tilts up."""
     moon = np.array(planets["Moon"].center)
-    radius = planets["Moon"].radius
     to_moon = moon - eye
     distance = np.linalg.norm(to_moon)
     to_moon /= distance
     lift = up - to_moon * (up @ to_moon)
     lift /= np.linalg.norm(lift)
-    angle = math.asin(radius / distance) + math.radians(ABOVE_MOON)
-    view = to_moon * math.cos(angle) + lift * math.sin(angle)
-    # The shipyard's axis across the view, level with the lounge's floor
-    axis = np.cross(view, lift)
-    axis /= np.linalg.norm(axis)
-    side = np.cross(axis, view)
-    others = np.concatenate([block_points(g)[::10] for g in grids])
+    angle = math.asin(planets["Moon"].radius / distance) + math.radians(ABOVE_MOON)
+    return to_moon * math.cos(angle) + lift * math.sin(angle), lift, angle
+
+
+def enclosing(points):
+    """The center and radius of the smallest sphere around points."""
+    from scipy.optimize import minimize
+
+    far = lambda c: np.linalg.norm(points - c, axis=1).max()  # noqa: E731
+    center = minimize(far, points.mean(0), method="Nelder-Mead", tol=1e-3).x
+    return center, far(center)
+
+
+def placement(sector, planets, gone):
+    """(origin, forward, up) of the shipyard's main grid, and how far the
+    station moves: the station and the shipyard together centered in the
+    safe zone."""
+    grids = [
+        e
+        for e in sector.find("SectorObjects")
+        if e.get(bw.XSI_TYPE) == "MyObjectBuilder_CubeGrid"
+    ]
+    station = next(g for g in grids if g.findtext("DisplayName") == STATION)
+    zone = station_zone(sector)
+    zone_center, zone_radius = frame(zone)[0], float(zone.findtext("Radius"))
+    own = block_points(station)
+    others = np.concatenate(
+        [block_points(g)[::10] for g in grids if g is not station and g not in gone]
+    )
     ring = np.array(
         [
             [RADIUS * math.cos(t), RADIUS * math.sin(t), z]
@@ -146,8 +173,16 @@ def placement(sector, planets):
         ]
     )
     middle = sum(LENGTH) / 2
-    best = None
-    for d in np.arange(100, zone_radius * 2, 5.0):
+    eye, up = lounge_eye(station)
+    move = np.zeros(3)
+    # The view depends a little on where the station ends up: settle it
+    for _ in range(3):
+        view, lift, angle = view_of(eye + move, up, planets)
+        # The shipyard's axis across the view, level with the lounge's floor
+        axis = np.cross(view, lift)
+        axis /= np.linalg.norm(axis)
+        side = np.cross(axis, view)
+        d = DISTANCE
         center = eye + view * d
         points = (
             center
@@ -155,22 +190,47 @@ def placement(sector, planets):
             + np.outer(ring[:, 0], view)
             + np.outer(ring[:, 1], side)
         )
-        inside = zone_radius - np.linalg.norm(points - zone_center, axis=1).max()
-        clear = np.linalg.norm(points[:, None] - others[None], axis=2).min()
-        if inside >= SAFE_ZONE_MARGIN and clear >= CLEARANCE:
-            best = (d, center, inside, clear)
-    assert best, "the shipyard doesn't fit into the safe zone"
-    d, center, inside, clear = best
+        apart = np.linalg.norm(points[:, None] - own[None, ::5], axis=2).min()
+        both, reach = enclosing(np.concatenate([points, own[::5]]))
+        move = zone_center - both
+        inside = zone_radius - reach
+        clear = np.linalg.norm(
+            np.concatenate([points, own])[::3, None] + move - others[None], axis=2
+        ).min()
+    assert apart >= CLEARANCE, "the shipyard is too close to the station"
+    assert inside >= SAFE_ZONE_MARGIN, "the shipyard doesn't fit into the safe zone"
+    assert clear >= CLEARANCE, "the shipyard is too close to another grid"
     print(
         f"shipyard {d:.0f} m from the lounge, {math.degrees(angle):.1f} degrees past the"
-        f" Moon's center, {inside:.0f} m inside the safe zone, {clear:.0f} m from the"
-        f" nearest grid; it spans {2 * math.degrees(math.atan((LENGTH[1] - LENGTH[0]) / 2 / (d - RADIUS))):.0f}"
+        f" Moon's center, {apart:.0f} m from the station; the two {inside:.0f} m inside"
+        f" the safe zone, {clear:.0f} m from any other grid, the station moved"
+        f" {np.linalg.norm(move):.0f} m; the shipyard spans"
+        f" {2 * math.degrees(math.atan((LENGTH[1] - LENGTH[0]) / 2 / (d - RADIUS))):.0f}"
         f" x {2 * math.degrees(math.atan(RADIUS / (d - RADIUS))):.0f} degrees"
     )
     # Grid frame: Backward (local Z) along the axis, Up away from the lounge
     grid_forward, grid_up = -axis, view
-    origin = center - axes(grid_forward, grid_up) @ np.array([0, 0, middle])
-    return origin, grid_forward, grid_up
+    origin = center + move - axes(grid_forward, grid_up) @ np.array([0, 0, middle])
+    return origin, grid_forward, grid_up, move
+
+
+def attached(grids, roots):
+    """roots and the grids on their rotors, hinges and pistons, and so on."""
+    owner = {
+        b.findtext("EntityId"): g
+        for g in grids
+        for b in g.find("CubeBlocks")
+        if b.findtext("EntityId")
+    }
+    found = list(roots)
+    for g in found:
+        for other in grids:
+            if other in found:
+                continue
+            parents = {b.findtext("ParentEntityId") for b in other.find("CubeBlocks")}
+            if any(owner.get(p) is g for p in parents):
+                found.append(other)
+    return found
 
 
 def owner_id(root, name):
@@ -240,12 +300,37 @@ def main():
     for planet in planets.values():
         # The storage's name ends in the planet's diameter: Moon-1353915701d19000
         planet.radius = float(planet.storage.rsplit("d", 1)[1]) / 2
-    origin, forward, up = placement(sector, planets)
+    objects = sector.find("SectorObjects")
+    grids = [e for e in objects if e.get(bw.XSI_TYPE) == "MyObjectBuilder_CubeGrid"]
+    gone = attached(grids, [g for g in grids if g.findtext("DisplayName") in REPLACES])
+    origin, forward, up, move = placement(sector, planets, gone)
+    for g in gone:
+        objects.remove(g)
+    station = next(g for g in grids if g.findtext("DisplayName") == STATION)
+    for g in attached(grids, [station]):
+        p = g.find("PositionAndOrientation/Position")
+        for k, v in zip("xyz", vec(p) + move):
+            p.set(k, repr(float(v)))
+    # Players in the safe zone wait in the lounge, facing the shipyard
+    zone = station_zone(sector)
+    position, station_forward, station_up = frame(station)
+    spot = position + axes(station_forward, station_up) @ (
+        np.array(LOUNGE_SPOT) * m.GRID
+    )
+    facing = origin + axes(forward, up) @ np.array([0, 0, sum(LENGTH) / 2]) - spot
+    facing -= station_up * (facing @ station_up)
+    facing /= np.linalg.norm(facing)
+    for e in objects:
+        if e.get(bw.XSI_TYPE) == "MyObjectBuilder_Character" and np.linalg.norm(
+            frame(e)[0] - frame(zone)[0]
+        ) < float(zone.findtext("Radius")):
+            bw.set_position(e, spot, facing, station_up)
+            print(f"{e.findtext('DisplayName')} waits in the lounge")
+    print(f"removed {', '.join(g.findtext('DisplayName') for g in gone)}")
     print(f"{STATION} safe zone allows {allow_tools(station_zone(sector))}")
     checkpoint = ET.parse(args.out / "Sandbox.sbc")
     owner = owner_id(checkpoint.getroot(), args.owner)
     ids = bw.Ids(random.Random(m.SEED))
-    objects = sector.find("SectorObjects")
     for e in objects.iter("EntityId"):
         if e.text and e.text.isdigit():
             ids.used.add(int(e.text))
@@ -263,6 +348,19 @@ def main():
     shutil.copy(args.shipyard / "MoonShipyard.vx2", args.out / f"{m.ROCK_NAME}.vx2")
     ET.indent(sector, "  ")
     tree.write(sbs, encoding="utf-8", xml_declaration=True)
+    # The station's economy entry sits where the station is
+    path = args.out / "Sandbox.sbc"
+    text = path.read_text(encoding="utf-8-sig")
+    entry = text.index(f"<StationEntityId>{station.findtext('EntityId')}<")
+    start = text.rindex("<Position ", 0, entry)
+    end = text.index("/>", start) + 2
+    where = vec(ET.fromstring(text[start:end])) + move
+    position = (
+        "<Position "
+        + " ".join(f'{k}="{v!r}"' for k, v in zip("xyz", map(float, where)))
+        + " />"
+    )
+    path.write_text(text[:start] + position + text[end:], encoding="utf-8")
     if args.name:
         for file in ("Sandbox.sbc", "Sandbox_config.sbc"):
             path = args.out / file

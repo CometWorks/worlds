@@ -15,7 +15,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `make_helix_shipyard.py` | generates the double helix shipyard blueprint (SE-952), not used by the world yet |
 | `make_moon_shipyard.py` | generates the Moon Shipyard (SE-986): a static grid with the conveyor double helix and its OmniArc tools, and the Uraninite asteroid around it (`asteroid.bin`) |
 | `moon-shipyard-asteroid/` | mod that builds the Moon Shipyard's asteroid in a world from `asteroid.bin` and `place.txt`; saving the world then writes the asteroid's `.vx2` |
-| `place_moon_shipyard.py` | puts the Moon Shipyard and its asteroid into a copy of a world, in the Moon Station's safe zone, in view of its lounge |
+| `place_moon_shipyard.py` | puts the Moon Shipyard and its asteroid into a copy of a world in place of the Omni Arc Beam Shipyard, centered with the Moon Station in its safe zone, in view of its lounge |
 | `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Hangar plugin's options (`hangar.cfg`); the Performance plugin's options that differ from its defaults (`performance.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
