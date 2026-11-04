@@ -14,9 +14,11 @@ which the MoonShipyardAsteroid mod built the asteroid.
 The shipyard replaces the Omni Arc Beam Shipyard in the Moon Station's safe
 zone, on the Moon's side: seen from the station's lounge, it lies across the
 view in front of the Moon's upper part, to the right of the trade lane gates and
-off the sun's path, under the lounge's glass dome, DISTANCE from it. The station and the shipyard move together so that they are
-centered in the safe zone, which stays where it is; they keep SAFE_ZONE_MARGIN
-inside it and CLEARANCE from each other and every other grid. The station's
+with the sun's path at most over its edge, under the lounge's glass dome,
+DISTANCE from it. The station and the shipyard move together so that they are
+centered in the safe zone, which keeps its center and shrinks to
+SAFE_ZONE_RADIUS; they keep SAFE_ZONE_MARGIN inside it, STATION_GAP from each
+other and CLEARANCE from every other grid. The station's
 economy entry moves with it, and players in the safe zone wait in the lounge,
 facing the shipyard. The shipyard's blocks belong to the owner (default: the
 world's first human player), shared with the owner's faction, and its reactors
@@ -50,12 +52,14 @@ LOUNGE_SPOT = (6, 6.6, -1)
 # upper edge (degrees)
 TO_THE_RIGHT = 30.0
 INSIDE_MOON = 8.0
-# How far the shipyard's center is from the lounge (m)
-DISTANCE = 260.0
-# How far the shipyard keeps from the sun's path, seen from the lounge (degrees)
-SUN_MARGIN = 5.0
+# How far the sun's path may run over the shipyard's edge, seen from the lounge
+# (degrees)
+SUN_EDGE = 15.0
+SAFE_ZONE_RADIUS = 300.0
 SAFE_ZONE_MARGIN = 20.0
 CLEARANCE = 40.0
+# Ships dock at the shipyard's base, away from the station
+STATION_GAP = 10.0
 URANIUM = 100
 # What the safe zone has to allow for the shipyard's tools to work
 TOOL_ACTIONS = ("Welding", "Grinding")
@@ -66,8 +70,14 @@ ACTIONS = (
 ).split()
 # The shipyard's extent in its grid's frame (m): the rock's radius around the
 # axis, and from below the junctions to past the rock's far end
-RADIUS = 88.0
+RADIUS = 90.0
 LENGTH = (-22.0, 290.0)
+# How far the shipyard's center is from the lounge (m): close enough that from
+# the lounge all of the rock renders at LOD 1 or better with Medium voxel
+# quality. LOD 1 reaches 192 m along each of the voxel map's axes
+# (MyVoxelClipmapSettingsPresets.NormalSettings[1]), snapped to 64 m cells;
+# within 124 m it holds all of the rock. At LOD 2 the far parts open up.
+DISTANCE = 120.0
 
 
 def vec(e):
@@ -181,7 +191,7 @@ def placement(sector, planets, gone, sun):
     ]
     station = next(g for g in grids if g.findtext("DisplayName") == STATION)
     zone = station_zone(sector)
-    zone_center, zone_radius = frame(zone)[0], float(zone.findtext("Radius"))
+    zone_center, zone_radius = frame(zone)[0], SAFE_ZONE_RADIUS
     own = block_points(station)
     others = np.concatenate(
         [block_points(g)[::10] for g in grids if g is not station and g not in gone]
@@ -218,31 +228,29 @@ def placement(sector, planets, gone, sun):
         clear = np.linalg.norm(
             np.concatenate([points, own])[::3, None] + move - others[None], axis=2
         ).min()
-    # The sun turns in the plane across its axis; the shipyard stays on one side
+    # The sun turns in the plane across its axis: how far the shipyard reaches
+    # past it on its smaller side (negative: it stays off the sun's path)
     sky = np.arcsin((points - eye) @ sun / np.linalg.norm(points - eye, axis=1))
-    off_sun = (
-        math.degrees(np.abs(sky).min())
-        if np.all(np.sign(sky) == np.sign(sky[0]))
-        else 0
-    )
+    over_sun = math.degrees(min(sky.max(), -sky.min()))
     moon = np.array(planets["Moon"].center) - eye - move
     from_moon = math.degrees(math.acos(view @ moon / np.linalg.norm(moon)))
     moon_size = math.degrees(math.asin(planets["Moon"].radius / np.linalg.norm(moon)))
-    assert off_sun >= SUN_MARGIN, "the shipyard crosses the sun's path"
-    assert apart >= CLEARANCE, "the shipyard is too close to the station"
+    assert over_sun <= SUN_EDGE, "the sun's path runs across the shipyard"
+    assert apart >= STATION_GAP, "the shipyard is too close to the station"
     assert inside >= SAFE_ZONE_MARGIN, "the shipyard doesn't fit into the safe zone"
     assert clear >= CLEARANCE, "the shipyard is too close to another grid"
     print(
         f"shipyard {d:.0f} m from the lounge, {from_moon:.1f} degrees from the"
-        f" Moon's center (its edge at {moon_size:.1f}), {off_sun:.0f} degrees off the"
-        f" sun's path, {apart:.0f} m from the station; the two {inside:.0f} m inside"
+        f" Moon's center (its edge at {moon_size:.1f}), the sun's path {over_sun:.0f} degrees"
+        f" over its edge, {apart:.0f} m from the station; the two {inside:.0f} m inside"
         f" the safe zone, {clear:.0f} m from any other grid, the station moved"
         f" {np.linalg.norm(move):.0f} m; the shipyard spans"
         f" {2 * math.degrees(math.atan((LENGTH[1] - LENGTH[0]) / 2 / (d - RADIUS))):.0f}"
         f" x {2 * math.degrees(math.atan(RADIUS / (d - RADIUS))):.0f} degrees"
     )
-    # Grid frame: Backward (local Z) along the axis, Up away from the lounge
-    grid_forward, grid_up = -axis, view
+    # Grid frame: Forward along the axis, so the storage end is on the right seen
+    # from the lounge; Up away from the lounge
+    grid_forward, grid_up = axis, view
     origin = center + move - axes(grid_forward, grid_up) @ np.array([0, 0, middle])
     return origin, grid_forward, grid_up, move
 
@@ -362,6 +370,7 @@ def main():
         ) < float(zone.findtext("Radius")):
             bw.set_position(e, spot, facing, station_up)
             print(f"{e.findtext('DisplayName')} waits in the lounge")
+    zone.find("Radius").text = f"{SAFE_ZONE_RADIUS:g}"
     print(f"removed {', '.join(g.findtext('DisplayName') for g in gone)}")
     print(f"{STATION} safe zone allows {allow_tools(station_zone(sector))}")
     owner = owner_id(checkpoint.getroot(), args.owner)
@@ -375,7 +384,9 @@ def main():
     # storage's middle voxel
     half = meta["storage"] / 2
     local = np.array([half, half, half]) - np.array(meta["origin_voxel"], float)
-    center = origin + axes(forward, up) @ local
+    # less the half voxel the game adds along the world's axes on loading
+    # (MyPerGameSettings.OffsetVoxelMapByHalfVoxel)
+    center = origin + axes(forward, up) @ local - 0.5
     rock = bw.voxel_map(
         ids, m.ROCK_NAME, tuple(center), meta["storage"], tuple(forward), tuple(up)
     )

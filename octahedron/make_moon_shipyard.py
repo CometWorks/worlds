@@ -33,7 +33,9 @@ a large head, the other with the medium head. The pipes and the cover are
 matte black, everything else black carbon fiber.
 
 Each arc runs in a tunnel through a rock that follows it from the junction to
-a round end past the arc's far end. The rock's surface is rough with scattered
+a round end past the arc's far end. The tunnel only just fits the blocks, which
+leaves the rock's wall thick enough that the far parts don't open up at the
+game's coarse voxel LODs. The rock's surface is rough with scattered
 lumps, and small holes let the lights shine through. The connectors, the
 conveyor between the arcs and the arm bases come out through openings. The
 rock and the grid never touch, and the grid is static, so nothing needs
@@ -89,7 +91,7 @@ OPENING = GRID / 2 * math.sqrt(2) + 0.75
 # per this many square meters of surface), the holes over the lights (radius,
 # a second one tilted up to this many degrees)
 ROCK_GAP = 1.0
-ROCK_WALL = 2.5
+ROCK_WALL = 4.0
 BLEND = 1.5
 ROUGH = (0.5, 2.5)
 LUMP_RADIUS = (0.6, 1.6)
@@ -110,7 +112,7 @@ MATTE = ((0.0, -0.96, -0.5), None)  # the same black, no skin
 # Lights on the conveyor, one per this many meters of arc
 LIGHT_SPACING = 10.0
 LIGHT_RGB = (0.05, 0.15, 0.85)  # dark blue
-LIGHT_RADIUS = 12
+LIGHT_RADIUS = 18
 LIGHT_INTENSITY = 1.5
 # The OmniArc tools' ToolCore settings (its ToolRepo, protobuf): activated,
 # no beam drawing, the mode below, primary action, every relation targeted, no
@@ -692,10 +694,9 @@ class Rock:
         return ROUGH[0] * ndimage.map_coordinates(self.noise, q.T, order=1, mode="wrap")
 
     def hollow(self, p):
-        """Signed distance (m) to the tunnel, negative inside it."""
-        h = self.line.query(p, distance_upper_bound=self.outer + 8, workers=-1)[0]
-        h = np.minimum(h, 1e3) - self.inner
-        h = smin(h, self.own.distance(p, bound=10.0) - ROCK_GAP, BLEND)
+        """Signed distance (m) to the tunnel, negative inside it: around the
+        blocks only"""
+        h = self.own.distance(p, bound=10.0) - ROCK_GAP
         turret = self.tools.query(p, distance_upper_bound=TURRET + 6, workers=-1)[0]
         return smin(h, np.minimum(turret, 1e3) - TURRET - ROCK_GAP, BLEND)
 
@@ -1038,7 +1039,7 @@ def report(yard, arcs, rock, chunks):
     gaps = chunked(rock.distance, p.reshape(-1, 3)).reshape(len(where), -1).min(1)
     worst = (gaps.min(), where[int(gaps.argmin())])
     print(
-        f"rock: tunnel radius {rock.inner:.2f} m, outside radius {rock.outer:.2f} m"
+        f"rock: blocks out to {rock.inner:.2f} m, outside radius {rock.outer:.2f} m"
         f" (+ roughness up to {ROUGH[0]} m and {rock.lump_count} lumps),"
         f" {len(rock.holes)} holes over {sum(len(a['lights']) for a in arcs)} lights,"
         f" {ROCK_MATERIAL}"
