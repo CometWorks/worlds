@@ -94,8 +94,9 @@ GATE_OFFSET = 220.0
 # (SE-720). The lanes stay; station_and_shipyard keeps the stations' decks out of their slabs.
 EQUATOR_LANE_NORTH = 200.0
 # How far north the ends of North Station's Moon lane move, North Station's end and the Moon's,
-# for the same reason. The other lanes needed no move.
-NORTH_MOON_LANE_NORTH = (-150.0, 160.0)
+# for the same reason: North Station's end goes below the station, whose lobby and shipyard
+# look away from EarthLike (SE-1066). The other lanes needed no move.
+NORTH_MOON_LANE_NORTH = (-350.0, 160.0)
 # A shipyard's block bounds stay out of the slab of its station's bounding sphere by this much
 SHIPYARD_SUN_CLEARANCE = 15.0
 # The bounding sphere of a block cell. Blocks are counted by their Min cell, so this also covers
@@ -177,7 +178,9 @@ SHIPYARD_ON = {"OmniArcDestro"}
 DELTA_TILT_DEGREES = 50.0
 # North and South Station turned this far about their up, the Sun's axis, so every Sun
 # condition stays as it was: their shipyards no longer stand between the lobby and the rings
-# of the lane to Beta Station (SE-945, test_shipyard_sight.py)
+# of the lane to Beta Station (SE-945, test_shipyard_sight.py). North Station's 240 degrees
+# also keep its shipyard furthest from the rings of all three of its lanes, the Moon's too: at
+# least 41 degrees apart, seen from the lobby (SE-1066).
 POLE_TURN_DEGREES = {"North Station": 240.0, "South Station": 60.0}
 # Each station's color: its shipyard's red frame gets the skin and the color, the station's
 # purple walls and furniture only the color. Skin None is the default, painted metal. Colors
@@ -1533,10 +1536,6 @@ def main():
     trade_stations = {}
     shipyards = {}
     for name, (center, forward, up) in places.items():
-        if name == "North Station":
-            # Upside down, like South Station: its up toward EarthLike, so the lobby looks
-            # down on the ring
-            up = mul(up, -1)
         if name in POLE_TURN_DEGREES:
             forward = rotate(forward, up, math.radians(POLE_TURN_DEGREES[name]))
         if name in EQUATOR_STATIONS:
@@ -1552,8 +1551,8 @@ def main():
             )
             forward, up = tilt(forward), tilt(up)
         if name == "Moon Station":
-            # Its front toward the Moon and the lobby toward EarthLike, upside down like North
-            # Station: its shipyard lies above it on the Sun's axis, so the station can sit low
+            # Its front toward the Moon and the lobby toward EarthLike, upside down: its
+            # shipyard lies above it on the Sun's axis, so the station can sit low
             # in the zone, its decks under the shadow of the Moon lanes' end gates
             forward, up = mul(forward, -1), mul(up, -1)
         # The station and its shipyard share the safe zone around the station's place
