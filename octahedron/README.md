@@ -13,7 +13,9 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `build_trader_ships.py` | builds the offline "Octahedron Trader Ships" showcase save of the SE-948 cargo ships listed in `trader_ships.txt` (SE-985); see its docstring |
 | `make_helix_shipyard.py` | generates the double helix shipyard blueprint (SE-952), not used by the world yet |
-| `make_moon_shipyard.py` | generates the Moon Shipyard blueprint (SE-986), two arcs around the build volume; not used by the world yet |
+| `make_moon_shipyard.py` | generates the Moon Shipyard (SE-986): a static grid with the conveyor double helix and its OmniArc tools, and the Uraninite asteroid around it (`asteroid.bin`) |
+| `moon-shipyard-asteroid/` | mod that builds the Moon Shipyard's asteroid in a world from `asteroid.bin` and `place.txt`; saving the world then writes the asteroid's `.vx2` |
+| `place_moon_shipyard.py` | puts the Moon Shipyard and its asteroid into a copy of a world, in the Moon Station's safe zone, in view of its lounge |
 | `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Hangar plugin's options (`hangar.cfg`); the Performance plugin's options that differ from its defaults (`performance.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
