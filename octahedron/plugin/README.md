@@ -97,7 +97,9 @@ with everyone, and the option covers them too.
 
 With `NewPlayersJoinOct` on, a new player joins OCT's faction (`MoneyAuthorityFactionTag`)
 when the game makes their identity: the server sends the game's join request and its
-acceptance, as a scenario's medical room does. Players relate to each other only through
+acceptance, as a scenario's medical room does. On a cluster the World Authority makes the
+identity when the Gateway admits the player, so it sends them
+([SE-1012](https://tasks.cometworks.se/tasks/1903)). Players relate to each other only through
 factions, so this makes every player an ally of every other one and of the stations: green
 markers, and turrets don't fire at them
 ([SE-975](https://tasks.cometworks.se/tasks/1866)). A player can leave OCT; OCT accepts no
