@@ -16,7 +16,9 @@ seen from the station's lounge, it lies across the view just above the top of
 the Moon, under the lounge's glass dome. It stays SAFE_ZONE_MARGIN inside the
 safe zone and CLEARANCE from the station and every other grid. Its blocks
 belong to the owner (default: the world's first human player), shared with
-the owner's faction, and its reactors get uranium.
+the owner's faction, and its reactors get uranium. The safe zone is changed
+to allow welding and grinding, which the shipyard's tools need; that lets
+players weld and grind anywhere in the zone.
 """
 
 import argparse
@@ -40,6 +42,13 @@ ABOVE_MOON = 10.0
 SAFE_ZONE_MARGIN = 20.0
 CLEARANCE = 40.0
 URANIUM = 100
+# What the safe zone has to allow for the shipyard's tools to work
+TOOL_ACTIONS = ("Welding", "Grinding")
+# MySafeZoneAction flags in their order
+ACTIONS = (
+    "Damage Shooting Drilling Welding Grinding VoxelHand Building LandingGearLock"
+    " ConvertToStation BuildingProjections"
+).split()
 # The shipyard's extent in its grid's frame (m): the rock's radius around the
 # axis, and from below the junctions to past the rock's far end
 RADIUS = 84.0
@@ -90,17 +99,29 @@ def lounge_eye(station):
     return position + np.mean(lounge, 0) * m.GRID @ turn.T + up * m.GRID, up
 
 
+def station_zone(sector):
+    return next(
+        e
+        for e in sector.find("SectorObjects")
+        if e.get(bw.XSI_TYPE) == "MyObjectBuilder_SafeZone"
+        and e.findtext("DisplayName") == STATION
+    )
+
+
+def allow_tools(zone):
+    """Lets the shipyard's welders and deconstructors work in the zone."""
+    allowed = zone.find("AllowedActions")
+    actions = set((allowed.text or "").split()) | set(TOOL_ACTIONS)
+    allowed.text = " ".join(a for a in ACTIONS if a in actions)
+    return allowed.text
+
+
 def placement(sector, planets):
     """(origin, forward, up) of the shipyard's main grid."""
     objects = list(sector.find("SectorObjects"))
     grids = [e for e in objects if e.get(bw.XSI_TYPE) == "MyObjectBuilder_CubeGrid"]
     station = next(g for g in grids if g.findtext("DisplayName") == STATION)
-    zone = next(
-        e
-        for e in objects
-        if e.get(bw.XSI_TYPE) == "MyObjectBuilder_SafeZone"
-        and e.findtext("DisplayName") == STATION
-    )
+    zone = station_zone(sector)
     zone_center, zone_radius = frame(zone)[0], float(zone.findtext("Radius"))
     eye, up = lounge_eye(station)
     moon = np.array(planets["Moon"].center)
@@ -213,6 +234,7 @@ def main():
         # The storage's name ends in the planet's diameter: Moon-1353915701d19000
         planet.radius = float(planet.storage.rsplit("d", 1)[1]) / 2
     origin, forward, up = placement(sector, planets)
+    print(f"{STATION} safe zone allows {allow_tools(station_zone(sector))}")
     checkpoint = ET.parse(args.out / "Sandbox.sbc")
     owner = owner_id(checkpoint.getroot(), args.owner)
     ids = bw.Ids(random.Random(m.SEED))
