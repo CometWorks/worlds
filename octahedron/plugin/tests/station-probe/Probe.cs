@@ -1721,11 +1721,11 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "drill",
-        "A static grid of a switched on ship drill and a battery inside a small asteroid, 60% of the radius into the station's safe zone or 100 m out of it: DRILL grid-id inzone=yes|no",
-        "!sprobe drill <station> <in|out>"
+        "A static grid of a switched on ship drill, named so when a name is given, and a battery inside a small asteroid, 60% of the radius into the station's safe zone or 100 m out of it: DRILL grid-id inzone=yes|no at=x,y,z",
+        "!sprobe drill <station> <in|out> [drill name]"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string Drill(string station, string where)
+    public string Drill(string station, string where, string name = "")
     {
         var zone = StationZone(station);
         if (zone == null)
@@ -1755,6 +1755,8 @@ public sealed class ProbeCommands : CommandModule
         };
         var drill = Block<MyObjectBuilder_Drill>("LargeBlockDrill", Vector3I.Zero, owner);
         drill.Enabled = true;
+        if (name != "")
+            drill.CustomName = name;
         ship.CubeBlocks.Add(drill);
         var size = MyDefinitionManager
             .Static.GetCubeBlockDefinition(
@@ -1769,12 +1771,20 @@ public sealed class ProbeCommands : CommandModule
         battery.CurrentStoredPower = 1;
         ship.CubeBlocks.Add(battery);
         var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(ship);
-        return $"DRILL {grid.EntityId} inzone={(zone.Contains(spot.Value) ? "yes" : "no")}";
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "DRILL {0} inzone={1} at={2:0.#},{3:0.#},{4:0.#}",
+            grid.EntityId,
+            zone.Contains(spot.Value) ? "yes" : "no",
+            spot.Value.X,
+            spot.Value.Y,
+            spot.Value.Z
+        );
     }
 
     [Command(
         "drillstate",
-        "What the drill has dug: DRILLSTATE grid-id ore=kg on=yes|no",
+        "What the drill has dug: DRILLSTATE grid-id ore=kg on=yes|no ores=subtype:kg,...",
         "!sprobe drillstate <grid-id>"
     )]
     [Permission(MyPromoteLevel.Admin)]
@@ -1785,13 +1795,25 @@ public sealed class ProbeCommands : CommandModule
         var drill = grid.GetFatBlocks<MyShipDrill>().FirstOrDefault();
         if (drill == null)
             return $"NODRILL {id}";
-        var ore = drill.GetInventory().GetItems().Sum(i => (double)i.Amount);
+        var items = drill.GetInventory().GetItems();
+        var ore = items.Sum(i => (double)i.Amount);
+        var ores = items
+            .GroupBy(i => i.Content.SubtypeName)
+            .Select(g =>
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}:{1:0.###}",
+                    g.Key,
+                    g.Sum(i => (double)i.Amount)
+                )
+            );
         return string.Format(
             CultureInfo.InvariantCulture,
-            "DRILLSTATE {0} ore={1:0.###} on={2}",
+            "DRILLSTATE {0} ore={1:0.###} on={2} ores={3}",
             id,
             ore,
-            drill.Enabled && drill.IsWorking ? "yes" : "no"
+            drill.Enabled && drill.IsWorking ? "yes" : "no",
+            string.Join(",", ores)
         );
     }
 
