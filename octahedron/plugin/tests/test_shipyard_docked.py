@@ -31,13 +31,24 @@ from test_table_rules import check, checks  # noqa: E402
 STATION = tt.STATION
 SUPPLY = "Supply"
 TURN = {**tt.PAY, "ShipyardTurnMinutes": 10}
-# Cells of the shipyard's grid: the space's open end is z -57
-MIDDLE = "0,-16,0"
-LAST_BLOCK_IN = "0,-16,-58"
-AT_THE_END = "0,-16,-57"
-PAST_THE_END = "0,-16,-60"
-PAST_AND_TURNED = "0,-16,-62"
-BESIDE_THE_WALLS = "31,-16,0"
+# Cells of the shipyard's grid, the ship's cockpit with its battery one cell toward +Z. The Omni
+# Arc Beam Shipyard's space has its open end at z -57, so the battery reaches in from outside. The
+# Moon Shipyard's ends at z 112, the arcs' far end, so the cockpit is the block in it; its pod
+# parks outside the rock around the arcs (SE-1069).
+if STATION == "Moon":
+    MIDDLE = "0,0,55"
+    LAST_BLOCK_IN = "0,0,112"
+    AT_THE_END = "0,0,112"
+    PAST_THE_END = "0,0,114"
+    PAST_AND_TURNED = "0,0,117"
+    BESIDE_THE_WALLS = "40,0,0"
+else:
+    MIDDLE = "0,-16,0"
+    LAST_BLOCK_IN = "0,-16,-58"
+    AT_THE_END = "0,-16,-57"
+    PAST_THE_END = "0,-16,-60"
+    PAST_AND_TURNED = "0,-16,-62"
+    BESIDE_THE_WALLS = "31,-16,0"
 
 
 def probe(a, args: str) -> str:
