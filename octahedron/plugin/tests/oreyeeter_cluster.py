@@ -1,6 +1,7 @@
 """OreYeeter (OCT_OREYEETER_REPO) on a local test cluster (SE-1014), through the cluster's scenario bench
-(CometWorks/cluster Test/), with the station probe and OreYeeter on the nodes at OreYeeter's defaults,
-as the deploy runs it. Drills dig in small asteroids 100 m out of Alpha's zone; what a drill digs
+(CometWorks/cluster Test/), with the station probe and OreYeeter on the nodes at OreYeeter's own
+defaults: lists start with Stone here, while Octahedron's config/oreyeeter.cfg starts them empty.
+Drills dig in small asteroids 100 m out of Alpha's zone; what a drill digs
 stays in its own inventory, the first container the ore would reach.
 
 - A drill not named with the tag voids nothing while !ore auto is off; a tagged one voids the

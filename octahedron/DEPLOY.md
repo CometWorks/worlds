@@ -184,9 +184,11 @@ Dashboard, **Create Cluster**, **Create and deploy**:
    the same editor does.
    Hangar takes `config/hangar.cfg`, which brings ships back only where they were
    saved: Deploy Octahedron stages it on every update.
-   OreYeeter runs at its defaults: drills named with `!ore`, or all of a
-   player's drills after `!ore auto`, void the ores on the player's list (Stone
-   until they change it). On a cluster its server list (`MasterOres`) is set in
+   OreYeeter takes `config/oreyeeter.cfg`: a player's list starts empty, so no
+   ore is voided until they add one (players need the gravel from stone for
+   reactors). Drills named with `!ore`, or all of a player's drills after
+   `!ore auto`, void the ores on the player's list. Deploy Octahedron stages the
+   file on every update. On a cluster the server list (`MasterOres`) is set in
    this editor, not with `!ore master add`, which reaches one node at most.
    The Performance plugin takes `config/performance.cfg`, which runs programmable
    block scripts on worker threads: Deploy Octahedron stages it on every update,
