@@ -105,6 +105,12 @@ markers, and turrets don't fire at them
 ([SE-975](https://tasks.cometworks.se/tasks/1866)). A player can leave OCT; OCT accepts no
 request to join it again. Players who were in the world before keep their faction.
 
+OCT's leaders are the players whose Steam IDs `OctLeaders` lists, Viktor on the Octahedron
+([SE-1015](https://tasks.cometworks.se/tasks/1906)): they join OCT as leaders, everyone else as a
+plain member. The game makes an admin who joins a faction of only NPCs its leader, so without this
+the first admin to join a fresh world would lead OCT and could kick or promote players and change
+OCT's settings. OCT's NPC stays its founder. A player who is already in OCT keeps their rank.
+
 The game shares whatever a player builds with their faction. With `OctBuildsPrivate` on, a
 block an OCT member places, welds from a projection or welds to working order, and a ship a
 shipyard or a contract gives them, starts as No share instead. Placing a block runs on

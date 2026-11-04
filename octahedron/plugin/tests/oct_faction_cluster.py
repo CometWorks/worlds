@@ -1,13 +1,15 @@
 """New players join OCT on a local test cluster (SE-1012), through the cluster's scenario bench
 (CometWorks/cluster Test/): the World Authority makes the joining player's identity, so it is
 the one that joins them to OCT, once. The client and its node both see the player in OCT. A
-player who leaves OCT stays out of it when they connect again.
+player who leaves OCT stays out of it when they connect again. The first player, an admin, joins
+as a plain member; a second player, whom OctLeaders names in Viktor's place, joins as OCT's
+leader (SE-1015).
 
     OCT_TASK=SE-1012C OCT_WORLD_SOURCE=<world from build_world.py> \\
         <Test>/.venv/bin/python tests/oct_faction_cluster.py <Test>     (from plugin/)
 
 The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one
-headless admin client, with the station probe on the nodes.
+headless admin client, a second client for the leader, with the station probe on the nodes.
 
 Run on polaris on 2026-11-04 on cluster 0.2.1: 12/12 checks in 5 minutes; 8/12 without the fix.
 """
@@ -23,6 +25,7 @@ from pathlib import Path
 
 os.environ.setdefault("OCT_TASK", "SE-1012C")
 import wa_economy_cluster as wa  # noqa: E402  (takes the bench's folder from argv)
+from scenarios_core import CLIENT2_ID  # noqa: E402
 from wa_economy_cluster import (  # noqa: E402
     CLIENT_ID,
     Client,
@@ -35,6 +38,8 @@ import station_tests as st  # noqa: E402
 
 NODES = ("node-1", "node-2")
 JOINED = re.compile(r"New player (\d+) joins OCT")
+RANK = re.compile(r"New player \d+ joins OCT as (\w+)")
+LEADER_PORT = 24160
 
 wa.ROOT = Path.home() / f"cluster-runs/oct-faction-{os.environ['OCT_TASK']}"
 wa.lc.PLUGINS = wa.ROOT / "plugins"
@@ -52,18 +57,18 @@ def run(bench) -> None:
             if p.is_file()
         )
 
-    def connect():
+    def connect(client_id=CLIENT_ID, port=bench_module.LEGACY_REMOTE_PORT):
         wa.link_mods(
             Client(
                 bench.run_root,
-                CLIENT_ID,
-                bench.remote_port(bench_module.LEGACY_REMOTE_PORT),
+                client_id,
+                bench.remote_port(port),
                 cluster.config.gateway_listen,
             ).user_data
             / "Mods"
         )
-        api = bench.start_client(CLIENT_ID)
-        bench.wait_spawned(CLIENT_ID)
+        api = bench.start_client(client_id, port)
+        bench.wait_spawned(client_id)
         return api
 
     def probe(api, args: str) -> str:
@@ -93,6 +98,25 @@ def run(bench) -> None:
     )
     for node in NODES:
         bench.check(f"{node} joined no one", not JOINED.search(log(node)))
+    bench.check(
+        "the first player, an admin, is a plain member",
+        "ME OCT member" in probe(api, "whoami"),
+    )
+
+    # Viktor's stand-in, whom OctLeaders names, leads OCT; the first player stays a member
+    leader = connect(CLIENT2_ID, LEADER_PORT)
+    st.wait_until(lambda: tag(leader) == "OCT", 60, 2)
+    bench.check(
+        "the player OctLeaders names leads OCT",
+        "ME OCT leader" in probe(leader, "whoami"),
+    )
+    bench.check(
+        "the first player is still a member", "ME OCT member" in probe(api, "whoami")
+    )
+    ranks = RANK.findall(log("wa-1"))
+    bench.check("the WA's log", ranks == ["member", "leader"], ranks)
+    viktor = leader.get_faction()["identityId"]
+    bench.kill_client(CLIENT2_ID)
 
     # Leaving OCT is the player's choice: connecting again doesn't put them back
     probe(api, "faction OCT none")
@@ -106,7 +130,7 @@ def run(bench) -> None:
     )
     bench.check("a player who left stays out", tag(api) is None, tag(api))
     joined = [j for p in processes for j in JOINED.findall(log(p))]
-    bench.check("no second join", joined == [str(me)], joined)
+    bench.check("no second join", joined == [str(me), str(viktor)], joined)
 
     bench.check("graceful stop", cluster.stop(grace=240))
     for process in processes:
@@ -121,6 +145,7 @@ run.administrators = [CLIENT_ID]
 
 def main() -> int:
     run.world_template = wa.prepare()
+    wa.set_config(OctLeaders=CLIENT2_ID)
     probe_folder = turn.build_probe()
     os.environ["CLUSTER_EXTRA_PLUGINS"] += f",node:{probe_folder}"
     label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-oct-faction")

@@ -318,7 +318,8 @@ game update that changes the planet or voxel material definitions or maps.
   the Octahedron plugin keeps them that way (`StationConnectorsTrade`), in a
   world from before the rule too, and charges a docked ship's batteries from
   the station (`StationDockCharging`).
-- Every new player joins OCT's faction (`NewPlayersJoinOct`), so the stations'
+- Every new player joins OCT's faction (`NewPlayersJoinOct`) as a plain member,
+  and Viktor as its leader (`OctLeaders`), so the stations'
   and shipyards' blocks are shared with nobody instead of with the faction
   ([SE-975](https://tasks.cometworks.se/tasks/1866)). A station's store, ATM,
   vending machine, contract block, doors and button panel have the game's

@@ -158,6 +158,17 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     }
 
+    [StringOption(
+        description: "Steam IDs of the players who lead OCT, comma separated. NewPlayersJoinOct puts them into OCT as leaders and "
+            + "everyone else as a plain member, an admin too, whom the game would make the leader of a faction of NPCs.",
+        Parent = "faction"
+    )]
+    public string OctLeaders
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
+
     [BoolOption("Fill the turrets with ammo.", Parent = "stations")]
     public bool StationReloadTurrets
     {

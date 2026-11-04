@@ -1,7 +1,7 @@
 """Checks the OCT faction rules on the test server with the headless client, in a world built by
-build_world.py (OCT_WORLD_SOURCE): a new player joins OCT, blocks they place by hand get
-No share, on the client as on the server, and the leaderboard, with LeaderboardOctPlayers on,
-ranks them by name with their grids. With --no-oct the rules and LeaderboardOctPlayers are off:
+build_world.py (OCT_WORLD_SOURCE): a new player joins OCT as a plain member although an admin
+(SE-1015), blocks they place by hand get No share, on the client as on the server, and the
+leaderboard, with LeaderboardOctPlayers on, ranks them by name with their grids. With --no-oct the rules and LeaderboardOctPlayers are off:
 the player stays without a faction, the game's faction share stays, and the player isn't on the
 leaderboard. With --own-faction the rules are on, but the player makes a faction of their own
 (the station probe's founder command): their blocks keep the game's faction share and the faction
@@ -84,6 +84,10 @@ def main() -> None:
     tag = remote.get_faction()["tag"]
     print("faction:", tag)
     assert tag == ("OCT" if oct_on else None), f"faction {tag}"
+    if oct_on:
+        # An admin, but not one OctLeaders names (SE-1015)
+        rank = st.probe(remote, "whoami")
+        assert "ME OCT member" in rank, rank
     if own:
         print(st.probe(remote, "faction KRS founder"))
         tag = remote.get_faction()["tag"]
