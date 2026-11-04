@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
@@ -25,6 +27,10 @@ namespace ServerPlugin;
 // and the node they land on gets it ready-made, so the game's RealPlayerIdentityCreated, which
 // fires only for an identity a server makes for a joining player itself, fires nowhere. The World
 // Authority joins them instead (SE-1012).
+//
+// OCT's leaders are the players OctLeaders names, Viktor on the Octahedron (SE-1015). The game makes
+// an admin who joins a faction of NPCs its leader, so on a fresh world the first admin to join would
+// lead OCT. Every other player is demoted right after joining. The NPC stays OCT's founder.
 internal static class OctFaction
 {
     private static MyPlayerCollection bound;
@@ -80,8 +86,21 @@ internal static class OctFaction
             return;
         MyFactionCollection.SendJoinRequest(oct.FactionId, identity);
         MyFactionCollection.AcceptJoin(oct.FactionId, identity);
-        Plugin.Log.Info($"New player {identity} joins {oct.Tag}");
+        var leader = Leaders.Contains(MySession.Static.Players.TryGetSteamId(identity));
+        if (leader && !oct.IsLeader(identity))
+            MyFactionCollection.PromoteMember(oct.FactionId, identity);
+        else if (!leader && oct.IsLeader(identity))
+            MyFactionCollection.DemoteMember(oct.FactionId, identity);
+        Plugin.Log.Info(
+            $"New player {identity} joins {oct.Tag} as {(oct.IsLeader(identity) ? "leader" : "member")}"
+        );
     }
+
+    private static HashSet<ulong> Leaders =>
+        Plugin
+            .Config.OctLeaders.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(id => ulong.TryParse(id.Trim(), out var steamId) ? steamId : 0)
+            .ToHashSet();
 
     public static void Update()
     {
