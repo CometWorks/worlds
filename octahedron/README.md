@@ -9,7 +9,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 |---|---|
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
-| `make_filament_mod.py` | builds the OctahedronFilaments mod, the shipyards' welders and deconstructors that draw filaments instead of laser beams (SE-1067); `filament-tools/` is its script |
+| `make_filament_mod.py` | builds the OctahedronFilaments mod, the Moon Shipyard's welders and deconstructors that draw filaments instead of laser beams (SE-1067); `filament-tools/` is its script |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `build_trader_ships.py` | builds the offline "Octahedron Trader Ships" showcase save of the SE-948 cargo ships listed in `trader_ships.txt` (SE-985); see its docstring |
@@ -101,8 +101,7 @@ station and shipyard blueprints are in `blueprints/`.
   (SE1-0121).
 - Places a shipyard next to every station but Moon Station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame, each with an OmniArc
-  deconstructor beside it; with `--filament-mod` they become the
-  OctahedronFilaments mod's filament welders and deconstructors), in view of the station's
+  deconstructor beside it), in view of the station's
   lobby, its pressurized back half
   ([SE-945](https://tasks.cometworks.se/tasks/1832)).
   - Every shipyard starts where Viktor put Gamma Station's on the live cluster
@@ -149,7 +148,8 @@ station and shipyard blueprints are in `blueprints/`.
   - It works like the other shipyards. It is named "Moon Station Shipyard" and owned by
     OCT, and its blocks are set up the same way: reactors with 10 ingots, connectors
     and welders off, and the OmniArc tools with the Omni Arc Beam Shipyard's ToolCore
-    settings, so the deconstructors stay on and never shoot. Its lights are shared with
+    settings, so the deconstructors stay on and never shoot. With `--filament-mod` its
+    tools are the OctahedronFilaments mod's filament welders and deconstructors. Its lights are shared with
     everyone. The two arm rotors carry the names the plugin looks for
     (`ShipyardArmRotors`): the large head's arm builds large grid ships and the small
     head's arm small grid ones. In a player's turn the player can own more of its
@@ -303,7 +303,7 @@ game update that changes the planet or voxel material definitions or maps.
 
 ## OctahedronFilaments
 
-The shipyards' tools look alien, like the shipyard of Laconia Station in The
+The Moon Shipyard's tools look alien, like the shipyard of Laconia Station in The
 Expanse: thin filaments reach out from them to the blocks they build or take
 apart, instead of laser beams (SE-1067). `make_filament_mod.py` writes the mod
 into `OctahedronFilaments/` (ignored here, like OctahedronOres) from the
@@ -322,8 +322,9 @@ OmniArc welder and deconstructor definitions of the Workshop copy:
   world loads. A world with this mod needs ToolCore and OmniArc too.
 - The blocks are not public: players can't build them, and their own OmniArc
   tools keep the laser beams. `build_world.py --filament-mod <id>` lists the mod
-  and swaps them in for the OmniArc tools of every shipyard it places
-  (`FILAMENT_TOOLS`); without the option the shipyards keep OmniArc's tools.
+  and swaps them in for the Moon Shipyard's OmniArc tools (`FILAMENT_TOOLS`); the
+  other shipyards keep OmniArc's tools, and without the option the Moon Shipyard
+  does too.
 
 OmniArc is licensed CC BY-NC-ND 4.0 by its author; the mod is our own block
 definitions on top of it and needs it installed, it doesn't copy its models,
@@ -382,6 +383,9 @@ two blocks.
   are shared with everyone, and on the server the Octahedron plugin refuses
   players' changes to them (`NpcBlocksLocked`): no settings, names, texts or
   toolbars.
+- Players don't spawn at Moon Station (`NO_SPAWN_STATIONS`): its medical room is
+  shared with nobody, so the spawn screen lists it only for an admin with "Use
+  terminals" on in the admin menu. It doesn't heal other players either.
 - Every station has 4 "Free Tools" cargo terminals (the blueprint's hidden
   toolboxes by its "Free tools!" signs, renamed and shown in inventory screens)
   shared with all players. On the server, the Octahedron plugin's

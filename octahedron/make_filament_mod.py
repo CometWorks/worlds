@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the OctahedronFilaments mod: the shipyards' welder and deconstructor (SE-1067).
+"""Generates the OctahedronFilaments mod: the Moon Shipyard's welder and deconstructor (SE-1067).
 
     python3 make_filament_mod.py [output folder, default: OctahedronFilaments next to this script]
         [--omniarc <OmniArc Workshop folder>]
@@ -13,7 +13,7 @@ the filaments while a tool works and gives the blocks the models and icons of
 their OmniArc originals when a world loads.
 
 The mod ships no OmniArc files, so a world with it needs OmniArc and ToolCore
-too. The blocks are not public: only the shipyards have them (build_world.py
+too. The blocks are not public: only the Moon Shipyard has them (build_world.py
 --filament-mod), players can't build them.
 
 Rerun it after an OmniArc update that changes these two blocks.
