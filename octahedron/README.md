@@ -15,7 +15,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `make_helix_shipyard.py` | generates the double helix shipyard blueprint (SE-952), not used by the world yet |
 | `make_moon_shipyard.py` | generates the Moon Shipyard (SE-986): a static grid with the conveyor double helix and its OmniArc tools, and the Uraninite asteroid around it (`asteroid.bin`) |
 | `moon-shipyard-asteroid/` | mod that builds the Moon Shipyard's asteroid in a world from `asteroid.bin` and `place.txt`; saving the world then writes the asteroid's `.vx2` |
-| `place_moon_shipyard.py` | puts the Moon Shipyard and its asteroid into a copy of a world in place of the Omni Arc Beam Shipyard, centered with the Moon Station in its safe zone, in view of its lounge |
+| `place_moon_shipyard.py` | puts the Moon Shipyard and its asteroid into a copy of a world in place of the Omni Arc Beam Shipyard, centered with the Moon Station in its safe zone, in view of its lounge; `build_world.py` places it in the Octahedron world as Viktor's design world has it (SE-1069) |
 | `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Hangar plugin's options (`hangar.cfg`); the Performance plugin's options that differ from its defaults (`performance.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
@@ -86,7 +86,8 @@ station and shipyard blueprints are in `blueprints/`.
   lies above it (see below). Delta Station, whose up leaned 25 degrees away
   from EarthLike, is turned 50 degrees further, so its up leans 25 degrees
   toward it, like Beta Station's: the lobby sees the planet, and the deck is
-  still tilted against the Sun. Each station sits in a 250 m admin safe zone, owned by the
+  still tilted against the Sun. Each station sits in a 250 m admin safe zone (Moon Station
+  300 m, see below), owned by the
   "Octahedron Authority" NPC faction, and players can't damage or edit it. The
   zone allows no action: no welding, grinding or block placing, also not by the
   shipyard's welders until the Octahedron plugin makes an exception for them
@@ -97,7 +98,7 @@ station and shipyard blueprints are in `blueprints/`.
   zone chips) and the gas in the tanks. The station's programmable block is
   emptied and off: the blueprint's Automatic LCDs 2 script isn't needed
   (SE1-0121).
-- Places a shipyard next to every station (`blueprints/omni-arc-beam-shipyard.sbc`,
+- Places a shipyard next to every station but Moon Station (`blueprints/omni-arc-beam-shipyard.sbc`,
   24 OmniArc beam welders around an open frame, each with an OmniArc
   deconstructor beside it), in view of the station's
   lobby, its pressurized back half
@@ -134,6 +135,26 @@ station and shipyard blueprints are in `blueprints/`.
     color, at 70 % brightness. North red, South blue, Beta green and Delta
     orange painted metal; Alpha black and Gamma cyan carbon fiber; Moon purple
     concrete.
+- Moon Station has the Moon Shipyard instead
+  ([SE-1069](https://tasks.cometworks.se/tasks/1960)): `blueprints/moon-shipyard.sbc`,
+  the output of `make_moon_shipyard.py`, and its Uraninite rock,
+  `blueprints/moon-shipyard-rock.vx2`, as the game saved it in Viktor's design world
+  "Octahedron Design Moon Shipyard".
+  - The station, the shipyard and the rock are where that world has them, within 0.1 mm
+    (`MOON_STATION_PLACE`, `MOON_SHIPYARD_PLACE`, in the station's axes from the zone's
+    center). The station sits 82 m from where the other rules would put it, and its safe
+    zone keeps its center and has a 300 m radius.
+  - It works like the other shipyards. It is named "Moon Station Shipyard" and owned by
+    OCT, and its blocks are set up the same way: reactors with 10 ingots, connectors
+    and welders off, and the OmniArc tools with the Omni Arc Beam Shipyard's ToolCore
+    settings, so the deconstructors stay on and never shoot. Its lights are shared with
+    everyone. The two arm rotors carry the names the plugin looks for
+    (`ShipyardArmRotors`): the large head's arm builds large grid ships and the small
+    head's arm small grid ones. In a player's turn the player can own more of its
+    blocks than OCT; the plugin still knows it as a shipyard.
+  - It keeps its own black: no station color. The rotor heads are matte black, so the
+    support arms the plugin builds on them, of industrial conveyor pipes, are matte
+    black like the shipyard's arcs.
 - Makes the stations the NPC faction's trade stations: the faction, with the
   game's OtherIcon_8 logo in black on white, is a Trader
   with a bank account, and each station grid has a station entry, so the
@@ -156,7 +177,7 @@ station and shipyard blueprints are in `blueprints/`.
   lane goes both ways: each end is an entry toward the other. The lanes of the
   equatorial square run 200 m north of the stations' plane, on the side the
   lobbies look at, and the ends of North Station's Moon lane are moved too, 350 m
-  south at North and 160 m north at the Moon, to keep their gates out of the
+  south at North and 190 m north at the Moon, to keep their gates out of the
   Sun's way (see "The Sun" below). Every end is a
   one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
   the Earth stations for the Moon lanes, clear of their other lane ends),

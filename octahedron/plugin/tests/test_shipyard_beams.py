@@ -47,7 +47,8 @@ PROBE = (
     "beam-probe",
 )
 SHIP = "ArmBeams"
-STATION = "Alpha"
+# OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
+STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 ENTITY = 777000782000100
 STEPS = os.environ.get("OCT_BEAM_STEPS", "stream,rejoin,off").split(",")
 # The plugin sends the switch to all clients in range every 30 s, at one of its 10 s checks

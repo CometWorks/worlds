@@ -69,11 +69,19 @@ internal static class ShipyardZoneWelding
         if (grid?.DisplayName?.EndsWith(NameSuffix) != true)
             return false;
         var players = MySession.Static.Players;
-        foreach (var owner in grid.BigOwners)
+        foreach (var owner in Owners(grid))
             if (players.IdentityIsNpc(owner) && players.TryGetIdentity(owner)?.DisplayName == Owner)
                 return true;
         return false;
     }
+
+    /// <summary>
+    /// Everyone who owns a block of the grid. During a player's turn the player may own more of
+    /// a shipyard's blocks than OCT and be its only big owner: the Moon Shipyard's lights have no
+    /// owner, and OCT keeps only its reactors, deconstructors and arm rotors (SE-1069).
+    /// </summary>
+    internal static IEnumerable<long> Owners(MyCubeGrid grid) =>
+        grid.BigOwners.Concat(grid.SmallOwners);
 
     private static readonly System.Reflection.MethodInfo removeEntity = AccessTools.Method(
         typeof(MySafeZone),

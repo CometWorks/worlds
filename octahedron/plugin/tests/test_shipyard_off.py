@@ -17,8 +17,10 @@ Not covered: a cluster, where the player moves to another node (tests/shipyard_o
 
 from __future__ import annotations
 
+import functools
 import os
 import re
+import xml.etree.ElementTree as ET
 import sys
 import time
 
@@ -35,7 +37,33 @@ import test_table_rules as tr  # noqa: E402
 from test_client import log, with_config  # noqa: E402
 from test_table_rules import Second, check, checks, load, press, settled  # noqa: E402
 
-STATION = "Alpha"
+# OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
+STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
+XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
+
+
+@functools.cache
+def blocks() -> dict[str, int]:
+    """The station's shipyard's welders, deconstructors, connectors and refill stations in
+    the world: the Omni Arc Beam Shipyard and the Moon Shipyard have different blocks"""
+    sector = ET.parse(rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").getroot()
+    grid = next(
+        e
+        for e in sector.find("SectorObjects")
+        if e.findtext("DisplayName") == f"{STATION} Station Shipyard"
+    )
+    kinds = [
+        (b.get(XSI_TYPE).removeprefix("MyObjectBuilder_"), b.findtext("SubtypeName"))
+        for b in grid.find("CubeBlocks")
+    ]
+    return {
+        "welders": sum(s == "OmniArcBeam" for _, s in kinds),
+        "destros": sum(s == "OmniArcDestro" for _, s in kinds),
+        "connectors": sum(t == "ShipConnector" for t, _ in kinds),
+        "refill": sum(t == "MedicalRoom" for t, _ in kinds),
+    }
+
+
 PLATE = "Component/SteelPlate"
 SHIP = "Off Test"
 RUNS = 8 * 32
@@ -76,7 +104,7 @@ def idle_deconstructors(state: dict[str, str]) -> bool:
     as links of the welders' conveyor lines (SE-983)"""
     return (
         state["destros"] == f"{rs.OCT}/None"
-        and state["destroson"] == "24/24"
+        and state["destroson"] == f"{blocks()['destros']}/{blocks()['destros']}"
         and state["destroshoot"] == "0"
     )
 
@@ -97,7 +125,9 @@ def stays_on(remote, what: str) -> None:
     rs.power_stays(state, what)
     for key in ("reactorson", "refill"):
         have, total = state[key].split("/")
-        check(have == total and total != "0", f"{what}: {key} {state[key]}")
+        # The Moon Shipyard has no refill stations
+        empty = key == "refill" and blocks()["refill"] == 0
+        check(have == total and (total != "0" or empty), f"{what}: {key} {state[key]}")
     for player in ("OctTester", "OctOther"):
         check(
             access(remote, player)["refill"] == "True",
@@ -132,7 +162,8 @@ def starts_off(a) -> None:
     # The reply, not a yard reading: the plugin can turn them off again before that
     on = st.probe(a, f"yardon {STATION}")
     log(on)
-    check(on == "ON 32", f"the probe turned them on: {on}")
+    want = blocks()["welders"] + blocks()["connectors"]
+    check(on == f"ON {want}", f"the probe turned them on: {on}")
     is_off(a, "found on, as in an old world")
 
 
@@ -143,7 +174,7 @@ def free_build(a) -> None:
     settled(a, "table", "Press the button")
     check("is in the queue" in press(a), "a free order")
     check(
-        rs.wait_for(lambda: yard(a)["welderson"] == "24", 30, 1),
+        rs.wait_for(lambda: yard(a)["welderson"] == str(blocks()["welders"]), 30, 1),
         "a free build turns on the welders",
     )
     state = yard(a)
@@ -169,7 +200,8 @@ def turn_access(a, b) -> None:
         f"the slot's player has the blocks, shared with their faction: {state}",
     )
     check(
-        state["welderson"] == "24" and state["connectorson"] == "8",
+        state["welderson"] == str(blocks()["welders"])
+        and state["connectorson"] == str(blocks()["connectors"]),
         f"on for a slot: {state}",
     )
     seen = access(a, "OctTester")
@@ -250,7 +282,9 @@ def leaves_a_build(a, b):
     # A client that quit stays online for a while
     check(rs.wait_for(all_owned, 180, 5), "for a player who is away it doesn't ask")
     state = yard(b)
-    check(state["welderson"] == "24", f"their welders go on: {state}")
+    check(
+        state["welderson"] == str(blocks()["welders"]), f"their welders go on: {state}"
+    )
     delivered(b, RUNS + DLC_BLOCKS, "left")
     is_off(b, "the deadline passed without them")
     a = rejoin()
