@@ -1,8 +1,9 @@
 """A player's turn at a station shipyard welds only their blocks and their faction's (SE-939),
-with two players on one server. In OctTester's repair slot, each player has a ship to repair
-in the shipyard: a damaged armor block and a projection to build. The shipyard's welders repair
-OctTester's ship and leave OctOther's alone, its block and its projection. Once OctOther joins
-OctTester's faction, the welders repair theirs too. On a world built by build_world.py.
+OCT's not counting (SE-975), with two players on one server, both in OCT. In OctTester's repair
+slot, each player has a ship to repair in the shipyard: a damaged armor block and a projection to
+build. The shipyard's welders repair OctTester's ship and leave OctOther's alone, its block and
+its projection. Once both join a faction of their own, the welders repair OctOther's too; then
+they go back to OCT. On a world built by build_world.py.
 
     OCT_TASK=SE-939 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_shipyard_own_blocks.py
@@ -59,6 +60,13 @@ def repaired(remote, grid: str) -> bool:
 
 
 def turn(a, b) -> None:
+    me = rs.probe(a, "whoami")
+    with Second():
+        other = rs.probe(b, "whoami")
+    check(
+        me.startswith("ME OCT ") and other.startswith("ME OCT "),
+        f"both players are in OCT's faction: {me} / {other}",
+    )
     reply = press(a)
     check("Repair slot" in reply, f"a press without a blueprint books a slot: {reply}")
     check(wait_for(lambda: rs.slot_runs(a) is not None, 20), "the slot runs")
@@ -97,8 +105,8 @@ def turn(a, b) -> None:
         f"in the faction, the other player's ship is repaired: {rs.info(a, other)}",
     )
     with Second():
-        rs.probe(b, "faction KRS none")
-    rs.probe(a, "faction KRS none")
+        rs.probe(b, "faction OCT member")
+    rs.probe(a, "faction OCT member")
 
     reply = press(a)
     check("you canceled it" in reply, f"the press ends the slot: {reply}")

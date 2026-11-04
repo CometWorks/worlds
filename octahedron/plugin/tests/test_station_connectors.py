@@ -1,8 +1,9 @@
 """The stations' connectors trade, and no player can turn that off (SE-936). The world copy starts
 with every station connector shared with everyone and not trading, the way players had left them on
-Octahedron, and the plugin puts them right: trading and OCT's faction's only. A player's attempt to
-turn trading off doesn't hold. A ship docks to one just the same, and its empty battery and its
-empty, stockpiling H2 tank stay empty with ice in the station's gas generators.
+Octahedron, and the plugin puts them right: trading, OCT's and shared with nobody (SE-975), not
+even with OCT's faction, which every player is in. A player's attempt to turn trading off doesn't
+hold. A ship docks to one just the same, and its empty battery and its empty, stockpiling H2 tank
+stay empty with ice in the station's gas generators.
 
 The control, with StationConnectorsTrade off and the connectors not trading: the same ship charges
 and fills, so the readings can tell. Turned back on, the plugin lets that ship go and the connector
@@ -68,7 +69,7 @@ def connectors(a) -> list[dict]:
 def put_right(a) -> bool:
     found = connectors(a)
     return len(found) == 8 and all(
-        c["trading"] == "yes" and c["share"] == "Faction" for c in found
+        c["trading"] == "yes" and c["share"] == "None" for c in found
     )
 
 
@@ -93,7 +94,7 @@ def kept(a) -> None:
     """The world's connectors put right, and a player can't turn trading off"""
     check(
         bool(st.wait_until(lambda: put_right(a), 30, 3)),
-        "every connector of the station trades and is OCT's faction's only",
+        "every connector of the station trades and is OCT's, shared with nobody",
     )
     first = connectors(a)[0]
     try:
