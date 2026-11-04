@@ -290,13 +290,15 @@ OmniArc welder and deconstructor definitions of the Workshop copy:
 
 - `OctahedronFilamentWelder` and `OctahedronFilamentDeconstructor` are copies of
   `OmniArcBeam` and `OmniArcDestro` with the same stats, reach, turret,
-  animations and sound. ToolCore draws a bundle of filaments from all over the
-  tool to the block it hits, and a few idle strands across the tool while it is
-  on. No laser glow and no sparks.
+  animations and sound, without the laser beams and sparks.
+- The mod's script (`filament-tools/`) draws the filaments on the clients:
+  while a tool shoots, eight threads run from around its ring to the block it
+  aims at, spread over the block, sagging a little and slowly swaying, with
+  short strands between them. It finds the block along the tool's emitter, as
+  ToolCore aims, up to its 100 m reach.
 - The mod ships none of OmniArc's files. Its blocks name a vanilla model, and
-  its script (`filament-tools/`) hands them the models and icons of their
-  OmniArc originals when a world loads. A world with this mod needs ToolCore and
-  OmniArc too.
+  the script hands them the models and icons of their OmniArc originals when a
+  world loads. A world with this mod needs ToolCore and OmniArc too.
 - The blocks are not public: players can't build them, and their own OmniArc
   tools keep the laser beams. `build_world.py --filament-mod <id>` lists the mod
   and swaps them in for the OmniArc tools of every shipyard it places

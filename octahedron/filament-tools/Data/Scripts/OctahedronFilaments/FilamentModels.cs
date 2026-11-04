@@ -16,7 +16,6 @@ namespace OctahedronFilaments
     [MySessionComponentDescriptor(MyUpdateOrder.NoUpdate)]
     public class FilamentModels : MySessionComponentBase
     {
-        // make_filament_mod.py names every filament tool "<prefix><variant>"
         static readonly string[][] Originals =
         {
             new[] { "OctahedronFilamentWelder", "OmniArcBeam" },
@@ -35,7 +34,7 @@ namespace OctahedronFilaments
                 if (definition.Id.TypeId != sorter)
                     continue;
                 var subtype = definition.Id.SubtypeName;
-                var pair = Originals.FirstOrDefault(p => subtype.StartsWith(p[0]));
+                var pair = Originals.FirstOrDefault(p => subtype == p[0]);
                 if (pair == null)
                     continue;
                 MyCubeBlockDefinition original;
