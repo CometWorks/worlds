@@ -200,6 +200,9 @@ def run(bench) -> None:
 
     def order(api, blueprint: str) -> str:
         probe(api, "air")
+        # The world's blueprint off the table first: the server refuses a player's removal of it
+        # from an OCT table (SE-936), and the client's load would keep it
+        tr.remove(api)
         tr.load(api, blueprint)
         tr.settled(api, "table", "paid")
         reply = press(api)

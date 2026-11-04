@@ -115,6 +115,9 @@ def run(bench) -> None:
                 print(f"no stand by a table yet: {error}", flush=True)
     table = min(tc.tables(api), key=lambda b: b["distance"])
     block = api.get_block(table["gridId"], tuple(table["min"]))
+    # The world's blueprint off the table first: the server refuses a player's removal of it
+    # from an OCT table (SE-936), and the client's load would keep it
+    print(" ".join(rig.chat(api, "!oct table remove", 5)), flush=True)
     print(api.load_projection(block["entityId"], name="Loaded"), flush=True)
     time.sleep(10)
     print(api.get_block(table["gridId"], tuple(table["min"]))["projector"], flush=True)
