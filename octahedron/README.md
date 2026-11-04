@@ -74,11 +74,12 @@ station and shipyard blueprints are in `blueprints/`.
   the asteroid ring (up along the ring's axis, its north side, 25 degrees from
   north) and the front faces EarthLike in the ring's plane. Otherwise the sun
   shines sideways through the deck all day: bad shadows and unreadable LCDs.
-  North and South Station stay level with the equator, both with their up
-  toward EarthLike: North Station is upside down, so its lobby looks down on
-  the ring. North Station is turned 240 degrees about its up and South Station
-  60 degrees, so their shipyards don't hide the rings of their lanes to Beta
-  Station from the lobby. The lanes don't turn. Moon Station's up is square to the line
+  North and South Station stay level with the equator, with their up along
+  EarthLike's north: North Station's lobby looks away from the planet, South
+  Station's toward it. North Station is turned 240 degrees about its up and
+  South Station 60 degrees, so their shipyards don't hide the rings of their
+  lanes to Beta Station from the lobby; North Station's shipyard also stays
+  clear of the Moon lane's ring. The lanes don't turn. Moon Station's up is square to the line
   between EarthLike and the Moon, the one such direction nearest to where Delta
   Station was before the turn, and it is turned 180 degrees about its up and
   upside down: it faces the Moon, its lobby toward EarthLike, and its shipyard
@@ -154,7 +155,7 @@ station and shipyard blueprints are in `blueprints/`.
   Trade Lanes MP places them, are 654 m apart (Alpha-Delta and Delta-North). A
   lane goes both ways: each end is an entry toward the other. The lanes of the
   equatorial square run 200 m north of the stations' plane, on the side the
-  lobbies look at, and the ends of North Station's Moon lane are moved too, 150 m
+  lobbies look at, and the ends of North Station's Moon lane are moved too, 350 m
   south at North and 160 m north at the Moon, to keep their gates out of the
   Sun's way (see "The Sun" below). Every end is a
   one-block grid with a Trade Lane Computer, 1000 m from its station (1500 m at
