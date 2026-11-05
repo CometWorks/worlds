@@ -534,8 +534,11 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   at once, and the table's screen and the button refuse it. Both name the two ways
   out: the Multigrid Projector plugin of Pulsar, or the blueprint's Steam Workshop
   link with `!oct workshop <link or id> [table name]`, which needs no plugin. The
-  node the player is on downloads the item through its own Steam connection, as it
-  does the world's mods, and loads the blueprint into the nearest table as if the
+  node the player is on downloads the item anonymously with SteamCMD
+  (`ShipyardSteamCmd`; empty: Quasar's managed SteamCMD in
+  `ManagedRuntime/Tools/SteamCMD` above the server's data folder, else `steamcmd`
+  on the PATH), because a cluster node has no Steam connection of its own for the
+  game's Workshop calls. It loads the blueprint into the nearest table as if the
   player had loaded it: ids remapped together, the main grid at the origin, and
   programmable blocks' scripts dropped unless the player may use scripts, as the
   game does with a client's blueprint. The table must be free or the player's. A

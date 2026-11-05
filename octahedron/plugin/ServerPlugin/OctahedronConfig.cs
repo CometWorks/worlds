@@ -524,6 +524,17 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 3;
 
+    [StringOption(
+        description: "SteamCMD that !oct workshop downloads Workshop blueprints with. Empty: Quasar's managed SteamCMD "
+            + "(ManagedRuntime/Tools/SteamCMD above this server's data folder), else steamcmd on the PATH.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardSteamCmd
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
+
     [IntOption(
         0,
         description: "A press of a station's shipyard button without a blueprint books a repair slot: the shipyard's welders, containers and "

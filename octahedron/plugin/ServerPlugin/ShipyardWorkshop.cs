@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -8,13 +9,12 @@ using System.Threading.Tasks;
 using HarmonyLib;
 using Sandbox;
 using Sandbox.Common.ObjectBuilders;
-using Sandbox.Engine.Networking;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.World;
 using VRage;
+using VRage.FileSystem;
 using VRage.Game;
-using VRage.GameServices;
 using VRage.ObjectBuilders.Private;
 using VRageMath;
 
@@ -24,8 +24,8 @@ namespace ServerPlugin;
 // each grid's entity ids on its own, so a rotor, piston or hinge base points at no block of its
 // head's grid, and the server can't tell where the subgrids belong. Multigrid Projector on the
 // client remaps them together. The shipyard refuses such a blueprint and asks the player for the
-// blueprint's Steam Workshop link (!oct workshop), which this server downloads and loads into
-// the table itself, or for the plugin. Players without Pulsar can order ships with subgrids so.
+// blueprint's Steam Workshop link (!oct workshop), which this server downloads with SteamCMD and
+// loads into the table itself, or for the plugin. Players without Pulsar can order ships with subgrids so.
 internal static partial class ShipyardOrders
 {
     private static readonly Regex WorkshopIdPattern = new(@"(?:\bid=|^)(\d{6,20})\b");
@@ -97,57 +97,116 @@ internal static partial class ShipyardOrders
         return $"The shipyard downloads Workshop item {id} and answers in chat.";
     }
 
-    // Blocks the calling thread for the Workshop's answers
+    private const string WorkshopAppId = "244850";
+    private static readonly object steamCmdLock = new();
+
+    // Blocks the calling thread while SteamCMD downloads the item anonymously. The cluster's nodes
+    // have no Steam client or game server of their own, so the game's Workshop calls fail there.
     private static MyObjectBuilder_ShipBlueprintDefinition Download(ulong id, out string error)
     {
-        var items = new List<MyWorkshopItem>();
-        if (
-            !MyWorkshop.GetItemsBlockingUGC(
-                [new WorkshopId(id, MyGameService.GetDefaultUGC().ServiceName)],
-                items
-            )
-            || items.Count == 0
+        var root = Path.Combine(MyFileSystem.UserDataPath, "Octahedron", "Workshop");
+        var home = Path.Combine(root, "home");
+        Directory.CreateDirectory(home);
+        var steamCmd = SteamCmd();
+        var start = new ProcessStartInfo(steamCmd)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (
+            var arg in new[]
+            {
+                "+force_install_dir",
+                root,
+                "+login",
+                "anonymous",
+                "+workshop_download_item",
+                WorkshopAppId,
+                id.ToString(),
+                "+quit",
+            }
         )
+            start.ArgumentList.Add(arg);
+        // SteamCMD keeps its login and cache in HOME: ours, not that of the user running Quasar
+        start.Environment["HOME"] = home;
+        string output;
+        // One SteamCMD at a time in that HOME
+        lock (steamCmdLock)
         {
-            error = $"The Workshop has no public item {id}.";
+            using var process = Process.Start(start);
+            var stderr = process.StandardError.ReadToEndAsync();
+            output = process.StandardOutput.ReadToEndAsync().Wait(TimeSpan.FromMinutes(5))
+                ? process.StandardOutput.ReadToEnd()
+                : null;
+            if (output == null)
+            {
+                process.Kill();
+                error = "The Workshop download took too long.";
+                return null;
+            }
+            output += stderr.Result;
+        }
+        // SteamCMD puts the item into the install folder, or into its own or HOME's Steam folder
+        var folder = new[]
+        {
+            root,
+            Path.Combine(home, ".steam", "steamcmd"),
+            Path.GetDirectoryName(steamCmd),
+        }
+            .Where(r => !string.IsNullOrEmpty(r))
+            .Select(r =>
+                Path.Combine(r, "steamapps", "workshop", "content", WorkshopAppId, id.ToString())
+            )
+            .FirstOrDefault(Directory.Exists);
+        if (!output.Contains("Success. Downloaded item") || folder == null)
+        {
+            var why = output.Split('\n').LastOrDefault(l => l.Contains("ERROR"))?.Trim();
+            Plugin.Log.Warning($"Workshop blueprint {id}: {steamCmd} failed: {why ?? output}");
+            error = $"The Workshop has no public item {id}" + (why == null ? "." : $": {why}");
             return null;
         }
-        var item = items[0];
-        var result = MyWorkshop.DownloadBlueprintBlockingUGC(item);
-        if (result != MyGameServiceCallResult.OK)
-        {
-            error = $"The Workshop download of '{item.Title}' failed: {result}.";
-            return null;
-        }
-        var blueprint = ReadBlueprint(item.Folder)?.ShipBlueprints?.FirstOrDefault();
+        var blueprint = ReadBlueprint(folder)?.ShipBlueprints?.FirstOrDefault();
         if (blueprint?.CubeGrids == null || blueprint.CubeGrids.Length == 0)
         {
-            error = $"Workshop item {id} '{item.Title}' is not a ship blueprint.";
+            error = $"Workshop item {id} is not a ship blueprint.";
             return null;
         }
         Plugin.Log.Info(
-            $"Workshop blueprint {id} '{item.Title}' downloaded: {blueprint.CubeGrids.Length} grids"
+            $"Workshop blueprint {id} '{blueprint.CubeGrids[0].DisplayName}' downloaded: {blueprint.CubeGrids.Length} grids"
         );
-        // As the game's blueprint screen names it
-        blueprint.CubeGrids[0].DisplayName = item.Title;
         error = null;
         return blueprint;
+    }
+
+    private static string SteamCmd()
+    {
+        if (!string.IsNullOrWhiteSpace(Config.ShipyardSteamCmd))
+            return Config.ShipyardSteamCmd;
+        var name =
+            Environment.OSVersion.Platform == PlatformID.Win32NT ? "steamcmd.exe" : "steamcmd.sh";
+        for (var dir = new DirectoryInfo(MyFileSystem.UserDataPath); dir != null; dir = dir.Parent)
+        {
+            var quasar = Path.Combine(dir.FullName, "ManagedRuntime", "Tools", "SteamCMD", name);
+            if (File.Exists(quasar))
+                return quasar;
+        }
+        return "steamcmd";
     }
 
     // bp.sbc in the item's folder, or in the zip of an item from before the Workshop's UGC
     private static MyObjectBuilder_Definitions ReadBlueprint(string folder)
     {
         MyObjectBuilder_Definitions definitions = null;
-        var file = Path.Combine(folder ?? "", "bp.sbc");
+        var file = Path.Combine(folder, "bp.sbc");
         if (File.Exists(file))
         {
             MyObjectBuilderSerializerKeen.DeserializeXML(file, out definitions);
             return definitions;
         }
-        var archive =
-            File.Exists(folder) ? folder
-            : Directory.Exists(folder) ? Directory.GetFiles(folder).FirstOrDefault()
-            : null;
+        var archive = Directory
+            .GetFiles(folder)
+            .FirstOrDefault(f => f.EndsWith(".bin") || f.EndsWith(".sbb"));
         if (archive == null)
             return null;
         using var zip = ZipFile.OpenRead(archive);

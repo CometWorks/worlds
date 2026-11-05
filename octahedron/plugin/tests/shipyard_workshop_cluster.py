@@ -3,7 +3,7 @@ client (SE-1082), through the cluster's scenario bench (CometWorks/cluster Test/
 blueprint with subgrids on its way to the table, so the shipyard refuses it and asks for the blueprint's Workshop
 link (!oct workshop), which the node downloads and loads into the table itself.
 
-    OCT_WORLD_SOURCE=<world from build_world.py> [OCT_MGP_REPO=<MGP working copy>] \\
+    OCT_WORLD_SOURCE=<world from build_world.py> [OCT_MGP_REPO=<MGP working copy>] [OCT_STEAMCMD=<steamcmd>] \\
         <Test>/.venv/bin/python tests/shipyard_workshop_cluster.py <Test> <mode> <single bp.sbc> <multi bp.sbc> <item>
 
 The two blueprints are the Workshop item's bp.sbc (a ship with subgrids) and any ship without subgrids. Modes, one
@@ -21,6 +21,7 @@ tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + on
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import time
@@ -146,8 +147,14 @@ def run(bench) -> None:
         time.sleep(20)
         return " ".join(rig.new_chat_lines(api, before, ""))
 
-    def screen() -> str:
-        return " ".join(rig.chat(api, "!oct table show", 5))
+    def screen(*words: str) -> str:
+        """The table's screens on one line, their text wraps; within 30 s the one with the words"""
+        text = ""
+        for _ in range(10):
+            text = " ".join(" ".join(rig.chat(api, "!oct table show", 3)).split())
+            if all(w in text for w in words):
+                break
+        return text
 
     ship, grids, blocks = counts(SINGLE if MODE == "single" else MULTI)
     if MODE == "single":
@@ -159,7 +166,7 @@ def run(bench) -> None:
     else:
         said = load("Multi")
         check("the player is told in chat", HINT in said and "damage" in said, said)
-        shown = screen()
+        shown = screen("sent damaged", HINT)
         check(
             "the table's screen tells why",
             "sent damaged" in shown and HINT in shown,
@@ -189,7 +196,7 @@ def run(bench) -> None:
             if "'" in reply
             else ship
         )
-        shown = screen()
+        shown = screen("A free build.")
         check("the quote is a free build", "A free build." in shown, shown)
 
     owned = {g["entityId"] for g in api.list_grids()}
@@ -257,6 +264,8 @@ def press(api) -> str:
 def main() -> int:
     run.world_template = wa.prepare()
     wa.set_config(FreeBuildPcuLimit=100000)
+    if os.environ.get("OCT_STEAMCMD"):
+        wa.set_config(ShipyardSteamCmd=os.environ["OCT_STEAMCMD"])
     label = datetime.now(timezone.utc).strftime(f"%Y%m%d-%H%M%SZ-workshop-{MODE}")
     results = bench_module.HOST.results / label
     results.mkdir(parents=True, exist_ok=True)
