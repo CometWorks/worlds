@@ -106,8 +106,8 @@ def build_space(a) -> None:
     check(space is not None, f"the build space: {reply}")
     if space:
         size = tuple(float(v) for v in space.group(1, 2, 3))
-        # The Moon Shipyard's, between its arcs, is larger (SE-1069)
-        walls = (107.5, 100.0, 287.5) if STATION == "Moon" else (72.5, 75.0, 287.5)
+        # The Alien Shipyard's, between its arcs, is larger (SE-1069, SE-1118)
+        walls = (102.5, 105.0, 287.5) if STATION == "Moon" else (72.5, 75.0, 287.5)
         check(size == walls, f"it goes up to the walls: {size}")
         check(int(space[4]) > 0 and space[5] == "0", f"no connector is in it: {reply}")
         check(int(space[6]) > 0 and space[7] == "0", f"no conveyor is in it: {reply}")

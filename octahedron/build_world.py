@@ -41,9 +41,10 @@ SCENARIO = STEAM / "common/SpaceEngineers/Content/CustomWorlds/Star System"
 CONFIG = Path(__file__).parent / "config"
 STATION_BLUEPRINT = Path(__file__).parent / "blueprints/octahedron-station.sbc"
 SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/omni-arc-beam-shipyard.sbc"
-# make_moon_shipyard.py's bp.sbc, and the rock around it as the game saved it (SE-986)
-MOON_SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/moon-shipyard.sbc"
-MOON_SHIPYARD_ROCK = Path(__file__).parent / "blueprints/moon-shipyard-rock.vx2"
+# Moon Station's shipyard: the Alien Shipyard, make_moon_shipyard.py --variant alien's bp.sbc, and
+# the rock around it as the game saved it (SE-986, SE-1118)
+MOON_SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/alien-shipyard.sbc"
+MOON_SHIPYARD_ROCK = Path(__file__).parent / "blueprints/alien-shipyard-rock.vx2"
 MES_MODS = CONFIG / "mes-mods.xml"
 MES_STORAGE = CONFIG / "storage"
 RELATIVE_TOP_SPEED = CONFIG / "relative-top-speed.xml"
@@ -172,10 +173,11 @@ SHIPYARD_PLACE = (
 )
 # The pair's block bounds stay this far inside the safe zone's edge
 SAFE_ZONE_MARGIN = 10.0
-# Moon Station has the Moon Shipyard instead (make_moon_shipyard.py, SE-986), in a Uraninite rock
-# of its own, as Viktor placed them in the design world "Octahedron Design Moon Shipyard"
-# (SE-1069). In the station's (right, up, forward), from the safe zone's center: the station's
-# block bounds center, and the shipyard's, with its forward and up. Their zone is larger.
+# Moon Station has the Alien Shipyard instead (make_moon_shipyard.py, SE-986, SE-1118), in a
+# Uraninite rock of its own, where Viktor placed the Moon Shipyard in the design world "Octahedron
+# Design Moon Shipyard" (SE-1069): the Alien Shipyard's block bounds have the same center. In the
+# station's (right, up, forward), from the safe zone's center: the station's block bounds center,
+# and the shipyard's, with its forward and up. Their zone is larger.
 MOON_STATION_PLACE = (-50.0666, -97.8166, -77.7938)
 MOON_SHIPYARD_PLACE = (
     (4.5376, 0.0001, -2.6406),
