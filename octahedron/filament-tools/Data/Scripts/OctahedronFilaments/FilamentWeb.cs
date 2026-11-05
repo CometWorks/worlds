@@ -42,12 +42,13 @@ namespace OctahedronFilaments
         }
     }
 
-    // The filaments (SE-1067): while a filament tool works, thin threads reach out from
-    // around its ring to the block it works on, spread over the block, sagging a little and
-    // slowly swaying, with short strands between neighbors, like the web of Laconia
-    // Station's shipyard in The Expanse. ToolCore draws no beams for these tools (their
-    // definitions have none), so this finds the block the way ToolCore aims: along the
-    // emitter dummy of the turret's ball, up to the tool's reach.
+    // The filaments (SE-1067): while a filament tool works, dark threads reach out from
+    // around its ring to the block it works on, spread over the block, with short strands
+    // between neighbors, like the web of Laconia Station's shipyard in The Expanse. A slow
+    // wave field drifting through space bends them (SE-1089), so neighboring threads bend
+    // alike, like carbon fibers drifting in a current. ToolCore draws no beams for these
+    // tools (their definitions have none), so this finds the block the way ToolCore aims:
+    // along the emitter dummy of the turret's ball, up to the tool's reach.
     [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
     public class FilamentWeb : MySessionComponentBase
     {
@@ -57,17 +58,21 @@ namespace OctahedronFilaments
         const double DrawDistance = 2000;
         const int AimInterval = 10;
         const int Threads = 8;
-        const int Segments = 12;
+        const int Segments = 32;
         const int Strands = 10;
 
-        // The spread of the threads' ends over the block, the sag and sway as parts of
-        // the thread's length
+        // The spread of the threads' ends over the block; the sag and the bend as parts of
+        // the thread's length; the bend's wave length (m) and drift speed (rad/s). Wide
+        // enough to see at shipyard distances, dark gray (SE-1089). The color is linear,
+        // the texture darkens it further
         const double Spread = 1.4;
-        const double Sag = 0.04;
-        const double Sway = 0.01;
-        const float ThreadWidth = 0.06f;
-        const float StrandWidth = 0.035f;
-        static readonly Vector4 Color = new Vector4(0.42f, 0.44f, 0.47f, 0.9f);
+        const double Sag = 0.03;
+        const double Bend = 0.07;
+        const double WaveLength = 45;
+        const double Drift = 0.35;
+        const float ThreadWidth = 0.5f;
+        const float StrandWidth = 0.3f;
+        static readonly Vector4 Color = new Vector4(0.08f, 0.08f, 0.085f, 1f);
         static readonly MyStringId Material = MyStringId.GetOrCompute("WeaponLaser");
 
         // Emitter dummy of each tool's turret ball, and the ring's dummies the threads start from
@@ -93,7 +98,7 @@ namespace OctahedronFilaments
             public Vector3D[] Anchors;
             public readonly Vector3D[] Ends = new Vector3D[Threads];
             public readonly Vector3D[] Bows = new Vector3D[Threads];
-            public readonly double[] Phases = new double[Threads];
+            public readonly Vector3D[] Shifts = new Vector3D[Threads];
             public readonly int[] StrandThreads = new int[Strands];
             public readonly double[] StrandAt = new double[Strands * 2];
         }
@@ -170,13 +175,18 @@ namespace OctahedronFilaments
             {
                 var start = Vector3D.Transform(web.Anchors[i], tool.WorldMatrix);
                 var end = web.Hit + web.Ends[i];
-                var length = Vector3D.Distance(start, end);
-                var bow =
-                    web.Bows[i] * length * (Sag + Sway * Math.Sin(time * 0.6 + web.Phases[i]));
+                var along = end - start;
+                var length = along.Normalize();
+                var sag = web.Bows[i] * length * Sag;
                 for (var s = 0; s <= Segments; s++)
                 {
                     var t = (double)s / Segments;
-                    points[i, s] = Vector3D.Lerp(start, end, t) + bow * Math.Sin(Math.PI * t);
+                    var point = Vector3D.Lerp(start, end, t);
+                    // Only the field's part across the thread bends it; each thread
+                    // samples it a little off its place, so neighbors differ a bit
+                    var bend = Wave(point + web.Shifts[i], time);
+                    bend -= along * bend.Dot(along);
+                    points[i, s] = point + (sag + bend * length * Bend) * Math.Sin(Math.PI * t);
                 }
                 for (var s = 0; s < Segments; s++)
                     Line(points[i, s], points[i, s + 1], ThreadWidth);
@@ -191,6 +201,18 @@ namespace OctahedronFilaments
                     StrandWidth
                 );
             }
+        }
+
+        // A smooth field of unit-ish vectors that changes over WaveLength in space and
+        // drifts slowly with time
+        static Vector3D Wave(Vector3D p, double time)
+        {
+            p *= 2 * Math.PI / WaveLength;
+            return new Vector3D(
+                Math.Sin(p.Y + 0.5 * p.Z - Drift * time),
+                Math.Sin(p.Z + 0.6 * p.X - 0.8 * Drift * time + 2),
+                Math.Sin(p.X + 0.7 * p.Y - 1.2 * Drift * time + 4)
+            );
         }
 
         static void Line(Vector3D from, Vector3D to, float width)
@@ -225,7 +247,7 @@ namespace OctahedronFilaments
             {
                 web.Ends[i] = unit() * Spread * Math.Sqrt(random.NextDouble());
                 web.Bows[i] = unit();
-                web.Phases[i] = random.NextDouble() * Math.PI * 2;
+                web.Shifts[i] = unit() * WaveLength * 0.2 * random.NextDouble();
             }
             for (var k = 0; k < Strands; k++)
             {

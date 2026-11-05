@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Sounds>
+    <!-- The filament tools at work (SE-1089): the thunder of Pertam's electric storm
+         (the game's WM_Lightning waves), looped, at the range of OmniArc's welding sound.
+         The game picks one wave each time a tool starts, so the tools don't sound alike.
+         make_filament_mod.py copies the waves from the game: a mod's sound can't point
+         at the game's Content/Audio -->
+    <Sound>
+      <Id>
+        <TypeId>MyObjectBuilder_AudioDefinition</TypeId>
+        <SubtypeId>OctahedronFilamentStorm</SubtypeId>
+      </Id>
+      <Category>TOOL</Category>
+      <MaxDistance>125</MaxDistance>
+      <UpdateDistance>125</UpdateDistance>
+      <Volume>0.6</Volume>
+      <PitchVariation>100</PitchVariation>
+      <Loopable>true</Loopable>
+      <Waves>
+        <Wave Type="D3">
+          <Loop>Audio\OctahedronFilaments\Lightning_0.wav</Loop>
+        </Wave>
+        <Wave Type="D3">
+          <Loop>Audio\OctahedronFilaments\Lightning_1.wav</Loop>
+        </Wave>
+        <Wave Type="D3">
+          <Loop>Audio\OctahedronFilaments\Lightning_2.wav</Loop>
+        </Wave>
+        <Wave Type="D3">
+          <Loop>Audio\OctahedronFilaments\Lightning_3.wav</Loop>
+        </Wave>
+      </Waves>
+    </Sound>
+  </Sounds>
+</Definitions>
