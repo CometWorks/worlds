@@ -318,7 +318,7 @@ OmniArc welder and deconstructor definitions of the Workshop copy:
 - The mod's script (`filament-tools/`) draws the filaments on the clients:
   while a tool shoots, eight threads run from around its ring to the block it
   aims at, spread over the block, with short strands between them. They are
-  very dark gray, 0.24 m wide to be seen from across the shipyard, and bent by
+  dark gray, 0.5 m wide to be seen from across the shipyard, and bent by
   a wave field that drifts slowly through space, so neighbors bend alike
   (SE-1089). It finds the block along the tool's emitter, as
   ToolCore aims, up to its 100 m reach.

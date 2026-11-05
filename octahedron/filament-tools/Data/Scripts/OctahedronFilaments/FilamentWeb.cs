@@ -63,16 +63,16 @@ namespace OctahedronFilaments
 
         // The spread of the threads' ends over the block; the sag and the bend as parts of
         // the thread's length; the bend's wave length (m) and drift speed (rad/s). Wide
-        // enough to see at shipyard distances (SE-1089: 4x SE-1067's), very dark gray like
-        // the Moon Shipyard's Uraninite. The color is linear, the texture darkens it further
+        // enough to see at shipyard distances, dark gray (SE-1089). The color is linear,
+        // the texture darkens it further
         const double Spread = 1.4;
         const double Sag = 0.03;
         const double Bend = 0.07;
         const double WaveLength = 45;
         const double Drift = 0.35;
-        const float ThreadWidth = 0.24f;
-        const float StrandWidth = 0.14f;
-        static readonly Vector4 Color = new Vector4(0.025f, 0.025f, 0.027f, 1f);
+        const float ThreadWidth = 0.5f;
+        const float StrandWidth = 0.3f;
+        static readonly Vector4 Color = new Vector4(0.08f, 0.08f, 0.085f, 1f);
         static readonly MyStringId Material = MyStringId.GetOrCompute("WeaponLaser");
 
         // Emitter dummy of each tool's turret ball, and the ring's dummies the threads start from
