@@ -16,6 +16,9 @@ build each:
   the client's copy on the table has every grid in place, again by its bare id from the cache, and it is ordered
   and built.
 - mgp: the client with MGP (OCT_MGP_REPO) loads the ship with subgrids: no prompt, ordered and built.
+- dlc: the player owns no DLC (!sprobe nodlc, a node plugin built from tests/station-probe) and loads the
+  item, a ship with DLC blocks, with !bp: the quote and the order name the blocks left out, and the ship is
+  built without them.
 
 A built ship must have the blueprint's grids and blocks, the grids next to each other. The setup is
 tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one headless client.
@@ -27,6 +30,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -43,6 +47,7 @@ from wa_economy_cluster import (
 )  # noqa: E402
 
 import clients  # noqa: E402
+import station_tests as st  # noqa: E402
 from se_remote import CallOp  # noqa: E402
 
 MODE = sys.argv[2]
@@ -177,10 +182,44 @@ def run(bench) -> None:
                 break
         return text
 
+    def workshop(command: str, seconds: float) -> str:
+        """Sends a !bp command, returns the chat until the shipyard says the blueprint is on the
+        table: the answer comes once SteamCMD is done"""
+        before = api.get_chat_messages()
+        api.send_chat(command)
+        reply = ""
+        deadline = time.monotonic() + seconds
+        while "hologram table" not in reply and time.monotonic() < deadline:
+            time.sleep(2)
+            reply = " ".join(rig.new_chat_lines(api, before, command))
+        print(f"{command} -> {reply}", flush=True)
+        return reply
+
     ship, grids, blocks = counts(SINGLE if MODE == "single" else MULTI)
+    left_out = 0
     if MODE == "single":
         said = load("Single")
         check("no prompt for a ship without subgrids", HINT not in said, said)
+    elif MODE == "dlc":
+        reply = st.probe(api, "nodlc")
+        check("the server takes the player for owning no DLC", "NODLC" in reply, reply)
+        reply = workshop(f"{HINT} {ITEM}", 180)
+        check(
+            "the Workshop blueprint is on the table",
+            "is on the hologram table" in reply,
+            reply,
+        )
+        ship = re.search(r"'(.+)' is on the hologram table", reply)[1]
+        shown = screen("Left out")
+        left_out = sum(
+            int(n)
+            for n in re.findall(r"(\d+) of ", shown.split("Left out", 1)[-1][:200])
+        )
+        check(
+            "the quote names the DLC blocks it leaves out",
+            "you don't own their DLCs" in shown and left_out > 0,
+            shown,
+        )
     elif MODE == "mgp":
         said = load("Multi")
         check("no prompt with Multigrid Projector", HINT not in said, said)
@@ -194,18 +233,9 @@ def run(bench) -> None:
             )
             shown = screen("BLUEPRINT False")
             check(f"{name}: the table is empty", "BLUEPRINT False" in shown, shown)
-        # The answer comes in chat once SteamCMD is done
-        command = (
-            f"{HINT} https://steamcommunity.com/sharedfiles/filedetails/?id={ITEM}"
+        reply = workshop(
+            f"{HINT} https://steamcommunity.com/sharedfiles/filedetails/?id={ITEM}", 180
         )
-        before = api.get_chat_messages()
-        api.send_chat(command)
-        reply = ""
-        deadline = time.monotonic() + 180
-        while "hologram table" not in reply and time.monotonic() < deadline:
-            time.sleep(2)
-            reply = " ".join(rig.new_chat_lines(api, before, command))
-        print(f"{command} -> {reply}", flush=True)
         check(
             "the Workshop blueprint is on the table",
             "is on the hologram table" in reply,
@@ -224,14 +254,7 @@ def run(bench) -> None:
             f"{shown} {expected}",
         )
         # Again, by the bare id: the blueprint now comes from the cache the nodes share (CACHE)
-        command = f"{HINT} {ITEM}"
-        before = api.get_chat_messages()
-        api.send_chat(command)
-        again = ""
-        deadline = time.monotonic() + 60
-        while "hologram table" not in again and time.monotonic() < deadline:
-            time.sleep(1)
-            again = " ".join(rig.new_chat_lines(api, before, command))
+        again = workshop(f"{HINT} {ITEM}", 60)
         log = node_log()
         downloads = re.findall(
             rf"Workshop blueprint {ITEM} version \S+ .* (from the cache|downloaded)",
@@ -296,8 +319,9 @@ def run(bench) -> None:
         default=0,
     )
     check(
-        f"the ship has the blueprint's {grids} grids and {blocks} blocks",
-        len(found) == grids and sum(found.values()) == blocks,
+        f"the ship has the blueprint's {grids} grids and {blocks} blocks"
+        + (f" but the {left_out} left out" if left_out else ""),
+        len(found) == grids and sum(found.values()) == blocks - left_out,
         f"{found}",
     )
     check("its grids are within 100 m of each other", spread < 100, f"{spread:.1f} m")
@@ -336,8 +360,35 @@ def press(api) -> str:
     return reply
 
 
+def build_probe() -> Path:
+    """The station probe as a local plugin, as tests/shipyard_turn_cluster.py builds it"""
+    plugin = Path(wa.__file__).resolve().parents[1]
+    out = wa.lc.PLUGINS / ".build" / "StationProbe"
+    subprocess.run(
+        ["nice", "-n", "19", "dotnet", "build", str(plugin / "tests/station-probe/StationProbe.csproj"),
+         "-c", "Release", "--nologo", "-v", "q", f"-p:Magnetar={os.environ['MAGNETAR_HOME']}", "-o", str(out)],
+        check=True,
+    )  # fmt: skip
+    folder = wa.lc.PLUGINS / "StationProbe"
+    folder.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(out / "StationProbe.dll", folder / "StationProbe.dll")
+    commit = subprocess.check_output(
+        ["git", "-C", str(plugin), "rev-parse", "HEAD"], text=True
+    ).strip()
+    (folder / "StationProbe.xml").write_text(
+        '<?xml version="1.0"?>\n<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">'
+        f"<Id>{st.PROBE[3]}</Id><FriendlyName>StationProbe</FriendlyName><RepoId>CometWorks/worlds</RepoId>"
+        f"<Commit>{commit}</Commit><Runtimes>CoreCLR</Runtimes></PluginData>\n",
+        encoding="utf-8",
+    )
+    return folder
+
+
 def main() -> int:
     run.world_template = wa.prepare()
+    if MODE == "dlc":
+        os.environ["CLUSTER_EXTRA_PLUGINS"] += f",node:{build_probe()}"
     wa.set_config(FreeBuildPcuLimit=100000, ShipyardWorkshopCache=CACHE)
     shutil.rmtree(CACHE, ignore_errors=True)
     if os.environ.get("OCT_STEAMCMD"):
