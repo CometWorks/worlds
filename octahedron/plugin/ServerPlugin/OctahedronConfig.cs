@@ -1193,7 +1193,15 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = "";
+    } =
+        // Five times the minimum stock of what MarketStationPrices makes each station sell cheap
+        "Beta Station=Component/SteelPlate=1500,Component/Construction=2500,Component/InteriorPlate=2500,Component/MetalGrid=500,Component/SmallTube=1000,Component/LargeTube=200,Component/Motor=300,Component/Computer=1000,Component/Display=150,Component/BulletproofGlass=150,Component/Girder=250;"
+        + "Delta Station=Component/SteelPlate=1500,Component/Construction=2500,Component/InteriorPlate=2500,Component/MetalGrid=500,Component/SmallTube=1000,Component/LargeTube=200,Component/Motor=300,Component/Computer=1000,Component/Display=150,Component/BulletproofGlass=150,Component/Girder=250;"
+        + "Alpha Station=Ingot/Iron=10000,Ingot/Nickel=2500,Ingot/Silicon=2500,Ingot/Cobalt=1500;"
+        + "Gamma Station=Ingot/Iron=10000,Ingot/Nickel=2500,Ingot/Silicon=2500,Ingot/Cobalt=1500;"
+        + "North Station=Ingot/Iron=10000,Ingot/Nickel=2500,Ingot/Silicon=2500,Ingot/Cobalt=1500;"
+        + "South Station=Ingot/Iron=10000,Ingot/Nickel=2500,Ingot/Silicon=2500,Ingot/Cobalt=1500;"
+        + "Moon Station=Ingot/Iron=10000,Ingot/Nickel=2500,Ingot/Silicon=2500,Ingot/Cobalt=1500";
 
     [StringOption(
         description: "Each station's specialties, which OCT buys at MarketSpecialtyPercent: Station name=Type/Subtype,..., stations separated by ;.",
