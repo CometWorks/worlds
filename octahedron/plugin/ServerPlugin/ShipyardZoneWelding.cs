@@ -46,6 +46,13 @@ namespace ServerPlugin;
 // ToolCore does when it changes; a client whose tool is on takes no notice. Not every such
 // client shows as one with a new tool, so every 30 s of a build the switch also goes to all
 // clients in sync range that have the tool (SE-963).
+//
+// A cluster handover that brings the shipyard to another node takes its players' clients along
+// (SE-1115). Such a client keeps its tools and never asks the new node's ToolCore for them, so
+// the new node's lists of the tools' clients are empty: nothing tells it of the build, neither
+// ToolCore nor the tellings above, and its tools stay off and their target tracking too. So the
+// clients in sync range join the lists, which then tell them like a client with a new tool, and
+// the tellings of new tools send the target tracking as well.
 internal static class ShipyardZoneWelding
 {
     private const string Owner = "Octahedron Authority";
@@ -143,6 +150,10 @@ internal static class ShipyardZoneWelding
             AccessTools.TypeByName("ToolCore.Session.FieldType"),
             "Activated"
         );
+        internal readonly object TrackTargets = Enum.Parse(
+            AccessTools.TypeByName("ToolCore.Session.FieldType"),
+            "TrackTargets"
+        );
     }
 
     private static ToolCore toolCore;
@@ -176,8 +187,9 @@ internal static class ShipyardZoneWelding
     private static readonly HashSet<ulong> inRange = [];
 
     /// <summary>
-    /// Sends the tools' switch to the clients with a new tool, or forgets them as the build ends.
-    /// Does nothing without ToolCore.
+    /// Sends the tools' switch to the clients with a new tool, counting every client in sync
+    /// range as one that has the tools, or forgets them as the build ends. Does nothing without
+    /// ToolCore.
     /// </summary>
     internal static void ShowShooting(IEnumerable<MyFunctionalBlock> tools, bool on)
     {
@@ -201,30 +213,41 @@ internal static class ShipyardZoneWelding
                 told.Remove(comp);
                 continue;
             }
+            if (!ranged)
+                InRange(tool.CubeGrid);
+            ranged = true;
             var telling = told.GetOrCreateValue(comp);
             var clients = (List<ulong>)core.Clients.GetValue(comp);
+            foreach (var client in inRange)
+                if (!clients.Contains(client))
+                    clients.Add(client);
             ClientsToTell(clients, telling.Clients);
+            // Only the zone turns a tool off on a client, so the repeats need no target tracking
+            if (toTell.Count > 0)
+                Send(core, networking, tool, core.TrackTargets);
             if (now >= telling.Again)
             {
                 telling.Again = now + Repeat;
-                if (!ranged)
-                    InRange(tool.CubeGrid);
-                ranged = true;
                 foreach (var client in clients.Distinct())
                     if (inRange.Contains(client) && !toTell.Contains(client))
                         toTell.Add(client);
             }
             if (toTell.Count > 0)
-                core.Send.Invoke(
-                    networking,
-                    [
-                        Activator.CreateInstance(core.Packet, tool.EntityId, core.Activated, true),
-                        toTell,
-                        0UL,
-                    ]
-                );
+                Send(core, networking, tool, core.Activated);
         }
     }
+
+    // ToolCore's switch of the field on, to toTell
+    private static void Send(
+        ToolCore core,
+        object networking,
+        MyFunctionalBlock tool,
+        object field
+    ) =>
+        core.Send.Invoke(
+            networking,
+            [Activator.CreateInstance(core.Packet, tool.EntityId, field, true), toTell, 0UL]
+        );
 
     // The online players within sync distance of the grid. ToolCore's list may still hold
     // clients that quit, or joined again far away; they'd log the packet as invalid.

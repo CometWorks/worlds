@@ -595,6 +595,11 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   at the next 10 s check and once more at the one after (SE-782). Not every such client
   shows up as one with a new tool, so every 30 s of a build the switch also goes to the
   online players within sync distance of the shipyard that have the tools (SE-963).
+  A cluster handover that moves the shipyard to another node brings its players'
+  clients along with their tools, so they never tell the new node's ToolCore they have
+  them, and it would tell them nothing (SE-1115). So the online players within sync
+  distance also count as having the tools, and the switch they get turns target
+  tracking on too.
   ToolCore is the mod's own code: this reaches its session
   and packet by reflection and does nothing if they are gone.
 - A build whose ship gains no integrity for 60 s has stalled. The plugin first
@@ -1462,6 +1467,10 @@ integrity is left. `OCT_BEAM_MIX=1` builds functional blocks too, `OCT_BEAM_ZONE
 is the control with zones that allow welding, and `OCT_BEAM_OFFLINE=1` stops the server
 mid-build and loads its save offline. `tests/shipyard_beams_cluster.py` does the same
 check on a test cluster, with a trip to a station on the other node.
+`OCT_BEAM_STEPS=handover` has the server forget which clients have the tools before the
+order, as a node does after a handover that brought the client along. With the
+OctahedronFilaments tools (`OCT_SHIPYARD_STATION=Moon`) the client must draw their
+filaments too.
 `tests/panel-text/PanelTextTests` checks the queue panel's layout without the game
 (`dotnet run -c Release --project tests/panel-text/PanelTextTests`) and
 `tests/test_queue_panel.py` on a real station.
