@@ -307,7 +307,12 @@ def run(bench) -> None:
     modded = sum(int(n) for n in re.findall(r"(\d+) ", named[1])) if named else 0
     check(
         f"the order names the {expected} blocks of mods the server doesn't have",
-        modded == expected,
+        (
+            modded == expected
+            and all(re.fullmatch(r"\d+ \S.*", n.strip()) for n in named[1].split(","))
+            if named
+            else expected == 0
+        ),
         reply,
     )
     left_out += modded
