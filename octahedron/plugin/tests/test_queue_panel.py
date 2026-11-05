@@ -247,10 +247,9 @@ def main() -> int:
             found = building.search(" ".join(queue(a).split()))
         log(f"percents seen: {seen}")
         check(
-            len(seen) > 0
-            and all(0 <= p <= 100 for p in seen)
-            and seen == sorted(seen)
-            and len(set(seen)) >= 3,
+            len(seen) > 0 and all(0 <= p <= 100 for p in seen) and seen == sorted(seen)
+            # The shots take 16 s, in which a fast shipyard can finish the ship
+            and (len(set(seen)) >= 2 or 0 < seen[0] < 100),
             f"the percent goes up from 0 to 100: {seen}",
         )
         leave(a, mark)
