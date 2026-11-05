@@ -46,6 +46,16 @@ from test_table_rules import (  # noqa: E402
 )
 
 COLUMNS = 46
+# The test ship on a slab of heavy armor, so the welders take a while and the percent has steps
+SHIP = so.SMALL.replace(
+    "</CubeBlocks>",
+    "".join(
+        rig.block("MyObjectBuilder_CubeBlock", "LargeHeavyBlockArmorBlock", (x, -1, z))
+        for x in range(-3, 4)
+        for z in range(9)
+    )
+    + "</CubeBlocks>",
+)
 QUEUE_PANEL = "Text Panel - Station ShipyardQueue"
 CLEAR = 3
 SHOTS = os.environ.get("OCT_SHOTS")
@@ -177,7 +187,7 @@ def font(a, lines: list[str]) -> None:
 def main() -> int:
     rig.stop_client()
     rig.stop_server()
-    so.prepare(so.SMALL, 60)
+    so.prepare(SHIP, 60)
     folder = rig.APPDATA / "Mods"
     folder.mkdir(parents=True, exist_ok=True)
     for id_ in pl.MODS:
@@ -193,7 +203,7 @@ def main() -> int:
         with_config(a, **CONFIG, ShipyardClearMinutes=CLEAR)
         log(remove(a))
         settled(a, "table", "then press")
-        load(a)
+        load(a, SHIP)
         settled(a, "table", "Press the button")
         mark = tp.latest(a)
         check("is in the queue" in press(a), "the order is in the queue")
@@ -227,18 +237,20 @@ def main() -> int:
         )
         # The percent grows with the welders until the build ends
         seen = []
-        while found and len(seen) < 60:
+        shot = False
+        while found and len(seen) < 300:
             seen.append(int(found.group(1)))
+            if SHOTS and not shot and 0 < seen[-1] < 100:
+                shoot(a, "queue-panel-build")
+                shot = True
             time.sleep(2)
             found = building.search(" ".join(queue(a).split()))
-            if SHOTS and len(seen) == 1:
-                shoot(a, "queue-panel-build")
         log(f"percents seen: {seen}")
         check(
             len(seen) > 0
             and all(0 <= p <= 100 for p in seen)
             and seen == sorted(seen)
-            and (len(seen) == 1 or seen[-1] > seen[0]),
+            and len(set(seen)) >= 3,
             f"the percent goes up from 0 to 100: {seen}",
         )
         leave(a, mark)
