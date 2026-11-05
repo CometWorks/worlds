@@ -543,6 +543,30 @@ public sealed class MarketBook
         return profiles;
     }
 
+    /// <summary>"Beta Station=Component/*=90,Ingot/*=110; Alpha Station=Component/*=110": each station's share of the reference prices, in %, by item pattern.</summary>
+    public static Dictionary<string, List<(Regex Items, long Percent)>> ParsePercents(
+        string text
+    ) =>
+        ParseProfiles(text)
+            .ToDictionary(
+                p => p.Key,
+                p => p.Value.Select(e => (Glob(e.Key), e.Value / Amounts.Unit)).ToList()
+            );
+
+    /// <summary>The station's share of the item's reference price, in %: the first pattern that matches, else 100.</summary>
+    public static long Percent(
+        Dictionary<string, List<(Regex Items, long Percent)>> percents,
+        string station,
+        string item
+    )
+    {
+        if (percents.TryGetValue(station, out var shares))
+            foreach (var (items, percent) in shares)
+                if (items.IsMatch(item))
+                    return percent;
+        return 100;
+    }
+
     /// <summary>"Ore/*, Ingot/*": items as Type/Subtype, * matching any text; null for none.</summary>
     public static Regex Glob(string patterns)
     {

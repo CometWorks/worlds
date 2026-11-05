@@ -515,6 +515,8 @@ internal static class Market
     private static string playerMinedKey;
     private static HashSet<string> playerMined;
     private static Dictionary<string, List<KeyValuePair<string, long>>> profiles = new();
+    private static string stationPricesKey;
+    private static Dictionary<string, List<(Regex Items, long Percent)>> stationPrices = new();
     private static string pricesKey;
     private static Dictionary<string, long> prices = new();
 
@@ -621,6 +623,20 @@ internal static class Market
             "MarketSpecialties"
         );
 
+    /// <summary>The station's share of the item's reference price, in %, from MarketStationPrices.</summary>
+    public static long StationPercent(string station, string item) =>
+        MarketBook.Percent(
+            Parsed(
+                Config.MarketStationPrices,
+                ref stationPricesKey,
+                ref stationPrices,
+                MarketBook.ParsePercents,
+                "MarketStationPrices"
+            ),
+            station,
+            item
+        );
+
     private static Dictionary<string, long> Prices() =>
         Parsed(
             Config.MarketPrices,
@@ -696,7 +712,9 @@ internal static class Market
         }
 
         public long Reference(string station, string item) =>
-            Market.Catalog().Contains(item) ? ReferencePrice(item) : 0;
+            Market.Catalog().Contains(item)
+                ? ReferencePrice(item) * StationPercent(station, item) / 100
+                : 0;
 
         public long BasePrice(string item) => ReferencePrice(item);
 
