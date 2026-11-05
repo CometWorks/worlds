@@ -95,23 +95,22 @@ def shoot(remote, name: str) -> None:
     )
     center = panel["worldPosition"]
     log(f"panel at {center}, facing {side}")
-    # One cell out, which looks over the table's projector arm onto the screen. The character
-    # drops onto the arm or past it to the floor, from where the arm hides the screen: again then
-    if remote.get_character()["jetpack"]:
+    # The station's gravity pulls along its grid, so the feet are 1.6 m down its up axis
+    feet = [1.6 * (b - a) / 2.5 for a, b in zip(here, above)]
+    # With the jetpack on and dampeners the character stays where it is put instead of falling
+    if not remote.get_character()["jetpack"]:
         remote.key("X")
-    eye = [c + b - a for c, a, b in zip(center, here, front)]
-    for _ in range(6):
-        remote.character_teleport(eye[0], eye[1] - 1.6, eye[2])
+    # The shot is what the character sees, not the view from behind it
+    if remote.get_view().get("thirdPerson"):
+        remote.key("V")
+    for cells in (1.5, 2):
+        eye = [c + cells * (b - a) for c, a, b in zip(center, here, front)]
+        remote.character_teleport(*(e - f for e, f in zip(eye, feet)))
         time.sleep(3)
-        feet = remote.get_character()["position"]
-        log(f"eye {eye}, character at {feet}")
-        if math.dist(feet, (eye[0], eye[1] - 1.6, eye[2])) < 1.0:
-            break
-    remote.character_look_at(*center, tolerance=0.5)
-    time.sleep(3)
-    # Tab cycles the HUD: the shots with less of it in front of the screen
-    for hud in range(3):
-        path = Path(SHOTS) / f"{name}-{hud}.png"
+        remote.character_look_at(*center, tolerance=0.5)
+        time.sleep(3)
+        log(f"eye {eye}, character {remote.get_character().get('position')}")
+        path = Path(SHOTS) / f"{name}-{cells}.png"
         remote.screenshot_save(str(path), 1280, 720)
         time.sleep(2)
         log(f"screenshot {path}")
