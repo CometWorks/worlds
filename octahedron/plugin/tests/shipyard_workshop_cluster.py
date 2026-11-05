@@ -20,7 +20,9 @@ build each:
   item, a ship with DLC blocks, with !bp: the quote and the order name the blocks left out, and the ship is
   built without them.
 
-A built ship must have the blueprint's grids and blocks, the grids next to each other. The setup is
+Blocks of mods the world doesn't load, by OCT_DS64's content (2414780476 has some on its hinges' grids), are left
+out and named by the order (SE-1086). A built ship must have the blueprint's grids and blocks, the grids next to
+each other, and the order ends with it ready. The setup is
 tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one headless client.
 """
 
@@ -90,6 +92,17 @@ def counts(blueprint: str) -> tuple[str, int, int]:
     blocks = blueprint.count("<MyObjectBuilder_CubeBlock")
     name = re.search(r"<CubeGrid>.*?<DisplayName>([^<]*)<", blueprint, re.S)[1]
     return name, grids, blocks
+
+
+def unknown(blueprint: str) -> int:
+    """The bp.sbc's blocks that the game's own content doesn't define, of mods the world doesn't load"""
+    data = Path(os.environ["OCT_DS64"]).parent / "Content" / "Data"
+    known = set()
+    for f in data.rglob("*.sbc"):
+        known.update(re.findall(r"<SubtypeId>([^<]*)<", f.read_text(errors="ignore")))
+    blocks = blueprint.split("<MyObjectBuilder_CubeBlock")[1:]
+    subtypes = (re.search(r"<SubtypeName>([^<]*)<|<SubtypeName />", b) for b in blocks)
+    return sum(bool(m and m[1] and m[1] not in known) for m in subtypes)
 
 
 def run(bench) -> None:
@@ -289,6 +302,20 @@ def run(bench) -> None:
         "the ship is ordered", "is in the queue" in reply or "builds" in reply, reply
     ):
         return
+    expected = unknown(SINGLE if MODE == "single" else MULTI)
+    named = re.search(r"doesn't have their mods: ([^.]*)\.", reply)
+    modded = sum(int(n) for n in re.findall(r"(\d+) ", named[1])) if named else 0
+    check(
+        f"the order names the {expected} blocks of mods the server doesn't have",
+        (
+            modded == expected
+            and all(re.fullmatch(r"\d+ \S.*", n.strip()) for n in named[1].split(","))
+            if named
+            else expected == 0
+        ),
+        reply,
+    )
+    left_out += modded
     line = wait_until(
         lambda: re.search(
             rf"Shipyard order \S+ '{re.escape(ship)}' of .* ended: (.*)", node_log()
@@ -297,6 +324,7 @@ def run(bench) -> None:
         "the order's end",
     )
     print(line[0], flush=True)
+    check("the order ends with the ship ready", "is ready" in line[1], line[1])
     time.sleep(20)
     new = [
         api.get_grid(g["entityId"])

@@ -233,6 +233,9 @@ internal static partial class ShipyardOrders
         // The blocks left out, of DLCs the player doesn't own (ShipyardDlc)
         public string LeftOut;
 
+        // The blocks left out, of mods this server doesn't have (LeaveOutUnknown)
+        public string Unknown;
+
         // The player ignores PCU limits: a free build whatever the ship (FreePrints.Exempt)
         public bool Exempt;
 
@@ -286,6 +289,12 @@ internal static partial class ShipyardOrders
                 $"'{plan.Ship}' has subgrids, which your game may have sent damaged. {WorkshopHint}"
             );
         var main = blueprint[0];
+        plan.Unknown = LeaveOutUnknown(blueprint);
+        if (!blueprint.Contains(main))
+            return Fail(
+                plan,
+                $"'{plan.Ship}' can't be built: its main grid has only blocks of mods this server doesn't have ({plan.Unknown})."
+            );
         plan.LeftOut = ShipyardDlc.LeaveOut(
             blueprint,
             MySession.Static.Players.TryGetSteamId(identityId)
@@ -1063,7 +1072,11 @@ internal static partial class ShipyardOrders
     }
 
     private static string LeftOutText(Plan plan) =>
-        plan.LeftOut == null ? "" : $"Left out, you don't own their DLCs: {plan.LeftOut}. ";
+        (
+            plan.Unknown == null
+                ? ""
+                : $"Left out, this server doesn't have their mods: {plan.Unknown}. "
+        ) + (plan.LeftOut == null ? "" : $"Left out, you don't own their DLCs: {plan.LeftOut}. ");
 
     private static void ShowQuote(Plan plan, BuildQuote quote)
     {
@@ -1088,7 +1101,7 @@ internal static partial class ShipyardOrders
                 .AppendLine($"Bring the parts at your turn, or {quote.Total:N0} SC.");
         if (plan.Error == null)
         {
-            if (plan.LeftOut != null)
+            if (plan.LeftOut != null || plan.Unknown != null)
                 text.AppendLine(LeftOutText(plan).TrimEnd());
             text.AppendLine();
             if (plan.Blocker != null)
@@ -2463,21 +2476,28 @@ internal static partial class ShipyardOrders
         foreach (var block in blocks)
             if (unbuilt.TryGetValue(block.BlockDefinition.Id, out var n))
                 unbuilt[block.BlockDefinition.Id] = n - 1;
-        var missing = new Dictionary<MyCubeBlockDefinition, int>();
+        // By name; a block of a mod this server doesn't have as Unknown names it (SE-1086)
+        var missing = new Dictionary<string, int>();
         var parts = new Dictionary<string, int>();
         foreach (var (id, count) in unbuilt.Select(u => (u.Key, u.Value)).Where(u => u.Value > 0))
-            if (MyDefinitionManager.Static.TryGetCubeBlockDefinition(id, out var definition))
+        {
+            if (!MyDefinitionManager.Static.TryGetCubeBlockDefinition(id, out var definition))
             {
-                missing[definition] = count;
-                foreach (var c in definition.Components)
-                    parts[c.Definition.Id.SubtypeName] =
-                        (parts.TryGetValue(c.Definition.Id.SubtypeName, out var had) ? had : 0)
-                        + c.Count * count;
+                missing[Unknown(id)] =
+                    (missing.TryGetValue(Unknown(id), out var had) ? had : 0) + count;
+                continue;
             }
+            missing[definition.DisplayNameText] =
+                (missing.TryGetValue(definition.DisplayNameText, out var was) ? was : 0) + count;
+            foreach (var c in definition.Components)
+                parts[c.Definition.Id.SubtypeName] =
+                    (parts.TryGetValue(c.Definition.Id.SubtypeName, out var had) ? had : 0)
+                    + c.Count * count;
+        }
         foreach (var block in blocks.Where(b => !b.IsFullIntegrity))
         {
-            missing[block.BlockDefinition] =
-                (missing.TryGetValue(block.BlockDefinition, out var had) ? had : 0) + 1;
+            var name = block.BlockDefinition.DisplayNameText;
+            missing[name] = (missing.TryGetValue(name, out var had) ? had : 0) + 1;
             block.GetMissingComponents(parts);
         }
         var shortOf = Short(shipyard, parts);
@@ -2499,12 +2519,14 @@ internal static partial class ShipyardOrders
         }
         order.Missing = string.Join(
             ", ",
-            missing
-                .OrderByDescending(m => m.Value)
-                .Select(m => $"{m.Value} {m.Key.DisplayNameText}")
+            missing.OrderByDescending(m => m.Value).Select(m => $"{m.Value} {m.Key}")
         );
         if (leftOut != null)
-            order.Missing += $", left out on {leftOut}, where no welder can place them";
+            order.Missing +=
+                (order.Missing.Length > 0 ? ", left out" : "blocks left out")
+                + $" on {leftOut}, where no welder can place them";
+        if (order.Missing.Length == 0)
+            order.Missing = "the blocks its welders couldn't place";
         order.Refund = leftOut == null && MainGridFails(order, projected?.FirstOrDefault(), blocks);
         Plugin.Log.Info(
             $"Shipyard order {order.Id} at {shipyard.DisplayName}: no progress for {StallChecks * UpdateTicks / 60} s, "
@@ -3613,6 +3635,38 @@ internal static partial class ShipyardOrders
         }
         return start != null;
     }
+
+    // SE-1086: a block of a mod the world doesn't load has no definition here, so no projection
+    // shows it and no welder builds it, and the build stalled without it, listing nothing missing.
+    // Such blocks are left out of the blueprint up front, as DLC blocks are (ShipyardDlc), and the
+    // quote says so: what they were (Unknown), or null if none.
+    private static string LeaveOutUnknown(List<MyObjectBuilder_CubeGrid> grids)
+    {
+        var left = new Dictionary<string, int>();
+        foreach (var grid in grids)
+            grid.CubeBlocks.RemoveAll(block =>
+            {
+                if (MyDefinitionManager.Static.TryGetCubeBlockDefinition(block.GetId(), out _))
+                    return false;
+                var name = Unknown(block.GetId());
+                left[name] = (left.TryGetValue(name, out var n) ? n : 0) + 1;
+                return true;
+            });
+        grids.RemoveAll(g => g.CubeBlocks.Count == 0);
+        return left.Count == 0
+            ? null
+            : string.Join(
+                ", ",
+                left.OrderByDescending(l => l.Value).Select(l => $"{l.Value} {l.Key}")
+            );
+    }
+
+    // A block without a definition here by its subtype, or by its type when the subtype came from
+    // a client as a hash this server never had the name of
+    private static string Unknown(MyDefinitionId id) =>
+        string.IsNullOrEmpty(id.SubtypeName)
+            ? $"of type {id.TypeId.ToString().Replace("MyObjectBuilder_", "")}"
+            : id.SubtypeName;
 
     // The blueprint's blocks that a free build can't have, counted by name: "2 Prototech Battery"
     private static List<string> Blocked(List<MyObjectBuilder_CubeGrid> grids)

@@ -556,6 +556,11 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   and when the download is done.
   Multigrid Projector before 0.9.10 sent no ids, so its blueprints with subgrids
   are cleared too.
+- The quote leaves out the blocks of DLCs the player doesn't own and the blocks
+  of mods the world doesn't load, and names them by DLC or by subtype. The server
+  has no definition for a mod's block, so no projection shows it and no welder
+  could build it: the build would stall without it (SE-1086). A main grid left
+  with no blocks can't be ordered.
 - The next order starts when no block of another ship is in the shipyard's free
   space: a ship left there has to fly out first. The space ends at the walls, so
   a ship docked at the connectors outside them is not in the way, and neither the
@@ -1543,8 +1548,9 @@ such a client, and a copy of it without its bases' links, both cleared off the t
 with the prompt, then loaded with `!bp` by link and by id (the second time from the
 cache), the client's hologram checked, and built; the same from a client with the
 plugin; and a `!bp` ship with DLC blocks for a player who owns none, built without
-them. A built ship must have the blueprint's
-grids and blocks. See its docstring.
+them. Blocks of mods the world doesn't load must be named by the order and left out.
+A built ship must have the blueprint's grids and blocks, and the order must end with
+it ready. See its docstring.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
 `tests/test_shipyard_deadline.py` checks a ship left in the build space past
