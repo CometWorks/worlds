@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
+using ToolCoreApi;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
@@ -49,6 +50,10 @@ namespace OctahedronFilaments
     // alike, like carbon fibers drifting in a current. ToolCore draws no beams for these
     // tools (their definitions have none), so this finds the block the way ToolCore aims:
     // along the emitter dummy of the turret's ball, up to the tool's reach.
+    // The threads extend in about a second when the tool starts on a run of blocks and
+    // retract when it ends, by ToolCore's Hit state (the storm sound's trigger), and their
+    // ends glide from block to block (SE-1095). Only the drawing moves this way: the tool
+    // works as ToolCore says, without waiting for the threads.
     [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
     public class FilamentWeb : MySessionComponentBase
     {
@@ -60,6 +65,12 @@ namespace OctahedronFilaments
         const int Threads = 8;
         const int Segments = 32;
         const int Strands = 10;
+
+        // Seconds to extend or retract, to wait in a gap between blocks before
+        // retracting, and the ends' glide time to a new block
+        const double ExtendTime = 1;
+        const double Grace = 0.4;
+        const double GlideTime = 0.3;
 
         // The spread of the threads' ends over the block; the sag and the bend as parts of
         // the thread's length; the bend's wave length (m) and drift speed (rad/s). Wide
@@ -89,10 +100,23 @@ namespace OctahedronFilaments
             "chargeemitter8",
         };
 
+        // The rig's per-frame trace of each web: tool, extension, drawn and aimed end
+        public static Action<IMyTerminalBlock, double, Vector3D, Vector3D> Trace;
+
         class Web
         {
-            public Vector3D Hit;
-            public bool Active;
+            // Where the tool aims, and whether it works; the drawn end follows the aim
+            public Vector3D Target;
+            public bool Working;
+            public Vector3D End;
+            public Vector3D Velocity;
+            public double Extension;
+            public double Idle;
+
+            // ToolCore's events; until the first comes, a shooting tool counts as working
+            public Action<int, bool> Monitor;
+            public bool Monitored;
+            public bool Hitting;
 
             // In the tool's frame
             public Vector3D[] Anchors;
@@ -108,7 +132,22 @@ namespace OctahedronFilaments
         readonly Dictionary<string, IMyModelDummy> dummies =
             new Dictionary<string, IMyModelDummy>();
         readonly Vector3D[,] points = new Vector3D[Threads, Segments + 1];
+        readonly TCApi toolCore = new TCApi();
         int tick;
+        double drawn;
+
+        public override void LoadData()
+        {
+            if (!MyAPIGateway.Utilities.IsDedicated)
+                toolCore.Load();
+        }
+
+        protected override void UnloadData()
+        {
+            if (!MyAPIGateway.Utilities.IsDedicated)
+                toolCore.Unload();
+            Trace = null;
+        }
 
         public override void UpdateAfterSimulation()
         {
@@ -120,12 +159,19 @@ namespace OctahedronFilaments
                 Web web;
                 if (!webs.TryGetValue(tool, out web))
                     webs[tool] = web = NewWeb(tool.EntityId);
-                web.Active = false;
+                // ToolCore takes the monitor only once it has the tool, which can be
+                // after the tool got here
+                if (toolCore.IsReady && !web.Monitored)
+                {
+                    toolCore.UnMonitorEvents((MyEntity)tool, web.Monitor);
+                    toolCore.MonitorEvents((MyEntity)tool, web.Monitor);
+                }
+                web.Working = false;
                 if (
                     !tool.IsWorking
                     || Vector3D.DistanceSquared(camera, tool.GetPosition())
                         > DrawDistance * DrawDistance
-                    || !Shooting(tool)
+                    || !(web.Monitored ? web.Hitting : Shooting(tool))
                 )
                     continue;
                 MatrixD emitter;
@@ -139,7 +185,8 @@ namespace OctahedronFilaments
                     emitter.Translation + forward * Reach,
                     hits
                 );
-                // The nearest block of another grid
+                // The nearest block of another grid; while the turret turns past a gap,
+                // the threads stay on the last block
                 var nearest = double.MaxValue;
                 foreach (var hit in hits)
                 {
@@ -147,14 +194,19 @@ namespace OctahedronFilaments
                     if (grid == null || grid == tool.CubeGrid || hit.Fraction >= nearest)
                         continue;
                     nearest = hit.Fraction;
-                    web.Hit = hit.Position;
-                    web.Active = true;
+                    web.Target = hit.Position;
+                    web.Working = true;
                 }
+                web.Working |= web.Extension > 0;
             }
             if (webs.Count > Tools.Count)
                 foreach (var tool in new List<IMyTerminalBlock>(webs.Keys))
                     if (!Tools.Contains(tool))
+                    {
+                        if (toolCore.IsReady)
+                            toolCore.UnMonitorEvents((MyEntity)tool, webs[tool].Monitor);
                         webs.Remove(tool);
+                    }
         }
 
         public override void Draw()
@@ -162,19 +214,56 @@ namespace OctahedronFilaments
             if (MyAPIGateway.Utilities.IsDedicated)
                 return;
             var time = MyAPIGateway.Session.ElapsedPlayTime.TotalSeconds;
+            var dt = MathHelper.Clamp(time - drawn, 0, 0.1);
+            drawn = time;
             foreach (var pair in webs)
-                if (pair.Value.Active && !pair.Key.Closed)
-                    Draw(pair.Key, pair.Value, time);
+            {
+                var web = pair.Value;
+                Animate(web, dt);
+                if (web.Extension <= 0 || pair.Key.Closed)
+                    continue;
+                Trace?.Invoke(pair.Key, web.Extension, web.End, web.Target);
+                Draw(pair.Key, web, time);
+            }
+        }
+
+        // Extends or retracts the threads and glides their end toward the aim, critically
+        // damped, so it neither jumps nor overshoots
+        static void Animate(Web web, double dt)
+        {
+            if (web.Working)
+            {
+                if (web.Extension <= 0)
+                {
+                    web.End = web.Target;
+                    web.Velocity = Vector3D.Zero;
+                }
+                web.Idle = 0;
+                web.Extension = Math.Min(1, web.Extension + dt / ExtendTime);
+            }
+            else if ((web.Idle += dt) > Grace)
+                web.Extension = Math.Max(0, web.Extension - dt / ExtendTime);
+            var omega = 2 / GlideTime;
+            var x = omega * dt;
+            var decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+            var offset = web.End - web.Target;
+            var push = (web.Velocity + omega * offset) * dt;
+            web.Velocity = (web.Velocity - omega * push) * decay;
+            web.End = web.Target + (offset + push) * decay;
         }
 
         void Draw(IMyTerminalBlock tool, Web web, double time)
         {
             if (web.Anchors == null)
                 web.Anchors = AnchorsOf(tool);
+            // The threads grow along their whole curve from the ring, easing in and out
+            var e = web.Extension;
+            var reach = e * e * (3 - 2 * e) * Segments;
+            var full = (int)reach;
             for (var i = 0; i < Threads; i++)
             {
                 var start = Vector3D.Transform(web.Anchors[i], tool.WorldMatrix);
-                var end = web.Hit + web.Ends[i];
+                var end = web.End + web.Ends[i];
                 var along = end - start;
                 var length = along.Normalize();
                 var sag = web.Bows[i] * length * Sag;
@@ -188,18 +277,23 @@ namespace OctahedronFilaments
                     bend -= along * bend.Dot(along);
                     points[i, s] = point + (sag + bend * length * Bend) * Math.Sin(Math.PI * t);
                 }
-                for (var s = 0; s < Segments; s++)
+                for (var s = 0; s < full; s++)
                     Line(points[i, s], points[i, s + 1], ThreadWidth);
+                if (full < Segments)
+                    Line(
+                        points[i, full],
+                        Vector3D.Lerp(points[i, full], points[i, full + 1], reach - full),
+                        ThreadWidth
+                    );
             }
             for (var k = 0; k < Strands; k++)
             {
                 var i = web.StrandThreads[k];
                 var j = (i + 1) % Threads;
-                Line(
-                    points[i, (int)(web.StrandAt[2 * k] * Segments)],
-                    points[j, (int)(web.StrandAt[2 * k + 1] * Segments)],
-                    StrandWidth
-                );
+                var a = (int)(web.StrandAt[2 * k] * Segments);
+                var b = (int)(web.StrandAt[2 * k + 1] * Segments);
+                if (a <= full && b <= full)
+                    Line(points[i, a], points[j, b], StrandWidth);
             }
         }
 
@@ -243,6 +337,13 @@ namespace OctahedronFilaments
                     )
                 );
             var web = new Web();
+            web.Monitor = (state, on) =>
+            {
+                web.Monitored = true;
+                // Any lower state that goes off takes Hit with it
+                if (on ? state == TCApi.Hit : state <= TCApi.Hit)
+                    web.Hitting = on;
+            };
             for (var i = 0; i < Threads; i++)
             {
                 web.Ends[i] = unit() * Spread * Math.Sqrt(random.NextDouble());
