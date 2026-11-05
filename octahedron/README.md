@@ -316,12 +316,16 @@ OmniArc welder and deconstructor definitions of the Workshop copy:
   lightning waves, which `make_filament_mod.py` copies from the game install (`--game`)
   into the mod, since a mod's sound can't point at the game's `Content/Audio`.
 - The mod's script (`filament-tools/`) draws the filaments on the clients:
-  while a tool shoots, eight threads run from around its ring to the block it
+  while a tool works, eight threads run from around its ring to the block it
   aims at, spread over the block, with short strands between them. They are
   dark gray, 0.5 m wide to be seen from across the shipyard, and bent by
   a wave field that drifts slowly through space, so neighbors bend alike
   (SE-1089). It finds the block along the tool's emitter, as
-  ToolCore aims, up to its 100 m reach.
+  ToolCore aims, up to its 100 m reach. The threads grow out in about a second
+  when a tool starts on a run of blocks and pull back in when the run ends (by
+  ToolCore's Hit state, which also plays the sound), and their ends glide from
+  block to block instead of jumping (SE-1095). Only the drawing waits: the tools
+  weld and grind as fast as without it.
 - The mod ships none of OmniArc's files. Its blocks name a vanilla model, and
   the script hands them the models and icons of their OmniArc originals when a
   world loads. A world with this mod needs ToolCore and OmniArc too.
