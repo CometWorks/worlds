@@ -1210,6 +1210,26 @@ public class OctahedronConfig : PluginConfig
         + "Delta Station=Ore/Cobalt,Ingot/Cobalt,Ore/Silicon,Ingot/Silicon;"
         + "Moon Station=Ore/Uranium,Ingot/Uranium";
 
+    [StringOption(
+        description: "Each station's share of the reference prices, which OCT buys and sells at there: "
+            + "Station name=Type/Subtype=percent,..., stations separated by ;, where * matches any text and the first "
+            + "match counts. Items not named stay at 100%. Prices that differ between stations give traders a reason "
+            + "to carry goods, and the price drift ends a route once enough has gone along it.",
+        Parent = "market"
+    )]
+    public string MarketStationPrices
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "Beta Station=Component/*=90,Ore/*=110,Ingot/*=110;"
+        + "Delta Station=Component/*=90,Ore/*=110,Ingot/*=110;"
+        + "Alpha Station=Component/*=110,Ore/*=90,Ingot/*=90;"
+        + "Gamma Station=Component/*=110,Ore/*=90,Ingot/*=90;"
+        + "North Station=Component/*=110,Ore/*=90,Ingot/*=90;"
+        + "South Station=Component/*=110,Ore/*=90,Ingot/*=90;"
+        + "Moon Station=Component/*=110,Ore/*=90,Ingot/*=90";
+
     [IntOption(
         0,
         description: "OCT buys a station's specialties at this share of the reference price, less the tax, and sells them at no less (%).",

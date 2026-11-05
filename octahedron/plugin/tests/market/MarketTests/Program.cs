@@ -330,6 +330,17 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     );
     Check(MarketBook.Glob("Ore/*, Ingot/Iron").IsMatch("ingot/iron"), "glob");
     Check(MarketBook.Glob("") == null, "glob: none");
+    var shares = MarketBook.ParsePercents(
+        "Beta Station=Ingot/Iron=95,Ingot/*=110,Component/*=90; Alpha Station=Ore/*=80"
+    );
+    Check(
+        MarketBook.Percent(shares, "Beta Station", "Ingot/Iron") == 95
+            && MarketBook.Percent(shares, "Beta Station", "Ingot/Nickel") == 110
+            && MarketBook.Percent(shares, "Beta Station", "Ore/Iron") == 100
+            && MarketBook.Percent(shares, "Alpha Station", "ore/ice") == 80
+            && MarketBook.Percent(shares, "Gamma Station", "Ore/Ice") == 100,
+        "station prices: first match, else 100"
+    );
     Check(MarketBook.Price(12_500) == "12.5 SC" && MarketBook.Sc(1234) == "1,234 SC", "formats");
 }
 
