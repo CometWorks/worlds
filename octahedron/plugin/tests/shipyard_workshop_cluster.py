@@ -148,9 +148,10 @@ def run(bench) -> None:
         return " ".join(rig.new_chat_lines(api, before, ""))
 
     def screen(*words: str) -> str:
-        """The table's screens on one line, their text wraps; within 30 s the one with the words"""
+        """The table's screens on one line, their text wraps; within 2 min the one with the words,
+        the time the shipyard may take to plan a support arm"""
         text = ""
-        for _ in range(10):
+        for _ in range(40):
             text = " ".join(" ".join(rig.chat(api, "!oct table show", 3)).split())
             if all(w in text for w in words):
                 break
