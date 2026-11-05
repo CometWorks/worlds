@@ -69,7 +69,7 @@ def utc(minutes: float) -> set[str]:
 
 
 def shoot(remote, name: str) -> None:
-    """The queue panel from 2.5 m in front of its screen"""
+    """The queue panel from 1.5 and 2 cells in front of its screen"""
     panel = queue_panel(remote)
     grid, at = panel["gridId"], tuple(panel["min"])
     cube = next(
@@ -80,21 +80,27 @@ def shoot(remote, name: str) -> None:
     )
     side = cube["forward"]
     side = SIDES[side] if isinstance(side, str) else side
-    world = [
+    up = tuple(a + u for a, u in zip(at, SIDES["Up"]))
+    here, front, above = (
         remote.call([CallOp.grid_to_world(grid, c)]).call(0)["world"]
-        for c in (at, tuple(a + s for a, s in zip(at, side)))
-    ]
+        for c in (at, tuple(a + s for a, s in zip(at, side)), up)
+    )
     center = panel["worldPosition"]
-    # One large cell out, 2.5 m
-    eye = [c + b - a for c, a, b in zip(center, *world)]
-    remote.character_teleport(eye[0], eye[1] - 1.6, eye[2])
-    time.sleep(3)
-    remote.character_look_at(*center, tolerance=0.5)
-    time.sleep(3)
-    path = Path(SHOTS) / f"{name}.png"
-    remote.screenshot_save(str(path), 1280, 720)
-    time.sleep(2)
-    log(f"screenshot {path}")
+    log(f"panel at {center}, facing {side}")
+    # The station's gravity pulls along its grid, so the feet are 1.6 m down its up axis
+    feet = [1.6 * (b - a) / 2.5 for a, b in zip(here, above)]
+    if remote.get_character()["jetpack"]:
+        remote.key("X")
+    for cells in (1.5, 2):
+        eye = [c + cells * (b - a) for c, a, b in zip(center, here, front)]
+        remote.character_teleport(*(e - f for e, f in zip(eye, feet)))
+        time.sleep(3)
+        remote.character_look_at(*center, tolerance=0.5)
+        time.sleep(3)
+        path = Path(SHOTS) / f"{name}-{cells}.png"
+        remote.screenshot_save(str(path), 1280, 720)
+        time.sleep(2)
+        log(f"screenshot {path}")
 
 
 def leave(a, mark) -> None:
