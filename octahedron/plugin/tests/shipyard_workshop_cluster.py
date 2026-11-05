@@ -1,7 +1,7 @@
 """Blueprints with subgrids at a cluster shipyard's hologram table without and with Multigrid Projector on the
 client (SE-1082), through the cluster's scenario bench (CometWorks/cluster Test/). The game's client damages a
 blueprint with subgrids on its way to the table, so the shipyard refuses it and asks for the blueprint's Workshop
-link (!oct workshop), which the node downloads and loads into the table itself.
+link (!bp), which the node downloads and loads into the table itself.
 
     OCT_WORLD_SOURCE=<world from build_world.py> [OCT_MGP_REPO=<MGP working copy>] [OCT_STEAMCMD=<steamcmd>] \\
         <Test>/.venv/bin/python tests/shipyard_workshop_cluster.py <Test> <mode> <single bp.sbc> <multi bp.sbc> <item>
@@ -11,7 +11,7 @@ build each:
 
 - single: the client without MGP loads the ship without subgrids and orders it.
 - vanilla: the client without MGP loads the ship with subgrids: the server tells the player in chat and on the
-  table's screen, a press doesn't order it. Then !oct workshop <item's link> loads it, and it is ordered and built.
+  table's screen, a press doesn't order it. Then !bp <item's link> loads it (again by its bare id, from the cache), and it is ordered and built.
 - mgp: the client with MGP (OCT_MGP_REPO) loads the ship with subgrids: no prompt, ordered and built.
 
 A built ship must have the blueprint's grids and blocks, the grids next to each other. The setup is
@@ -50,7 +50,7 @@ MGP = (
     "MultigridProjectorClient.xml",
     "viktor-ferenczi/se-multigrid-projector",
 )
-HINT = "!oct workshop"
+HINT = "!bp"
 CACHE = wa.ROOT / "workshop-cache"
 pin_source_age = clients.pin_source_age
 
@@ -198,7 +198,8 @@ def run(bench) -> None:
             "is on the hologram table" in reply,
             reply,
         )
-        # Again: the blueprint now comes from the cache the nodes share (CACHE)
+        # Again, by the bare id: the blueprint now comes from the cache the nodes share (CACHE)
+        command = f"{HINT} {ITEM}"
         before = api.get_chat_messages()
         api.send_chat(command)
         again = ""

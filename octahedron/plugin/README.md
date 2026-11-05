@@ -533,7 +533,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   blueprint by a base whose head is in none of its grids, tells the player in chat
   at once, and the table's screen and the button refuse it. Both name the two ways
   out: the Multigrid Projector plugin of Pulsar, or the blueprint's Steam Workshop
-  link with `!oct workshop <link or id> [table name]`, which needs no plugin. The
+  link or id with `!bp <link or id> [table name]` (or `!oct workshop`), which
+  needs no plugin. The
   node the player is on downloads the item anonymously with SteamCMD
   (`ShipyardSteamCmd`; empty: Quasar's managed SteamCMD in
   `ManagedRuntime/Tools/SteamCMD` above the server's data folder, else `steamcmd`

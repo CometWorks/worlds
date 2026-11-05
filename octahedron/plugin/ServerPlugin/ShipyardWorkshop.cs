@@ -25,7 +25,7 @@ namespace ServerPlugin;
 // each grid's entity ids on its own, so a rotor, piston or hinge base points at no block of its
 // head's grid, and the server can't tell where the subgrids belong. Multigrid Projector on the
 // client remaps them together. The shipyard refuses such a blueprint and asks the player for the
-// blueprint's Steam Workshop link (!oct workshop), which this server downloads with SteamCMD and
+// blueprint's Steam Workshop link or id (!bp or !oct workshop), which this server downloads with SteamCMD and
 // loads into the table itself, or for the plugin. Players without Pulsar can order ships with subgrids so.
 internal static partial class ShipyardOrders
 {
@@ -35,7 +35,7 @@ internal static partial class ShipyardOrders
     private static readonly HashSet<long> downloading = new();
 
     internal const string DamagedHint =
-        "Paste its Steam Workshop link into chat as !oct workshop <link>, "
+        "Type !bp and its Steam Workshop link or id into chat, "
         + "or load it again with the Multigrid Projector plugin of Pulsar.";
 
     /// <summary>A blueprint with subgrids whose mechanical connections point at no block of it.</summary>
@@ -60,7 +60,7 @@ internal static partial class ShipyardOrders
     {
         var match = WorkshopIdPattern.Match(link?.Trim() ?? "");
         if (!match.Success)
-            return "Give the blueprint's Steam Workshop link or id: !oct workshop <link>";
+            return "Give the blueprint's Steam Workshop link or id: !bp <link or id>";
         var id = ulong.Parse(match.Groups[1].Value);
         var character = MySession.Static.Players.TryGetIdentity(identityId)?.Character;
         if (character == null || character.IsDead || character.MarkedForClose)

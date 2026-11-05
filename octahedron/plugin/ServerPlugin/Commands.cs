@@ -300,3 +300,21 @@ public sealed class Commands : CommandModule
     public string Drop(string kind = "") =>
         ContainerDrops.Spawn(Context.Caller.IdentityId, kind == "strong");
 }
+
+// !bp, short for !oct workshop: what the shipyard tells a player whose game damaged a blueprint
+[CommandRoot("bp", "Octahedron", "Loads a Steam Workshop blueprint into a station hologram table")]
+public sealed class BlueprintCommand : CommandModule
+{
+    [Command(
+        "",
+        "Loads a blueprint from the Steam Workshop into the nearest station hologram table for you",
+        "!bp <link or id> [table name]: stand by a station's hologram table. The same as !oct workshop."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public string Load(string link, params string[] table) =>
+        ShipyardOrders.Workshop(
+            Context.Caller.IdentityId,
+            link,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+}
