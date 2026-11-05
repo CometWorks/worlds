@@ -135,17 +135,15 @@ internal static partial class ShipyardOrders
         lock (steamCmdLock)
         {
             using var process = Process.Start(start);
+            var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
-            output = process.StandardOutput.ReadToEndAsync().Wait(TimeSpan.FromMinutes(5))
-                ? process.StandardOutput.ReadToEnd()
-                : null;
-            if (output == null)
+            if (!stdout.Wait(TimeSpan.FromMinutes(5)))
             {
                 process.Kill();
                 error = "The Workshop download took too long.";
                 return null;
             }
-            output += stderr.Result;
+            output = stdout.Result + stderr.Result;
         }
         // SteamCMD puts the item into the install folder, or into its own or HOME's Steam folder
         var folder = new[]
