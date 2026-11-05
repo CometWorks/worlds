@@ -144,6 +144,7 @@ def leave(a, mark) -> None:
         all(len(l) <= COLUMNS for l in lines),
         f"no line is wider than {COLUMNS}: {max(len(l) for l in lines)}",
     )
+    font(a, lines)
     if SHOTS:
         shoot(a, "queue-panel-leave")
     moved = tp.wait_chat(a, "was moved out", CLEAR * 60 + 60, mark)
@@ -151,6 +152,25 @@ def leave(a, mark) -> None:
     check(
         moved is not None and -0.25 <= late <= 0.75,
         f"the ship is moved out at the deadline, {late * 60:+.0f} s: {moved}",
+    )
+
+
+def font(a, lines: list[str]) -> None:
+    """The font is the fit of the panel's text, at least the 46 columns' 0.57"""
+    panel = queue_panel(a)
+    grid, at = panel["gridId"], tuple(panel["min"])
+    size = a.get_property(grid, at, "FontSize")
+    log(f"FontSize {size}")
+    value = float(size.get("value") if isinstance(size, dict) else size)
+    # The fit on the 512x307 screen: shorter lines than 46 columns get a bigger font
+    fit = min(
+        0.7,
+        512 * 0.96 / (max(len(l) for l in lines) * 18.7),
+        307.2 * 0.96 / (len(lines) * 28.8),
+    )
+    check(
+        value >= 0.57 and abs(value - fit) < 0.002,
+        f"the font size is {value:.3f}, the fit {fit:.3f}, at least the 46 columns' 0.57",
     )
 
 
@@ -186,12 +206,16 @@ def main() -> int:
         building = re.compile(
             r"1\. (\d+)% \((\d+) mins?\) OctTester 'Order Test' \([\d,]+ PCU\)"
         )
-        text = settled(a, "queue", "mins)")
+        # The projector counts its blocks a moment after the build starts
+        deadline = time.monotonic() + 60
+        while True:
+            text = queue(a)
+            found = building.search(" ".join(text.split()))
+            if found or time.monotonic() > deadline:
+                break
+            time.sleep(1)
         log(repr(text))
-        if SHOTS:
-            shoot(a, "queue-panel-build")
         lines = text.rstrip().split("\n")
-        found = building.search(" ".join(text.split()))
         left = int(found.group(2)) if found else -1
         check(
             found is not None and minutes - 2 <= left <= minutes,
@@ -207,6 +231,8 @@ def main() -> int:
             seen.append(int(found.group(1)))
             time.sleep(2)
             found = building.search(" ".join(queue(a).split()))
+            if SHOTS and len(seen) == 1:
+                shoot(a, "queue-panel-build")
         log(f"percents seen: {seen}")
         check(
             len(seen) > 0
@@ -214,21 +240,6 @@ def main() -> int:
             and seen == sorted(seen)
             and (len(seen) == 1 or seen[-1] > seen[0]),
             f"the percent goes up from 0 to 100: {seen}",
-        )
-        panel = queue_panel(a)
-        grid, at = panel["gridId"], tuple(panel["min"])
-        size = a.get_property(grid, at, "FontSize")
-        log(f"FontSize {size}")
-        value = float(size.get("value") if isinstance(size, dict) else size)
-        # The fit on the 512x307 screen: shorter lines than 46 columns get a bigger font
-        fit = min(
-            0.7,
-            512 * 0.96 / (max(len(l) for l in lines) * 18.7),
-            307.2 * 0.96 / (len(lines) * 28.8),
-        )
-        check(
-            value >= 0.57 and abs(value - fit) < 0.002,
-            f"the font size is {value:.3f}, the fit {fit:.3f}, at least the 46 columns' 0.57",
         )
         leave(a, mark)
     finally:
