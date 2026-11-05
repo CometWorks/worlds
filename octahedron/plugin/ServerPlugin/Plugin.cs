@@ -52,7 +52,8 @@ public class Plugin : IPlugin
         ServerCommands.Register(
             Assembly.GetExecutingAssembly(),
             typeof(Commands),
-            typeof(MarketCommands)
+            typeof(MarketCommands),
+            typeof(BlueprintCommand)
         );
     }
 
