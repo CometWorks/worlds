@@ -226,8 +226,13 @@ def run(bench) -> None:
         for g in api.list_grids()
         if g["entityId"] not in owned
     ]
-    found = {g["entityId"]: api.list_cubes(g["entityId"])["total"] for g in new}
-    positions = [g["position"] for g in new]
+    # Grids of the player's the client has no blocks of yet, far away, aren't the ship
+    cubes = {g["entityId"]: api.list_cubes(g["entityId"])["total"] for g in new}
+    print(
+        f"new grids: {[(g['entityId'], cubes[g['entityId']], g['position']) for g in new]}"
+    )
+    found = {id_: n for id_, n in cubes.items() if n}
+    positions = [g["position"] for g in new if cubes[g["entityId"]]]
     spread = max(
         (
             sum((a - b) ** 2 for a, b in zip(p, q)) ** 0.5
