@@ -40,6 +40,22 @@ public static class PanelText
         return string.Join("\n", lines.Take(maxLines));
     }
 
+    // The text with the name in it cut short, like "Long na...", as far as it takes to fit in
+    // maxLines, so that what follows the name, like a deadline, is not cut
+    public static string ClipName(Func<string, string> text, string name, int columns, int maxLines)
+    {
+        for (var n = name.Length; n > 0; n--)
+        {
+            var lines = Wrap(
+                text(n == name.Length ? name : name.Substring(0, n).TrimEnd() + "..."),
+                columns
+            );
+            if (lines.Split('\n').Length <= maxLines)
+                return lines;
+        }
+        return Clip(text("..."), columns, maxLines);
+    }
+
     // A deadline as the minutes left and its UTC time, like "59 min (by 03:38 UTC)". A bare UTC
     // time reads like a local one, so a player one hour ahead of UTC took it for the start (SE-962)
     public static string Left(DateTime ends, DateTime now) =>

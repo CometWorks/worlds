@@ -70,6 +70,32 @@ Check(!orderEntry.Contains("..."), "SE-962's entry is not cut");
 Check(orderLines.All(l => l.Length <= Columns), "SE-962's entry fits the columns");
 Console.WriteLine(orderEntry);
 
+// SE-1113: the leave line shows ClearWay's deadline, the ship's name cut short instead of the time
+string Leave(string ship, string within) =>
+    PanelText.ClipName(n => $"Waiting for '{n}' to leave the shipyard{within}.", ship, Columns, 2);
+var within = " within " + PanelText.Left(ends, ends.AddMinutes(-2));
+var leave = Leave("Small Grid 657", within);
+Check(
+    leave == "Waiting for 'Small Grid 657' to leave the\nshipyard within 2 min (by 03:38 UTC).",
+    $"the ticket's leave line, not:\n{leave}"
+);
+Check(
+    Leave("Small Grid 657", "") == "Waiting for 'Small Grid 657' to leave the\nshipyard.",
+    "no deadline before ClearWay started the clock"
+);
+var longLeave = Leave(new string('N', 32), within);
+Check(longLeave.Split('\n').Length == 2, "a long name's leave line takes two lines");
+Check(longLeave.EndsWith("within 2 min (by 03:38 UTC)."), "a long name keeps the deadline");
+Check(longLeave.Contains("NNN...'"), "a long name is cut short");
+Check(longLeave.Split('\n').All(l => l.Length <= Columns), "a long name's leave line fits");
+var spaced = Leave("Black Warship With Ext Cockpit Mk2 Heavy", within);
+Check(
+    spaced.Split('\n').Length == 2 && spaced.EndsWith("(by 03:38 UTC)."),
+    $"a long name with spaces keeps the deadline, not:\n{spaced}"
+);
+Console.WriteLine(longLeave);
+Console.WriteLine(spaced);
+
 // A full queue with the longest names, a waiting ship and the longest shipyard name
 var name = new string('N', 32);
 var full = "Gamma Station Shipyard queue\n\n";
@@ -81,7 +107,7 @@ for (int i = 1; i <= 6; i++)
             Columns,
             2
         ) + "\n";
-full += "\n" + PanelText.Clip($"Waiting for '{name}' to leave the shipyard.", Columns, 2);
+full += "\n" + Leave(name, within);
 var fullLines = full.Split('\n');
 Check(fullLines.Length == 17, $"a full queue is 17 lines, not {fullLines.Length}");
 Check(fullLines.All(l => l.Length <= Columns), "every line of a full queue fits the columns");

@@ -207,7 +207,7 @@ internal static partial class ShipyardOrders
                         }
                         if (Obstacle(shipyard) is { } obstacle)
                             why =
-                                $"Fly '{obstacle.DisplayName}' out of {shipyard.DisplayName}'s build space first.";
+                                $"Fly '{obstacle.DisplayName}' out of {shipyard.DisplayName}'s build space first{ClearWithin(shipyard, obstacle)}.";
                         var lacking = Lacking(shipyard, next);
                         var volume = lacking
                             .Where(l => l.Key != Hydrogen)
@@ -811,6 +811,18 @@ internal static partial class ShipyardOrders
         }
         Retire(station, shipyard, obstacle, ship);
     }
+
+    // " within 5 min (by 03:38 UTC)" when ClearWay acts on the grid in the build space, empty
+    // until it has told the owner and started the clock
+    private static string ClearWithin(MyCubeGrid shipyard, MyCubeGrid obstacle) =>
+        blockers.TryGetValue(shipyard.EntityId, out var blocker)
+        && blocker.Grid == obstacle.EntityId
+            ? " within "
+                + PanelText.Left(
+                    blocker.At.AddMinutes(Config.ShipyardClearMinutes),
+                    DateTime.UtcNow
+                )
+            : "";
 
     // The ships the station's last queue answer named, by shipyard
     private static readonly Dictionary<long, List<BuiltShip>> builtShips = new();
