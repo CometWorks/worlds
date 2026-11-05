@@ -69,6 +69,10 @@ internal static class Market
             DriftKg = Config.MarketPriceDriftTonnes * 1000,
             DriftHalfLifeHours = Config.MarketPriceDriftHalfLifeHours,
             DriftMaxFactor = Config.MarketPriceDriftMax,
+            ScarcityPercent = Config.MarketScarcityPercent,
+            SurplusPercent = Config.MarketSurplusPercent,
+            UsePercent = Config.MarketUsePercent,
+            RestockMinutes = Config.MarketRestockMinutes,
             FixedAsks = (Config.ZoneChipStations ?? "")
                 .Split(',')
                 .Select(station => station.Trim())
@@ -287,7 +291,14 @@ internal static class Market
         if (OctId == 0)
             return $"No faction tagged {Config.MoneyAuthorityFactionTag}.";
         var lines = new List<string>();
-        var restock = Book.Restock(World, Settings, Stations.StationNames(), Profile, force);
+        var restock = Book.Restock(
+            World,
+            Settings,
+            Stations.StationNames(),
+            Profile,
+            force,
+            Produces
+        );
         if (restock != null)
             lines.Add(restock);
         var topUp = Book.TopUp(Settings, Stations.StationNames());
@@ -567,6 +578,17 @@ internal static class Market
         return merged.Where(c => !PlayerMined(c.Key)).ToList();
     }
 
+    /// <summary>Whether the station produces the item: it is in the station's part of MarketStationStock, or the station has none.</summary>
+    public static bool Produces(string station, string item) =>
+        !Parsed(
+                Config.MarketStationStock,
+                ref profilesKey,
+                ref profiles,
+                MarketBook.ParseProfiles,
+                "MarketStationStock"
+            )
+            .TryGetValue(station, out var own) || own.Any(e => e.Key == item);
+
     /// <summary>
     /// The ores and ingots of MarketPlayerMinedMetals and the components whose blueprint needs those
     /// ingots: players must mine them, so OCT never restocks them or asks for them in its
@@ -717,6 +739,9 @@ internal static class Market
                 : 0;
 
         public long BasePrice(string item) => ReferencePrice(item);
+
+        public long Target(string station, string item) =>
+            Profile(station).FirstOrDefault(p => p.Key == item).Value;
 
         public IEnumerable<string> Catalog(string station) =>
             Market.Catalog().Where(i => ReferencePrice(i) > 0);

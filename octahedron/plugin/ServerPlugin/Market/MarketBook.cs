@@ -23,6 +23,17 @@ public sealed class MarketSettings
     public double DriftHalfLifeHours = 24;
     public double DriftMaxFactor = 2;
 
+    // A station's prices of an item it keeps a target stock of: this share at an empty stock, 100% at the target,
+    // SurplusPercent at three times the target (%)
+    public int ScarcityPercent = 130;
+    public int SurplusPercent = 80;
+
+    // The share of its target a station uses up each hour of what it doesn't produce (%)
+    public int UsePercent = 25;
+
+    // Minutes between restocks: each brings this share of an hour's production and use
+    public int RestockMinutes = 10;
+
     // Goods OCT sells at a fixed price (milli-SC per unit) by station and item, from a stock
     // kept topped up to FixedStock (raw): the zone chips
     public Dictionary<(string Station, string Item), long> FixedAsks = new();
@@ -46,6 +57,9 @@ public interface IMarketWorld
 
     /// <summary>The item's economy base price in milli-SC per unit, for items OCT has no price for; 0 if none.</summary>
     long BasePrice(string item);
+
+    /// <summary>The station's target stock of the item, raw; 0: none, and its prices there don't follow the stock.</summary>
+    long Target(string station, string item);
 
     /// <summary>The station's catalog, the items OCT trades there.</summary>
     IEnumerable<string> Catalog(string station);
@@ -126,9 +140,10 @@ public sealed class MarketBook
 
     private readonly Dictionary<(string Station, string Item), long> stock = new();
 
-    // UTC day number of the specialty purchases counted, UTC hour number of the last restock
+    // UTC day number of the specialty purchases counted, Unix minute of the last restock (an hour number in
+    // older saves, which only makes the next restock come at once)
     public long Day = -1;
-    public long Hour = -1;
+    public long RestockMinute = -1;
     private readonly Dictionary<string, double> specialtyKg = new();
 
     // Net kg bought from the market (positive) or sold to it, per station and item, and when
@@ -180,6 +195,20 @@ public sealed class MarketBook
         drift[key] = (had + kg, now);
     }
 
+    /// <summary>How the station's stock of the item against its target moves OCT's prices there: 1 = at the target, or no target.</summary>
+    public double Scarcity(IMarketWorld w, MarketSettings s, string station, string item)
+    {
+        long target = w.Target(station, item);
+        if (target <= 0)
+            return 1;
+        double stock = (double)Stock(station, item) / target;
+        double empty = s.ScarcityPercent / 100.0,
+            surplus = s.SurplusPercent / 100.0;
+        return stock < 1
+            ? empty + (1 - empty) * stock
+            : Math.Max(surplus, 1 + (surplus - 1) * (stock - 1) / 2);
+    }
+
     // A Store block's prices are whole SC per unit
     private long Price(
         IMarketWorld w,
@@ -197,7 +226,8 @@ public sealed class MarketBook
             / 100
             * (100 + tax)
             / 100
-            * Factor(s, station, item, w.Now);
+            * Factor(s, station, item, w.Now)
+            * Scarcity(w, s, station, item);
         return (long)Math.Round(sc, MidpointRounding.AwayFromZero) * MilliPerSc;
     }
 
@@ -405,43 +435,76 @@ public sealed class MarketBook
     // --- stock ---
 
     /// <summary>
-    /// Once a UTC hour: every item of a station's profile that is completely out comes back to its
-    /// minimum stock, up to OCT's stock limit; a new UTC day starts the specialty purchases again.
-    /// Null when it is not a new hour or nothing was out, else what was added. Force does it now and
-    /// also starts a new day.
+    /// Every RestockMinutes, every item of a station's profile: what the station produces OCT tops up toward the
+    /// profile's amount, at most its stock limit, by that share of an hour's production (the amount an hour), and
+    /// of the rest the station uses up that share of UsePercent of the amount. Without <paramref name="produced"/>
+    /// an item comes back whole once it is completely out. A new UTC day starts the specialty purchases again.
+    /// Null when it is not time yet or nothing changed, else what did. Force does it now and also starts a new day.
     /// </summary>
     public string Restock(
         IMarketWorld w,
         MarketSettings s,
         IEnumerable<string> stations,
         Func<string, IReadOnlyList<KeyValuePair<string, long>>> profile,
-        bool force = false
+        bool force = false,
+        Func<string, string, bool> produced = null
     )
     {
-        long hour = w.Now / 3600;
-        if (force || hour / 24 > Day)
+        long minute = w.Now / 60,
+            every = Math.Max(1, s.RestockMinutes);
+        if (force || w.Now / 86_400 > Day)
         {
-            Day = hour / 24;
+            Day = w.Now / 86_400;
             specialtyKg.Clear();
         }
-        if (!force && hour <= Hour)
+        if (!force && minute / every <= RestockMinute / every)
             return null;
-        Hour = hour;
-        int added = 0;
+        RestockMinute = minute;
+        double share = every / 60.0;
+        int added = 0,
+            used = 0;
         var names = stations.ToList();
         foreach (var station in names)
         foreach (var (item, raw) in profile(station))
         {
-            if (Stock(station, item) > 0 || !w.Item(item, out double massKg, out bool integral))
+            if (!w.Item(item, out double massKg, out bool integral))
                 continue;
-            long add = Math.Min(raw, Raw(s.OctMaxStockKg, massKg, integral));
-            if (add <= 0)
+            long have = Stock(station, item);
+            if (produced?.Invoke(station, item) == false)
+            {
+                long use = Whole(
+                    Math.Min(have, (long)(raw * share * s.UsePercent / 100)),
+                    integral
+                );
+                if (use <= 0)
+                    continue;
+                SetStock(station, item, have - use);
+                used++;
                 continue;
-            SetStock(station, item, add);
+            }
+            long want = Math.Min(raw, Raw(s.OctMaxStockKg, massKg, integral));
+            if (want <= 0 || (produced == null ? have > 0 : have >= want))
+                continue;
+            long add =
+                produced == null
+                    ? want
+                    : Math.Min(
+                        want - have,
+                        Whole((long)Math.Ceiling(want * share), integral, up: true)
+                    );
+            SetStock(station, item, have + add);
             added++;
         }
-        return added == 0 ? null : $"OCT restocked {added} items at {names.Count} stations.";
+        return added == 0 && used == 0
+            ? null
+            : $"OCT restocked {added} items and the stations used {used} at {names.Count} stations.";
     }
+
+    // A raw amount in whole units for an item that comes in whole units
+    private static long Whole(long raw, bool integral, bool up = false) =>
+        !integral || raw % Amounts.Unit == 0 ? raw
+        : up ? raw - raw % Amounts.Unit + Amounts.Unit
+        : raw - raw % Amounts.Unit;
 
     /// <summary>
     /// Tops OCT's fixed-price goods up to their stock at the given stations. Null when none was
@@ -591,7 +654,7 @@ public sealed class MarketBook
         string N(long v) => v.ToString(CultureInfo.InvariantCulture);
         string D(double v) => v.ToString("R", CultureInfo.InvariantCulture);
         var text = new StringBuilder(Header).Append('\n');
-        text.Append("N\t").Append(N(Day)).Append('\t').Append(N(Hour)).Append('\n');
+        text.Append("N\t").Append(N(Day)).Append('\t').Append(N(RestockMinute)).Append('\n');
         foreach (
             var p in stock.OrderBy(p => p.Key.Station + "\t" + p.Key.Item, StringComparer.Ordinal)
         )
@@ -623,7 +686,7 @@ public sealed class MarketBook
             {
                 case "N" when f.Length >= 3:
                     book.Day = L(f[1]);
-                    book.Hour = L(f[2]);
+                    book.RestockMinute = L(f[2]);
                     break;
                 case "S" when f.Length >= 4:
                     book.stock[(f[1], f[2])] = L(f[3]);

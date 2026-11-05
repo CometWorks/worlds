@@ -234,6 +234,82 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     Check(d.SpecialtyBoughtKg(A) == 0, "the next day starts again");
 }
 
+// Prices follow the stock against the station's target: dearer when short, cheaper with plenty
+{
+    var w = new FakeWorld();
+    var s = new MarketSettings();
+    var m = new MarketBook();
+    w.Targets[(A, Plate)] = 100 * U;
+    Check(
+        m.OctAsk(w, s, A, Plate) == 66_000,
+        "scarcity: an empty stock asks 130%: " + m.OctAsk(w, s, A, Plate)
+    );
+    m.SetStock(A, Plate, 50 * U);
+    Check(
+        m.OctAsk(w, s, A, Plate) == 59_000,
+        "scarcity: half the target asks 115%: " + m.OctAsk(w, s, A, Plate)
+    );
+    m.SetStock(A, Plate, 100 * U);
+    Check(
+        m.OctAsk(w, s, A, Plate) == 51_000 && m.OctBid(w, s, A, Plate) == 49_000,
+        "scarcity: at the target as without one"
+    );
+    m.SetStock(A, Plate, 300 * U);
+    Check(
+        m.OctAsk(w, s, A, Plate) == 41_000,
+        "scarcity: three times the target asks 80%: " + m.OctAsk(w, s, A, Plate)
+    );
+    m.SetStock(A, Plate, 3000 * U);
+    Check(m.OctAsk(w, s, A, Plate) == 41_000, "scarcity: never below 80%");
+    Check(m.OctAsk(w, s, B, Plate) == 51_000, "scarcity: no target, no change");
+    m.SetStock(A, Plate, 0);
+    Check(
+        m.OctBid(w, s, A, Plate) > m.OctAsk(w, s, B, Plate),
+        "a short station pays more than a stocked one asks"
+    );
+}
+
+// A station tops up what it produces each hour and uses up a share of the rest
+{
+    var w = new FakeWorld();
+    var s = new MarketSettings { RestockMinutes = 60 };
+    var m = new MarketBook();
+    var profile = new List<KeyValuePair<string, long>> { new(Plate, 100 * U), new(Iron, 2000 * U) };
+    m.SetStock(A, Plate, 40 * U);
+    m.SetStock(A, Iron, 2000 * U);
+    m.Restock(w, s, [A], _ => profile, produced: (_, item) => item == Plate);
+    Check(m.Stock(A, Plate) == 100 * U, "produced: topped up to the profile, not only when out");
+    Check(
+        m.Stock(A, Iron) == 1500 * U,
+        "used: a quarter of the profile an hour: " + Amounts.Units(m.Stock(A, Iron))
+    );
+    w.Now += 3600;
+    m.SetStock(A, Plate, 7 * U);
+    m.Restock(w, s, [A], _ => profile, produced: (_, item) => item == Iron);
+    Check(
+        m.Stock(A, Plate) == 0 && m.Stock(A, Iron) == 2000 * U,
+        "used down to none, produced back up"
+    );
+
+    // Every 10 minutes a sixth of that
+    s.RestockMinutes = 10;
+    w.Now += 600;
+    m.SetStock(A, Plate, 0);
+    m.Restock(w, s, [A], _ => profile, produced: (_, item) => item == Plate);
+    Check(
+        m.Stock(A, Plate) == 17 * U,
+        "a sixth of an hour's production, in whole plates: " + Amounts.Units(m.Stock(A, Plate))
+    );
+    Check(
+        m.Stock(A, Iron) == 2000 * U - (long)(2000 * U * (10 / 60.0) * 25 / 100),
+        "a sixth of an hour's use: " + Amounts.Units(m.Stock(A, Iron))
+    );
+    Check(
+        m.Restock(w, s, [A], _ => profile, produced: (_, item) => item == Plate) == null,
+        "not again within the 10 minutes"
+    );
+}
+
 // Prices drift with the volume at the station, and wear off
 {
     var w = new FakeWorld();
@@ -287,7 +363,9 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     Check(back.Serialize() == m.Serialize(), "saved: the same");
     Check(back.Stock(A, Iron) == 5 * U && back.Stock(A, Platinum) == 10 * U, "saved: the stock");
     Check(
-        back.SpecialtyBoughtKg(A) == 10 && back.Hour == m.Hour && back.Day == m.Day,
+        back.SpecialtyBoughtKg(A) == 10
+            && back.RestockMinute == m.RestockMinute
+            && back.Day == m.Day,
         "saved: counts"
     );
     Check(
@@ -386,6 +464,11 @@ sealed class FakeWorld : IMarketWorld
         integral = info.Integral;
         return known;
     }
+
+    public readonly Dictionary<(string Station, string Item), long> Targets = new();
+
+    public long Target(string station, string item) =>
+        Targets.TryGetValue((station, item), out long target) ? target : 0;
 
     public long Reference(string station, string item) =>
         Items.TryGetValue(item, out var info) ? info.Price : 0;
