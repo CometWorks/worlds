@@ -313,7 +313,7 @@ OmniArc welder and deconstructor definitions of the Workshop copy:
   `OmniArcBeam` and `OmniArcDestro` with the same stats, reach, turret and
   animations, without the laser beams and sparks. At work they sound like
   Pertam's electric storm instead of OmniArc's laser (SE-1089): the game's
-  lightning waves, which the script copies from the game install (`--game`)
+  lightning waves, which `make_filament_mod.py` copies from the game install (`--game`)
   into the mod, since a mod's sound can't point at the game's `Content/Audio`.
 - The mod's script (`filament-tools/`) draws the filaments on the clients:
   while a tool shoots, eight threads run from around its ring to the block it
