@@ -301,7 +301,7 @@ public sealed class Commands : CommandModule
         ContainerDrops.Spawn(Context.Caller.IdentityId, kind == "strong");
 }
 
-// !bp, short for !oct workshop: what the shipyard tells a player whose game damaged a blueprint
+// !bp, short for !oct workshop: what the shipyard tells a player whose blueprint with subgrids it took off the table
 [CommandRoot("bp", "Octahedron", "Loads a Steam Workshop blueprint into a station hologram table")]
 public sealed class BlueprintCommand : CommandModule
 {

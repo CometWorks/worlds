@@ -36,7 +36,7 @@ internal static partial class ShipyardOrders
     // Players whose Workshop download is running
     private static readonly HashSet<long> downloading = new();
 
-    internal const string DamagedHint =
+    internal const string WorkshopHint =
         "Type !bp and the blueprint's Steam Workshop link or id into chat instead: the shipyard "
         + "loads it from the Workshop. Or load it with the Multigrid Projector plugin of Pulsar.";
 
@@ -68,7 +68,7 @@ internal static partial class ShipyardOrders
     internal static bool Unproven(MyProjectorBase table) =>
         !workshopTables.Contains(table.EntityId) && Unproven(TableHologram.Blueprint(table));
 
-    // !oct workshop: the Workshop blueprint into the nearest table, as if the player loaded it
+    // !bp and !oct workshop: the Workshop blueprint into the nearest table, as if the player loaded it
     public static string Workshop(long identityId, string link, string tableName)
     {
         var match = WorkshopIdPattern.Match(link?.Trim() ?? "");
@@ -373,6 +373,17 @@ internal static partial class ShipyardOrders
             return "The hologram table is gone or off.";
         if (Holder(table) is var holder && holder != 0 && holder != identityId)
             return $"{Name(holder)} took the hologram table meanwhile.";
+        // Still by the table once the download is done
+        var character = MySession.Static.Players.TryGetIdentity(identityId)?.Character;
+        if (
+            character == null
+            || character.IsDead
+            || Vector3D.Distance(
+                character.PositionComp.GetPosition(),
+                table.PositionComp.GetPosition()
+            ) > Config.StarterShipTableReach
+        )
+            return "Stand by the hologram table and type !bp again.";
         var grids = blueprint.CubeGrids.ToList();
         // What the game does to a client's blueprint on the server
         if (!MySession.Static.IsUserScripter(steamId))

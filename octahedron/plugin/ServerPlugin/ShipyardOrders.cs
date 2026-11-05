@@ -283,7 +283,7 @@ internal static partial class ShipyardOrders
         if (Unproven(table))
             return Fail(
                 plan,
-                $"'{plan.Ship}' has subgrids, which your game may have sent damaged. {DamagedHint}"
+                $"'{plan.Ship}' has subgrids, which your game may have sent damaged. {WorkshopHint}"
             );
         var main = blueprint[0];
         plan.LeftOut = ShipyardDlc.LeaveOut(
@@ -384,10 +384,14 @@ internal static partial class ShipyardOrders
         var room = space.HalfExtent * 2;
         var size = Size(blueprint, start, outward, room, out _, out var turn);
         if (size.X > room.X || size.Y > room.Y || size.Z > room.Z)
-            // A client without Multigrid Projector can send the subgrids out of place, and so can
-            // an old blueprint; a new one made offline has them right
+            // A blueprint with subgrids got here intact (Unproven), but an old one can have them out
+            // of place; a new one made offline has them right
             return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}."
-                + (blueprint.Count > 1 ? $" Its subgrids may be off. {DamagedHint}" : "");
+                + (
+                    blueprint.Count > 1
+                        ? " An old blueprint can have its subgrids out of place: blueprint the ship again in an offline game."
+                        : ""
+                );
         var needed = Components(blueprint, skipFirst: !arms)
             .Sum(c => MyDefinitionManager.Static.GetPhysicalItemDefinition(c.Key).Volume * c.Value);
         var capacity = Containers(shipyard).Sum(i => (double)i.MaxVolume);
@@ -971,7 +975,7 @@ internal static partial class ShipyardOrders
                 Tell(
                     identity,
                     $"'{gridBuilders[0].DisplayName}' has subgrids, which your game damages when it sends a blueprint "
-                        + $"without the Multigrid Projector plugin, so the shipyard took it off the table. {DamagedHint}"
+                        + $"without the Multigrid Projector plugin, so the shipyard took it off the table. {WorkshopHint}"
                 );
                 // Once the game has passed the blueprint on to the other clients
                 var table = __instance;

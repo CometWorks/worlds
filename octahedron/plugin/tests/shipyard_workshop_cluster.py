@@ -11,7 +11,7 @@ The two blueprints are the Workshop item's bp.sbc (a ship with subgrids) and any
 build each:
 
 - single: the client without MGP loads the ship without subgrids and orders it.
-- vanilla: the client without MGP loads the ship with subgrids, then a copy of it without the links of its rotors,
+- vanilla: !bp away from a table is refused. The client without MGP loads the ship with subgrids, then a copy of it without the links of its rotors,
   pistons and hinges: the server takes each off the table and names !bp in chat. Then !bp <item's link> loads it,
   the client's copy on the table has every grid in place, again by its bare id from the cache, and it is ordered
   and built.
@@ -134,6 +134,14 @@ def run(bench) -> None:
     api.set_admin_flag("ignorePcu", True)
     time.sleep(3)  # the server gets the flag with the admin menu's event
 
+    if MODE == "vanilla":
+        # Far from any table, where the player spawned: no download
+        far = " ".join(rig.chat(api, f"{HINT} {ITEM}", 5))
+        check(
+            "!bp away from a hologram table is refused",
+            "Stand by a station's hologram table." in far,
+            far,
+        )
     station = next(iter(wa.stations().values()))
     for attempt in range(24):
         if attempt == 0:

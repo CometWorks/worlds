@@ -523,9 +523,9 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back. When a
-  blueprint with subgrids is too big, the message also suggests the Workshop link
-  or the Multigrid Projector plugin below: an old blueprint can have its subgrids
-  out of place too.
+  blueprint with subgrids is too big, the message also suggests blueprinting the
+  ship again in an offline game: an old blueprint can have its subgrids out of
+  place.
 - The game's client damages a blueprint with subgrids on its way to the table: it
   remaps the entity ids of each grid on its own, so a rotor, piston or hinge base
   points at no block of its head's grid, and the ship would come out wrong.
@@ -551,7 +551,9 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   downloaded every time. It loads the blueprint into the nearest table as if the
   player had loaded it: ids remapped together, the main grid at the origin, and
   programmable blocks' scripts dropped unless the player may use scripts, as the
-  game does with a client's blueprint. The table must be free or the player's.
+  game does with a client's blueprint. The table must be free or the player's,
+  and the player within `StarterShipTableReach` of it, both when typing the command
+  and when the download is done.
   Multigrid Projector before 0.9.10 sent no ids, so its blueprints with subgrids
   are cleared too.
 - The next order starts when no block of another ship is in the shipyard's free
@@ -1535,7 +1537,8 @@ Projector. A cluster's plugin messages carry 64 KiB at most, so a blueprint goes
 from the World Authority in parts; `tests/mech_blueprint.py bp.sbc big` writes a ship
 that needs them and still builds fast.
 `tests/shipyard_workshop_cluster.py` loads blueprints into a cluster's table: a ship
-without subgrids from a client without Multigrid Projector; one with subgrids from
+without subgrids from a client without Multigrid Projector; `!bp` away from a table,
+refused; one with subgrids from
 such a client, and a copy of it without its bases' links, both cleared off the table
 with the prompt, then loaded with `!bp` by link and by id (the second time from the
 cache), the client's hologram checked, and built; and the same from a client with the
