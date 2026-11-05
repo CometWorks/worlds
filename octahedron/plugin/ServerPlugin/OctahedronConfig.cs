@@ -1167,10 +1167,7 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } =
-        "Component/SteelPlate=300,Component/Construction=500,Component/InteriorPlate=500,Component/MetalGrid=100,"
-        + "Component/SmallTube=200,Component/LargeTube=40,Component/Motor=60,Component/Computer=200,Component/Display=30,"
-        + "Component/BulletproofGlass=30,Component/Girder=50,Ingot/Iron=2000,Ingot/Nickel=500,Ingot/Silicon=500,"
-        + "Ingot/Cobalt=300,Ore/Ice=100000";
+        "Component/SteelPlate=2000,Component/Construction=4000,Component/InteriorPlate=4000,Component/MetalGrid=1000,Component/SmallTube=4000,Component/LargeTube=400,Component/Motor=1000,Component/Computer=4000,Component/Display=400,Component/BulletproofGlass=400,Component/Girder=1000,Ingot/Iron=30000,Ingot/Nickel=10000,Ingot/Silicon=10000,Ingot/Cobalt=6000,Ore/Ice=40000";
 
     [StringOption(
         description: "Metals players must mine, comma separated: OCT never restocks their ores and ingots, nor the components "
@@ -1185,15 +1182,26 @@ public class OctahedronConfig : PluginConfig
     } = "Gold,Silver,Platinum,Uranium";
 
     [StringOption(
-        description: "The stations' profiles: what a station stocks besides or instead of MarketMinStock, "
-            + "as Station name=Type/Subtype=units,..., stations separated by ;.",
+        description: "What each station produces, besides or instead of MarketMinStock, as Station name=Type/Subtype=units,..., "
+            + "stations separated by ;. Once an hour OCT tops these up to the amount; a station named here uses up "
+            + "MarketUsePercent of the rest of its MarketMinStock instead. A station not named here restocks all of "
+            + "MarketMinStock once it is completely out.",
         Parent = "market"
     )]
     public string MarketStationStock
     {
         get;
         set => SetField(ref field, value);
-    } = "";
+    } =
+        // The hubs make components, the other stations ingots, and the Moon has the ice: a few cargo ships' worth an
+        // hour, five times what the other stations want of them, within OCT's 200 t an item
+        "Beta Station=Component/SteelPlate=10000,Component/Construction=20000,Component/InteriorPlate=20000,Component/MetalGrid=5000,Component/SmallTube=20000,Component/LargeTube=2000,Component/Motor=5000,Component/Computer=20000,Component/Display=2000,Component/BulletproofGlass=2000,Component/Girder=5000;"
+        + "Delta Station=Component/SteelPlate=10000,Component/Construction=20000,Component/InteriorPlate=20000,Component/MetalGrid=5000,Component/SmallTube=20000,Component/LargeTube=2000,Component/Motor=5000,Component/Computer=20000,Component/Display=2000,Component/BulletproofGlass=2000,Component/Girder=5000;"
+        + "Alpha Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
+        + "Gamma Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
+        + "North Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
+        + "South Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
+        + "Moon Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000,Ore/Ice=200000";
 
     [StringOption(
         description: "Each station's specialties, which OCT buys at MarketSpecialtyPercent: Station name=Type/Subtype,..., stations separated by ;.",
@@ -1221,14 +1229,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } =
-        "Beta Station=Component/*=90,Ore/*=110,Ingot/*=110;"
-        + "Delta Station=Component/*=90,Ore/*=110,Ingot/*=110;"
-        + "Alpha Station=Component/*=110,Ore/*=90,Ingot/*=90;"
-        + "Gamma Station=Component/*=110,Ore/*=90,Ingot/*=90;"
-        + "North Station=Component/*=110,Ore/*=90,Ingot/*=90;"
-        + "South Station=Component/*=110,Ore/*=90,Ingot/*=90;"
-        + "Moon Station=Component/*=110,Ore/*=90,Ingot/*=90";
+    } = "";
 
     [IntOption(
         0,
@@ -1294,6 +1295,55 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 2;
+
+    [IntOption(
+        0,
+        description: "OCT's prices of an item at a station that has no stock of it, as a share of its prices at the station's "
+            + "MarketMinStock or MarketStationStock amount (%). Between the two the price falls in a straight line.",
+        Parent = "market"
+    )]
+    public int MarketScarcityPercent
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 130;
+
+    [IntOption(
+        0,
+        description: "OCT's prices of an item at a station that holds three times its stock amount, as a share of its "
+            + "prices at that amount (%); never lower. Traders earn by carrying goods from where they are plentiful to "
+            + "where they are short.",
+        Parent = "market"
+    )]
+    public int MarketSurplusPercent
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 80;
+
+    [IntOption(
+        0,
+        description: "Each hour a station named in MarketStationStock uses up this share of its MarketMinStock amount of what it "
+            + "doesn't produce (%).",
+        Parent = "market"
+    )]
+    public int MarketUsePercent
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 25;
+
+    [IntOption(
+        1,
+        description: "Minutes between OCT's restocks; each brings that share of an hour's MarketStationStock production "
+            + "and MarketUsePercent use, so a station's stock comes in small parts that several traders can share.",
+        Parent = "market"
+    )]
+    public int MarketRestockMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
 
     [StringOption(
         description: "Stations where OCT sells zone chips at ZoneChipPrice, comma separated; empty: nowhere. "
