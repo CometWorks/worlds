@@ -431,8 +431,8 @@ public sealed class BuildBook
         return new BuildResult(
             true,
             order.Repair ? $"'{order.Ship}' is in the queue."
-            : order.Free ? $"'{order.Ship}' is in the queue, a free build."
-            : $"'{order.Ship}' is in the queue. At its turn you load the components and press the button.",
+                : order.Free ? $"'{order.Ship}' is in the queue, a free build."
+                : $"'{order.Ship}' is in the queue. At its turn you load the components and press the button.",
             order
         );
     }
@@ -461,8 +461,7 @@ public sealed class BuildBook
         string station,
         long player,
         IReadOnlyDictionary<string, long> items
-    ) =>
-        new(true, MarketBook.Sc(market?.SellOff(station, player, items) ?? 0));
+    ) => new(true, MarketBook.Sc(market?.SellOff(station, player, items) ?? 0));
 
     private void Add(IMarketWorld w, BuildOrder order)
     {
@@ -735,9 +734,7 @@ public sealed class BuildBook
         BuildOrder order,
         IReadOnlyDictionary<string, long> items
     ) =>
-        items.Count == 0 || market == null
-            ? 0
-            : market.SellOff(order.Station, order.Player, items);
+        items.Count == 0 || market == null ? 0 : market.SellOff(order.Station, order.Player, items);
 
     /// <summary>
     /// What a breakdown sells because the containers lack the room: the cheapest units first,
