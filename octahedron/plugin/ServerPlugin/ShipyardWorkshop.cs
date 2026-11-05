@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using HarmonyLib;
@@ -99,10 +100,102 @@ internal static partial class ShipyardOrders
 
     private const string WorkshopAppId = "244850";
     private static readonly object steamCmdLock = new();
+    private static readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly TimeSpan CacheRetention = TimeSpan.FromDays(7);
+    private static DateTime nextPurge;
 
-    // Blocks the calling thread while SteamCMD downloads the item anonymously. The cluster's nodes
-    // have no Steam client or game server of their own, so the game's Workshop calls fail there.
+    // The blueprint of the item's current version from the cache shared by the servers on this
+    // host, else downloaded and put there. A hidden item has no public version: it is downloaded
+    // every time. Blocks the calling thread.
     private static MyObjectBuilder_ShipBlueprintDefinition Download(ulong id, out string error)
+    {
+        var version = WorkshopVersion(id);
+        var entry = version == null ? null : Path.Combine(CacheFolder(), $"{id}-{version}");
+        byte[] xml;
+        string how;
+        if (entry != null && File.Exists(Path.Combine(entry, "bp.sbc")))
+        {
+            xml = File.ReadAllBytes(Path.Combine(entry, "bp.sbc"));
+            // Kept CacheRetention from the last use
+            Directory.SetLastWriteTimeUtc(entry, DateTime.UtcNow);
+            how = "from the cache";
+        }
+        else
+        {
+            xml = SteamCmdDownload(id, out error);
+            if (xml == null)
+                return null;
+            if (entry != null)
+                Store(entry, xml);
+            how = "downloaded with SteamCMD";
+        }
+        MyObjectBuilderSerializerKeen.DeserializeXML(
+            new MemoryStream(xml),
+            out MyObjectBuilder_Definitions definitions
+        );
+        var blueprint = definitions?.ShipBlueprints?.FirstOrDefault();
+        if (blueprint?.CubeGrids == null || blueprint.CubeGrids.Length == 0)
+        {
+            error = $"Workshop item {id} is not a ship blueprint.";
+            return null;
+        }
+        Plugin.Log.Info(
+            $"Workshop blueprint {id} version {version ?? "unknown"} '{blueprint.CubeGrids[0].DisplayName}' {how}: "
+                + $"{blueprint.CubeGrids.Length} grids"
+        );
+        error = null;
+        return blueprint;
+    }
+
+    // Another server on this host may store the same version meanwhile: a whole folder or none
+    private static void Store(string entry, byte[] xml)
+    {
+        var staging = Path.Combine(Path.GetDirectoryName(entry), $".{Guid.NewGuid():N}");
+        Directory.CreateDirectory(staging);
+        File.WriteAllBytes(Path.Combine(staging, "bp.sbc"), xml);
+        try
+        {
+            Directory.Move(staging, entry);
+        }
+        catch (IOException)
+        {
+            Directory.Delete(staging, true);
+        }
+    }
+
+    // The item's time_updated from the public Steam Web API, null for a hidden item or no answer
+    private static string WorkshopVersion(ulong id)
+    {
+        try
+        {
+            var answer = http.PostAsync(
+                    "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/",
+                    new FormUrlEncodedContent(
+                        new Dictionary<string, string>
+                        {
+                            ["itemcount"] = "1",
+                            ["publishedfileids[0]"] = id.ToString(),
+                        }
+                    )
+                )
+                .Result.Content.ReadAsStringAsync()
+                .Result;
+            return Regex.Match(answer, @"""time_updated"":(\d+)") is { Success: true } m
+                ? m.Groups[1].Value
+                : null;
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Warning(
+                $"Workshop blueprint {id}: no version from the Steam Web API: {e.Message}"
+            );
+            return null;
+        }
+    }
+
+    // bp.sbc of the item, downloaded anonymously. The cluster's nodes have no Steam client or game
+    // server of their own, so the game's Workshop calls fail there.
+    private static byte[] SteamCmdDownload(ulong id, out string error)
     {
         var root = Path.Combine(MyFileSystem.UserDataPath, "Octahedron", "Workshop");
         var home = Path.Combine(root, "home");
@@ -146,62 +239,99 @@ internal static partial class ShipyardOrders
             output = stdout.Result + stderr.Result;
         }
         // SteamCMD puts the item into the install folder, or into its own or HOME's Steam folder
-        var folder = new[]
+        var workshop = new[]
         {
             root,
             Path.Combine(home, ".steam", "steamcmd"),
             Path.GetDirectoryName(steamCmd),
         }
             .Where(r => !string.IsNullOrEmpty(r))
-            .Select(r =>
-                Path.Combine(r, "steamapps", "workshop", "content", WorkshopAppId, id.ToString())
-            )
-            .FirstOrDefault(Directory.Exists);
-        if (!output.Contains("Success. Downloaded item") || folder == null)
+            .Select(r => Path.Combine(r, "steamapps", "workshop"))
+            .FirstOrDefault(w =>
+                Directory.Exists(Path.Combine(w, "content", WorkshopAppId, id.ToString()))
+            );
+        var xml =
+            workshop == null
+                ? null
+                : BlueprintXml(Path.Combine(workshop, "content", WorkshopAppId, id.ToString()));
+        if (!output.Contains("Success. Downloaded item") || xml == null)
         {
             var why = output.Split('\n').LastOrDefault(l => l.Contains("ERROR"))?.Trim();
             Plugin.Log.Warning($"Workshop blueprint {id}: {steamCmd} failed: {why ?? output}");
-            error = $"The Workshop has no public item {id}" + (why == null ? "." : $": {why}");
+            error =
+                xml == null && workshop != null
+                    ? $"Workshop item {id} is not a ship blueprint."
+                    : $"The Workshop has no public item {id}" + (why == null ? "." : $": {why}");
             return null;
         }
-        var blueprint = ReadBlueprint(folder)?.ShipBlueprints?.FirstOrDefault();
-        if (blueprint?.CubeGrids == null || blueprint.CubeGrids.Length == 0)
-        {
-            error = $"Workshop item {id} is not a ship blueprint.";
-            return null;
-        }
-        Plugin.Log.Info(
-            $"Workshop blueprint {id} '{blueprint.CubeGrids[0].DisplayName}' downloaded: {blueprint.CubeGrids.Length} grids"
-        );
         error = null;
-        return blueprint;
+        return xml;
     }
 
-    private static string SteamCmd()
+    private static string SteamCmd() =>
+        !string.IsNullOrWhiteSpace(Config.ShipyardSteamCmd) ? Config.ShipyardSteamCmd
+        : QuasarTools() is { } tools
+            ? Path.Combine(
+                tools,
+                "SteamCMD",
+                Environment.OSVersion.Platform == PlatformID.Win32NT
+                    ? "steamcmd.exe"
+                    : "steamcmd.sh"
+            )
+        : "steamcmd";
+
+    private static string CacheFolder() =>
+        !string.IsNullOrWhiteSpace(Config.ShipyardWorkshopCache) ? Config.ShipyardWorkshopCache
+        : QuasarTools() is { } tools ? Path.Combine(tools, "OctahedronBlueprints")
+        : Path.Combine(MyFileSystem.UserDataPath, "Octahedron", "Blueprints");
+
+    // Quasar's ManagedRuntime/Tools above this server's data folder, shared by its servers
+    private static string QuasarTools()
     {
-        if (!string.IsNullOrWhiteSpace(Config.ShipyardSteamCmd))
-            return Config.ShipyardSteamCmd;
-        var name =
-            Environment.OSVersion.Platform == PlatformID.Win32NT ? "steamcmd.exe" : "steamcmd.sh";
         for (var dir = new DirectoryInfo(MyFileSystem.UserDataPath); dir != null; dir = dir.Parent)
         {
-            var quasar = Path.Combine(dir.FullName, "ManagedRuntime", "Tools", "SteamCMD", name);
-            if (File.Exists(quasar))
-                return quasar;
+            var tools = Path.Combine(dir.FullName, "ManagedRuntime", "Tools");
+            if (Directory.Exists(Path.Combine(tools, "SteamCMD")))
+                return tools;
         }
-        return "steamcmd";
+        return null;
+    }
+
+    // Once a day: cached blueprints unused for CacheRetention go
+    internal static void PurgeCache()
+    {
+        if (DateTime.UtcNow < nextPurge)
+            return;
+        nextPurge = DateTime.UtcNow.AddDays(1);
+        var cache = CacheFolder();
+        Task.Run(() =>
+        {
+            if (!Directory.Exists(cache))
+                return;
+            foreach (var entry in Directory.GetDirectories(cache))
+                try
+                {
+                    if (DateTime.UtcNow - Directory.GetLastWriteTimeUtc(entry) > CacheRetention)
+                    {
+                        Directory.Delete(entry, true);
+                        Plugin.Log.Info(
+                            $"Workshop blueprint cache: {Path.GetFileName(entry)} removed"
+                        );
+                    }
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // Another server on this host removed it first
+                }
+        });
     }
 
     // bp.sbc in the item's folder, or in the zip of an item from before the Workshop's UGC
-    private static MyObjectBuilder_Definitions ReadBlueprint(string folder)
+    private static byte[] BlueprintXml(string folder)
     {
-        MyObjectBuilder_Definitions definitions = null;
         var file = Path.Combine(folder, "bp.sbc");
         if (File.Exists(file))
-        {
-            MyObjectBuilderSerializerKeen.DeserializeXML(file, out definitions);
-            return definitions;
-        }
+            return File.ReadAllBytes(file);
         var archive = Directory
             .GetFiles(folder)
             .FirstOrDefault(f => f.EndsWith(".bin") || f.EndsWith(".sbb"));
@@ -214,8 +344,9 @@ internal static partial class ShipyardOrders
         if (entry == null)
             return null;
         using var stream = entry.Open();
-        MyObjectBuilderSerializerKeen.DeserializeXML(stream, out definitions);
-        return definitions;
+        using var bytes = new MemoryStream();
+        stream.CopyTo(bytes);
+        return bytes.ToArray();
     }
 
     private static string Load(

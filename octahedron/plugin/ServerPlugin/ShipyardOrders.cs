@@ -1194,6 +1194,7 @@ internal static partial class ShipyardOrders
     public static void Update()
     {
         ticks++;
+        PurgeCache();
         ShipyardAway.Update();
         ShipyardArm.Update();
         if (docks.Count > 0)

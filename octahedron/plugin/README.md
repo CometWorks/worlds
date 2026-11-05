@@ -538,7 +538,12 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   (`ShipyardSteamCmd`; empty: Quasar's managed SteamCMD in
   `ManagedRuntime/Tools/SteamCMD` above the server's data folder, else `steamcmd`
   on the PATH), because a cluster node has no Steam connection of its own for the
-  game's Workshop calls. It loads the blueprint into the nearest table as if the
+  game's Workshop calls. The blueprint is kept by item and version (the Steam Web
+  API's `time_updated`) in `ShipyardWorkshopCache` (empty: `OctahedronBlueprints`
+  next to Quasar's SteamCMD, else in the server's data folder), which the servers
+  on a host share, so each version is downloaded once. Entries unused for 7 days
+  are removed, checked once a day. A hidden item has no public version and is
+  downloaded every time. It loads the blueprint into the nearest table as if the
   player had loaded it: ids remapped together, the main grid at the origin, and
   programmable blocks' scripts dropped unless the player may use scripts, as the
   game does with a client's blueprint. The table must be free or the player's. A
@@ -1525,7 +1530,8 @@ from the World Authority in parts; `tests/mech_blueprint.py bp.sbc big` writes a
 that needs them and still builds fast.
 `tests/shipyard_workshop_cluster.py` loads blueprints into a cluster's table: a ship
 without subgrids from a client without Multigrid Projector, one with subgrids from
-such a client, refused with the prompt and then loaded with `!oct workshop` and built,
+such a client, refused with the prompt and then loaded with `!oct workshop` (twice: the
+second time from the cache) and built,
 and the same from a client with the plugin. A built ship must have the blueprint's
 grids and blocks. See its docstring.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a

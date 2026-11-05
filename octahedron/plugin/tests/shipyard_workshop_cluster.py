@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from datetime import datetime, timezone
@@ -50,6 +51,7 @@ MGP = (
     "viktor-ferenczi/se-multigrid-projector",
 )
 HINT = "!oct workshop"
+CACHE = wa.ROOT / "workshop-cache"
 pin_source_age = clients.pin_source_age
 
 
@@ -196,6 +198,26 @@ def run(bench) -> None:
             "is on the hologram table" in reply,
             reply,
         )
+        # Again: the blueprint now comes from the cache the nodes share (CACHE)
+        before = api.get_chat_messages()
+        api.send_chat(command)
+        again = ""
+        deadline = time.monotonic() + 60
+        while "hologram table" not in again and time.monotonic() < deadline:
+            time.sleep(1)
+            again = " ".join(rig.new_chat_lines(api, before, command))
+        log = node_log()
+        downloads = re.findall(
+            rf"Workshop blueprint {ITEM} version \S+ .* (from the cache|downloaded)",
+            log,
+        )
+        check(
+            "a second load comes from the cache, one download",
+            "is on the hologram table" in again
+            and downloads == ["downloaded", "from the cache"]
+            and list(CACHE.glob(f"{ITEM}-*/bp.sbc")),
+            f"{again} {downloads} {list(CACHE.iterdir())}",
+        )
         # The quote and the details name the Workshop item's title
         ship = (
             re.search(r"'(.+)' is on the hologram table", reply)[1]
@@ -274,7 +296,8 @@ def press(api) -> str:
 
 def main() -> int:
     run.world_template = wa.prepare()
-    wa.set_config(FreeBuildPcuLimit=100000)
+    wa.set_config(FreeBuildPcuLimit=100000, ShipyardWorkshopCache=CACHE)
+    shutil.rmtree(CACHE, ignore_errors=True)
     if os.environ.get("OCT_STEAMCMD"):
         wa.set_config(ShipyardSteamCmd=os.environ["OCT_STEAMCMD"])
     label = datetime.now(timezone.utc).strftime(f"%Y%m%d-%H%M%SZ-workshop-{MODE}")
