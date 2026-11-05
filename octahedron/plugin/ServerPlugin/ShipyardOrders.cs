@@ -279,6 +279,12 @@ internal static partial class ShipyardOrders
         if (blueprint == null || blueprint.Count == 0)
             return Fail(plan, "Switch the hologram table on and load a blueprint into it first.");
         plan.Ship = blueprint[0].DisplayName ?? "Ship";
+        // The table's own copy: the copy above has each grid's ids remapped anew
+        if (Damaged(TableHologram.Blueprint(table)))
+            return Fail(
+                plan,
+                $"'{plan.Ship}' has subgrids that your game sent damaged. {DamagedHint}"
+            );
         var main = blueprint[0];
         plan.LeftOut = ShipyardDlc.LeaveOut(
             blueprint,
@@ -381,11 +387,7 @@ internal static partial class ShipyardOrders
             // A client without Multigrid Projector can send the subgrids out of place, and so can
             // an old blueprint; a new one made offline has them right
             return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}."
-                + (
-                    blueprint.Count > 1
-                        ? " Its subgrids may be off: load it with the Multigrid Projector plugin of Pulsar, or blueprint the ship again in an offline game."
-                        : ""
-                );
+                + (blueprint.Count > 1 ? $" Its subgrids may be off. {DamagedHint}" : "");
         var needed = Components(blueprint, skipFirst: !arms)
             .Sum(c => MyDefinitionManager.Static.GetPhysicalItemDefinition(c.Key).Volume * c.Value);
         var capacity = Containers(shipyard).Sum(i => (double)i.MaxVolume);
@@ -949,7 +951,10 @@ internal static partial class ShipyardOrders
     [HarmonyPatch(typeof(MyProjectorBase), "SetNewBlueprint")]
     private static class SetNewBlueprint
     {
-        private static void Postfix(MyProjectorBase __instance)
+        private static void Postfix(
+            MyProjectorBase __instance,
+            List<MyObjectBuilder_CubeGrid> gridBuilders
+        )
         {
             if (!Sync.IsServer || MyEventContext.Current.IsLocallyInvoked)
                 return;
@@ -962,6 +967,12 @@ internal static partial class ShipyardOrders
             loaded[__instance.EntityId] = identity;
             loadedAt[__instance.EntityId] = DateTime.UtcNow;
             Hold(__instance, identity);
+            if (Damaged(gridBuilders))
+                Tell(
+                    identity,
+                    $"'{gridBuilders[0].DisplayName}' has subgrids, and your game damages those when it sends a blueprint "
+                        + $"without the Multigrid Projector plugin: the shipyard can't build this copy. {DamagedHint}"
+                );
         }
     }
 

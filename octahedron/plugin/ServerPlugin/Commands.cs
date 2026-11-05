@@ -86,6 +86,20 @@ public sealed class Commands : CommandModule
         );
 
     [Command(
+        "workshop",
+        "Loads a blueprint from the Steam Workshop into the nearest station hologram table for you",
+        "!oct workshop <link or id> [table name]: stand by a station's hologram table. The server downloads the blueprint, "
+            + "so a ship with subgrids arrives whole without the Multigrid Projector plugin."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public string Workshop(string link, params string[] table) =>
+        ShipyardOrders.Workshop(
+            Context.Caller.IdentityId,
+            link,
+            table.Length == 0 ? null : string.Join(" ", table)
+        );
+
+    [Command(
         "shipyard done",
         "Ends your turn at a shipyard now: what is left in its containers is sold to the station for you",
         "!oct shipyard done: your turn would otherwise end by itself at its deadline, or once the containers are empty. "

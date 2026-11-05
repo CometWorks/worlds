@@ -523,10 +523,23 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back. When a
-  blueprint with subgrids is too big, the message also suggests loading it with
-  the Multigrid Projector plugin of Pulsar or blueprinting the ship again in an
-  offline game: a client without the plugin, or an old blueprint, can have its
-  subgrids out of place.
+  blueprint with subgrids is too big, the message also suggests the Workshop link
+  or the Multigrid Projector plugin below: an old blueprint can have its subgrids
+  out of place too.
+- The game's client damages a blueprint with subgrids on its way to the table: it
+  remaps the entity ids of each grid on its own, so a rotor, piston or hinge base
+  points at no block of its head's grid, and the ship would come out wrong.
+  Multigrid Projector on the client remaps them together. The server finds such a
+  blueprint by a base whose head is in none of its grids, tells the player in chat
+  at once, and the table's screen and the button refuse it. Both name the two ways
+  out: the Multigrid Projector plugin of Pulsar, or the blueprint's Steam Workshop
+  link with `!oct workshop <link or id> [table name]`, which needs no plugin. The
+  node the player is on downloads the item through its own Steam connection, as it
+  does the world's mods, and loads the blueprint into the nearest table as if the
+  player had loaded it: ids remapped together, the main grid at the origin, and
+  programmable blocks' scripts dropped unless the player may use scripts, as the
+  game does with a client's blueprint. The table must be free or the player's. A
+  blueprint from Multigrid Projector before 0.9.10 has no ids to check and passes.
 - The next order starts when no block of another ship is in the shipyard's free
   space: a ship left there has to fly out first. The space ends at the walls, so
   a ship docked at the connectors outside them is not in the way, and neither the
@@ -1507,6 +1520,11 @@ a whole day of payouts and Hangar's retrieval fee alone
 Projector. A cluster's plugin messages carry 64 KiB at most, so a blueprint goes to and
 from the World Authority in parts; `tests/mech_blueprint.py bp.sbc big` writes a ship
 that needs them and still builds fast.
+`tests/shipyard_workshop_cluster.py` loads blueprints into a cluster's table: a ship
+without subgrids from a client without Multigrid Projector, one with subgrids from
+such a client, refused with the prompt and then loaded with `!oct workshop` and built,
+and the same from a client with the plugin. A built ship must have the blueprint's
+grids and blocks. See its docstring.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
 `tests/test_shipyard_deadline.py` checks a ship left in the build space past
