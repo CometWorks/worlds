@@ -1541,8 +1541,9 @@ without subgrids from a client without Multigrid Projector; `!bp` away from a ta
 refused; one with subgrids from
 such a client, and a copy of it without its bases' links, both cleared off the table
 with the prompt, then loaded with `!bp` by link and by id (the second time from the
-cache), the client's hologram checked, and built; and the same from a client with the
-plugin. A built ship must have the blueprint's
+cache), the client's hologram checked, and built; the same from a client with the
+plugin; and a `!bp` ship with DLC blocks for a player who owns none, built without
+them. A built ship must have the blueprint's
 grids and blocks. See its docstring.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
