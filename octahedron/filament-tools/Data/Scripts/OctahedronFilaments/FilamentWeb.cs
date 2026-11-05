@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Sandbox.Common.ObjectBuilders;
+using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
 using ToolCoreApi;
@@ -50,10 +51,13 @@ namespace OctahedronFilaments
     // alike, like carbon fibers drifting in a current. ToolCore draws no beams for these
     // tools (their definitions have none), so this finds the block the way ToolCore aims:
     // along the emitter dummy of the turret's ball, up to the tool's reach.
-    // The threads extend in about a second when the tool starts on a run of blocks and
-    // retract when it ends, by ToolCore's Hit state (the storm sound's trigger), and their
-    // ends glide from block to block (SE-1095). Only the drawing moves this way: the tool
-    // works as ToolCore says, without waiting for the threads.
+    // The threads extend in about a second when the tool starts on a run of blocks, by
+    // ToolCore's Hit state, and their ends glide from block to block (SE-1095). When the
+    // tool stops, they stay on the last block for Linger seconds and glide on if it starts
+    // again by then, so they retract less often (SE-1116). Only the drawing moves this
+    // way: the tool works as ToolCore says, without waiting for the threads.
+    // The storm sound plays here too, one sample at a time while the tool works, and a
+    // started sample plays to its end. ToolCore would cut it off when Hit ends.
     [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
     public class FilamentWeb : MySessionComponentBase
     {
@@ -66,11 +70,12 @@ namespace OctahedronFilaments
         const int Segments = 32;
         const int Strands = 10;
 
-        // Seconds to extend or retract, to wait in a gap between blocks before
-        // retracting, and the ends' glide time to a new block
+        // Seconds to extend or retract, to stay on the last block after the tool stops
+        // before retracting, and the ends' glide time to a new block
         const double ExtendTime = 1;
-        const double Grace = 0.4;
+        const double Linger = 3;
         const double GlideTime = 0.3;
+        const string Sound = "OctahedronFilamentStorm";
 
         // The spread of the threads' ends over the block; the sag and the bend as parts of
         // the thread's length; the bend's wave length (m) and drift speed (rad/s). Wide
@@ -100,8 +105,9 @@ namespace OctahedronFilaments
             "chargeemitter8",
         };
 
-        // The rig's per-frame trace of each web: tool, extension, drawn and aimed end
-        public static Action<IMyTerminalBlock, double, Vector3D, Vector3D> Trace;
+        // The rig's per-frame trace of each web: tool, extension, drawn and aimed end,
+        // whether the tool works
+        public static Action<IMyTerminalBlock, double, Vector3D, Vector3D, bool> Trace;
 
         class Web
         {
@@ -117,6 +123,7 @@ namespace OctahedronFilaments
             public Action<int, bool> Monitor;
             public bool Monitored;
             public bool Hitting;
+            public MyEntity3DSoundEmitter Emitter;
 
             // In the tool's frame
             public Vector3D[] Anchors;
@@ -133,13 +140,16 @@ namespace OctahedronFilaments
             new Dictionary<string, IMyModelDummy>();
         readonly Vector3D[,] points = new Vector3D[Threads, Segments + 1];
         readonly TCApi toolCore = new TCApi();
+        MySoundPair storm;
         int tick;
         double drawn;
 
         public override void LoadData()
         {
-            if (!MyAPIGateway.Utilities.IsDedicated)
-                toolCore.Load();
+            if (MyAPIGateway.Utilities.IsDedicated)
+                return;
+            toolCore.Load();
+            storm = new MySoundPair(Sound);
         }
 
         protected override void UnloadData()
@@ -174,6 +184,10 @@ namespace OctahedronFilaments
                     || !(web.Monitored ? web.Hitting : Shooting(tool))
                 )
                     continue;
+                if (web.Emitter == null)
+                    web.Emitter = new MyEntity3DSoundEmitter((MyEntity)tool);
+                if (!web.Emitter.IsPlaying)
+                    web.Emitter.PlaySound(storm);
                 MatrixD emitter;
                 if (!Emitter(tool, out emitter))
                     continue;
@@ -205,6 +219,7 @@ namespace OctahedronFilaments
                     {
                         if (toolCore.IsReady)
                             toolCore.UnMonitorEvents((MyEntity)tool, webs[tool].Monitor);
+                        webs[tool].Emitter?.StopSound(true);
                         webs.Remove(tool);
                     }
         }
@@ -222,7 +237,7 @@ namespace OctahedronFilaments
                 Animate(web, dt);
                 if (web.Extension <= 0 || pair.Key.Closed)
                     continue;
-                Trace?.Invoke(pair.Key, web.Extension, web.End, web.Target);
+                Trace?.Invoke(pair.Key, web.Extension, web.End, web.Target, web.Working);
                 Draw(pair.Key, web, time);
             }
         }
@@ -241,7 +256,7 @@ namespace OctahedronFilaments
                 web.Idle = 0;
                 web.Extension = Math.Min(1, web.Extension + dt / ExtendTime);
             }
-            else if ((web.Idle += dt) > Grace)
+            else if ((web.Idle += dt) > Linger)
                 web.Extension = Math.Max(0, web.Extension - dt / ExtendTime);
             var omega = 2 / GlideTime;
             var x = omega * dt;
