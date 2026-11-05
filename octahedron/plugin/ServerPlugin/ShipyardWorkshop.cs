@@ -24,9 +24,11 @@ namespace ServerPlugin;
 // The game's client damages a blueprint with subgrids on its way to a hologram table: it remaps
 // each grid's entity ids on its own, so a rotor, piston or hinge base points at no block of its
 // head's grid, and the server can't tell where the subgrids belong. Multigrid Projector on the
-// client remaps them together. The shipyard refuses such a blueprint and asks the player for the
-// blueprint's Steam Workshop link or id (!bp or !oct workshop), which this server downloads with SteamCMD and
-// loads into the table itself, or for the plugin. Players without Pulsar can order ships with subgrids so.
+// client remaps them together. The server can't see the plugin, so the shipyard clears any blueprint with
+// subgrids off the table that doesn't show it came from Multigrid Projector, and asks the player for the
+// blueprint's Steam Workshop link or id (!bp or !oct workshop) instead. This server downloads it with SteamCMD
+// and loads its own copy into the table, which the clients show and the shipyard builds: the client never sends
+// it. Players without Pulsar can order ships with subgrids so.
 internal static partial class ShipyardOrders
 {
     private static readonly Regex WorkshopIdPattern = new(@"(?:\bid=|^)(\d{6,20})\b");
@@ -35,25 +37,36 @@ internal static partial class ShipyardOrders
     private static readonly HashSet<long> downloading = new();
 
     internal const string DamagedHint =
-        "Type !bp and its Steam Workshop link or id into chat, "
-        + "or load it again with the Multigrid Projector plugin of Pulsar.";
+        "Type !bp and the blueprint's Steam Workshop link or id into chat instead: the shipyard "
+        + "loads it from the Workshop. Or load it with the Multigrid Projector plugin of Pulsar.";
 
-    /// <summary>A blueprint with subgrids whose mechanical connections point at no block of it.</summary>
-    internal static bool Damaged(List<MyObjectBuilder_CubeGrid> blueprint)
+    // Tables whose blueprint the server loaded from the Workshop: its own copy, ids intact
+    private static readonly HashSet<long> workshopTables = new();
+
+    /// <summary>
+    /// A blueprint with subgrids that doesn't show it came intact from Multigrid Projector: the
+    /// game's client remaps each grid's ids on its own, so its bases point at no block of the
+    /// blueprint. Only a blueprint whose bases all point at its blocks, at least one of them,
+    /// passes. The server can't see the plugin itself, so any other one with subgrids may be
+    /// damaged, including those of Multigrid Projector before 0.9.10, which sent no ids.
+    /// </summary>
+    internal static bool Unproven(List<MyObjectBuilder_CubeGrid> blueprint)
     {
         if (blueprint == null || blueprint.Count < 2)
             return false;
-        var ids = new HashSet<long>(
-            blueprint.SelectMany(g => g.CubeBlocks).Select(b => b.EntityId)
-        );
-        // Multigrid Projector before 0.9.10 sent every block with EntityId 0: no ids to check
-        ids.Remove(0);
-        return ids.Count > 0
-            && blueprint
-                .SelectMany(g => g.CubeBlocks)
-                .OfType<MyObjectBuilder_MechanicalConnectionBlock>()
-                .Any(b => b.TopBlockId is long top && top != 0 && !ids.Contains(top));
+        var blocks = blueprint.SelectMany(g => g.CubeBlocks).ToList();
+        var ids = new HashSet<long>(blocks.Select(b => b.EntityId).Where(id => id != 0));
+        var tops = blocks
+            .OfType<MyObjectBuilder_MechanicalConnectionBlock>()
+            .Select(b => b.TopBlockId ?? 0)
+            .Where(top => top != 0)
+            .ToList();
+        return tops.Count == 0 || !tops.All(ids.Contains);
     }
+
+    // Whether the table's blueprint may be damaged: one the server loaded from the Workshop isn't
+    internal static bool Unproven(MyProjectorBase table) =>
+        !workshopTables.Contains(table.EntityId) && Unproven(TableHologram.Blueprint(table));
 
     // !oct workshop: the Workshop blueprint into the nearest table, as if the player loaded it
     public static string Workshop(long identityId, string link, string tableName)
@@ -377,6 +390,7 @@ internal static partial class ShipyardOrders
                 );
         }
         SendNewBlueprint(table, grids);
+        workshopTables.Add(table.EntityId);
         loaded[table.EntityId] = identityId;
         loadedAt[table.EntityId] = DateTime.UtcNow;
         Hold(table, identityId);

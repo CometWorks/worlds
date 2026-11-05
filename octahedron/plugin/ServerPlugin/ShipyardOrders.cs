@@ -280,10 +280,10 @@ internal static partial class ShipyardOrders
             return Fail(plan, "Switch the hologram table on and load a blueprint into it first.");
         plan.Ship = blueprint[0].DisplayName ?? "Ship";
         // The table's own copy: the copy above has each grid's ids remapped anew
-        if (Damaged(TableHologram.Blueprint(table)))
+        if (Unproven(table))
             return Fail(
                 plan,
-                $"'{plan.Ship}' has subgrids that your game sent damaged. {DamagedHint}"
+                $"'{plan.Ship}' has subgrids, which your game may have sent damaged. {DamagedHint}"
             );
         var main = blueprint[0];
         plan.LeftOut = ShipyardDlc.LeaveOut(
@@ -964,15 +964,30 @@ internal static partial class ShipyardOrders
             // Any projector ends up here: only a station's table is held
             if (identity == 0 || !IsTable(__instance) || StationOf(__instance.CubeGrid) == null)
                 return;
+            workshopTables.Remove(__instance.EntityId);
+            // Not from Multigrid Projector: the subgrids may be damaged, so no ship comes of it
+            if (Unproven(gridBuilders))
+            {
+                Tell(
+                    identity,
+                    $"'{gridBuilders[0].DisplayName}' has subgrids, which your game damages when it sends a blueprint "
+                        + $"without the Multigrid Projector plugin, so the shipyard took it off the table. {DamagedHint}"
+                );
+                // Once the game has passed the blueprint on to the other clients
+                var table = __instance;
+                MySandboxGame.Static.Invoke(
+                    () =>
+                    {
+                        if (!table.MarkedForClose)
+                            ClearTable(table);
+                    },
+                    "Octahedron damaged blueprint"
+                );
+                return;
+            }
             loaded[__instance.EntityId] = identity;
             loadedAt[__instance.EntityId] = DateTime.UtcNow;
             Hold(__instance, identity);
-            if (Damaged(gridBuilders))
-                Tell(
-                    identity,
-                    $"'{gridBuilders[0].DisplayName}' has subgrids, and your game damages those when it sends a blueprint "
-                        + $"without the Multigrid Projector plugin: the shipyard can't build this copy. {DamagedHint}"
-                );
         }
     }
 

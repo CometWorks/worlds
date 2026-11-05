@@ -1,7 +1,8 @@
 """Blueprints with subgrids at a cluster shipyard's hologram table without and with Multigrid Projector on the
 client (SE-1082), through the cluster's scenario bench (CometWorks/cluster Test/). The game's client damages a
-blueprint with subgrids on its way to the table, so the shipyard refuses it and asks for the blueprint's Workshop
-link (!bp), which the node downloads and loads into the table itself.
+blueprint with subgrids on its way to the table, so the shipyard takes any blueprint with subgrids that doesn't
+show it came from MGP off the table and asks for the blueprint's Workshop link (!bp), which the node downloads and
+loads into the table itself.
 
     OCT_WORLD_SOURCE=<world from build_world.py> [OCT_MGP_REPO=<MGP working copy>] [OCT_STEAMCMD=<steamcmd>] \\
         <Test>/.venv/bin/python tests/shipyard_workshop_cluster.py <Test> <mode> <single bp.sbc> <multi bp.sbc> <item>
@@ -10,8 +11,10 @@ The two blueprints are the Workshop item's bp.sbc (a ship with subgrids) and any
 build each:
 
 - single: the client without MGP loads the ship without subgrids and orders it.
-- vanilla: the client without MGP loads the ship with subgrids: the server tells the player in chat and on the
-  table's screen, a press doesn't order it. Then !bp <item's link> loads it (again by its bare id, from the cache), and it is ordered and built.
+- vanilla: the client without MGP loads the ship with subgrids, then a copy of it without the links of its rotors,
+  pistons and hinges: the server takes each off the table and names !bp in chat. Then !bp <item's link> loads it,
+  the client's copy on the table has every grid in place, again by its bare id from the cache, and it is ordered
+  and built.
 - mgp: the client with MGP (OCT_MGP_REPO) loads the ship with subgrids: no prompt, ordered and built.
 
 A built ship must have the blueprint's grids and blocks, the grids next to each other. The setup is
@@ -40,6 +43,7 @@ from wa_economy_cluster import (
 )  # noqa: E402
 
 import clients  # noqa: E402
+from se_remote import CallOp  # noqa: E402
 
 MODE = sys.argv[2]
 SINGLE, MULTI = (Path(a).read_text(encoding="utf-8") for a in sys.argv[3:5])
@@ -111,7 +115,13 @@ def run(bench) -> None:
         cluster.config.gateway_listen,
     ).user_data
     wa.link_mods(user_data / "Mods")
-    for name, blueprint in (("Single", SINGLE), ("Multi", MULTI)):
+    # The links of the bases to their heads gone: nothing shows it came from MGP
+    unlinked = re.sub(r"<TopBlockId>-?\d+</TopBlockId>", "", MULTI)
+    for name, blueprint in (
+        ("Single", SINGLE),
+        ("Multi", MULTI),
+        ("Unlinked", unlinked),
+    ):
         target = user_data / "Blueprints/local" / name
         target.mkdir(parents=True, exist_ok=True)
         (target / "bp.sbc").write_text(blueprint, encoding="utf-8")
@@ -167,20 +177,15 @@ def run(bench) -> None:
         said = load("Multi")
         check("no prompt with Multigrid Projector", HINT not in said, said)
     else:
-        said = load("Multi")
-        check("the player is told in chat", HINT in said and "damage" in said, said)
-        shown = screen("sent damaged", HINT)
-        check(
-            "the table's screen tells why",
-            "sent damaged" in shown and HINT in shown,
-            shown,
-        )
-        reply = press(api)
-        check(
-            "a press doesn't order the damaged copy",
-            "is in the queue" not in reply and HINT in reply,
-            reply,
-        )
+        for name in ("Multi", "Unlinked"):
+            said = load(name)
+            check(
+                f"{name}: taken off the table, the player is told !bp in chat",
+                HINT in said and "off the table" in said,
+                said,
+            )
+            shown = screen("BLUEPRINT False")
+            check(f"{name}: the table is empty", "BLUEPRINT False" in shown, shown)
         # The answer comes in chat once SteamCMD is done
         command = (
             f"{HINT} https://steamcommunity.com/sharedfiles/filedetails/?id={ITEM}"
@@ -197,6 +202,18 @@ def run(bench) -> None:
             "the Workshop blueprint is on the table",
             "is on the hologram table" in reply,
             reply,
+        )
+        # The client's own copy, the hologram it shows: every grid, in place
+        time.sleep(5)
+        xml = api.call([CallOp.fat_block_method(block["entityId"], "GetObjectBuilder")])
+        shown, expected = layout(xml.call(0)["xml"], "ProjectedGrids"), layout(MULTI)
+        check(
+            "the client's hologram has the blueprint's grids in place",
+            len(shown) == len(expected)
+            and all(
+                a[0] == b[0] and abs(a[1] - b[1]) < 0.1 for a, b in zip(shown, expected)
+            ),
+            f"{shown} {expected}",
         )
         # Again, by the bare id: the blueprint now comes from the cache the nodes share (CACHE)
         command = f"{HINT} {ITEM}"
@@ -279,6 +296,22 @@ def run(bench) -> None:
 
 
 run.administrators = [CLIENT_ID]
+
+
+def layout(xml: str, under: str = "CubeGrids") -> list[tuple[int, float]]:
+    """Each grid's blocks and its distance from the main grid, the same however the copy is turned"""
+    import xml.etree.ElementTree as ET
+
+    grids = [
+        (len(g.find("CubeBlocks")), g.find("PositionAndOrientation/Position").attrib)
+        for parent in ET.fromstring(xml).iter(under)
+        for g in parent
+    ]
+    origin = [float(v) for v in grids[0][1].values()] if grids else []
+    return [
+        (n, sum((float(v) - o) ** 2 for v, o in zip(p.values(), origin)) ** 0.5)
+        for n, p in grids
+    ]
 
 
 def press(api) -> str:
