@@ -1,10 +1,14 @@
-"""The shipyard queue panel's layout at a real station (SE-935): an entry wraps to two lines
-with the second indented, a build shows its minutes left with the UTC time (SE-962), no line
-is wider than the 46 columns, and the font is the size those columns give (0.57) or more
-instead of shrinking to fit an entry on one line. With the built ship left in the build space
-and an order behind it, the panel says the ship has to leave with ClearWay's deadline, and it is
-moved out at that time (SE-1113). tests/panel-text has the layout of a full queue without the
-game. With OCT_SHOTS=<folder> the client renders and saves a shot of the panel then.
+"""The shipyard queue panel's layout at a real station (SE-935): a build shows how far it is,
+the share of its blocks the projector counts built, and its minutes left, then whose ship it
+is: "1. 53% (46 mins) OctTester 'Order Test' (99 PCU)" (SE-1117). No line is wider than the 46
+columns, and the font is the size those columns give (0.57) or more instead of shrinking to fit
+an entry on one line. The build has the station's limit: 240 min at the Moon Shipyard
+(ShipyardStationOrderMinutes), else ShipyardOrderMinutes' 60. With the built ship left in the
+build space and an order behind it, the panel says the ship has to leave with ClearWay's
+deadline, and it is moved out at that time (SE-1113). tests/panel-text has the layout of a full
+queue without the game. With OCT_SHOTS=<folder> the client renders and saves shots of the panel
+while it builds and while it waits for the ship to leave. OCT_SHIPYARD_STATION=Moon runs it at
+the Moon Shipyard.
 
     OCT_TASK=SE-935 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_queue_panel.py
@@ -19,7 +23,6 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 os.environ.setdefault("OCT_TASK", "SE-935")
@@ -37,6 +40,7 @@ from test_table_rules import (  # noqa: E402
     checks,
     load,
     press,
+    queue,
     remove,
     settled,
 )
@@ -61,12 +65,6 @@ def queue_panel(remote) -> dict:
         subtype="LargeTextPanel", max_distance=100, limit=50
     )
     return next(p for p in panels if p.get("customName") == QUEUE_PANEL)
-
-
-def utc(minutes: float) -> set[str]:
-    """The HH:MM of now plus minutes, a minute either way"""
-    at = datetime.now(timezone.utc) + timedelta(minutes=minutes)
-    return {(at + timedelta(minutes=d)).strftime("%H:%M") for d in (-1, 0, 1)}
 
 
 def shoot(remote, name: str) -> None:
@@ -128,7 +126,7 @@ def leave(a, mark) -> None:
     log(repr(text))
     lines = text.rstrip().split("\n")
     found = re.search(
-        r"Waiting for '(.+?)' to leave the shipyard within (\d+) min \(by (\d\d:\d\d) UTC\)\.",
+        r"Waiting for '(.+?)' to leave the shipyard \((\d+) mins?\)\.",
         " ".join(text.split()),
     )
     since = (time.monotonic() - told_at) / 60
@@ -138,9 +136,7 @@ def leave(a, mark) -> None:
         f"the panel says which ship has to leave: {found and found.group(0)}",
     )
     check(
-        found is not None
-        and abs(left - (CLEAR - since)) <= 1
-        and found.group(3) in utc(CLEAR - since),
+        found is not None and abs(left - (CLEAR - since)) <= 1,
         f"it shows the time ClearWay acts at: {found and found.group(0)}, "
         f"{CLEAR - since:.1f} min left",
     )
@@ -181,36 +177,43 @@ def main() -> int:
         settled(a, "table", "Press the button")
         mark = tp.latest(a)
         check("is in the queue" in press(a), "the order is in the queue")
-        text = settled(a, "queue", "for OctTester")
+        minutes = 240 if STATION == "Moon" else 60
+        told = tp.wait_chat(a, "for you now, in", 120, mark)
+        check(
+            told is not None and f"in {minutes} min at most" in told,
+            f"{STATION}'s build runs {minutes} min at most: {told}",
+        )
+        building = re.compile(
+            r"1\. (\d+)% \((\d+) mins?\) OctTester 'Order Test' \([\d,]+ PCU\)"
+        )
+        text = settled(a, "queue", "mins)")
         log(repr(text))
+        if SHOTS:
+            shoot(a, "queue-panel-build")
         lines = text.rstrip().split("\n")
-        first = next((i for i, l in enumerate(lines) if l.startswith("1. ")), None)
-        check(first is not None, "the queue panel shows the order")
+        found = building.search(" ".join(text.split()))
+        left = int(found.group(2)) if found else -1
         check(
-            first is not None
-            and first + 1 < len(lines)
-            and lines[first + 1].startswith("   ")
-            and "for OctTester" in " ".join(lines[first : first + 2]),
-            "the entry wraps to a second, indented line",
-        )
-        # SE-962: a bare UTC time read like a local one, so the deadline shows the minutes left
-        text = settled(a, "queue", "done within")
-        lines = text.rstrip().split("\n")
-        found = re.search(
-            r"done within (\d+) min \(by (\d\d:\d\d) UTC\)", " ".join(text.split())
-        )
-        left = int(found.group(1)) if found else -1
-        by = datetime.now(timezone.utc) + timedelta(minutes=left)
-        check(
-            found is not None
-            and 58 <= left <= 60
-            and found.group(2)
-            in {(by + timedelta(minutes=d)).strftime("%H:%M") for d in (-1, 0, 1)},
-            f"the build shows the minutes left and its UTC time: {found and found.group(0)}",
+            found is not None and minutes - 2 <= left <= minutes,
+            f"the build shows its percent and {minutes} min left: {found and found.group(0)}",
         )
         check(
             all(len(l) <= COLUMNS for l in lines),
             f"no line is wider than {COLUMNS}: {max(len(l) for l in lines)}",
+        )
+        # The percent grows with the welders until the build ends
+        seen = []
+        while found and len(seen) < 60:
+            seen.append(int(found.group(1)))
+            time.sleep(2)
+            found = building.search(" ".join(queue(a).split()))
+        log(f"percents seen: {seen}")
+        check(
+            len(seen) > 0
+            and all(0 <= p <= 100 for p in seen)
+            and seen == sorted(seen)
+            and (len(seen) == 1 or seen[-1] > seen[0]),
+            f"the percent goes up from 0 to 100: {seen}",
         )
         panel = queue_panel(a)
         grid, at = panel["gridId"], tuple(panel["min"])

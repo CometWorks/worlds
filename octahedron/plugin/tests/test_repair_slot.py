@@ -140,9 +140,9 @@ def book_and_idle_out(a, b) -> None:
     reply = press(a)
     start = time.monotonic()
     check("Repair slot" in reply, f"a press without a blueprint books a slot: {reply}")
-    text = settled(a, "queue", "Repair for OctTester: repairing")
+    text = settled(a, "queue", "1. repairing OctTester (repair)")
     check(
-        "Repair for OctTester: repairing" in text,
+        "1. repairing OctTester (repair)" in text,
         f"the free shipyard starts it, on the queue panel: {text!r}",
     )
     check(
@@ -306,9 +306,9 @@ def waits_for_a_build(a, b) -> None:
     check(octs(yard(a)), "a build leaves the blocks OCT's")
     reply = press(b)
     check("Repair slot" in reply, f"the other player books a slot: {reply}")
-    text = settled(a, "queue", "Repair for OctOther: waiting")
+    text = settled(a, "queue", "2. OctOther (repair)")
     check(
-        "Order Big" in text and "Repair for OctOther: waiting" in text,
+        "Order Big" in text and "2. OctOther (repair)" in text,
         f"it waits behind the build: {text!r}",
     )
     check(slot_runs(a, "OctOther") is None, "and doesn't run")
@@ -316,7 +316,7 @@ def waits_for_a_build(a, b) -> None:
     check("left the queue" in reply, f"a waiting slot is canceled by a press: {reply}")
     check("Order Big" in queue(a), "the build isn't touched")
     check("Repair slot" in press(b), "booked again")
-    settled(a, "queue", "Repair for OctOther: waiting")
+    settled(a, "queue", "2. OctOther (repair)")
     with_config(a, **{**CONFIG, "FreeBuildCooldownMinutes": 60})
     reply = press(a)
     check(

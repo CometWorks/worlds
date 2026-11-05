@@ -58,39 +58,57 @@ Check(
     PanelText.Left(ends, ends.AddMinutes(2)) == "0 min (by 03:38 UTC)",
     "0 min past the deadline"
 );
-var orderEntry = PanelText.Item(
-    "1. ",
-    $"'Polaris Mk2 RC8' (23,276 PCU) for Viktor: building, done within {PanelText.Left(ends, start.AddSeconds(30))}",
+Check(PanelText.Mins(ends, start) == "60 mins", "SE-1117: 60 mins left at the start");
+Check(PanelText.Mins(ends, start.AddMinutes(59.5)) == "1 min", "SE-1117: 1 min, not mins");
+Check(PanelText.Mins(ends, ends.AddMinutes(2)) == "0 mins", "SE-1117: 0 mins past the deadline");
+
+// SE-1117: the first entry is how far it is, then whose ship it is; the others only whose
+var orderEntry = PanelText.QueueEntry(
+    1,
+    $"53% ({PanelText.Mins(start.AddMinutes(46), start)})",
+    "Viktor",
+    $"'IMDC Europa Carrier' ({44181:N0} PCU)",
     Columns,
     2
 );
-var orderLines = orderEntry.Split('\n');
-Check(orderLines.Length == 2, "SE-962's entry takes two lines");
-Check(!orderEntry.Contains("..."), "SE-962's entry is not cut");
-Check(orderLines.All(l => l.Length <= Columns), "SE-962's entry fits the columns");
+Check(
+    orderEntry == "1. 53% (46 mins) Viktor 'IMDC Europa Carrier'\n   (44,181 PCU)",
+    $"the ticket's entry, not:\n{orderEntry}"
+);
+Check(
+    PanelText.QueueEntry(2, "", "Viktor", "'IMDC Europa Carrier' (44,181 PCU)", Columns, 2)
+        == "2. Viktor 'IMDC Europa Carrier' (44,181 PCU)",
+    "a later entry is only whose ship it is, on one line"
+);
+Check(
+    PanelText.QueueEntry(1, "repairing", "Viktor", "(repair)", Columns, 2)
+        == "1. repairing Viktor (repair)",
+    "a repair slot"
+);
 Console.WriteLine(orderEntry);
 
-// SE-1113: the leave line shows ClearWay's deadline, the ship's name cut short instead of the time
+// SE-1113: the leave line shows ClearWay's deadline, the ship's name cut short instead of the
+// time; SE-1117 made it as short as the entries
 string Leave(string ship, string within) =>
     PanelText.ClipName(n => $"Waiting for '{n}' to leave the shipyard{within}.", ship, Columns, 2);
-var within = " within " + PanelText.Left(ends, ends.AddMinutes(-2));
+var within = $" ({PanelText.Mins(ends, ends.AddMinutes(-2))})";
 var leave = Leave("Small Grid 657", within);
 Check(
-    leave == "Waiting for 'Small Grid 657' to leave the\nshipyard within 2 min (by 03:38 UTC).",
+    leave == "Waiting for 'Small Grid 657' to leave the\nshipyard (2 mins).",
     $"the ticket's leave line, not:\n{leave}"
 );
 Check(
     Leave("Small Grid 657", "") == "Waiting for 'Small Grid 657' to leave the\nshipyard.",
     "no deadline before ClearWay started the clock"
 );
-var longLeave = Leave(new string('N', 32), within);
+var longLeave = Leave(new string('N', 80), within);
 Check(longLeave.Split('\n').Length == 2, "a long name's leave line takes two lines");
-Check(longLeave.EndsWith("within 2 min (by 03:38 UTC)."), "a long name keeps the deadline");
+Check(longLeave.EndsWith("(2 mins)."), "a long name keeps the deadline");
 Check(longLeave.Contains("NNN...'"), "a long name is cut short");
 Check(longLeave.Split('\n').All(l => l.Length <= Columns), "a long name's leave line fits");
 var spaced = Leave("Black Warship With Ext Cockpit Mk2 Heavy", within);
 Check(
-    spaced.Split('\n').Length == 2 && spaced.EndsWith("(by 03:38 UTC)."),
+    spaced.Split('\n').Length == 2 && spaced.EndsWith("(2 mins)."),
     $"a long name with spaces keeps the deadline, not:\n{spaced}"
 );
 Console.WriteLine(longLeave);
@@ -101,9 +119,11 @@ var name = new string('N', 32);
 var full = "Gamma Station Shipyard queue\n\n";
 for (int i = 1; i <= 6; i++)
     full +=
-        PanelText.Item(
-            $"{i}. ",
-            $"'{name}' (100,000 PCU) for {name}: loading parts within 10 min (by 01:39 UTC)",
+        PanelText.QueueEntry(
+            i,
+            i == 1 ? "taking what is left (10 mins)" : "",
+            name,
+            $"'{name}' (100,000 PCU)",
             Columns,
             2
         ) + "\n";

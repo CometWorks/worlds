@@ -227,8 +227,8 @@ def first_order(a, b, oct_owner: str) -> None:
 
     reply = press(b)
     check("Repair slot" in reply, f"their press books a repair slot, no order: {reply}")
-    text = settled(a, "queue", "Repair for OctOther")
-    check("Repair for OctOther" in text, f"the slot is on the queue panel: {text!r}")
+    text = settled(a, "queue", "OctOther (repair)")
+    check("OctOther (repair)" in text, f"the slot is on the queue panel: {text!r}")
     shown = screens(a)
     check(
         shown["holder"] == "OctTester"
@@ -270,9 +270,9 @@ def rules(a, b) -> None:
 
     reply = press(b)
     check("Repair slot" in reply, f"an empty table's press books a slot: {reply}")
-    text = settled(a, "queue", "Repair for OctOther")
+    text = settled(a, "queue", "OctOther (repair)")
     check(
-        "Order Test" in text and "Repair for OctOther: waiting" in text,
+        "Order Test" in text and "2. OctOther (repair)" in text,
         f"the slot waits behind the order: {text!r}",
     )
     reply = press(b)
