@@ -304,18 +304,23 @@ game update that changes the planet or voxel material definitions or maps.
 ## OctahedronFilaments
 
 The Moon Shipyard's tools look alien, like the shipyard of Laconia Station in The
-Expanse: thin filaments reach out from them to the blocks they build or take
+Expanse: dark filaments reach out from them to the blocks they build or take
 apart, instead of laser beams (SE-1067). `make_filament_mod.py` writes the mod
 into `OctahedronFilaments/` (ignored here, like OctahedronOres) from the
 OmniArc welder and deconstructor definitions of the Workshop copy:
 
 - `OctahedronFilamentWelder` and `OctahedronFilamentDeconstructor` are copies of
-  `OmniArcBeam` and `OmniArcDestro` with the same stats, reach, turret,
-  animations and sound, without the laser beams and sparks.
+  `OmniArcBeam` and `OmniArcDestro` with the same stats, reach, turret and
+  animations, without the laser beams and sparks. At work they sound like
+  Pertam's electric storm instead of OmniArc's laser (SE-1089): the game's
+  lightning waves, which the script copies from the game install (`--game`)
+  into the mod, since a mod's sound can't point at the game's `Content/Audio`.
 - The mod's script (`filament-tools/`) draws the filaments on the clients:
   while a tool shoots, eight threads run from around its ring to the block it
-  aims at, spread over the block, sagging a little and slowly swaying, with
-  short strands between them. It finds the block along the tool's emitter, as
+  aims at, spread over the block, with short strands between them. They are
+  very dark gray, 0.24 m wide to be seen from across the shipyard, and bent by
+  a wave field that drifts slowly through space, so neighbors bend alike
+  (SE-1089). It finds the block along the tool's emitter, as
   ToolCore aims, up to its 100 m reach.
 - The mod ships none of OmniArc's files. Its blocks name a vanilla model, and
   the script hands them the models and icons of their OmniArc originals when a
