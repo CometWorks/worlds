@@ -279,6 +279,12 @@ internal static partial class ShipyardOrders
         if (blueprint == null || blueprint.Count == 0)
             return Fail(plan, "Switch the hologram table on and load a blueprint into it first.");
         plan.Ship = blueprint[0].DisplayName ?? "Ship";
+        // The table's own copy: the copy above has each grid's ids remapped anew
+        if (Unproven(table))
+            return Fail(
+                plan,
+                $"'{plan.Ship}' has subgrids, which your game may have sent damaged. {WorkshopHint}"
+            );
         var main = blueprint[0];
         plan.LeftOut = ShipyardDlc.LeaveOut(
             blueprint,
@@ -378,12 +384,12 @@ internal static partial class ShipyardOrders
         var room = space.HalfExtent * 2;
         var size = Size(blueprint, start, outward, room, out _, out var turn);
         if (size.X > room.X || size.Y > room.Y || size.Z > room.Z)
-            // A client without Multigrid Projector can send the subgrids out of place, and so can
-            // an old blueprint; a new one made offline has them right
+            // A blueprint with subgrids got here intact (Unproven), but an old one can have them out
+            // of place; a new one made offline has them right
             return $"The ship is {Meters(size)} (width, height, length), {shipyard.DisplayName} builds up to {Meters(room)}."
                 + (
                     blueprint.Count > 1
-                        ? " Its subgrids may be off: load it with the Multigrid Projector plugin of Pulsar, or blueprint the ship again in an offline game."
+                        ? " An old blueprint can have its subgrids out of place: blueprint the ship again in an offline game."
                         : ""
                 );
         var needed = Components(blueprint, skipFirst: !arms)
@@ -949,7 +955,10 @@ internal static partial class ShipyardOrders
     [HarmonyPatch(typeof(MyProjectorBase), "SetNewBlueprint")]
     private static class SetNewBlueprint
     {
-        private static void Postfix(MyProjectorBase __instance)
+        private static void Postfix(
+            MyProjectorBase __instance,
+            List<MyObjectBuilder_CubeGrid> gridBuilders
+        )
         {
             if (!Sync.IsServer || MyEventContext.Current.IsLocallyInvoked)
                 return;
@@ -959,6 +968,27 @@ internal static partial class ShipyardOrders
             // Any projector ends up here: only a station's table is held
             if (identity == 0 || !IsTable(__instance) || StationOf(__instance.CubeGrid) == null)
                 return;
+            workshopTables.Remove(__instance.EntityId);
+            // Not from Multigrid Projector: the subgrids may be damaged, so no ship comes of it
+            if (Unproven(gridBuilders))
+            {
+                Tell(
+                    identity,
+                    $"'{gridBuilders[0].DisplayName}' has subgrids, which your game damages when it sends a blueprint "
+                        + $"without the Multigrid Projector plugin, so the shipyard took it off the table. {WorkshopHint}"
+                );
+                // Once the game has passed the blueprint on to the other clients
+                var table = __instance;
+                MySandboxGame.Static.Invoke(
+                    () =>
+                    {
+                        if (!table.MarkedForClose)
+                            ClearTable(table);
+                    },
+                    "Octahedron damaged blueprint"
+                );
+                return;
+            }
             loaded[__instance.EntityId] = identity;
             loadedAt[__instance.EntityId] = DateTime.UtcNow;
             Hold(__instance, identity);
@@ -1183,6 +1213,7 @@ internal static partial class ShipyardOrders
     public static void Update()
     {
         ticks++;
+        PurgeCache();
         ShipyardAway.Update();
         ShipyardArm.Update();
         if (docks.Count > 0)

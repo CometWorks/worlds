@@ -524,6 +524,29 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 3;
 
+    [StringOption(
+        description: "SteamCMD that !bp (!oct workshop) downloads Workshop blueprints with. Empty: Quasar's managed SteamCMD "
+            + "(ManagedRuntime/Tools/SteamCMD above this server's data folder), else steamcmd on the PATH.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardSteamCmd
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
+
+    [StringOption(
+        description: "Folder of the Workshop blueprints !bp (!oct workshop) downloaded, by item and version, shared by the servers "
+            + "that name the same one. Kept 7 days from their last use. Empty: OctahedronBlueprints next to Quasar's "
+            + "managed SteamCMD, else in this server's data folder.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardWorkshopCache
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
+
     [IntOption(
         0,
         description: "A press of a station's shipyard button without a blueprint books a repair slot: the shipyard's welders, containers and "

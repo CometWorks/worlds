@@ -523,10 +523,39 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   `GroupPcuLimit` PCU, the cap of a ship, unless an admin who ignores PCU limits
   ordered it. The quote checks that; an order that
   doesn't fit when its turn comes ends with everything given back. When a
-  blueprint with subgrids is too big, the message also suggests loading it with
-  the Multigrid Projector plugin of Pulsar or blueprinting the ship again in an
-  offline game: a client without the plugin, or an old blueprint, can have its
-  subgrids out of place.
+  blueprint with subgrids is too big, the message also suggests blueprinting the
+  ship again in an offline game: an old blueprint can have its subgrids out of
+  place.
+- The game's client damages a blueprint with subgrids on its way to the table: it
+  remaps the entity ids of each grid on its own, so a rotor, piston or hinge base
+  points at no block of its head's grid, and the ship would come out wrong.
+  Multigrid Projector on the client remaps them together. The server can't see
+  the plugin, so it takes a blueprint with subgrids as Multigrid Projector's only
+  when every base points at a block of the blueprint, and at least one does. It
+  clears any other blueprint with subgrids off the table at once and tells the
+  player in chat to use the blueprint's Steam Workshop link or id with
+  `!bp <link or id> [table name]` (or `!oct workshop`), which needs no plugin, or
+  the Multigrid Projector plugin of Pulsar. One found on a table later, after a
+  restart for example, is refused by the table's screen and the button the same
+  way. With `!bp` the server loads its own copy into the table, the hologram the
+  clients show and the ship the shipyard builds, so no client sends it. The
+  node the player is on downloads the item anonymously with SteamCMD
+  (`ShipyardSteamCmd`; empty: Quasar's managed SteamCMD in
+  `ManagedRuntime/Tools/SteamCMD` above the server's data folder, else `steamcmd`
+  on the PATH), because a cluster node has no Steam connection of its own for the
+  game's Workshop calls. The blueprint is kept by item and version (the Steam Web
+  API's `time_updated`) in `ShipyardWorkshopCache` (empty: `OctahedronBlueprints`
+  next to Quasar's SteamCMD, else in the server's data folder), which the servers
+  on a host share, so each version is downloaded once. Entries unused for 7 days
+  are removed, checked once a day. A hidden item has no public version and is
+  downloaded every time. It loads the blueprint into the nearest table as if the
+  player had loaded it: ids remapped together, the main grid at the origin, and
+  programmable blocks' scripts dropped unless the player may use scripts, as the
+  game does with a client's blueprint. The table must be free or the player's,
+  and the player within `StarterShipTableReach` of it, both when typing the command
+  and when the download is done.
+  Multigrid Projector before 0.9.10 sent no ids, so its blueprints with subgrids
+  are cleared too.
 - The next order starts when no block of another ship is in the shipyard's free
   space: a ship left there has to fly out first. The space ends at the walls, so
   a ship docked at the connectors outside them is not in the way, and neither the
@@ -1507,6 +1536,15 @@ a whole day of payouts and Hangar's retrieval fee alone
 Projector. A cluster's plugin messages carry 64 KiB at most, so a blueprint goes to and
 from the World Authority in parts; `tests/mech_blueprint.py bp.sbc big` writes a ship
 that needs them and still builds fast.
+`tests/shipyard_workshop_cluster.py` loads blueprints into a cluster's table: a ship
+without subgrids from a client without Multigrid Projector; `!bp` away from a table,
+refused; one with subgrids from
+such a client, and a copy of it without its bases' links, both cleared off the table
+with the prompt, then loaded with `!bp` by link and by id (the second time from the
+cache), the client's hologram checked, and built; the same from a client with the
+plugin; and a `!bp` ship with DLC blocks for a player who owns none, built without
+them. A built ship must have the blueprint's
+grids and blocks. See its docstring.
 `tests/wa_economy_cluster.py` runs the money rules and the free-build cool-down on a
 local test cluster, with the World Authority keeping both: see its docstring.
 `tests/test_shipyard_deadline.py` checks a ship left in the build space past
