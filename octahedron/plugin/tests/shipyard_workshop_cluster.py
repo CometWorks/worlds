@@ -178,13 +178,18 @@ def run(bench) -> None:
             "is in the queue" not in reply and HINT in reply,
             reply,
         )
-        reply = " ".join(
-            rig.chat(
-                api,
-                f"{HINT} https://steamcommunity.com/sharedfiles/filedetails/?id={ITEM}",
-                90,
-            )
+        # The answer comes in chat once SteamCMD is done
+        command = (
+            f"{HINT} https://steamcommunity.com/sharedfiles/filedetails/?id={ITEM}"
         )
+        before = api.get_chat_messages()
+        api.send_chat(command)
+        reply = ""
+        deadline = time.monotonic() + 180
+        while "hologram table" not in reply and time.monotonic() < deadline:
+            time.sleep(2)
+            reply = " ".join(rig.new_chat_lines(api, before, command))
+        print(f"{command} -> {reply}", flush=True)
         check(
             "the Workshop blueprint is on the table",
             "is on the hologram table" in reply,
