@@ -4015,6 +4015,24 @@ internal static partial class ShipyardOrders
         block.CustomName.ToString() == ScaffoldName
         && MySession.Static.Players.IdentityIsNpc(block.OwnerId);
 
+    // While an order runs at the tool's shipyard: true for a block that isn't its ship's, which
+    // is the grids of the scaffold and those Multigrid Projector built, and what the scaffold
+    // projects. Null without an order. ShipyardOwnBlocks keeps the tools off the others.
+    internal static Predicate<IMySlimBlock> NotTheOrder(MyCubeBlock tool)
+    {
+        if (!orders.TryGetValue(tool.CubeGrid.EntityId, out var order) || order.Projector.Closed)
+            return null;
+        var projector = order.Projector;
+        var ship = Grids(projector.CubeGrid).ToHashSet();
+        if (MgpApi() is { } api)
+            for (var i = ((Func<long, int>)api[1])(projector.EntityId) - 1; i >= 0; i--)
+                if (((Func<long, int, IMyCubeGrid>)api[4])(projector.EntityId, i) is MyCubeGrid g)
+                    ship.Add(g);
+        return block =>
+            block.CubeGrid is MyCubeGrid grid
+            && (grid.Projector != null ? grid.Projector != projector : !ship.Contains(grid));
+    }
+
     private static string Name(long identityId) =>
         MySession.Static.Players.TryGetIdentity(identityId)?.DisplayName ?? "someone";
 

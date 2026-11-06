@@ -597,6 +597,13 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   online players within sync distance of the shipyard that have the tools (SE-963).
   ToolCore is the mod's own code: this reaches its session
   and packet by reflection and does nothing if they are gone.
+- While an order runs, the shipyard's welders work only on its ship: the grids its
+  projector builds, those of the subgrids included, and what it projects (SE-1122).
+  They weld nothing else in their reach, such as a player's ship or projection
+  outside the build space. A free build's welders are OCT's, and before this they
+  built a player's missile printer parked by the Moon Shipyard with the order's
+  components, so the ship came up short and was removed. The plugin patches ToolCore
+  on the server for this (`ShipyardOwnBlocks`).
 - A build whose ship gains no integrity for 60 s has stalled. The plugin first
   places the projected blocks that only a collision with another part of the ship
   keeps the welders from, welds them from the containers and watches the physics
@@ -658,8 +665,8 @@ chat messages find the player on any node. One who is logged off misses them.
   not trading. The reactors and batteries stay OCT's, and conveyors can't pull
   uranium out of a reactor. OCT keeps most of the blocks, so it stays the grid's big
   owner and the grid a shipyard.
-- While the welders are the player's they work only on the player's blocks and their
-  faction's, OCT not counting as one: a block's owner, or for a block without one who built it, and for a
+- While the welders are the player's and no order runs, as in a repair slot, they work
+  only on the player's blocks and their faction's, OCT not counting as one: a block's owner, or for a block without one who built it, and for a
   projection the projector's owner. The order's own projector counts as theirs. Another
   player's ship in the shipyard is neither targeted nor welded, and its projection isn't
   built. The plugin patches ToolCore on the server for this, so a client may still draw
