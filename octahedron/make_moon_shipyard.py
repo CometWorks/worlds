@@ -5,7 +5,7 @@
 # ///
 """Generates the Moon Shipyard (SE-986): a large grid and the asteroid around it.
 
-    uv run make_moon_shipyard.py <folder>
+    uv run make_moon_shipyard.py <folder> [--variant alien]
 
 Writes into the folder:
 - bp.sbc and thumb.png: the large grid with its two arm heads, as a local
@@ -40,6 +40,12 @@ lumps, and small holes let the lights shine through. The connectors, the
 conveyor between the arcs and the arm bases come out through openings. The
 rock and the grid never touch, and the grid is static, so nothing needs
 locking.
+
+--variant alien makes the Alien Shipyard (SE-1118): the same with 50 % more
+welders and deconstructors. The arcs have too few straight conveyor cells for
+them all inline, so the rest sit on the branches of T pipes beside the
+conveyor, and the rock bulges out over those to keep its wall as thick.
+
 Reuses the SE-952 helpers and its template blueprint for the block XML.
 """
 
@@ -71,6 +77,14 @@ R = 30
 SPAN = 112
 # Tool stations per arc, a welder and a deconstructor each
 STATIONS = 14
+# Whether tools may also sit on the branch of a T pipe beside the arc's
+# conveyor: an arc has only 34 straight cells for tools inline
+BRANCHES = False
+# The variants, by --variant: (name, STATIONS, BRANCHES). The Alien Shipyard
+# has 50 % more tools (SE-1118).
+VARIANTS = {"moon": (NAME, STATIONS, BRANCHES), "alien": ("Alien Shipyard", 21, True)}
+# Branch tools keep this far (blocks) from the arm bases, out of the arms' way
+ARM_CLEARANCE = 4
 # The conveyor between the arcs, in blocks below the arcs' base
 BRIDGE_Z = -5
 # Storage boxes (3x3x3 blocks) on either side of that conveyor, per arc
@@ -497,14 +511,33 @@ def build():
             }:
                 continue
             reach = tool_margin(line[j], step, targets) >= 0
-            candidates.append((a, j, step, reach))
+            candidates.append((a, j, step, reach, line[j]))
+    # and on the branch of a T pipe, clear of other blocks, its Up away from
+    # the arc's conveyor
+    for a, arc in enumerate(arcs):
+        line = arc["line"]
+        for j in range(3, len(line) - 4) if BRANCHES else ():
+            dirs = conveyor[line[j]]
+            for d in ALL:
+                spot = add(line[j], d)
+                if (
+                    len(dirs) != 2
+                    or d in dirs
+                    or tube_piece(dirs | {d})[0] != "LargeBlockConveyorPipeT"
+                    or not all(free(add(spot, e)) for e in ALL if e != neg(d))
+                    or not free(spot)
+                    or math.dist(spot, arc["arm"]["cell"]) <= ARM_CLEARANCE
+                ):
+                    continue
+                reach = tool_margin(spot, d, targets) >= 0
+                candidates.append((a, j, d, reach, spot))
     counts = {tool: np.zeros(len(targets)) for tool in TOOLS}
     used = {0: [], 1: []}
     tools = {}
     for _ in range(STATIONS):
         for a, arc in enumerate(arcs):
             for tool in TOOLS:
-                a_, j, step, reach = max(
+                a_, j, up, reach, cell = max(
                     (
                         c
                         for c in candidates
@@ -514,10 +547,12 @@ def build():
                 )
                 used[a].append(j)
                 counts[tool] += reach
-                cell = arc["line"][j]
-                forward = axis_toward((-cell[0], -cell[1], 0), [step])
-                tools[cell] = (tool, forward, step)
+                forward = axis_toward((-cell[0], -cell[1], 0), [up])
+                tools[cell] = (tool, forward, up)
                 arc["tools"].append(cell)
+                if cell != arc["line"][j]:
+                    conveyor[arc["line"][j]].add(up)
+                    yard.block(tool, forward, up, cell, MATTE, a)
 
     # Dark blue lights on the arcs' conveyor, one every LIGHT_SPACING, each on
     # the branch of a T pipe, facing away from it in a random direction
@@ -560,7 +595,7 @@ def build():
                 break
 
     for cell, dirs in sorted(conveyor.items()):
-        if cell in tools:
+        if cell in tools and cell not in yard.cells:
             subtype, forward, up = tools[cell]
             assert dirs == {up, neg(up)}
         else:
@@ -645,6 +680,10 @@ class Rock:
         self.own = Boxes(list(yard.cells))
         tools = [c for arc in arcs for c in arc["tools"]]
         self.tools = cKDTree(GRID * np.array(tools, float))
+        # The wall bulges out over the tools beside the conveyor, as thick there
+        # as elsewhere
+        beside = [c for arc in arcs for c in arc["tools"] if c not in arc["line"]]
+        self.beside = cKDTree(GRID * np.array(beside, float)) if beside else None
         # The openings: the connectors and the conveyor between the arcs at
         # each junction, and the arm bases
         self.openings = []
@@ -705,7 +744,14 @@ class Rock:
     def distance(self, p):
         """Signed distance (m) to the rock, negative inside it."""
         d = self.line.query(p, distance_upper_bound=self.outer + 8, workers=-1)[0]
-        outer = np.minimum(d, 1e3) - self.outer - self.roughness(p)
+        outer = np.minimum(d, 1e3) - self.outer
+        if self.beside is not None:
+            # a ball around the tool, ROCK_WALL thick over its turret's room,
+            # which the blend widens
+            bulge = TURRET + ROCK_GAP + ROCK_WALL + BLEND / 2
+            b = self.beside.query(p, distance_upper_bound=bulge + 8, workers=-1)[0]
+            outer = smin(outer, np.minimum(b, 1e3) - bulge, BLEND)
+        outer = outer - self.roughness(p)
         near, i = self.lumps.query(p, k=4, distance_upper_bound=LUMP_RADIUS[1] + 1)
         valid = i < self.lump_count
         r = self.lump_radius[np.minimum(i, self.lump_count - 1)]
@@ -1104,7 +1150,10 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("folder", type=Path)
+    parser.add_argument("--variant", choices=VARIANTS, default="moon")
     args = parser.parse_args()
+    global NAME, STATIONS, BRANCHES
+    NAME, STATIONS, BRANCHES = VARIANTS[args.variant]
     yard, arcs = build()
     rock = Rock(yard, arcs)
     args.folder.mkdir(parents=True, exist_ok=True)
