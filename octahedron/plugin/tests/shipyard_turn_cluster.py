@@ -231,6 +231,8 @@ def run(bench) -> None:
             if "Your quote for" not in reply:
                 tp.wait_chat(api, "Your quote for", 60, mark)
             reply = press(api)
+        if "is in the queue" not in reply:
+            reply = tp.wait_chat(api, "is in the queue", 30, mark) or reply
         check("the order is in the queue", "is in the queue" in reply, reply)
         told = tp.wait_chat(api, "It is your turn", 60, mark)
         check("the player is told it is their turn", told, told)
