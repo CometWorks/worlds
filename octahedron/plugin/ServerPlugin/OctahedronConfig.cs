@@ -169,6 +169,39 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "";
 
+    [BoolOption(
+        "OCT's account takes deposits from its leaders only, who alone can take money out. The faction screen still shows "
+            + "every member the Deposit button; the server refuses a member's deposit and tells them why.",
+        Parent = "faction"
+    )]
+    public bool OctNoDeposits
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [BoolOption(
+        "Nobody but the owner grinds a grid of OCT's NPCs, as the stations are, or of a player OctProtectedSteamIds names, "
+            + "the trader bots. Hand, ship and ToolCore grinders do nothing to them, anywhere.",
+        Parent = "faction"
+    )]
+    public bool OctGridsNoGrinding
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [StringOption(
+        description: "Steam IDs whose grids OctGridsNoGrinding protects like OCT's own, comma separated; first-last is a range. "
+            + "The trader bots' on the Octahedron.",
+        Parent = "faction"
+    )]
+    public string OctProtectedSteamIds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
+
     [BoolOption("Fill the turrets with ammo.", Parent = "stations")]
     public bool StationReloadTurrets
     {
