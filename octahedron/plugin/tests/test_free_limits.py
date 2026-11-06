@@ -10,8 +10,8 @@ before each:
 - "Free Limits Blocked" (a jump drive, a large ion thruster and a prototech
   battery): the quote is still paid for the cool-down, the world kept it over the
   restart. With the cool-down at 0 it is paid for the prototech battery alone.
-- "Order Big" (1,536 blocks), the cool-down at 0: pressing again while it builds
-  doesn't cancel it.
+- "Order Big" (1,536 blocks), the cool-down at 0: pressing while it builds doesn't
+  queue a second one; two presses cancel it (SE-1127).
 
     OCT_WORLD_SOURCE=<world built by build_world.py> \\
     uv run --no-project --with httpx python tests/test_free_limits.py
@@ -184,12 +184,15 @@ def blocked_blocks() -> None:
 
 
 def one_at_a_time() -> None:
-    """A press while the player's build runs cancels it, it can't queue a second one"""
+    """A press while the player's build runs asks to cancel it, the second cancels it: it
+    can't queue a second one"""
     # The finished ship would be in the way
     set_tables(so.BIG, remove="Order Test")
     remote = start()
     tc.with_config(remote, FreeBuildCooldownMinutes=0)
     so.place(remote, "Order Big")
+    reply = order(remote)
+    assert "within 10 s to cancel it" in reply, reply
     reply = order(remote)
     # At once, before the arm has anything: nothing is handed over yet
     assert "You canceled 'Order Big'" in reply, reply

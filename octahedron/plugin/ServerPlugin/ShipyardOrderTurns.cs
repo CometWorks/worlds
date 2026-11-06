@@ -376,7 +376,13 @@ internal static partial class ShipyardOrders
 
     // --- a turn ends ---
 
-    private static void EndTurn(MyCubeGrid shipyard, BuildOrder order, string message)
+    // then: once the order is out of the queue
+    private static void EndTurn(
+        MyCubeGrid shipyard,
+        BuildOrder order,
+        string message,
+        Action then = null
+    )
     {
         if (!endingTurns.Add(order.Id))
             return;
@@ -421,6 +427,7 @@ internal static partial class ShipyardOrders
                 );
                 Tell(order.Player, answer.Length > 0 ? $"{message} {answer}" : message);
                 Refresh(order.Station);
+                then?.Invoke();
             }
         );
     }
