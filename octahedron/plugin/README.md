@@ -126,6 +126,26 @@ shipyard's welders, contract abuse) OCT doesn't count as a team (`OctFaction`).
 their placed blocks are No share, a player who makes their own faction keeps faction share
 (`--own-faction`), and with the options off nothing changes (`--no-oct`).
 
+Only OCT's leaders can take money out of its account, so a member's deposit would be money
+gone ([SE-1160](https://tasks.cometworks.se/tasks/2060)). The game's faction screen offers every
+member the Deposit button, and only a client plugin could grey it out, so with `OctNoDeposits`
+on the server refuses the deposit of a member who isn't a leader and tells them why. Nothing
+else pays into OCT's account but the stations' stores, the fees and what the money rules move:
+the `[B]` members are the trader bots, players, and what they pay is what they buy.
+
+With `OctGridsNoGrinding` on, nobody but the owner grinds a grid of OCT's NPC or of a player
+whose Steam ID `OctProtectedSteamIds` names (`first-last` ranges, comma separated; the
+trader bots' on the Octahedron). A grid counts when its owner owns the most blocks on it or on
+a grid it is mechanically joined to. The stations' safe zones forbid grinding anyway; this
+covers OCT's grids and the bots' ships everywhere else, so players can't take them apart for
+components to sell. Every grinder takes a block apart through `MySlimBlock.DecreaseMountLevel`
+on the server, a hand grinder, a ship grinder and ToolCore's tools, so the plugin refuses it
+there and the player hears why. Grids of the encounters' NPCs and of other players stay open.
+
+`tests/test_oct_protection.py` checks both with the client: the faction screen's Deposit moves
+no money, a hand grinder does nothing to OCT's and a bot's hull but grinds a player's and a
+pirate's, and after `!oct reload` with the options off the same deposit and grinders work.
+
 ### Refill containers
 
 `RefillContainers` keeps blocks stocked with fixed items, independent of the
