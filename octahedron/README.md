@@ -233,8 +233,10 @@ station and shipyard blueprints are in `blueprints/`.
   (`SuperRock_001`, 1024 m) filled with ice. The game's own procedural
   asteroids are off (`ProceduralDensity` = 0).
 - Writes the mod configs into the world's `Storage` folder: Relative Top Speed
-  (`config/relative-top-speed.xml`) and MES (`config/storage`: no lunar cargo
-  ships, and no cleanup, so NPC grids stay; see `MES.md`).
+  (`config/relative-top-speed.xml`), MES (`config/storage`: no lunar cargo
+  ships, and no cleanup, so NPC grids stay; see `MES.md`) and ToolCore
+  (`config/storage`: `RespectPlayerMaxPCU` off, because with it on ToolCore
+  keeps every grid a server ever loaded in memory, SE-1149).
 
 `server/` is the script's output as is, never loaded in a game: the first load
 converts it to the binary format and stocks the stores. It
