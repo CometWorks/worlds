@@ -1,0 +1,25 @@
+2 blocks in /home/factory/.se-test/SE-1116-old-c0-data/Mods/1067000001.sbm
+PASS 24 welders, 24 deconstructors
+PASS slab pasted, nothing welded with the tools off
+weld: tool 69 m from the slab, along [0.9  0.18 0.4 ]
+PASS weld: extend burst
+PASS weld: glide burst
+PASS weld: retract burst
+audio stop 0 {'wave': 'Lightning_3', 'semitones': np.float64(-0.8), 'played_before_stop_s': 2.01, 'left_after_stop_s': 2.12, 'match_before': 0.93, 'match_after': 0.49}
+audio stop 1 {'wave': 'Lightning_0', 'semitones': np.float64(0.4), 'played_before_stop_s': 7.47, 'left_after_stop_s': 7.24, 'match_before': 0.92, 'match_after': -0.03}
+audio stop 2 {'wave': 'Lightning_1', 'semitones': np.float64(-0.7), 'played_before_stop_s': 11.71, 'left_after_stop_s': 3.94, 'match_before': 0.84, 'match_after': 0.29}
+audio stop 3 {'wave': 'Lightning_2', 'semitones': np.float64(0.7), 'played_before_stop_s': 3.0, 'left_after_stop_s': 2.9, 'match_before': 0.98, 'match_after': -0.53}
+audio stop 4 {'wave': 'Lightning_1', 'semitones': np.float64(0.8), 'played_before_stop_s': 6.16, 'left_after_stop_s': 8.19, 'match_before': 0.87, 'match_after': -0.15}
+audio stop 5 {'wave': 'Lightning_2', 'semitones': np.float64(-0.4), 'played_before_stop_s': 3.09, 'left_after_stop_s': 3.19, 'match_before': 0.98, 'match_after': 0.16}
+audio stop 6 {'wave': 'Lightning_2', 'semitones': np.float64(-0.7), 'played_before_stop_s': 1.24, 'left_after_stop_s': 5.15, 'match_before': 0.87, 'match_after': 0.02}
+audio stop 7 {'wave': 'Lightning_1', 'semitones': np.float64(1.0), 'played_before_stop_s': 7.88, 'left_after_stop_s': 6.3, 'match_before': 0.87, 'match_after': -0.01}
+audio: 0 of 8 identified waves with sound left play on after the stop
+grind: tool 68 m from the slab, along [ 0.91 -0.18 -0.37]
+PASS grind: extend burst
+PASS grind: glide burst
+PASS grind: retract burst
+slab (655, 78)
+PASS no mod errors ([])
+PASS the script found the OmniArc originals
+RESULT {"mod": "/home/factory/ws/se/tmp/se1116/worlds-old/octahedron", "task": "SE-1116-old", "linger_s": null, "audio_stops": [{"wave": "Lightning_3", "semitones": -0.8, "played_before_stop_s": 2.01, "left_after_stop_s": 2.12, "match_before": 0.93, "match_after": 0.49}, {"wave": "Lightning_0", "semitones": 0.4, "played_before_stop_s": 7.47, "left_after_stop_s": 7.24, "match_before": 0.92, "match_after": -0.03}, {"wave": "Lightning_1", "semitones": -0.7, "played_before_stop_s": 11.71, "left_after_stop_s": 3.94, "match_before": 0.84, "match_after": 0.29}, {"wave": "Lightning_2", "semitones": 0.7, "played_before_stop_s": 3.0, "left_after_stop_s": 2.9, "match_before": 0.98, "match_after": -0.53}, {"wave": "Lightning_1", "semitones": 0.8, "played_before_stop_s": 6.16, "left_after_stop_s": 8.19, "match_before": 0.87, "match_after": -0.15}, {"wave": "Lightning_2", "semitones": -0.4, "played_before_stop_s": 3.09, "left_after_stop_s": 3.19, "match_before": 0.98, "match_after": 0.16}, {"wave": "Lightning_2", "semitones": -0.7, "played_before_stop_s": 1.24, "left_after_stop_s": 5.15, "match_before": 0.87, "match_after": 0.02}, {"wave": "Lightning_1", "semitones": 1.0, "played_before_stop_s": 7.88, "left_after_stop_s": 6.3, "match_before": 0.87, "match_after": -0.01}]}
+EXIT 0

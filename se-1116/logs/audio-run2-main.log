@@ -1,0 +1,25 @@
+2 blocks in /home/factory/.se-test/SE-1116-old-c0-data/Mods/1067000001.sbm
+PASS 24 welders, 24 deconstructors
+PASS slab pasted, nothing welded with the tools off
+weld: tool 69 m from the slab, along [0.9  0.18 0.4 ]
+PASS weld: extend burst
+PASS weld: glide burst
+PASS weld: retract burst
+audio stop 0 {'wave': 'Lightning_2', 'semitones': np.float64(0.3), 'played_before_stop_s': 4.53, 'left_after_stop_s': 1.5, 'match_before': 0.94, 'rest_audible': True, 'level_before_db': 5.3, 'level_after_db': 1.1}
+audio stop 1 {'wave': 'Lightning_1', 'semitones': np.float64(-0.9), 'played_before_stop_s': 7.28, 'left_after_stop_s': 8.55, 'match_before': 0.87, 'rest_audible': True, 'level_before_db': 5.1, 'level_after_db': 0.8}
+audio stop 2 {'wave': 'Lightning_2', 'semitones': np.float64(0.2), 'played_before_stop_s': 6.06, 'left_after_stop_s': 0.01, 'match_before': 0.89, 'rest_audible': False, 'level_before_db': 1.2, 'level_after_db': 2.6}
+audio stop 3 {'wave': 'Lightning_1', 'semitones': np.float64(-0.7), 'played_before_stop_s': 5.22, 'left_after_stop_s': 10.43, 'match_before': 0.62, 'rest_audible': True, 'level_before_db': 5.3, 'level_after_db': 1.0}
+audio stop 4 {'wave': 'Lightning_1', 'semitones': np.float64(0.1), 'played_before_stop_s': 6.49, 'left_after_stop_s': 8.45, 'match_before': 0.8, 'rest_audible': True, 'level_before_db': 3.0, 'level_after_db': 1.0}
+audio stop 5 {'wave': 'Lightning_0', 'semitones': np.float64(-0.5), 'played_before_stop_s': 9.23, 'left_after_stop_s': 6.26, 'match_before': 0.93, 'rest_audible': True, 'level_before_db': 3.3, 'level_after_db': 1.5}
+audio stop 6 {'wave': 'Lightning_1', 'semitones': np.float64(-0.3), 'played_before_stop_s': 4.93, 'left_after_stop_s': 10.36, 'match_before': 0.73, 'rest_audible': True, 'level_before_db': 2.5, 'level_after_db': 1.2}
+audio stop 7 {'wave': 'Lightning_2', 'semitones': np.float64(-0.5), 'played_before_stop_s': 1.38, 'left_after_stop_s': 4.94, 'match_before': 0.99, 'rest_audible': True, 'level_before_db': 12.2, 'level_after_db': 1.2}
+audio: 0 of 5 identified waves with sound left play on after the stop
+grind: tool 68 m from the slab, along [ 0.91 -0.18 -0.37]
+PASS grind: extend burst
+PASS grind: glide burst
+PASS grind: retract burst
+slab (655, 80)
+PASS no mod errors ([])
+PASS the script found the OmniArc originals
+RESULT {"mod": "/home/factory/ws/se/tmp/se1116/worlds-old/octahedron", "task": "SE-1116-old", "linger_s": null, "audio_stops": [{"wave": "Lightning_2", "semitones": 0.3, "played_before_stop_s": 4.53, "left_after_stop_s": 1.5, "match_before": 0.94, "rest_audible": true, "level_before_db": 5.3, "level_after_db": 1.1}, {"wave": "Lightning_1", "semitones": -0.9, "played_before_stop_s": 7.28, "left_after_stop_s": 8.55, "match_before": 0.87, "rest_audible": true, "level_before_db": 5.1, "level_after_db": 0.8}, {"wave": "Lightning_2", "semitones": 0.2, "played_before_stop_s": 6.06, "left_after_stop_s": 0.01, "match_before": 0.89, "rest_audible": false, "level_before_db": 1.2, "level_after_db": 2.6}, {"wave": "Lightning_1", "semitones": -0.7, "played_before_stop_s": 5.22, "left_after_stop_s": 10.43, "match_before": 0.62, "rest_audible": true, "level_before_db": 5.3, "level_after_db": 1.0}, {"wave": "Lightning_1", "semitones": 0.1, "played_before_stop_s": 6.49, "left_after_stop_s": 8.45, "match_before": 0.8, "rest_audible": true, "level_before_db": 3.0, "level_after_db": 1.0}, {"wave": "Lightning_0", "semitones": -0.5, "played_before_stop_s": 9.23, "left_after_stop_s": 6.26, "match_before": 0.93, "rest_audible": true, "level_before_db": 3.3, "level_after_db": 1.5}, {"wave": "Lightning_1", "semitones": -0.3, "played_before_stop_s": 4.93, "left_after_stop_s": 10.36, "match_before": 0.73, "rest_audible": true, "level_before_db": 2.5, "level_after_db": 1.2}, {"wave": "Lightning_2", "semitones": -0.5, "played_before_stop_s": 1.38, "left_after_stop_s": 4.94, "match_before": 0.99, "rest_audible": true, "level_before_db": 12.2, "level_after_db": 1.2}]}
+EXIT 0

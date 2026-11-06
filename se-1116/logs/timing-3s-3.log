@@ -1,0 +1,18 @@
+2 blocks in /home/factory/.se-test/SE-1116-new-c0-data/Mods/1067000001.sbm
+PASS 24 welders, 24 deconstructors
+PASS slab pasted, nothing welded with the tools off
+PASS weld: slab (675, 675) after 3227 frames (53.8 game s, 53.8 s)
+PASS grind: slab (0, 0) after 23344 frames (389.1 game s, 389.6 s)
+weld: tool 69 m from the slab, along [0.9  0.18 0.4 ]
+PASS weld: extend burst
+PASS weld: glide burst
+PASS weld: retract burst
+grind: tool 68 m from the slab, along [ 0.91 -0.18 -0.37]
+PASS grind: extend burst
+PASS grind: glide burst
+PASS grind: retract burst
+slab (653, 8)
+PASS no mod errors ([])
+PASS the script found the OmniArc originals
+RESULT {"mod": "/home/factory/ws/se/tmp/se1116/worlds-new/octahedron", "task": "SE-1116-new", "linger_s": 3.0, "weld": {"frames": 3227, "game_s": 53.78333333333333, "wall_s": 53.8}, "grind": {"frames": 23344, "game_s": 389.06666666666666, "wall_s": 389.6}}
+EXIT 0

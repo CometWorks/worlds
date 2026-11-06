@@ -1,0 +1,39 @@
+2 blocks in /home/factory/.se-test/SE-1116-new-c0-data/Mods/1067000001.sbm
+PASS 24 welders, 24 deconstructors
+PASS slab pasted, nothing welded with the tools off
+PASS weld: slab (675, 675) after 3231 frames (53.9 game s, 53.9 s)
+PASS grind: slab (0, 0) after 23292 frames (388.2 game s, 388.3 s)
+weld: tool 69 m from the slab, along [0.9  0.18 0.4 ]
+PASS weld: extend burst
+PASS weld: glide burst
+PASS weld: relink burst
+PASS weld: retract burst
+PASS audio 0: the storm is heard, level 439 against quiet 180
+PASS audio 1: the storm is heard, level 402 against quiet 180
+PASS audio 2: the storm is heard, level 459 against quiet 180
+audio {'quiet': 180, 'tails_s': [np.float64(17.0), np.float64(17.0), np.float64(17.0)], 'marks': {'quiet': 101883972, 'quiet_end': 102658116, 'cycles': [(103256132, 104792132, 108060740), (108064836, 109600836, 112865348), (112865348, 114405444, 117669956)]}}
+FAIL audio: the sound ends by itself after each stop, [np.float64(17.0), np.float64(17.0), np.float64(17.0)] s (waves are 4-15 s)
+grind: tool 68 m from the slab, along [ 0.91 -0.18 -0.37]
+PASS grind: extend burst
+PASS grind: glide burst
+PASS grind: relink burst
+PASS grind: retract burst
+slab (643, 83)
+PASS no mod errors ([])
+PASS the script found the OmniArc originals
+trace lines 363152
+PASS trace of 32 tools
+welder {'fps': 62.5, 'extends': 20, 'extend_s': [1.01, 1.01, 1.01], 'retracts': 20, 'interrupted_retracts': 0, 'retract_s': [1.01, 1.01, 1.01], 'max_end_step_m': 0.674, 'max_target_step_m': 17.229, 'tools': 16, 'runs': 20, 're_extends': 4, 'stops': 62, 'relinks': 42, 'relinks_to_new_aim': 38, 'gap_s_min_med_p90_max': [0.5, 0.5, 1.7, 396.02], 'stops_by_linger': {'0.4': {'glide': 0, 'partway': 40, 're_extend': 6}, '2': {'glide': 42, 'partway': 0, 're_extend': 4}, '3': {'glide': 42, 'partway': 0, 're_extend': 4}}, 'linger_s': [3.01, 3.01, 3.01]}
+PASS welder: extends in about 1 s ([1.01, 1.01, 1.01])
+PASS welder: retracts in about 1 s ([1.01, 1.01, 1.01])
+PASS welder: stays 3 s after the tool stops ([3.01, 3.01, 3.01])
+PASS welder: works again before retracting 42 times, the threads stay out
+PASS welder: glides, biggest step 0.67 m per frame for aim jumps up to 17.23 m
+deconstructor {'fps': 62.5, 'extends': 18, 'extend_s': [1.01, 1.01, 1.01], 'retracts': 18, 'interrupted_retracts': 0, 'retract_s': [1.01, 1.01, 1.01], 'max_end_step_m': 1.018, 'max_target_step_m': 28.903, 'tools': 16, 'runs': 18, 're_extends': 2, 'stops': 119, 'relinks': 101, 'relinks_to_new_aim': 89, 'gap_s_min_med_p90_max': [0.5, 0.5, 0.5, 142.58], 'stops_by_linger': {'0.4': {'glide': 0, 'partway': 97, 're_extend': 6}, '2': {'glide': 101, 'partway': 0, 're_extend': 2}, '3': {'glide': 101, 'partway': 0, 're_extend': 2}}, 'linger_s': [3.01, 3.01, 3.01]}
+PASS deconstructor: extends in about 1 s ([1.01, 1.01, 1.01])
+PASS deconstructor: retracts in about 1 s ([1.01, 1.01, 1.01])
+PASS deconstructor: stays 3 s after the tool stops ([3.01, 3.01, 3.01])
+PASS deconstructor: works again before retracting 101 times, the threads stay out
+PASS deconstructor: glides, biggest step 1.02 m per frame for aim jumps up to 28.90 m
+RESULT {"mod": "/home/factory/ws/se/tmp/se1116/worlds-new/octahedron", "task": "SE-1116-new", "linger_s": 3.0, "weld": {"frames": 3231, "game_s": 53.85, "wall_s": 53.9}, "grind": {"frames": 23292, "game_s": 388.2, "wall_s": 388.3}, "audio": {"quiet": 180, "tails_s": [17.0, 17.0, 17.0], "marks": {"quiet": 101883972, "quiet_end": 102658116, "cycles": [[103256132, 104792132, 108060740], [108064836, 109600836, 112865348], [112865348, 114405444, 117669956]]}}, "welder_trace": {"fps": 62.5, "extends": 20, "extend_s": [1.01, 1.01, 1.01], "retracts": 20, "interrupted_retracts": 0, "retract_s": [1.01, 1.01, 1.01], "max_end_step_m": 0.674, "max_target_step_m": 17.229, "tools": 16, "runs": 20, "re_extends": 4, "stops": 62, "relinks": 42, "relinks_to_new_aim": 38, "gap_s_min_med_p90_max": [0.5, 0.5, 1.7, 396.02], "stops_by_linger": {"0.4": {"glide": 0, "partway": 40, "re_extend": 6}, "2": {"glide": 42, "partway": 0, "re_extend": 4}, "3": {"glide": 42, "partway": 0, "re_extend": 4}}, "linger_s": [3.01, 3.01, 3.01]}, "deconstructor_trace": {"fps": 62.5, "extends": 18, "extend_s": [1.01, 1.01, 1.01], "retracts": 18, "interrupted_retracts": 0, "retract_s": [1.01, 1.01, 1.01], "max_end_step_m": 1.018, "max_target_step_m": 28.903, "tools": 16, "runs": 18, "re_extends": 2, "stops": 119, "relinks": 101, "relinks_to_new_aim": 89, "gap_s_min_med_p90_max": [0.5, 0.5, 0.5, 142.58], "stops_by_linger": {"0.4": {"glide": 0, "partway": 97, "re_extend": 6}, "2": {"glide": 101, "partway": 0, "re_extend": 2}, "3": {"glide": 101, "partway": 0, "re_extend": 2}}, "linger_s": [3.01, 3.01, 3.01]}}
+EXIT 1

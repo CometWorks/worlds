@@ -1,0 +1,34 @@
+2 blocks in /home/factory/.se-test/SE-1116-new2-c0-data/Mods/1067000001.sbm
+PASS 24 welders, 24 deconstructors
+PASS slab pasted, nothing welded with the tools off
+PASS weld: slab (675, 675) after 3273 frames (54.5 game s, 54.5 s)
+PASS grind: slab (0, 0) after 23287 frames (388.1 game s, 388.1 s)
+weld: tool 69 m from the slab, along [0.9  0.18 0.4 ]
+PASS weld: extend burst
+PASS weld: glide burst
+PASS weld: relink burst
+PASS weld: retract burst
+grind: tool 68 m from the slab, along [ 0.91 -0.18 -0.37]
+PASS grind: extend burst
+PASS grind: glide burst
+PASS grind: relink burst
+PASS grind: retract burst
+slab (643, 12)
+PASS no mod errors ([])
+PASS the script found the OmniArc originals
+trace lines 55092
+PASS trace of 6 tools
+welder {'fps': 62.5, 'extends': 3, 'extend_s': [1.01, 1.01, 1.01], 'retracts': 3, 'interrupted_retracts': 0, 'retract_s': [1.01, 1.01, 1.01], 'max_end_step_m': 0.674, 'max_target_step_m': 17.229, 'tools': 3, 'runs': 3, 're_extends': 0, 'stops': 15, 'relinks': 12, 'relinks_to_new_aim': 10, 'linger_s': [2.02, 2.02, 2.02]}
+PASS welder: extends in about 1 s ([1.01, 1.01, 1.01])
+PASS welder: retracts in about 1 s ([1.01, 1.01, 1.01])
+PASS welder: stays 2 s after the tool stops ([2.02, 2.02, 2.02])
+PASS welder: works again before retracting 12 times, the threads stay out
+PASS welder: glides, biggest step 0.67 m per frame for aim jumps up to 17.23 m
+deconstructor {'fps': 62.5, 'extends': 3, 'extend_s': [1.01, 1.01, 1.01], 'retracts': 3, 'interrupted_retracts': 0, 'retract_s': [1.01, 1.01, 1.01], 'max_end_step_m': 0.411, 'max_target_step_m': 10.655, 'tools': 3, 'runs': 3, 're_extends': 0, 'stops': 13, 'relinks': 10, 'relinks_to_new_aim': 9, 'linger_s': [2.02, 2.02, 2.02]}
+PASS deconstructor: extends in about 1 s ([1.01, 1.01, 1.01])
+PASS deconstructor: retracts in about 1 s ([1.01, 1.01, 1.01])
+PASS deconstructor: stays 2 s after the tool stops ([2.02, 2.02, 2.02])
+PASS deconstructor: works again before retracting 10 times, the threads stay out
+PASS deconstructor: glides, biggest step 0.41 m per frame for aim jumps up to 10.65 m
+RESULT {"mod": "/home/factory/ws/se/tmp/se1116/worlds-new/octahedron", "task": "SE-1116-new2", "linger_s": 2.0, "weld": {"frames": 3273, "game_s": 54.55, "wall_s": 54.5}, "grind": {"frames": 23287, "game_s": 388.1166666666667, "wall_s": 388.1}, "welder_trace": {"fps": 62.5, "extends": 3, "extend_s": [1.01, 1.01, 1.01], "retracts": 3, "interrupted_retracts": 0, "retract_s": [1.01, 1.01, 1.01], "max_end_step_m": 0.674, "max_target_step_m": 17.229, "tools": 3, "runs": 3, "re_extends": 0, "stops": 15, "relinks": 12, "relinks_to_new_aim": 10, "linger_s": [2.02, 2.02, 2.02]}, "deconstructor_trace": {"fps": 62.5, "extends": 3, "extend_s": [1.01, 1.01, 1.01], "retracts": 3, "interrupted_retracts": 0, "retract_s": [1.01, 1.01, 1.01], "max_end_step_m": 0.411, "max_target_step_m": 10.655, "tools": 3, "runs": 3, "re_extends": 0, "stops": 13, "relinks": 10, "relinks_to_new_aim": 9, "linger_s": [2.02, 2.02, 2.02]}}
+EXIT 0

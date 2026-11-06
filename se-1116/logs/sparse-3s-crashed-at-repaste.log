@@ -1,0 +1,25 @@
+2 blocks in /home/factory/.se-test/SE-1116-sparse-c0-data/Mods/1067000001.sbm
+PASS 24 welders, 24 deconstructors
+PASS slab pasted, nothing welded with the tools off
+PASS weld: slab (192, 192) after 1365 frames (22.8 game s, 22.8 s)
+PASS grind: slab (0, 0) after 888 frames (14.8 game s, 14.8 s)
+Traceback (most recent call last):
+  File "/home/factory/ws/se/tmp/se1116/rig1116.py", line 451, in <module>
+    sys.exit(1 if main() else 0)
+                  ^^^^^^
+  File "/home/factory/ws/se/tmp/se1116/rig1116.py", line 393, in main
+    plate_id = remote.paste_blueprint(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/factory/ws/se/se1/plugins/remote/skills/se-remote/se_remote.py", line 1129, in paste_blueprint
+    return self._post("/v1/blueprints/paste", body)["grids"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/factory/ws/se/se1/plugins/remote/skills/se-remote/se_remote.py", line 622, in _post
+    return self._parse(self._send("POST", path, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/factory/ws/se/se1/plugins/remote/skills/se-remote/se_remote.py", line 602, in _parse
+    resp.raise_for_status()
+  File "/home/factory/.cache/uv/archive-v0/bxh0RMwXvJzBETIm/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '409 Conflict' for url 'http://127.0.0.1:25690/v1/blueprints/paste'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409
+EXIT 1

@@ -1,0 +1,25 @@
+2 blocks in /home/factory/.se-test/SE-1116-old-c0-data/Mods/1067000001.sbm
+PASS 24 welders, 24 deconstructors
+PASS slab pasted, nothing welded with the tools off
+PASS weld: slab (675, 675) after 3158 frames (52.6 game s, 52.6 s)
+PASS grind: slab (0, 0) after 23301 frames (388.4 game s, 388.5 s)
+weld: tool 69 m from the slab, along [0.9  0.18 0.4 ]
+PASS weld: extend burst
+PASS weld: glide burst
+PASS weld: relink burst
+PASS weld: retract burst
+FAIL audio 0: the storm is heard, level 405 against quiet 264
+FAIL audio 1: the storm is heard, level 453 against quiet 264
+FAIL audio 2: the storm is heard, level 340 against quiet 264
+audio {'quiet': 264, 'tails_s': [np.float64(8.0), np.float64(0.1), np.float64(17.0)], 'marks': {'quiet': 101306436, 'quiet_end': 102076484, 'cycles': [(102674500, 104210500, 107479108), (107483204, 109019204, 112287812), (112287812, 113827908, 117096516)]}}
+FAIL audio: the sound ends by itself after each stop, [np.float64(8.0), np.float64(0.1), np.float64(17.0)] s (waves are 4-15 s)
+grind: tool 68 m from the slab, along [ 0.91 -0.18 -0.37]
+PASS grind: extend burst
+PASS grind: glide burst
+PASS grind: relink burst
+PASS grind: retract burst
+slab (643, 83)
+PASS no mod errors ([])
+PASS the script found the OmniArc originals
+RESULT {"mod": "/home/factory/ws/se/tmp/se1116/worlds-old/octahedron", "task": "SE-1116-old", "linger_s": null, "weld": {"frames": 3158, "game_s": 52.63333333333333, "wall_s": 52.6}, "grind": {"frames": 23301, "game_s": 388.35, "wall_s": 388.5}, "audio": {"quiet": 264, "tails_s": [8.0, 0.1, 17.0], "marks": {"quiet": 101306436, "quiet_end": 102076484, "cycles": [[102674500, 104210500, 107479108], [107483204, 109019204, 112287812], [112287812, 113827908, 117096516]]}}}
+EXIT 1
