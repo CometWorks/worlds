@@ -47,7 +47,6 @@ STATION = "Alpha"
 OCT = "Octahedron_Authority"
 PLATE = "Component/SteelPlate"
 GOLD = "Ingot/Gold"
-STONE = "Ore/Stone"
 WINDOW = 4
 SHIP = "Turn Test"
 BLOCKS = 8
@@ -275,8 +274,9 @@ def run(bench) -> None:
     told = tp.wait_chat(api, "!oct shipyard done gives the turn up", 5, mark)
     check("cancel: the turn's message names the way out", told, told)
     print(probe(api, f"yardload {STATION} {GOLD} 5"), flush=True)
-    # Full containers: the press can't start the build
-    print(probe(api, f"yardload {STATION} {STONE} 100000000"), flush=True)
+    # A ship in the build space: the press can't start the build. Not full containers, which
+    # would sell for over the 1,000,000 SC a client without Steam crashes at
+    print(probe(api, f"yardblocker {STATION}"), flush=True)
     to_node(other(home))
     check(
         f"cancel: moved to {where()}, still the player's",
@@ -287,7 +287,7 @@ def run(bench) -> None:
     reply = press(api)
     check(
         "cancel: the start is refused, the reply offers the cancel",
-        "Take something out first" in reply and "within 10 s to cancel" in reply,
+        "out of" in reply and "within 10 s to cancel" in reply,
         reply,
     )
     mark = tp.latest(api)
@@ -302,6 +302,7 @@ def run(bench) -> None:
         f"{before} -> {money(api)}",
     )
     free_again(api, "canceled in the turn")
+    print(probe(api, "removegrid Blocker"), flush=True)
     queue = tr.settled(api, "queue", "No ships in the queue")
     check("cancel: the queue is empty", "No ships in the queue" in queue, queue)
     if "cancel" in os.environ.get("OCT_TURN_ONLY", "").split(","):

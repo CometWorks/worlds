@@ -496,10 +496,12 @@ def cancel_while_loading(a) -> None:
     told = tp.wait_chat(a, "!oct shipyard done gives the turn up", 5, mark)
     check(told is not None, f"the turn's message names the way out: {told}")
     log(probe(a, f"yardload {STATION} {GOLD} 5"))
-    log(probe(a, f"yardload {STATION} {STONE} 100000000"))
+    # A ship in the build space: the press can't start the build. Not full containers, which
+    # would sell for over the 1,000,000 SC a client without Steam crashes at
+    log(probe(a, f"yardblocker {STATION}"))
     reply = start(a)
     check(
-        "Take something out first" in reply and "within 10 s to cancel" in reply,
+        "out of" in reply and "within 10 s to cancel" in reply,
         f"the start is refused and the reply offers the cancel: {reply}",
     )
     time.sleep(11)
@@ -518,10 +520,13 @@ def cancel_while_loading(a) -> None:
     free_at_end(a, "canceled in the turn")
     check(money(a) > before, f"what was loaded is sold: {before} -> {money(a)}")
 
+    # Out of the way of the next turn's start, which would wait for it
+    log(probe(a, "removegrid Blocker"))
+
     # The blueprint on the table during the turn: the press orders it into the turn, the start
     # is refused, and the next press still cancels
     turn(a)
-    log(probe(a, f"yardload {STATION} {STONE} 100000000"))
+    log(probe(a, f"yardblocker {STATION}"))
     mark = tp.latest(a)
     reply = order(a)
     check(
@@ -532,6 +537,7 @@ def cancel_while_loading(a) -> None:
     told = tp.wait_chat(a, "You canceled", 15, mark)
     check(told is not None, f"the next press cancels: {reply} {told}")
     free_at_end(a, "canceled with the blueprint loaded")
+    log(probe(a, "removegrid Blocker"))
     tr.remove(a)
 
 

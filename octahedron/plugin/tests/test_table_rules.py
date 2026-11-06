@@ -142,12 +142,13 @@ def settled_owner(remote, want, timeout: float = 15.0) -> tuple[str, str]:
 
 def screens(remote) -> dict[str, str]:
     """The server's text of the table's screen, the billboard's two and the queue panel"""
+    pattern = r"BLUEPRINT (.*?) HOLDER (.*?)\nTABLE\n(.*)\nDETAILS\n(.*)\nHOW\n(.*)\nQUEUE\n(.*)"
     reply = "\n".join(rig.chat(remote, "!oct table show", 2))
-    found = re.search(
-        r"BLUEPRINT (.*?) HOLDER (.*?)\nTABLE\n(.*)\nDETAILS\n(.*)\nHOW\n(.*)\nQUEUE\n(.*)",
-        reply,
-        re.S,
-    )
+    found = re.search(pattern, reply, re.S)
+    if not found:
+        # A busy cluster node can take longer than 2 s to answer (SE-1198's cluster run)
+        reply = "\n".join(rig.chat(remote, "!oct table show", 8))
+        found = re.search(pattern, reply, re.S)
     assert found, reply
     return dict(
         zip(("blueprint", "holder", "table", "details", "how", "queue"), found.groups())
