@@ -20,10 +20,10 @@ namespace ServerPlugin;
 // A paid build's turn starts with the player getting the shipyard's blocks (ShipyardTurn) and
 // ShipyardTurnMinutes to load components and press the button, which buys what is missing. If they
 // don't, the order is dropped. A press whose start is refused offers to give the turn up: a second
-// press within CancelConfirmSeconds ends it, as !oct shipyard done does. After the build or breakdown they have ShipyardTurnMinutes to take
-// what is in the containers. A turn ends at the deadline, once the containers are empty, or by
-// !oct shipyard done: the blocks go back to OCT, a docked ship floats free, and what is left is
-// sold to the station for the player.
+// press within CancelConfirmSeconds ends it, as !oct shipyard done does. After the build or
+// breakdown they have ShipyardTurnMinutes to take what is in the containers. A turn ends at the
+// deadline, once the containers are empty, or by !oct shipyard done: the blocks go back to OCT, a
+// docked ship floats free, and what is left is sold to the station for the player.
 internal static partial class ShipyardOrders
 {
     // Orders whose build is starting and turns that are ending, waiting for the authority's answer
