@@ -392,6 +392,10 @@ two blocks.
   are shared with everyone, and on the server the Octahedron plugin refuses
   players' changes to them (`NpcBlocksLocked`): no settings, names, texts or
   toolbars.
+- OCT's account takes no deposits from its members (`OctNoDeposits`), since only
+  its leader can take money out. Nobody grinds OCT's grids or the trader bots'
+  ships, anywhere (`OctGridsNoGrinding`, the bots by `OctProtectedSteamIds`)
+  ([SE-1160](https://tasks.cometworks.se/tasks/2060)).
 - Players don't spawn at Moon Station (`NO_SPAWN_STATIONS`): its medical room is
   shared with nobody, so the spawn screen lists it only for an admin with "Use
   terminals" on in the admin menu. It doesn't heal other players either.
