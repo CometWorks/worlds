@@ -309,39 +309,50 @@ it and turns the world setting on.
 ### Clang drives
 
 With `ClangDrivesEnabled` on (the default), the server switches a ship off when its speed
-changes much faster than its thrusters can change it, the way the Y key in its cockpit does:
+changes in a way the forces on it don't explain, the way the Y key in its cockpit does:
 the power switch and every battery, reactor, engine and other power producer of the ship go
 off. This stops clang drives, and a ship that brakes by ramming a station or another ship in
-a safe zone. The log names the grid, its owner, the acceleration measured and the one
-allowed, and the owner gets a chat message, at most one a minute. A ship over the limit that
+a safe zone. The log names the grid, its owner, the acceleration left unexplained, the one
+measured and the one allowed, and the owner gets a chat message, at most one a minute. A ship over the limit that
 one of the exceptions below leaves on gets a log line too, with the reason. Nothing switches
 the ship back on; the player can, with Y.
 
 - The ship is the grids joined by rotors, pistons, hinges, connectors and landing gear. Its
   speed is their common center of mass's, so parts moving inside the ship cancel out.
-- Each simulation frame's acceleration is the speed change from the frame before over 1/60 s
-  of game time. These are averaged over `ClangDriveWindowFrames` (6, 100 ms), so a single
-  spike counts only for its share, and server lag changes nothing.
-- The allowed acceleration is `ClangDriveFactor` (2) times the thrust of the ship's strongest
-  direction at full override, divided by its mass, plus the natural and artificial gravity
-  at its center of mass. Every built thruster counts, on or off, as effective as it is at
-  that place, and as it was up to a second before: a ship ramming a station may lose its
-  thrusters in the hit. A ship without thrusters may only fall.
-- Below `ClangDriveMinAcceleration` (3 m/s²) above gravity nothing counts: a heavy ship
-  bumping into a station while docking stays on. Nor does a ship slower than
-  `ClangDriveMinSpeed` (20 m/s) both before and after the window.
+- The speed change is taken over `ClangDriveWindowFrames` (6, 100 ms) of game time, so a
+  single spike counts only for its share, and server lag changes nothing.
+- Every force the game or a mod applies to a ship counts toward explaining it: thrusters
+  with their dampeners and overrides, Relative Top Speed's drag above the cruise speed,
+  explosions and hits, artificial mass. So does natural gravity. Artificial gravity doesn't
+  pull grids, only artificial mass does. A clang drive's push comes from its parts' contacts,
+  which are no such forces (SE-1157). Nor is a wheel's steering push: it pushes the ship alone,
+  against whatever the wheel touches, the ship's own hull too.
+- What these leave unexplained may be `ClangDriveMinAcceleration` (3 m/s²), plus
+  `ClangDriveFactor` (2) minus one times the thrust of the ship's strongest direction at
+  full override divided by its mass, plus the natural gravity, which the ground may be
+  holding up. Every built thruster counts, on or off, as effective as it is at that place,
+  and as it was up to a second before: a ship ramming a station may lose its thrusters in
+  the hit. The mass is each grid's own with its cargo, so grids welded by a locked connector
+  aren't counted twice. Ships slower than `ClangDriveMinSpeed` (20 m/s) both before and after
+  the window are left alone.
 - Outside safe zones a crash doesn't count: a ship whose grid touched an asteroid, a planet
   or another grid within the last second is left on. Its own grids touching each other, the
-  clang, count. Inside a safe zone a crash counts, but only for the faster of two ships
+  clang, count, and so do a floating item or a loose grid inside the ship's bounds: cargo
+  rattling in a bay. Inside a safe zone a crash counts, but only for the faster of two ships
   that hit each other: the one rammed is left on. A ship left on is left alone for five
   seconds more, the aftermath of its hit: its wreck's pieces keep bumping into each other.
 - A velocity set from code isn't the ship's doing: a Trade Lane pulling the ship in or
-  dropping it out, a teleport or jump, a grid splitting off, or any other mod. No window
+  dropping it out, a teleport or jump, a grid splitting off, the game capping a ship's speed,
+  or any other mod. A merge block's pull toward the block it merges with is a write too, but it
+  counts: it changes both grids' speeds by the same amount whatever their masses, which is what
+  a merge block clang drive runs on. No window
   with such a write in it counts, nor one with the ship's physics switched off. The server
   never takes a ship's velocity from a client, so contacts and thrusters, a clang drive's
   means, are never writes.
 - Ships with a static grid (one docked or landed on a station), NPC ships, ships in a
-  shipyard's build space and ships already switched off are left alone.
+  shipyard's build space and ships already switched off are left alone. A ship is an NPC's
+  only when none of its grids is a player's: a player's tug towing an NPC wreck is checked.
+  It is off when every grid's switch is.
 
 On a cluster each node checks the ships it simulates.
 
@@ -1403,13 +1414,16 @@ head, each stopped by the cap, next to a copy built by nobody that isn't.
 `tests/test_gravity_drive.py` pilots ships with a gravity drive, and with
 `--game-version` checks the other side of the version gate.
 `tests/gravity_drive_cluster.py` pilots them on a cluster node.
-`tests/test_clang_drive.py` runs one server without a client, with tests/clang-probe pushing
-ships beyond their thrust as a clang drive would: pushed at 3x and 1.5x, an NPC's ship,
-one-frame speed jumps of 3 s, 0.1 s and 0.3 s of thrust, a ship at full override, ramming a
-wall at 50 m/s in a safe zone and outside, a ship without thrusters ramming, a ship at rest
-rammed in the zone, a heavy ship falling toward the planet, Viktor's "Clang with Piston"
-contraption with a thruster added, and with `CLANG_BLUEPRINTS` two clang drives from the
-Workshop, a sliding door one and a merge block one.
+`tests/test_clang_drive.py` runs one server without a client, with Relative Top Speed from
+`OCT_WORKSHOP` and tests/clang-probe pushing ships beyond their thrust as a clang drive would:
+pushed at 3x, 1.5x and 0.8x, at 3x through AddForce as a mod pushes, an NPC's ship, one-frame
+speed jumps of 3 s, 0.1 s and 0.3 s of thrust, a ship at full override, ramming a wall at
+50 m/s in a safe zone and outside, a ship without thrusters ramming, a ship at rest rammed in
+the zone, a heavy ship falling toward the planet, the holes of SE-1024 (a loose block in a
+cage, a gravity generator, a player's grid holding a bigger NPC one), DIS-0059's false
+positives (full reverse at the boost ceiling, a missile thrusting two ways at 355 m/s),
+Viktor's "Clang with Piston" contraption with a thruster added, and with `CLANG_BLUEPRINTS`
+two clang drives from the Workshop, a sliding door one and a merge block one.
 `tests/clang_drive_cluster.py` checks a speed jump, a ram in a safe zone and a crash
 outside on a cluster node, without a client.
 `tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
