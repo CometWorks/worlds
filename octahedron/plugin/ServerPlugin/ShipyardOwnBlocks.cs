@@ -9,16 +9,22 @@ using VRage.Game.ModAPI;
 
 namespace ServerPlugin;
 
-// While a player has a station shipyard's welders (ShipyardTurn), they work only on that player's
-// blocks and their faction's: a block's owner, or who built it when it has no owner, and for a
-// projected block the projector's owner. The order's own projector (the scaffold) is OCT's and
-// counts as theirs. Other players' ships in the shipyard are neither targeted nor welded, nor are
-// their projections built. Out of a turn the welders are OCT's and work as before.
+// While an order runs at a station shipyard, its welders work only on the ordered ship (SE-1122):
+// the grids the scaffold builds and what it projects. A free build's welders are OCT's, which
+// built any projection in their reach: a player's missile printer parked near the Moon Shipyard
+// took 64 blocks' components from a free build, which then stalled short of them.
+//
+// Else, while a player has the shipyard's welders (ShipyardTurn), as for a repair slot, they work
+// only on that player's blocks and their faction's: a block's owner, or who built it when it has
+// no owner, and for a projected block the projector's owner. The order's own projector (the
+// scaffold) is OCT's and counts as theirs. Other players' ships in the shipyard are neither
+// targeted nor welded, nor are their projections built. Out of an order and a turn the welders
+// are OCT's and work as before.
 //
 // ToolCore collects the blocks a tool works on in its HitBlockLayers, on a worker thread, and
 // hands them over on the game thread: to a turret's targets (OnGetBlockTargetsComplete) or to the
 // welding (OnGetBlocksComplete, which adds the WorkSet of earlier hits). Both take the other
-// players' blocks out first. ToolCore is a mod, compiled while the world loads, so this patches
+// blocks out first. ToolCore is a mod, compiled while the world loads, so this patches
 // it by name once the session is ready. A ToolCore that renamed them gets no filter and an error
 // in the log.
 //
@@ -60,7 +66,9 @@ internal static class ShipyardOwnBlocks
                         ?? throw new MissingMethodException(utils.FullName, name),
                     prefix
                 );
-            Plugin.Log.Info("Shipyard welders: a player's turn welds only their blocks");
+            Plugin.Log.Info(
+                "Shipyard welders: an order welds only its ship, a player's turn welds only their blocks"
+            );
         }
         catch (Exception e)
         {
@@ -73,29 +81,37 @@ internal static class ShipyardOwnBlocks
 
     private static void Prefix(object comp)
     {
+        if (!Plugin.Config.Enabled || blockTool(comp) is not MyCubeBlock tool)
+            return;
+        var other = ShipyardOrders.NotTheOrder(tool) ?? NotTheirs(tool);
+        if (other == null)
+            return;
+        foreach (var layer in layers(comp).Values)
+            layer.RemoveAll(other);
+        workSet(comp).RemoveAll(other);
+    }
+
+    // In a player's turn at a shipyard: true for a block that isn't theirs or their faction's.
+    // Null out of a turn.
+    private static Predicate<IMySlimBlock> NotTheirs(MyCubeBlock tool)
+    {
         if (
-            !Plugin.Config.Enabled
-            || blockTool(comp) is not MyCubeBlock tool
-            || tool.OwnerId == 0
+            tool.OwnerId == 0
             || MySession.Static.Players.IdentityIsNpc(tool.OwnerId)
             || !ShipyardZoneWelding.IsShipyard(tool)
         )
-            return;
+            return null;
 
         var player = tool.OwnerId;
         var faction = OctFaction.Team(player);
         bool Theirs(long identity) =>
             identity == player || faction != null && faction.IsMember(identity);
-        bool Other(IMySlimBlock block)
+        return block =>
         {
             var slim = (MySlimBlock)block;
             if (slim.CubeGrid.Projector is { } projector)
                 return !ShipyardOrders.IsScaffold(projector) && !Theirs(projector.OwnerId);
             return !Theirs(slim.OwnerId != 0 ? slim.OwnerId : slim.BuiltBy);
-        }
-
-        foreach (var layer in layers(comp).Values)
-            layer.RemoveAll(Other);
-        workSet(comp).RemoveAll(Other);
+        };
     }
 }
