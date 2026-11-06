@@ -58,8 +58,8 @@ def running(remote) -> bool:
     return f"'{SHIP}'" in " ".join(rig.chat(remote, "!oct shipyards", 3))
 
 
-def ship_there(remote) -> bool:
-    return any(g.get("name") == SHIP for g in remote.list_grids())
+def ships(remote) -> list[dict]:
+    return [g for g in remote.list_grids() if g.get("name") == SHIP]
 
 
 def repair_then_blueprint(a) -> None:
@@ -81,7 +81,8 @@ def repair_then_blueprint(a) -> None:
 def two_presses(a) -> None:
     check(wait_for(lambda: building(a), 180, 5), "the ship has a complete block")
     load(a, so.BIG)
-    table = settled(a, "table", "twice")
+    # The screen's text wraps
+    table = " ".join(settled(a, "table", "twice").split())
     check(
         "Press the button twice" in table, f"the table asks for two presses: {table!r}"
     )
@@ -103,10 +104,8 @@ def two_presses(a) -> None:
         "the free build doesn't count" in reply,
         f"the canceled free build doesn't count: {reply}",
     )
-    check(
-        wait_for(lambda: not ship_there(a), 20, 2),
-        "the canceled free build's ship is removed",
-    )
+    wait_for(lambda: not ships(a), 20, 2)
+    check(not ships(a), f"the canceled free build's ship is removed: {ships(a)}")
 
 
 def free_again(a) -> None:
