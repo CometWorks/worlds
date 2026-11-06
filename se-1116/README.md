@@ -8,3 +8,5 @@ Linux, factory@nas and factory@polaris, 2026-11-05/06. `rig1116.py` (run with `r
 - `logs/`: the rig output of every run that the PR description quotes.
 
 The shipyard hums below 60 Hz, louder than the storm, and the storm is sparse thunder over a quiet bed. That is why the audio check identifies the playing wave and measures the band level after the stop instead of the overall loudness.
+
+The trace and timing logs come from runs made before the audio check was final. Their `audio` lines and audio FAILs are from a first check that compared overall loudness, which the shipyard's hum and the jetpack drowned. Only the trace and timing lines of those logs count; the audio results are in `audio-run*.log`.
