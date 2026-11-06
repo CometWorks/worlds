@@ -52,12 +52,17 @@ GOLD = "Ingot/Gold"
 STONE = "Ore/Stone"
 DEFAULT = "Ingot/Gold=100,Component/Motor=10"
 OCT = rs.OCT
-# No hourly payouts: they would change the balances the checks compare
+# No hourly payouts: they would change the balances the checks compare. Nor the stations'
+# production and use (SE-1087), which would change the Store's stock: no restock in this
+# test's lifetime
 MONEY = {
     "MoneySubsidyPerActivePlayer": 0,
     "MoneyOctCap": 1_000_000_000_000,
     "MoneyPlayerTaxThreshold": 1_000_000_000,
+    "MarketRestockMinutes": 1_000_000_000,
 }
+# What the Store sells for TANKED, which the default stock may be out of
+TANKED_PARTS = ("SteelPlate", "Construction", "SmallTube", "LargeTube", "Computer")
 PAY = {
     **tr.CONFIG,
     **MONEY,
@@ -805,6 +810,8 @@ def main() -> int:
         with_config(a, **tr.CONFIG)
         log(tr.remove(a))
         # The default stock is short of what the builds here buy
+        for part in TANKED_PARTS:
+            sa.admin(a, f"!oct market set {STATION} Component/{part} 1000")
         sa.admin(a, f"!oct market set {STATION} {PLATE} 10000")
         for scenario in (
             free_build,
