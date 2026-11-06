@@ -114,8 +114,12 @@ def prepare(blueprint: str, minutes: int, plugins=()) -> None:
             link = folder / f"{id_}.sbm"
             link.unlink(missing_ok=True)
             link.symlink_to(pl.WORKSHOP / str(id_))
-    config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
-    assert "ShipyardOrderMinutes" not in config
+    # The test sets its own build time, in place of the cfg's (SE-1181)
+    config = re.sub(
+        r"\s*<ShipyardOrderMinutes>\d+</ShipyardOrderMinutes>",
+        "",
+        rig.CONFIG_SOURCE.read_text(encoding="utf-8"),
+    )
     rig.write_plugin_config(
         config.replace(
             "</OctahedronConfig>",
