@@ -3972,8 +3972,8 @@ internal static partial class ShipyardOrders
 
     // Through the tools' terminal switches, which ToolCore also sends to the clients. In a
     // no-welding zone the clients would turn the tools off again and show no beams (SE-441):
-    // ShowBeams keeps them on, and ShowShooting turns them on again on a client that got the
-    // shipyard streamed in during the build (SE-782).
+    // ShowBeams keeps them on, and ShowShooting turns them on again on every client that has the
+    // shipyard (SE-782, SE-1126).
     private static void Welders(MyCubeGrid shipyard, bool on)
     {
         ShipyardZoneWelding.ShowBeams(shipyard, on);

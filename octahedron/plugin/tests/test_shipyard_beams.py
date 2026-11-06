@@ -7,7 +7,7 @@ build_world.py with the final shipyard.
 The steps, with a long build running: OCT_BEAM_STEPS=stream goes beyond sync distance and
 comes back, =rejoin leaves the game and joins again; the shipyard is streamed in again each
 time; =off switches the welders off on the client alone, with nothing streamed, which only the
-plugin's switch sent every 30 s turns on again (SE-963); =none stays in range, to count the
+plugin's switch sent at every 10 s check turns on again (SE-963, SE-1126); =none stays in range, to count the
 packets; =handover empties the server's client lists of the shipyard's tools before the order,
 as a cluster node has them after a handover that brought the shipyard and the client along,
 which keeps its tools and so never asks the new node for them again (SE-1115). All of its welders must shoot on the client after that, and some must hit, also once
@@ -54,7 +54,8 @@ SHIP = "ArmBeams"
 STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 ENTITY = 777000782000100
 STEPS = os.environ.get("OCT_BEAM_STEPS", "stream,rejoin,off").split(",")
-# The plugin sends the switch to all clients in range every 30 s, at one of its 10 s checks
+# The plugin sends the switch to all clients that have the shipyard at every 10 s check; this
+# leaves room for the main branch's 30 s, to compare
 RESEND = 45
 OFF = "the welders go off on the client alone"
 SIZE = tuple(int(x) for x in os.environ.get("OCT_BEAM_SHIP", "8,8,24").split(","))
