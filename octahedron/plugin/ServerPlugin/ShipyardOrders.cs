@@ -1644,36 +1644,34 @@ internal static partial class ShipyardOrders
         if (queue.Count == 0)
             text.AppendLine("No ships in the queue.");
         orders.TryGetValue(shipyard.EntityId, out var running);
+        var now = DateTime.UtcNow;
         int place = 1;
         foreach (var o in queue)
         {
-            if (o.Repair)
-            {
-                text.AppendLine(
-                    PanelText.Item(
-                        $"{place++}. ",
-                        $"{RepairName} for {Name(o.Player)}: {(o.Started ? "repairing" : o.Active ? "taking parts" : "waiting")}",
-                        QueueColumns,
-                        QueueEntryLines
-                    )
-                );
-                continue;
-            }
-            var state = o.Phase switch
-            {
-                BuildPhase.Building when running != null =>
-                    $"building, done within {PanelText.Left(running.Ends, DateTime.UtcNow)}",
-                BuildPhase.Building => o.Grid != 0 ? "breaking down" : "building",
-                BuildPhase.Loading => $"loading parts within {Left(o.TurnEnds)}",
-                BuildPhase.After => $"taking what is left within {Left(o.TurnEnds)}",
-                _ when o.Grid != 0 => "waiting, to break down",
-                _ when o.Free => "waiting, free",
-                _ => "waiting, paid",
-            };
+            // Only the first entry says how far it is
+            var state =
+                place > 1 ? ""
+                : o.Repair
+                    ? o.Started ? "repairing"
+                        : o.Active ? "taking parts"
+                        : "waiting"
+                : o.Phase switch
+                {
+                    BuildPhase.Building when running != null =>
+                        $"{Percent(running)}({PanelText.Mins(running.Ends, now)})",
+                    BuildPhase.Building => o.Grid != 0 ? "breaking down" : "building",
+                    BuildPhase.Loading =>
+                        $"loading parts ({PanelText.Mins(Unix(o.TurnEnds), now)})",
+                    BuildPhase.After =>
+                        $"taking what is left ({PanelText.Mins(Unix(o.TurnEnds), now)})",
+                    _ => "waiting",
+                };
             text.AppendLine(
-                PanelText.Item(
-                    $"{place++}. ",
-                    $"'{o.Ship}' ({o.Pcu:N0} PCU) for {Name(o.Player)}: {state}",
+                PanelText.QueueEntry(
+                    place++,
+                    state,
+                    Name(o.Player),
+                    o.Repair ? "(repair)" : $"'{o.Ship}' ({o.Pcu:N0} PCU)",
                     QueueColumns,
                     QueueEntryLines
                 )
@@ -1686,7 +1684,7 @@ internal static partial class ShipyardOrders
                 .AppendLine(
                     PanelText.ClipName(
                         n =>
-                            $"Waiting for '{n}' to leave the shipyard{ClearWithin(shipyard, obstacle)}.",
+                            $"Waiting for '{n}' to leave the shipyard{ClearLeft(shipyard, obstacle, now)}.",
                         obstacle.DisplayName,
                         QueueColumns,
                         QueueEntryLines
@@ -1844,7 +1842,7 @@ internal static partial class ShipyardOrders
             return $"the components take {needed:N0} m³, the containers have room for {free:N0} m³";
 
         var npc = ShipyardTurn.Npc(shipyard);
-        var ends = DateTime.UtcNow.AddMinutes(Config.ShipyardOrderMinutes);
+        var ends = DateTime.UtcNow.AddMinutes(OrderMinutes(next.Station));
         var world = turn * shipyard.WorldMatrix.GetOrientation();
         var ship = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_CubeGrid>();
         ship.GridSizeEnum = main.GridSizeEnum;
@@ -1906,7 +1904,7 @@ internal static partial class ShipyardOrders
         );
         Tell(
             next.Player,
-            $"{shipyard.DisplayName} builds '{grid.DisplayName}' for you now, in {Config.ShipyardOrderMinutes} min at most."
+            $"{shipyard.DisplayName} builds '{grid.DisplayName}' for you now, in {OrderMinutes(next.Station)} min at most."
         );
         return null;
     }
@@ -2083,12 +2081,12 @@ internal static partial class ShipyardOrders
                     : order.Missing != null && !gone
                         ? $"{stalled}. The ship is yours without {order.Missing}."
                         : missing == "unbuilt"
-                            ? $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}', no ship was built."
+                            ? $"{shipyard.DisplayName} stopped after {OrderMinutes(StationOf(shipyard))} min with {why} of '{name}', no ship was built."
                             : gone
                                 ? $"Your order '{name}' at {shipyard.DisplayName} ended: the ship is gone."
                                 : why == null
                                     ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
-                                    : $"{shipyard.DisplayName} stopped after {Config.ShipyardOrderMinutes} min with {why} of '{name}'. "
+                                    : $"{shipyard.DisplayName} stopped after {OrderMinutes(StationOf(shipyard))} min with {why} of '{name}'. "
                                         + "The unfinished ship is yours.";
         if (!order.Free)
         {
@@ -2241,7 +2239,7 @@ internal static partial class ShipyardOrders
             return $"the components take {needed:N0} m³, the containers have room for {free:N0} m³";
 
         var npc = ShipyardTurn.Npc(shipyard);
-        var ends = DateTime.UtcNow.AddMinutes(Config.ShipyardOrderMinutes);
+        var ends = DateTime.UtcNow.AddMinutes(OrderMinutes(next.Station));
         var hydrogen = BuildHydrogen(next, blueprint);
         var arm = layout
             .Plan.Blocks.Select(b => new Vector3I(b.Cell.X, b.Cell.Y, b.Cell.Z))
@@ -2311,7 +2309,7 @@ internal static partial class ShipyardOrders
         );
         Tell(
             next.Player,
-            $"{shipyard.DisplayName} builds '{order.Name}' for you now, in {Config.ShipyardOrderMinutes} min at most."
+            $"{shipyard.DisplayName} builds '{order.Name}' for you now, in {OrderMinutes(next.Station)} min at most."
                 + (
                     layout.GivenUp != null
                         ? $" The arm's projector takes the place of one {Definition(layout.GivenUp)}: build it yourself after."
@@ -3433,6 +3431,33 @@ internal static partial class ShipyardOrders
 
     private static string StationOf(MyCubeGrid grid) =>
         Grids(grid).Select(Stations.StationOf).FirstOrDefault(s => s != null);
+
+    // ShipyardStationOrderMinutes of the station, else ShipyardOrderMinutes
+    private static int OrderMinutes(string station)
+    {
+        foreach (var entry in (Config.ShipyardStationOrderMinutes ?? "").Split(';'))
+        {
+            var pair = entry.Split('=');
+            if (
+                pair.Length == 2
+                && string.Equals(pair[0].Trim(), station, StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(pair[1].Trim(), out var minutes)
+                && minutes > 0
+            )
+                return minutes;
+        }
+        return Config.ShipyardOrderMinutes;
+    }
+
+    // "53% " of the blocks the projector has built, empty before it counted them. Multigrid
+    // Projector sums its subgrids into the projector's counts.
+    private static string Percent(Order order)
+    {
+        var projector = (Sandbox.ModAPI.IMyProjector)order.Projector;
+        return projector.TotalBlocks > 0
+            ? $"{100 * (projector.TotalBlocks - projector.RemainingBlocks) / projector.TotalBlocks}% "
+            : "";
+    }
 
     // The nearest shipyard within 1 km of the table
     private static MyCubeGrid FindShipyard(MyProjectorBase table)

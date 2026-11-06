@@ -465,6 +465,17 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 60;
 
+    [StringOption(
+        description: "ShipyardOrderMinutes of the shipyards of some stations, as Station name=minutes, stations separated by ;. "
+            + "The Moon Shipyard builds the big ships.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardStationOrderMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Moon Station=240";
+
     [IntOption(
         1,
         description: "Minutes of each window of a player's turn at a shipyard: to load the components and press the button for "

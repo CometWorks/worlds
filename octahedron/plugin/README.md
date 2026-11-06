@@ -448,6 +448,9 @@ A queued order stays when its owner leaves: a free build is built and handed ove
 usual, a paid one gets its turn and leaves the queue if nobody presses, and the owner
 can cancel it when back.
 `ShipyardOrderMinutes` (60; 0 turns orders off) is how long a build runs at most.
+`ShipyardStationOrderMinutes` (`Moon Station=240`) gives some stations' shipyards
+their own limit, as `Station name=minutes` separated by `;`: the Moon Shipyard builds
+the big ships.
 
 A repair slot is an entry "Repair" in the shipyard's queue, without a blueprint or a
 payment. It takes a place in the queue, and a player has one entry at a time at any
@@ -515,7 +518,13 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   table. A full queue shows on the table's screen and refuses the press. The
   station's queue panels (`ShipyardQueuePanelName`, `Text Panel - Station
   ShipyardQueue`) show it, and which ship blocks the shipyard with the time it has
-  left to leave, once its owner was told. Each entry wraps to two lines of 46 columns
+  left to leave, once its owner was told. The first entry says how far it is, then
+  whose ship it is: `1. 53% (46 mins) Viktor 'IMDC Europa Carrier' (44,181 PCU)`
+  while it is built, the share of its blocks the projector counts built (all
+  subgrids, by Multigrid Projector), or `loading parts (8 mins)`, `taking what is
+  left (8 mins)`, `breaking down`, `repairing`, `taking parts` or `waiting`. The
+  others are just `2. Viktor 'Ship' (1,234 PCU)`, a repair slot `(repair)`. Each
+  entry wraps to two lines of 46 columns
   and is cut after that, a blocking ship's name before its time, so a full queue keeps
   font size 0.57.
 - The ship must fit the shipyard's free space, the largest box between its
