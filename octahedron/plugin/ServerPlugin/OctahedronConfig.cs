@@ -631,7 +631,7 @@ public class OctahedronConfig : PluginConfig
 
     [StringOption(
         description: "Name of the station button panel next to the hologram table. Its first button orders the blueprint "
-            + "loaded into the table, or cancels the presser's queue entry before its build starts.",
+            + "loaded into the table, or cancels the presser's queue entry, a running build on a second press within 10 s.",
         Parent = "shipyard"
     )]
     public string ShipyardConfirmButtonName
