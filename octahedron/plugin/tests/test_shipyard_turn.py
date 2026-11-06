@@ -479,18 +479,20 @@ def done_while_loading(a) -> None:
 
 
 def cancel_running(a) -> None:
-    """A press on a running paid build hands the ship over unfinished, what is left stays for the
-    window. A free one's is in test_repair_slot.py"""
+    """Two presses on a running paid build hand the ship over unfinished, what is left stays for
+    the window. A free one's is in test_repair_slot.py and test_cancel_confirm.py"""
     with_config(a, **PAY, ShipyardTurnMinutes=WINDOW)
     turn(a, BIG)
     log(probe(a, f"yardload {STATION} {PLATE} {BIG_PLATES + 100}"))
     start(a)
     placed(a)
     paid = money(a)
+    reply = press(a)
+    check("within 10 s" in reply, f"one press only asks (SE-1127): {reply}")
     mark = tp.latest(a)
     reply = press(a)
     told = tp.wait_chat(a, "You canceled", 20, mark)
-    check(told is not None, f"a press cancels: {reply} {told}")
+    check(told is not None, f"a second press cancels: {reply} {told}")
     check("The unfinished ship is yours" in (told or ""), f"handed over: {told}")
     check(wait_for(lambda: grid_there(a), 30, 1), "the unfinished ship is there")
     wait_for(lambda: stock(a).get(PLATE, 0) > 100, 15, 1)

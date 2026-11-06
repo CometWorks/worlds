@@ -319,9 +319,15 @@ def waits_for_a_build(a, b) -> None:
     settled(a, "queue", "2. OctOther (repair)")
     with_config(a, **{**CONFIG, "FreeBuildCooldownMinutes": 60})
     reply = press(a)
+    check("within 10 s" in reply, f"the owner's first press only asks: {reply}")
+    mark = sa.so_latest(a)
+    reply = press(a)
+    reply = (
+        reply if "You canceled" in reply else sa.wait_chat(a, "You canceled", 20, mark)
+    )
     check(
-        "The unfinished ship is yours" in reply,
-        f"the owner's press cancels the build, they get the ship: {reply}",
+        "the free build doesn't count" in (reply or ""),
+        f"their second press cancels the free build, its ship removed (SE-1127): {reply}",
     )
     check(
         wait_for(lambda: slot_runs(a, "OctOther") is not None, 30),
@@ -333,13 +339,16 @@ def waits_for_a_build(a, b) -> None:
         state["items"] == "0", f"a free build's components are gone: {state['items']}"
     )
     big = [g for g in a.list_grids() if g.get("name") == "Order Big"]
-    check(bool(big), f"the unfinished ship is there: {big}")
+    check(not big, f"the canceled free build's ship is gone: {big}")
     reply = press(b)
     check("you canceled it" in reply, f"their press ends it: {reply}")
     check(wait_for(lambda: octs(yard(a)), 25), "OCT's again")
     load(a)
-    main = " ".join(settled(a, "table", "next free").split())
-    check("next free ship" in main, f"the cool-down runs: {main!r}")
+    main = " ".join(settled(a, "table", "free build").split())
+    check(
+        "next free ship" not in main,
+        f"a canceled free build starts no cool-down: {main!r}",
+    )
     tr.remove(a)
     with_config(a, **CONFIG)
     for grid in big:
@@ -370,8 +379,11 @@ def build_after(a) -> None:
     settled(a, "table", "Press the button")
     check("is in the queue" in press(a), "an order after the slots")
     so.wait_chat(a, "is ready", 400)
+    # The client sees the ship pasted off the arm a moment later
     check(
-        [g for g in a.list_grids() if g.get("name") == "Order Test"],
+        wait_for(
+            lambda: [g for g in a.list_grids() if g.get("name") == "Order Test"], 20, 2
+        ),
         "the shipyard builds it",
     )
 

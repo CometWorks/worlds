@@ -41,8 +41,9 @@ namespace ServerPlugin;
 // (ShipyardDetailsPanelName), and press the button next to it (ShipyardConfirmButtonName) to queue
 // the ship at the station's shipyard. Who presses decides what the press means, whoever holds the
 // table: it queues the ship of the presser's blueprint, or else cancels their queue entry or
-// running build, or else books them a repair slot. The queue is kept by
-// Builds, on the authority; the station's queue panels show it.
+// running build (a build only on a second press within CancelConfirmSeconds), or else books
+// them a repair slot. A blueprint pressed during their repair slot ends the slot and is
+// ordered. The queue is kept by Builds, on the authority; the station's queue panels show it.
 //
 // A repair slot is a queue entry too. When its turn comes the shipyard's welders go on and
 // ShipyardTurn gives its blocks to the player, who docks a ship with a repair projector and the
@@ -170,6 +171,10 @@ internal static partial class ShipyardOrders
 
     // Repair slots that ended and aren't out of the queue yet
     private static readonly HashSet<string> ending = new();
+
+    // A first press on a running build only asks: the order id and when, by player
+    private static readonly Dictionary<long, (string Id, DateTime At)> cancelAsked = new();
+    private const int CancelConfirmSeconds = 10;
 
     // A finished ship docking to its arm's connector, by shipyard entity id
     private sealed class Dock
@@ -643,7 +648,7 @@ internal static partial class ShipyardOrders
             + (queue == null ? "none" : Screen(queue, 0));
     }
 
-    /// <summary>A press of the table's button. Who presses decides what it means: the presser's own queue entry or running build is canceled, else the blueprint they hold is ordered, else they get a repair slot. Nobody else's blueprint or queue entry is touched.</summary>
+    /// <summary>A press of the table's button. Who presses decides what it means: the presser's own queue entry or running build is canceled (a running build on the second press), else the blueprint they hold is ordered, ending their repair slot first, else they get a repair slot. Nobody else's blueprint or queue entry is touched.</summary>
     public static void Press(long identityId, MyProjectorBase table, Action<string> tell)
     {
         if (Config.ShipyardOrderMinutes <= 0)
@@ -682,8 +687,17 @@ internal static partial class ShipyardOrders
                 var holder = Holder(table);
                 var hasBlueprint =
                     TableHologram.Blueprint(table) != null && (holder == 0 || holder == identityId);
-                if (mine != null && mine.Phase is BuildPhase.Waiting or BuildPhase.Building)
-                    Cancel(mine, station, shipyard, tell);
+                if (
+                    mine != null
+                    && mine.Phase is BuildPhase.Waiting or BuildPhase.Building
+                    && !(mine.Repair && hasBlueprint)
+                )
+                {
+                    if (mine.Started && !mine.Repair && !CancelConfirmed(identityId, mine))
+                        AskCancel(identityId, mine, shipyard, tell);
+                    else
+                        Cancel(mine, station, shipyard, tell);
+                }
                 else if (hasBlueprint)
                 {
                     // Loaded before a restart or a move of the station to this node: the presser's now
@@ -692,6 +706,26 @@ internal static partial class ShipyardOrders
                     if (plan.Pending)
                         // The press stands: it goes on when the arm is planned
                         ShipyardArm.WhenDone(() => Press(identityId, table, tell));
+                    else if (
+                        mine?.Repair == true
+                        && mine.Phase != BuildPhase.After
+                        && plan.Error == null
+                    )
+                        // The blueprint is what they came for: the slot ends, and this press orders it
+                        Cancel(mine, station, shipyard, tell, () => Press(identityId, table, tell));
+                    else if (
+                        plan.Free
+                        && plan.Error == null
+                        && mine?.Phase == BuildPhase.After
+                        && Stock(shipyard).Count == 0
+                    )
+                        // Nothing to take: the turn ends now, not at the next check
+                        EndTurn(
+                            shipyard,
+                            mine,
+                            $"Your turn at {shipyard.DisplayName} is over: its containers are empty.",
+                            () => Place(plan, tell)
+                        );
                     else
                         Place(plan, tell);
                 }
@@ -708,11 +742,45 @@ internal static partial class ShipyardOrders
         );
     }
 
+    // True when the player's last press asked to cancel this build, within CancelConfirmSeconds
+    private static bool CancelConfirmed(long player, BuildOrder entry) =>
+        cancelAsked.Remove(player, out var asked)
+        && asked.Id == entry.Id
+        && DateTime.UtcNow - asked.At <= TimeSpan.FromSeconds(CancelConfirmSeconds);
+
+    // One press is easily a mistake, or a retry with the blueprint loaded again: it only asks
+    private static void AskCancel(
+        long player,
+        BuildOrder entry,
+        MyCubeGrid shipyard,
+        Action<string> tell
+    )
+    {
+        if (!orders.TryGetValue(shipyard.EntityId, out var order) || order.Id != entry.Id)
+        {
+            // Docking or not picked up yet: Cancel says why it can't
+            Cancel(entry, entry.Station, shipyard, tell);
+            return;
+        }
+        cancelAsked[player] = (entry.Id, DateTime.UtcNow);
+        tell(
+            $"'{entry.Ship}' is being built for you, {BlocksDone(shipyard, order)}. "
+                + $"Press the button again within {CancelConfirmSeconds} s to cancel it: "
+                + (
+                    order.Free
+                        ? "the ship will be removed, and the free build won't count."
+                        : "the unfinished ship will be yours."
+                )
+        );
+    }
+
+    // then: after an entry left the queue or a slot ended
     private static void Cancel(
         BuildOrder entry,
         string station,
         MyCubeGrid shipyard,
-        Action<string> tell
+        Action<string> tell,
+        Action then = null
     )
     {
         if (!entry.Started)
@@ -724,18 +792,24 @@ internal static partial class ShipyardOrders
                     Station = station,
                     Player = entry.Player,
                 },
-                (_, message) =>
+                (ok, message) =>
                 {
                     tell(message);
                     Refresh(station);
+                    if (ok)
+                        then?.Invoke();
                 }
             );
         else if (repairs.TryGetValue(shipyard.EntityId, out var slot) && slot.Id == entry.Id)
-            EndRepair(shipyard, slot, "you canceled it");
+            EndRepair(shipyard, slot, "you canceled it", then);
         else if (orders.TryGetValue(shipyard.EntityId, out var order) && order.Id == entry.Id)
         {
             order.Canceled = true;
-            End(shipyard, order, BlocksDone(shipyard, order));
+            var done = BlocksDone(shipyard, order);
+            // Its components were OCT's: the player gets no ship, and the free build doesn't count
+            if (order.Free)
+                Scrap(shipyard, order);
+            End(shipyard, order, done);
         }
         else if (docks.ContainsKey(shipyard.EntityId))
             tell($"'{entry.Ship}' is finished, it can't be canceled now.");
@@ -851,7 +925,12 @@ internal static partial class ShipyardOrders
     }
 
     // As a build's end: the player has their window to take what is in the shipyard
-    private static void EndRepair(MyCubeGrid shipyard, RepairSlot slot, string why)
+    private static void EndRepair(
+        MyCubeGrid shipyard,
+        RepairSlot slot,
+        string why,
+        Action then = null
+    )
     {
         repairs.Remove(shipyard.EntityId);
         Welders(shipyard, false);
@@ -876,6 +955,7 @@ internal static partial class ShipyardOrders
             {
                 ending.Remove(slot.Id);
                 Refresh(slot.Station);
+                then?.Invoke();
             }
         );
     }
@@ -1020,9 +1100,11 @@ internal static partial class ShipyardOrders
                 var mine = Mine(queue, plan.Player);
                 plan.Blocker =
                     mine?.Phase == BuildPhase.After && !plan.Free ? null
+                    // The press ends the slot and orders this
+                    : mine?.Repair == true && mine.Phase != BuildPhase.After ? null
                     : mine != null
                         ? mine.Active
-                                ? $"'{mine.Ship}' is running for you. Press the button to cancel it first."
+                                ? $"'{mine.Ship}' is running for you. Press the button twice to cancel it first."
                             : $"'{mine.Ship}' is in the queue for you. Press the button to cancel it first."
                     : queue.Count >= Config.ShipyardQueueMax
                         ? $"The shipyard's queue is full, {Config.ShipyardQueueMax} ships."
@@ -2056,14 +2138,14 @@ internal static partial class ShipyardOrders
     )
     {
         var gone = missing != null;
-        if (gone && order.Canceled)
-            NoteFreeEnd(order, name);
         var stalled =
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
         var message = order.Canceled
-            ? missing != null
-                ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
-                : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
+            ? order.Free
+                ? $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The ship was removed, and the free build doesn't count."
+                : missing != null
+                    ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
+                    : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
             : order.Clang != null
                 ? $"{shipyard.DisplayName} stopped building '{name}': {order.Clang} placed where another part of the ship is made it shake. The ship was removed, "
                     + (
@@ -2987,14 +3069,15 @@ internal static partial class ShipyardOrders
         MyMultiplayer.RaiseEvent(grid, x => x.RazeBlocksClient, present);
     }
 
-    // A free build starts the player's cool-down, unless an admin who ignores PCU limits ordered it
+    // A free build handed over starts the player's cool-down, unless an admin who ignores PCU
+    // limits ordered it. One its player canceled doesn't count: its ship is removed.
     private static void NoteFreeEnd(Order order, string name)
     {
         if (order.Exempt)
             Plugin.Log.Info(
                 $"Free builds: {Name(order.Player)} ignores PCU limits, no cool-down after '{name}'"
             );
-        else if (order.Free)
+        else if (order.Free && !order.Canceled)
             FreePrints.Ended(order.Player);
     }
 

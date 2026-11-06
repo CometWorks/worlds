@@ -432,10 +432,14 @@ presses it, whoever holds the table:
   if any, else their queued paid order. Without either, in the last part of a turn, it
   only says when the turn ends.
 - With another build or repair slot of theirs in the shipyard's queue or running, the
-  press cancels it. It does nothing to the table. A running build's ship is handed over
-  unfinished, as when its time runs out. What is left of a paid build stays in the
-  containers for the window; a free build's leftovers are removed and its cool-down
-  starts.
+  press cancels it. It does nothing to the table. A running build is canceled only by a
+  second press within 10 s; the first press says how far it is and what the second
+  does. A paid build's ship is handed over unfinished, as when its time runs out, and
+  what is left of it stays in the containers for the window. A free build's ship and
+  leftovers are removed, and the free build doesn't count: no cool-down starts.
+  Holding a blueprint during their repair slot, the press ends the slot and orders the
+  blueprint. A free one is ordered at once only when the shipyard's containers are
+  empty; else the slot's window to take what is in them comes first.
 - Else, holding a blueprint the shipyard accepts, the press orders the ship. That
   clears the blueprint and the list, and the screen tells the player a second press
   cancels. It first shows the quote and asks for another press when the screen doesn't
@@ -483,8 +487,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   `FreeBuildBlockedBlocks` (type/subtype with `*`, by default none). All three are
   in `config/octahedron.cfg` too, because a running cluster keeps the values it has
   for options that file doesn't name. The cool-down starts when a free build ends with
-  the ship handed over, finished or not; a canceled order or one whose ship was
-  removed starts none. The plugin keeps the times in the world variable
+  the ship handed over, finished or not; a canceled order or build, or one whose ship
+  was removed, starts none. The plugin keeps the times in the world variable
   `Octahedron-FreePrints`, on a cluster in the World Authority's world: the node
   ending an order sends the time to every process, and a starting node asks the
   World Authority for the list. A player gets one free ship at a time.
