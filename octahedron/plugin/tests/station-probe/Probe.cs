@@ -1013,6 +1013,89 @@ public sealed class ProbeCommands : CommandModule
         return $"TARGET {entity.EntityId}";
     }
 
+    [Command(
+        "yardprinter",
+        "Builds the caller a printer near the station's shipyard, at the given meters from the shipyard grid along its right, up and back: a projector, a battery and an armor block, with batteries to build in the projection (SE-1122): TARGET grid-id",
+        "!kprobe yardprinter <station> <right m> <up m> <back m> [projected batteries]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardPrinter(
+        string station,
+        double right,
+        double up,
+        double back,
+        int batteries = 2
+    )
+    {
+        var yard = Yard(station);
+        var m = yard.WorldMatrix;
+        var at = m.Translation + m.Right * right + m.Up * up + m.Backward * back;
+        long me = Context.Caller.IdentityId;
+        var battery = Block<MyObjectBuilder_BatteryBlock>(
+            "LargeBlockBatteryBlock",
+            new Vector3I(0, 0, 1),
+            me
+        );
+        battery.CurrentStoredPower = 3;
+        var armor = new MyObjectBuilder_CubeBlock
+        {
+            SubtypeName = "LargeBlockArmorBlock",
+            Min = new Vector3I(0, 0, 2),
+            BlockOrientation = new SerializableBlockOrientation(
+                Base6Directions.Direction.Forward,
+                Base6Directions.Direction.Up
+            ),
+            BuiltBy = me,
+        };
+        var projector = Block<MyObjectBuilder_Projector>("LargeProjector", Vector3I.Zero, me);
+        projector.KeepProjection = true;
+        var plan = new MyObjectBuilder_CubeGrid
+        {
+            GridSizeEnum = MyCubeSize.Large,
+            DisplayName = "Printer",
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            PositionAndOrientation = new MyPositionAndOrientation(
+                Vector3D.Zero,
+                Vector3.Forward,
+                Vector3.Up
+            ),
+            CubeBlocks =
+            [
+                (MyObjectBuilder_CubeBlock)projector.Clone(),
+                (MyObjectBuilder_CubeBlock)battery.Clone(),
+                (MyObjectBuilder_CubeBlock)armor.Clone(),
+            ],
+        };
+        for (var i = 0; i < batteries; i++)
+        {
+            var printed = Block<MyObjectBuilder_BatteryBlock>(
+                "LargeBlockBatteryBlock",
+                new Vector3I(0, 0, 3 + i),
+                me
+            );
+            plan.CubeBlocks.Add(printed);
+        }
+        foreach (var block in plan.CubeBlocks)
+            block.EntityId = MyEntityIdentifier.AllocateId();
+        projector.ProjectedGrids = [plan];
+        var grid = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Large,
+            IsStatic = true,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = "Printer",
+            PositionAndOrientation = new MyPositionAndOrientation(
+                at,
+                (Vector3)m.Forward,
+                (Vector3)m.Up
+            ),
+            CubeBlocks = [projector, battery, armor],
+        };
+        var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
+        return $"TARGET {entity.EntityId}";
+    }
+
     private static string Who(MyCubeBlock block) =>
         (MySession.Static.Players.TryGetIdentity(block.OwnerId)?.DisplayName ?? "nobody").Replace(
             ' ',
