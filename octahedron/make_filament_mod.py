@@ -10,8 +10,8 @@ the web of carbon fiber threads of Laconia Station's shipyard in The Expanse.
 Their definitions here are OmniArc's (stats, reach, turret, animations)
 without its laser beams and sparks, and with the thunder of Pertam's electric
 storm instead of its laser sound (filament-tools/Data/Audio_*.sbc, with the
-game's waves copied in); the mod's
-script (filament-tools/) draws the filaments while a tool works and gives the
+game's waves copied in); the mod's script (filament-tools/) plays that sound and
+draws the filaments while a tool works, and gives the
 blocks the models and icons of their OmniArc originals when a world loads.
 
 The mod ships no OmniArc files, so a world with it needs OmniArc and ToolCore
@@ -50,9 +50,12 @@ TOOLS = {
         "to the block it takes apart.",
     ),
 }
-# Plays while a tool works, instead of OmniArc's laser sound
-SOUND = "OctahedronFilamentStorm"
-# Its waves: Pertam's lightning (the game's WM_Lightning), from Content/Audio to the
+# ToolCore's Hit sound: none. The script plays the storm (OctahedronFilamentStorm)
+# instead, since ToolCore stops its sound the moment a tool stops hitting. The Hit
+# event still needs an effect, or ToolCore sends the script no Hit events; a material
+# sound map that doesn't exist plays nothing
+SOUND = "MaterialProperties/OctahedronFilamentsSilent"
+# The storm's waves: Pertam's lightning (the game's WM_Lightning), from Content/Audio to the
 # mod's Audio/OctahedronFilaments
 SOUND_WAVES = [f"ARC/EVENT/Lightning_{i}.wav" for i in range(4)]
 # Placeholder model and icon until the script swaps in OmniArc's
