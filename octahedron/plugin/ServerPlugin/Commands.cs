@@ -109,6 +109,35 @@ public sealed class Commands : CommandModule
     public string ShipyardDone() => ShipyardOrders.Done(Context.Caller.IdentityId);
 
     [Command(
+        "shipyard clear",
+        "Ends every order and turn in a station's shipyard queue, as each player's cancel or !oct shipyard done would",
+        "!oct shipyard clear <station>: run it on the node that simulates the station. Waiting orders leave the queue, "
+            + "a running build is canceled (a paid one's unfinished ship is handed over, a free one's removed), a repair "
+            + "slot ends, and each turn ends with what is left in the shipyard sold for its player."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ShipyardClear(string station)
+    {
+        if (!Stations.Find(ref station, out string error))
+            return error;
+        var admin = Context.Caller.IdentityId;
+        var answers = new List<string>();
+        var synchronous = true;
+        var reply = ShipyardOrders.Clear(
+            station,
+            text =>
+            {
+                if (synchronous)
+                    answers.Add(text);
+                else
+                    ShipyardAway.Tell(admin, text);
+            }
+        );
+        synchronous = false;
+        return answers.Count > 0 ? string.Join("\n", answers) : reply;
+    }
+
+    [Command(
         "shipyard tow",
         "Breaks down a grid for you at a station's shipyard, as a tow over your limits does, for tests",
         "!oct shipyard tow <station> <grid id>"

@@ -36,6 +36,10 @@ internal static partial class ShipyardOrders
     // Grids a tow just gave a player, and until when Sweep leaves them alone
     private static readonly Dictionary<long, DateTime> towGiven = new();
 
+    // The active entries an admin cleared (!oct shipyard clear): the turn of each ends at the next
+    // check, once a running build or repair slot has ended
+    private static readonly HashSet<string> clearing = [];
+
     // The shipyards with something in their queue at its last answer
     private static readonly HashSet<long> queued = [];
 
@@ -106,6 +110,16 @@ internal static partial class ShipyardOrders
     {
         if (beginning.Contains(order.Id) || endingTurns.Contains(order.Id))
             return;
+        if (clearing.Contains(order.Id))
+        {
+            EndTurn(
+                shipyard,
+                order,
+                $"An admin cleared {shipyard.DisplayName}: your turn there is over.",
+                () => clearing.Remove(order.Id)
+            );
+            return;
+        }
         var minutes = Config.ShipyardTurnMinutes;
         if (order.TurnEnds <= Now)
         {
@@ -519,6 +533,95 @@ internal static partial class ShipyardOrders
         if (shipyards.Count == 0)
             return "You have no turn at a shipyard here.";
         return answers.Count > 0 ? string.Join("\n", answers) : "The shipyard answers in chat.";
+    }
+
+    /// <summary>
+    /// !oct shipyard clear: every entry of the station's shipyard queue ends as the player's own
+    /// cancel or !oct shipyard done would end it. A waiting order leaves the queue, a running build
+    /// is canceled, a repair slot ends, and each turn ends with what is left sold for its player.
+    /// Only on the node that simulates the shipyard.
+    /// </summary>
+    public static string Clear(string station, Action<string> tell)
+    {
+        var shipyard = StationTables().TryGetValue(station, out var tables)
+            ? FindShipyard(tables[0])
+            : null;
+        if (shipyard == null)
+            return $"{station} has no shipyard.";
+        if (!Plugin.Simulated(shipyard))
+            return $"{shipyard.DisplayName} is on another node: run this there.";
+        Builds.Read(
+            new BuildRequest { Verb = BuildVerb.Queue, Station = station },
+            (text, error) =>
+            {
+                if (text == null)
+                {
+                    tell(error);
+                    return;
+                }
+                var queue = DecodeQueue(text);
+                if (queue.Count == 0)
+                {
+                    tell($"{shipyard.DisplayName}'s queue is empty.");
+                    return;
+                }
+                var cleared = new List<string>();
+                foreach (var entry in queue)
+                {
+                    var what = entry.Repair
+                        ? $"the repair slot of {Name(entry.Player)}"
+                        : $"'{entry.Ship}' of {Name(entry.Player)}";
+                    if (!entry.Active)
+                    {
+                        // Nothing was paid for a waiting order
+                        Finish(
+                            entry,
+                            $"Your order '{entry.Ship}' at {shipyard.DisplayName} left the queue: an admin cleared it."
+                        );
+                        cleared.Add($"{what}: left the queue");
+                        continue;
+                    }
+                    clearing.Add(entry.Id);
+                    if (repairs.TryGetValue(shipyard.EntityId, out var slot) && slot.Id == entry.Id)
+                    {
+                        EndRepair(shipyard, slot, "an admin cleared the shipyard");
+                        cleared.Add($"{what}: ended, then the turn");
+                    }
+                    else if (
+                        orders.TryGetValue(shipyard.EntityId, out var order)
+                        && order.Id == entry.Id
+                    )
+                    {
+                        order.Canceled = order.Cleared = true;
+                        var done = BlocksDone(shipyard, order);
+                        if (order.Free)
+                        {
+                            // No turn follows: the order leaves the queue
+                            clearing.Remove(entry.Id);
+                            Scrap(shipyard, order);
+                        }
+                        End(shipyard, order, done);
+                        cleared.Add(
+                            order.Free
+                                ? $"{what}: canceled, the ship removed"
+                                : $"{what}: canceled, the unfinished ship handed over, then the turn"
+                        );
+                    }
+                    else
+                        cleared.Add(
+                            entry.Started
+                                ? $"{what}: ending, then the turn"
+                                : $"{what}: the turn ends"
+                        );
+                }
+                Plugin.Log.Info(
+                    $"Shipyard {shipyard.DisplayName} cleared by an admin: {string.Join("; ", cleared)}"
+                );
+                tell($"{shipyard.DisplayName} cleared: {string.Join("; ", cleared)}.");
+                Refresh(station);
+            }
+        );
+        return "The shipyard answers in chat.";
     }
 
     // --- a towed grid's breakdown ---
