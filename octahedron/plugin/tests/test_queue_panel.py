@@ -46,6 +46,15 @@ from test_table_rules import (  # noqa: E402
 )
 
 COLUMNS = 46
+# A block's forward side in its grid's cells
+SIDES = {
+    "Forward": (0, 0, -1),
+    "Backward": (0, 0, 1),
+    "Left": (-1, 0, 0),
+    "Right": (1, 0, 0),
+    "Up": (0, 1, 0),
+    "Down": (0, -1, 0),
+}
 # The test ship on a slab of heavy armor, so the welders take a while and the percent has steps
 SHIP = so.SMALL.replace(
     "</CubeBlocks>",
@@ -59,26 +68,42 @@ SHIP = so.SMALL.replace(
 QUEUE_PANEL = "Text Panel - Station ShipyardQueue"
 CLEAR = 3
 SHOTS = os.environ.get("OCT_SHOTS")
-# A block's forward side in its grid's cells
-SIDES = {
-    "Forward": (0, 0, -1),
-    "Backward": (0, 0, 1),
-    "Left": (-1, 0, 0),
-    "Right": (1, 0, 0),
-    "Up": (0, 1, 0),
-    "Down": (0, -1, 0),
-}
 
 
 def queue_panel(remote) -> dict:
     panels = remote.find_nearby_blocks(
         subtype="LargeTextPanel", max_distance=100, limit=50
     )
-    return next(p for p in panels if p.get("customName") == QUEUE_PANEL)
+    # The station can have more than one: the one above the table is the nearest
+    return min(
+        (p for p in panels if p.get("customName") == QUEUE_PANEL),
+        key=lambda p: p["distance"],
+    )
+
+
+def aim(remote, center) -> bool:
+    """Turns until the crosshair is on the queue panel, trying the directions nearest the
+    panel's first: a look at its position alone missed it at the Moon Shipyard"""
+    pos = remote.get_character()["position"]
+    to = [c - p for c, p in zip(center, pos)]
+    n = 200
+    sphere = []
+    for i in range(n):
+        z = 1 - 2 * (i + 0.5) / n
+        r = math.sqrt(1 - z * z)
+        sphere.append((r * math.cos(i * 2.39996), r * math.sin(i * 2.39996), z))
+    sphere.sort(key=lambda d: -sum(a * b for a, b in zip(d, to)))
+    for d in sphere:
+        remote.character_look_at(*(p + 6 * c for p, c in zip(pos, d)), tolerance=2)
+        hit = remote.get_character_target(15).get("block") or {}
+        if hit.get("customName") == QUEUE_PANEL:
+            return True
+    return False
 
 
 def shoot(remote, name: str) -> None:
-    """The queue panel from in front of its screen"""
+    """The queue panel from 3 m in front of its screen, which faces the block's backward side,
+    aimed at until the crosshair is on it"""
     panel = queue_panel(remote)
     grid, at = panel["gridId"], tuple(panel["min"])
     cube = next(
@@ -95,27 +120,25 @@ def shoot(remote, name: str) -> None:
     )
     center = panel["worldPosition"]
     log(f"panel at {center}, facing {side}")
-    # The station's gravity pulls along its grid, so the feet are 1.6 m down its up axis
-    feet = [1.6 * (b - a) / 2.5 for a, b in zip(here, above)]
-    # With the jetpack on and dampeners the character stays where it is put instead of falling
-    if not remote.get_character()["jetpack"]:
-        remote.key("X")
     # The shot is what the character sees, not the view from behind it
     if remote.get_view().get("thirdPerson"):
         remote.key("V")
-    for cells in (1.5, 2):
-        eye = [c + cells * (b - a) for c, a, b in zip(center, here, front)]
-        remote.character_teleport(*(e - f for e, f in zip(eye, feet)))
-        time.sleep(3)
-        remote.character_look_at(*center, tolerance=0.5)
-        time.sleep(3)
-        log(f"eye {eye}, character {remote.get_character().get('position')}")
-        path = Path(SHOTS) / f"{name}-{cells}.png"
-        remote.screenshot_save(str(path), 1280, 720)
-        time.sleep(2)
-        log(f"screenshot {path}")
-        remote.key("Tab")
-        time.sleep(1)
+    # With the jetpack on and dampeners the character stays where it is put
+    if not remote.get_character()["jetpack"]:
+        remote.key("X")
+    remote.character_teleport(
+        *(c - 1.2 * (b - a) for c, a, b in zip(center, here, front))
+    )
+    time.sleep(3)
+    log(f"crosshair on the queue panel: {aim(remote, center)}")
+    time.sleep(2)
+    path = Path(SHOTS) / f"{name}.png"
+    remote.screenshot_save(str(path), 1280, 720)
+    time.sleep(2)
+    log(f"screenshot {path}")
+    sa.at_table(remote, STATION)
+    if remote.get_character()["jetpack"]:
+        remote.key("X")
 
 
 def leave(a, mark) -> None:
@@ -220,11 +243,14 @@ def main() -> int:
         while True:
             text = queue(a)
             found = building.search(" ".join(text.split()))
-            if found or time.monotonic() > deadline:
+            # "done within": the line before SE-1117, for the shot to compare with
+            if found or "done within" in text or time.monotonic() > deadline:
                 break
             time.sleep(1)
         log(repr(text))
         lines = text.rstrip().split("\n")
+        if SHOTS and not found:
+            shoot(a, "queue-panel-build")
         left = int(found.group(2)) if found else -1
         check(
             found is not None and minutes - 2 <= left <= minutes,
