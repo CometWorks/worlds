@@ -84,6 +84,7 @@ public class Plugin : IPlugin
             TableHologram.Update();
             ShipyardOrders.Update();
             ShipyardOwnBlocks.Update();
+            ShipyardToolSpeed.Update();
             FreePrints.Update();
             Market.Update();
             Builds.Update();
