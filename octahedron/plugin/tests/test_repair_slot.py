@@ -379,8 +379,11 @@ def build_after(a) -> None:
     settled(a, "table", "Press the button")
     check("is in the queue" in press(a), "an order after the slots")
     so.wait_chat(a, "is ready", 400)
+    # The client sees the ship pasted off the arm a moment later
     check(
-        [g for g in a.list_grids() if g.get("name") == "Order Test"],
+        wait_for(
+            lambda: [g for g in a.list_grids() if g.get("name") == "Order Test"], 20, 2
+        ),
         "the shipyard builds it",
     )
 

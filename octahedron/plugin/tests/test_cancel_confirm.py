@@ -22,6 +22,7 @@ Prints one line per check and a pass/fail summary; exit code 0 = all passed.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import time
 
@@ -53,9 +54,13 @@ def pressed(remote, *texts: str) -> list[str]:
     ]
 
 
+def shipyards(remote) -> str:
+    return " ".join(rig.chat(remote, "!oct shipyards", 3))
+
+
 def running(remote) -> bool:
     """The shipyard runs the player's build"""
-    return f"'{SHIP}'" in " ".join(rig.chat(remote, "!oct shipyards", 3))
+    return f"'{SHIP}'" in shipyards(remote)
 
 
 def ships(remote) -> list[dict]:
@@ -98,14 +103,20 @@ def two_presses(a) -> None:
     reply = press(a)
     check("within 10 s" in reply, f"a press after 10 s asks again: {reply}")
     check(running(a), "the build goes on")
+    # The table's projection of the blueprint is a grid of that name too
+    shown = {g["entityId"] for g in ships(a)}
     (reply,) = pressed(a, f"You canceled '{SHIP}'")
     check(bool(reply), f"two presses within 10 s cancel: {reply}")
     check(
         "the free build doesn't count" in reply,
         f"the canceled free build doesn't count: {reply}",
     )
-    wait_for(lambda: not ships(a), 20, 2)
-    check(not ships(a), f"the canceled free build's ship is removed: {ships(a)}")
+    left = wait_for(lambda: [g for g in ships(a) if g["entityId"] not in shown], 20, 2)
+    heads = [int(n) for n in re.findall(r"head (\d+) blocks", shipyards(a))]
+    check(
+        not left,
+        f"the canceled free build's ship is removed: {left}, arm heads {heads}",
+    )
 
 
 def free_again(a) -> None:
