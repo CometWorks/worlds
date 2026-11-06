@@ -606,15 +606,12 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   The server's own zones are left alone. A client that gets the shipyard streamed
   in during a build (it comes back in range, joins or crosses to this node) still
   turns the tools off before that message comes, and ToolCore tells it only when
-  the server's switch changes. So the plugin sends each such client the switch itself
-  at the next 10 s check and once more at the one after (SE-782). Not every such client
-  shows up as one with a new tool, so every 30 s of a build the switch also goes to the
-  online players within sync distance of the shipyard that have the tools (SE-963).
-  A cluster handover that moves the shipyard to another node brings its players'
-  clients along with their tools, so they never tell the new node's ToolCore they have
-  them, and it would tell them nothing (SE-1115). So the online players within sync
-  distance also count as having the tools, and the switch they get turns target
-  tracking on too.
+  the server's switch changes, and only if it knows the client has the tools. After a
+  cluster handover that moves the shipyard to another node with its players, the new
+  node's ToolCore knows of none of them (SE-1115). So at every 10 s check of a build
+  the plugin sends the switch and target tracking itself to every client the server
+  has given the shipyard grid, however it got there: in range all along, joined,
+  respawned, streamed in or brought along by a handover (SE-782, SE-963, SE-1126).
   ToolCore is the mod's own code: this reaches its session
   and packet by reflection and does nothing if they are gone.
 - While an order runs, the shipyard's welders work only on its ship: the grids its
