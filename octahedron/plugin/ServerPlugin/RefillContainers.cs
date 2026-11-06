@@ -19,6 +19,9 @@ namespace ServerPlugin;
 // container, reactor, ...) to a minimum stock, a battery to a full charge. An item with several
 // ids counts them together, and each one missing is one of them at random.
 // Player-owned containers are skipped, so players can't name their own after a rule and farm it.
+// On a cluster a grid this node doesn't simulate is skipped too: a frozen one, or one still being
+// imported, is compared to its source by the handover gate, and a refill there fails the handover
+// (SE-1155).
 internal sealed class RefillContainers
 {
     private const string TypePrefix = "MyObjectBuilder_";
@@ -59,6 +62,7 @@ internal sealed class RefillContainers
             if (
                 entity is not MyCubeGrid grid
                 || grid.MarkedForClose
+                || !Plugin.Simulated(grid)
                 || !ShipyardZoneWelding.Owners(grid).Any(MySession.Static.Players.IdentityIsNpc)
             )
                 continue;
