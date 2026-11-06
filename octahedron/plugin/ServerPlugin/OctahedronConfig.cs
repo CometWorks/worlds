@@ -604,6 +604,19 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 5;
 
+    [DoubleOption(
+        0,
+        10,
+        "How many times as fast as their default the station shipyards' welders weld. Their deconstructors take a block apart in the time those welders build it. "
+            + "Tools anywhere else, players' too, keep their default speed.",
+        Parent = "shipyard"
+    )]
+    public double ShipyardToolSpeed
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 2;
+
     [IntOption(
         0,
         description: "Minutes a player's character may stay alive at a station with the player offline. Then its inventory is kept in the world, "
