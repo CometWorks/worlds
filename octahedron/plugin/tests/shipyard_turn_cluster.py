@@ -113,13 +113,23 @@ def run(bench) -> None:
         source = wait_until(where, 120, "the client's partition")
         if source != target:
             partition = wa._client_partition(wa._partitions(bench, source))
-            bench.record(
-                f"handover-{source}-{target}-{int(time.time())}",
-                cluster.post(
-                    wa._handover_url(bench, partition, source=source, target=target),
-                    timeout=300,
-                ),
-            )
+            # On a busy host the target's import can outlast the gateway's 10 s call and the
+            # handover is rolled back (SE-1198's runs): the partition is still the source's
+            for attempt in range(3):
+                try:
+                    answer = cluster.post(
+                        wa._handover_url(
+                            bench, partition, source=source, target=target
+                        ),
+                        timeout=300,
+                    )
+                    break
+                except ClusterError as error:
+                    print(f"handover attempt {attempt + 1} failed: {error}", flush=True)
+                    if attempt == 2:
+                        raise
+                    time.sleep(10)
+            bench.record(f"handover-{source}-{target}-{int(time.time())}", answer)
             wait_until(lambda: where() == target, 120, f"the client on {target}")
 
     def until(what, timeout: float = 30, every: float = 1):
