@@ -18,7 +18,7 @@ namespace StoreProbe;
 // Test only, for tests/test_store.py: the client's side of the Store screen as chat commands, on
 // the nearest Store block. The game's own requests go to the server, and the answers come back as
 // chat lines:
-//   /store list [item]            STORE items offers bonus; OFFER or ORDER item amount price
+//   /store list [item|all]        STORE items offers bonus; OFFER or ORDER item amount price
 //   /store buy <item> <amount>    BUY result, into the character's inventory
 //   /store sell <item> <amount>   SELL result, from the character's inventory
 //   /store have <item>            HAVE amount
@@ -126,7 +126,7 @@ public class Plugin : IPlugin
                 $"STORE {items.Count} OFFERS {items.Count(i => i.StoreItemType == StoreItemTypes.Offer)} NPC {npc} BONUS {offers} {orders}"
             )
         );
-        foreach (var i in items.Where(i => item != null && Name(i) == item))
+        foreach (var i in items.Where(i => item == "all" || Name(i) == item))
             Say(
                 $"{(i.StoreItemType == StoreItemTypes.Offer ? "OFFER" : "ORDER")} {Name(i)} {i.Amount} {i.PricePerUnit}"
             );
