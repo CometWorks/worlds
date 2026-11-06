@@ -108,7 +108,8 @@ internal static class Builds
         public void Return(string station, string item, long raw) =>
             Market.Return(station, item, raw);
 
-        public long SalePrice(string station, string item) => Market.Book.SalePrice(Market.World, Market.Settings, station, item);
+        public long SalePrice(string station, string item) =>
+            Market.Book.SalePrice(Market.World, Market.Settings, station, item);
 
         public long SellOff(string station, long seller, IReadOnlyDictionary<string, long> items) =>
             Market.SellOff(station, seller, items);
@@ -125,7 +126,11 @@ internal static class Builds
             if (request.Verb == BuildVerb.Order && request.Payer != 0 && Market.OctId == 0)
                 return $"0\tNo faction tagged {Config.MoneyAuthorityFactionTag}.";
             if (
-                request.Verb is BuildVerb.Order or BuildVerb.Cancel or BuildVerb.Tow or BuildVerb.Sale
+                request.Verb
+                    is BuildVerb.Order
+                        or BuildVerb.Cancel
+                        or BuildVerb.Tow
+                        or BuildVerb.Sale
                 && !Stations.StationNames().Contains(request.Station)
             )
                 return $"0\tUnknown station '{request.Station}'.";

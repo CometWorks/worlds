@@ -514,8 +514,10 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   being built included, one per player: more don't fit the queue panel above the
   table. A full queue shows on the table's screen and refuses the press. The
   station's queue panels (`ShipyardQueuePanelName`, `Text Panel - Station
-  ShipyardQueue`) show it, and which ship blocks the shipyard. Each entry wraps to
-  two lines of 46 columns and is cut after that, so a full queue keeps font size 0.57.
+  ShipyardQueue`) show it, and which ship blocks the shipyard with the time it has
+  left to leave, once its owner was told. Each entry wraps to two lines of 46 columns
+  and is cut after that, a blocking ship's name before its time, so a full queue keeps
+  font size 0.57.
 - The ship must fit the shipyard's free space, the largest box between its
   welders free of its blocks, turned so that its main cockpit points along the
   shipyard or, when it only fits another way, by right angles from there,
