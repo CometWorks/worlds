@@ -593,10 +593,13 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   Multigrid Projector on the client remaps them together. The server can't see
   the plugin, so it takes a blueprint with subgrids as Multigrid Projector's only
   when every base points at a block of the blueprint, and at least one does. It
-  clears any other blueprint with subgrids off the table at once and tells the
-  player in chat to use the blueprint's Steam Workshop link or id with
+  clears any other blueprint with subgrids off the table after
+  `ShipyardTableSettleSeconds` (10) and tells the player in chat to use the blueprint's Steam Workshop link or id with
   `!bp <link or id> [table name]` (or `!oct workshop`), which needs no plugin, or
-  the Multigrid Projector plugin of Pulsar. One found on a table later, after a
+  the Multigrid Projector plugin of Pulsar. The wait is for the clients: each
+  starts showing the blueprint on a worker thread when it arrives, and a removal
+  that comes while that runs breaks it, with "Blueprint can't be found" or a
+  hologram that stays and hides the next blueprint (SE-1195, SE-1196). One found on a table later, after a
   restart for example, is refused by the table's screen and the button the same
   way. With `!bp` the server loads its own copy into the table, the hologram the
   clients show and the ship the shipyard builds, so no client sends it. The
@@ -1594,6 +1597,12 @@ main grid still does. `OCT_BLUEPRINT` and the case `blueprint` order a real ship
 `build_world.py`: the screens, one press to order and one to cancel, the loader's
 sole access, removing another player's blueprint, a full queue and an owner who
 logs off; with `OCT_SHOTS` it also takes screenshots of the screens.
+`tests/test_table_watchers.py` has three players with Multigrid Projector at one
+table: a blueprint the shipyard refuses (`OCT_BLUEPRINT`, two grids that only
+connectors join) gives the player watching no "Blueprint can't be found" box and
+leaves no hologram once cleared, and one it takes shows for the watcher and for a
+player who joins later. The `tests/table-probe` test plugin on the server and the
+clients logs any change to the table's clipboard while its activation runs.
 `tests/arm/ArmTests` checks the support arm's path planning without the game
 (`dotnet run -c Release --project tests/arm/ArmTests`): pipes around the ship and
 obstacles, the turn cost, docking, the cap, giving up an armor block, no plan when

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>table-probe</Id>
+    <GroupId>table-probe</GroupId>
+    <RepoId>local/table-probe</RepoId>
+
+    <FriendlyName>Table Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: logs what changes a hologram table's clipboard while it activates</Tooltip>
+    <Description>Test only. Writes table-probe.log to the game's user data folder: each call
+        that sets, clears, hides or activates a projector's clipboard, with the stack of a call
+        made while an activation runs on a worker thread.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>
