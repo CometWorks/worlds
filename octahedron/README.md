@@ -143,10 +143,12 @@ station and shipyard blueprints are in `blueprints/`.
     color, at 70 % brightness. North red, South blue, Beta green and Delta
     orange painted metal; Alpha black and Gamma cyan carbon fiber; Moon purple
     concrete.
-- Moon Station has the Moon Shipyard instead
-  ([SE-1069](https://tasks.cometworks.se/tasks/1960)): `blueprints/moon-shipyard.sbc`,
-  the output of `make_moon_shipyard.py`, and its Uraninite rock,
-  `blueprints/moon-shipyard-rock.vx2`, as the game saved it in Viktor's design world
+- Moon Station has the Alien Shipyard instead
+  ([SE-1069](https://tasks.cometworks.se/tasks/1960),
+  [SE-1118](https://tasks.cometworks.se/tasks/2016)): `blueprints/alien-shipyard.sbc`,
+  the output of `make_moon_shipyard.py --variant alien`, the Moon Shipyard with 50 % more
+  welders and deconstructors, and its Uraninite rock, `blueprints/alien-shipyard-rock.vx2`,
+  as the game saved it. It stands where the Moon Shipyard stands in Viktor's design world
   "Octahedron Design Moon Shipyard".
   - The station, the shipyard and the rock are where that world has them, within 0.1 mm
     (`MOON_STATION_PLACE`, `MOON_SHIPYARD_PLACE`, in the station's axes from the zone's
