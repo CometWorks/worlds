@@ -1137,6 +1137,11 @@ spawned and logs nothing else; the plugin logs `Personal container drop
 Authority decides who is due a drop and the node that owns the player spawns it,
 so the rule acts there.
 
+On a cluster at most `drops.maxActive` drops are out at a time for all players
+together (`config/cluster.cfg`, 5). A drop due while that many are out is
+skipped, and the World Authority also deletes the oldest drop GPS markers over
+the cap (SE-1146).
+
 `!oct drop` (admin) spawns a personal drop for the caller the way the game's
 timer does, `!oct drop strong` a strong one, so the rule can be checked by hand.
 
