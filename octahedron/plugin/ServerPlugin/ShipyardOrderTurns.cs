@@ -44,8 +44,9 @@ internal static partial class ShipyardOrders
 
     private static long Now => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-    private static string Left(long unix) =>
-        PanelText.Left(DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime, DateTime.UtcNow);
+    private static DateTime Unix(long unix) => DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
+
+    private static string Left(long unix) => PanelText.Left(Unix(unix), DateTime.UtcNow);
 
     // The player's running turn at the queue, else their order that isn't a tow
     private static BuildOrder Mine(List<BuildOrder> queue, long player) =>
@@ -812,17 +813,23 @@ internal static partial class ShipyardOrders
         Retire(station, shipyard, obstacle, ship);
     }
 
-    // " within 5 min (by 03:38 UTC)" when ClearWay acts on the grid in the build space, empty
-    // until it has told the owner and started the clock
-    private static string ClearWithin(MyCubeGrid shipyard, MyCubeGrid obstacle) =>
+    // When ClearWay acts on the grid in the build space; null until it has told the owner and
+    // started the clock
+    private static DateTime? ClearAt(MyCubeGrid shipyard, MyCubeGrid obstacle) =>
         blockers.TryGetValue(shipyard.EntityId, out var blocker)
         && blocker.Grid == obstacle.EntityId
-            ? " within "
-                + PanelText.Left(
-                    blocker.At.AddMinutes(Config.ShipyardClearMinutes),
-                    DateTime.UtcNow
-                )
+            ? blocker.At.AddMinutes(Config.ShipyardClearMinutes)
+            : null;
+
+    // " within 5 min (by 03:38 UTC)", or empty before the clock started
+    private static string ClearWithin(MyCubeGrid shipyard, MyCubeGrid obstacle) =>
+        ClearAt(shipyard, obstacle) is { } at
+            ? " within " + PanelText.Left(at, DateTime.UtcNow)
             : "";
+
+    // " (5 mins)" for the queue panel, or empty before the clock started
+    private static string ClearLeft(MyCubeGrid shipyard, MyCubeGrid obstacle, DateTime now) =>
+        ClearAt(shipyard, obstacle) is { } at ? $" ({PanelText.Mins(at, now)})" : "";
 
     // The ships the station's last queue answer named, by shipyard
     private static readonly Dictionary<long, List<BuiltShip>> builtShips = new();

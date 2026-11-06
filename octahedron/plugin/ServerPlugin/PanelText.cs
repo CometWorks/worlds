@@ -62,6 +62,30 @@ public static class PanelText
         $"{Math.Max(0, (int)Math.Ceiling((ends - now).TotalMinutes))} min "
         + $"(by {ends.ToString("HH:mm", CultureInfo.InvariantCulture)} UTC)";
 
+    // The minutes left, rounded up, like "46 mins" or "1 min"
+    public static string Mins(DateTime ends, DateTime now)
+    {
+        var minutes = Math.Max(0, (int)Math.Ceiling((ends - now).TotalMinutes));
+        return minutes == 1 ? "1 min" : $"{minutes} mins";
+    }
+
+    // A shipyard queue entry: "1. 53% (46 mins) Viktor 'Ship' (44,181 PCU)", the state empty
+    // after the first entry
+    public static string QueueEntry(
+        int place,
+        string state,
+        string player,
+        string ship,
+        int columns,
+        int maxLines
+    ) =>
+        Item(
+            $"{place}. ",
+            (state.Length > 0 ? state + " " : "") + $"{player} {ship}",
+            columns,
+            maxLines
+        );
+
     // A list item: the prefix, like "1. ", then the text clipped and indented under its first line
     public static string Item(string prefix, string text, int columns, int maxLines) =>
         prefix
