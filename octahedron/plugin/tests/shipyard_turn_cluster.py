@@ -226,7 +226,10 @@ def run(bench) -> None:
         tr.load(api, PAID)
         tr.settled(api, "table", "paid")
         reply = press(api)
-        if "Your quote for" in reply:
+        if "is in the queue" not in reply:
+            # The first quote on a fresh cluster can take longer than the press's 15 s
+            if "Your quote for" not in reply:
+                tp.wait_chat(api, "Your quote for", 60, mark)
             reply = press(api)
         check("the order is in the queue", "is in the queue" in reply, reply)
         told = tp.wait_chat(api, "It is your turn", 60, mark)
