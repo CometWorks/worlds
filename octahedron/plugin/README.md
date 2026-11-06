@@ -435,6 +435,21 @@ All of it runs only after the zone refused welding. There is no switch of its
 own; `Enabled` turns it off with the other rules. The server welds, and clients
 without the plugin see the welded blocks.
 
+### Shipyard tool speed
+
+The station shipyards' OmniArc welders weld `ShipyardToolSpeed` (2) times as fast
+as their default, and their deconstructors take a block apart in the time those
+welders build it: on twice as many blocks at once, with 3/2 the speed times the
+block's `DisassembleRatio`, which the game divides a grinder's work by (3 for
+heavy armor). ToolCore's definitions are shared by every tool of a type, so the
+plugin patches where ToolCore welds and grinds on the server.
+
+Only a tool on a shipyard grid, named `<station> Shipyard` with blocks of the
+Octahedron Authority NPC, that is neither editable nor destructible is faster.
+`build_world.py` sets both, and only an admin can change them, so a tool a player
+builds, grinds off, merges in or takes over keeps its default speed. A player's
+turn at a shipyard keeps its welders fast: they are still the shipyard's.
+
 ### Shipyard orders
 
 A player loads a blueprint into a station's hologram table (`Console Block -
@@ -1503,6 +1518,11 @@ with the zones holding every test grid from the start, and off.
 one of another player's in the shipyard, each with a damaged block and a projection: the
 welders repair the slot's player's ship and leave the other alone until that player joins
 their faction.
+`tests/test_shipyard_tool_speed.py` runs the server alone, with OmniArc and ToolCore, and
+measures how much an OmniArc welder and deconstructor weld and grind in a minute on rigs far
+from the stations: a shipyard grid of OCT's, one in a player's turn, a player's grid, a
+player's grid named like a shipyard with a block of OCT's, and a player's grid made neither
+editable nor destructible.
 `tests/test_shipyard_align.py` orders 150 m ships that only fit along the shipyard,
 one behind a cryo chamber facing sideways and one with its only cockpit sideways,
 and short ones that fit: one with its cockpit along the shipyard, which stays so, one

@@ -1,7 +1,7 @@
 """Checks the station shipyards' faster OmniArc tools (SE-1180) on the test server, without a
 client: rigs far from the stations, each with an OmniArc beam welder and deconstructor and
-batteries, the welder on a row of damaged heavy armor blocks, the deconstructor on a row of
-whole ones. Each tool works only on its own row, by its work colour, so neither touches its
+batteries, the welder on a row of damaged heavy armor blocks, carrying the components they
+lost, the deconstructor on a row of whole ones. Each tool works only on its own row, by its work colour, so neither touches its
 own grid nor another rig's. The server runs for a while, stops (it saves), and the saved
 world says how much of each row was welded or ground. The rigs:
 
@@ -98,6 +98,24 @@ def tool_storage(mode: int, colour) -> str:
     )
 
 
+def components() -> str:
+    """The welder's inventory: a damaged block needs new components for what it lost"""
+    items = "".join(
+        f"<MyObjectBuilder_InventoryItem><Amount>{amount}</Amount>"
+        '<PhysicalContent xsi:type="MyObjectBuilder_Component">'
+        f"<SubtypeName>{name}</SubtypeName></PhysicalContent><ItemId>{i}</ItemId>"
+        "</MyObjectBuilder_InventoryItem>"
+        for i, (name, amount) in enumerate((("SteelPlate", 800), ("MetalGrid", 300)))
+    )
+    return (
+        "<ComponentData><TypeId>MyInventoryBase</TypeId>"
+        '<Component xsi:type="MyObjectBuilder_Inventory"><CanPutItems>true</CanPutItems>'
+        f"<Items>{items}</Items><nextItemId>2</nextItemId><Volume>32</Volume>"
+        "<InventoryFlags>CanSend</InventoryFlags><RemoveEntityOnEmpty>false</RemoveEntityOnEmpty>"
+        "</Component></ComponentData>"
+    )
+
+
 def owned(owner: int) -> str:
     return f"<Owner>{owner}</Owner><BuiltBy>{owner}</BuiltBy><ShareMode>Faction</ShareMode>"
 
@@ -115,7 +133,7 @@ def tools_grid(index: int, name: str, tools: int, batteries, locked: bool) -> st
     blocks = [
         rig.block("MyObjectBuilder_ConveyorSorter", "OmniArcBeam", (0, 0, 0),
                   owned(tools) + "<ComponentContainer><Components>"
-                  + tool_storage(WELD, WELD_COLOUR) + "</Components></ComponentContainer><Enabled>true</Enabled>"),
+                  + tool_storage(WELD, WELD_COLOUR) + components() + "</Components></ComponentContainer><Enabled>true</Enabled>"),
         rig.block("MyObjectBuilder_ConveyorSorter", "OmniArcDestro", (0, 0, -1),
                   owned(tools) + "<ComponentContainer><Components>"
                   + tool_storage(GRIND, GRIND_COLOUR) + "</Components></ComponentContainer><Enabled>true</Enabled>"),
@@ -230,6 +248,10 @@ def integrity(saved: str, entity_id: int) -> float:
     return total
 
 
+def ratio(a: float, b: float) -> float:
+    return a / b if b else float("nan")
+
+
 def main() -> int:
     npc = oct_npc()
     rig.stop_server()
@@ -261,31 +283,31 @@ def main() -> int:
     print("rig     | welded  x player | ground  x player | ground / welded")
     for key in RIGS:
         print(
-            f"{key:7} | {weld[key]:6.3f} {weld[key] / weld['player']:5.2f}x  | "
-            f"{grind[key]:6.3f} {grind[key] / grind['player']:5.2f}x  | "
-            f"{grind[key] / weld[key]:5.2f}"
+            f"{key:7} | {weld[key]:6.3f} {ratio(weld[key], weld['player']):5.2f}x  | "
+            f"{grind[key]:6.3f} {ratio(grind[key], grind['player']):5.2f}x  | "
+            f"{ratio(grind[key], weld[key]):5.2f}"
         )
 
     check(weld["player"] > 0.1 and grind["player"] > 0.01, "the player's tools work")
     for key, (*_, fast) in RIGS.items():
         if key == "player":
             continue
-        ratio = weld[key] / weld["player"]
+        welded = ratio(weld[key], weld["player"])
         if fast:
             check(
-                abs(ratio / EXPECTED - 1) < 0.15,
-                f"{key}: the welder welds {ratio:.2f}x the player's, expected {EXPECTED}x",
+                abs(welded / EXPECTED - 1) < 0.15,
+                f"{key}: the welder welds {welded:.2f}x the player's, expected {EXPECTED}x",
             )
-            matched = grind[key] / weld[key]
+            matched = ratio(grind[key], weld[key])
             check(
                 abs(matched - 1) < 0.25,
                 f"{key}: the deconstructor takes apart {matched:.2f}x what the welder builds, expected about 1x",
             )
         else:
-            grind_ratio = grind[key] / grind["player"]
+            grind_ratio = ratio(grind[key], grind["player"])
             check(
-                abs(ratio - 1) < 0.15 and abs(grind_ratio - 1) < 0.25,
-                f"{key}: the welder welds {ratio:.2f}x, the deconstructor grinds {grind_ratio:.2f}x "
+                abs(welded - 1) < 0.15 and abs(grind_ratio - 1) < 0.25,
+                f"{key}: the welder welds {welded:.2f}x, the deconstructor grinds {grind_ratio:.2f}x "
                 "the player's, expected 1x",
             )
 
