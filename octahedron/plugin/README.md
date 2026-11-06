@@ -895,6 +895,15 @@ stock as long as its entry keeps the name.
   that needs it is refused as more than the station has for sale. The value is in
   `config/octahedron.cfg` too, because a running cluster keeps the values it has
   for options that file doesn't name.
+- With `MarketCatalogBuildableOnly` on, the catalog also leaves out every ingot and
+  component players can't make: one that no public production block (refinery,
+  assembler, survival kit) has a blueprint for. That covers the parts of MES's
+  NPC-only blocks, like Proprietary Circuits and the Proprietary Thrust Component,
+  so nobody can weld a proprietary jump drive or gyroscope from Store parts. Ores
+  stay. The server logs what the rule leaves out. Prototech items stay out by
+  `MarketCatalogExcluded`, whatever blueprints they have. Restocks and acquisition contracts skip anything out of the catalog, even
+  when a stock list names it, and stock a saved world already has of it stays in
+  the book, unsold.
 - It sells at `MarketOctSellPercent` (100 %) of the reference plus
   `MarketTaxPercent` (2 %), and buys at `MarketOctBuyPercent` (100 %) less the tax,
   until it holds `MarketOctMaxStockTonnes` (200 t) of the item there. Selling
