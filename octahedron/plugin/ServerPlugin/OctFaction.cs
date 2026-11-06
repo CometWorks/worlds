@@ -4,9 +4,11 @@ using System.Linq;
 using HarmonyLib;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.Multiplayer;
 using Sandbox.Game.World;
 using VRage.Game;
+using VRage.Network;
 using VRageMath;
 
 namespace ServerPlugin;
@@ -31,6 +33,10 @@ namespace ServerPlugin;
 // OCT's leaders are the players OctLeaders names, Viktor on the Octahedron (SE-1015). The game makes
 // an admin who joins a faction of NPCs its leader, so on a fresh world the first admin to join would
 // lead OCT. Every other player is demoted right after joining. The NPC stays OCT's founder.
+//
+// Only a leader can take money out of OCT's account, so a member's deposit would be money gone
+// (SE-1160). The game's faction screen offers every member the Deposit button and only a client
+// could grey it out, so the server refuses the deposit and tells the player why.
 internal static class OctFaction
 {
     private static MyPlayerCollection bound;
@@ -183,6 +189,27 @@ internal static class OctFaction
         {
             if (Sync.IsServer && sharing == MyOwnershipShareModeEnum.Faction)
                 sharing = BuildShare(welderOwnerIdentId);
+        }
+    }
+
+    // The client's deposit, before the game takes the money; on a cluster on the player's node
+    [HarmonyPatch(typeof(MyBankingSystem), "RequestDeposit_Server")]
+    private static class NoDeposits
+    {
+        private static bool Prefix()
+        {
+            if (!Plugin.Config.Enabled || !Plugin.Config.OctNoDeposits)
+                return true;
+            var identity = MySession.Static.Players.TryGetIdentityId(
+                MyEventContext.Current.Sender.Value
+            );
+            if (!Member(identity) || Faction.IsLeader(identity))
+                return true;
+            GroupPcuLimit.Notify(
+                identity,
+                "OCT's account takes no deposits: only its leader can take money out. You keep your money."
+            );
+            return false;
         }
     }
 }
