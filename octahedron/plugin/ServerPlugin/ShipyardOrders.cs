@@ -1684,8 +1684,10 @@ internal static partial class ShipyardOrders
         if (obstacle != null && queue.Count > 0)
             text.AppendLine()
                 .AppendLine(
-                    PanelText.Clip(
-                        $"Waiting for '{obstacle.DisplayName}' to leave the shipyard.",
+                    PanelText.ClipName(
+                        n =>
+                            $"Waiting for '{n}' to leave the shipyard{ClearWithin(shipyard, obstacle)}.",
+                        obstacle.DisplayName,
                         QueueColumns,
                         QueueEntryLines
                     )

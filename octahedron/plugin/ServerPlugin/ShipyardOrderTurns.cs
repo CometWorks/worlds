@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Sandbox.Definitions;
+using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
-using Sandbox.Game;
 using VRage;
 using VRage.Game;
 using VRage.ObjectBuilders;
@@ -181,96 +181,109 @@ internal static partial class ShipyardOrders
                     return;
                 }
                 var next = BuildBook.DecodeOrder(text);
-                Builds.ReadBlueprint(next.Id, encoded =>
-                {
-                var blueprint = encoded == null ? null : DecodeBlueprint(encoded);
-                if (blueprint == null || blueprint.Count == 0)
-                {
-                    Refuse("Its blueprint could not be read.");
-                    return;
-                }
-                var why = Fits(shipyard, blueprint, next.Exempt, out var layout, out var pending);
-                if (pending)
-                {
-                    // The press stands: it goes on when the arm is planned
-                    beginning.Remove(order.Id);
-                    ShipyardArm.WhenDone(() => Begin(table, order, tell));
-                    return;
-                }
-                if (Obstacle(shipyard) is { } obstacle)
-                    why =
-                        $"Fly '{obstacle.DisplayName}' out of {shipyard.DisplayName}'s build space first.";
-                var lacking = Lacking(shipyard, next);
-                var volume = lacking
-                    .Where(l => l.Key != Hydrogen)
-                    .Sum(l =>
-                        MyDefinitionManager.Static.GetPhysicalItemDefinition(ItemId(l.Key)).Volume
-                        * ((double)l.Value / Amounts.Unit)
-                    );
-                var room = Containers(shipyard).Sum(i => (double)(i.MaxVolume - i.CurrentVolume));
-                if (why == null && volume > room)
-                    why =
-                        $"What is missing takes {volume:N0} m³, {shipyard.DisplayName}'s containers have room for {room:N0} m³. Take something out first.";
-                if (why != null)
-                {
-                    Refuse(why);
-                    return;
-                }
-
-                next.Items.TryGetValue(Hydrogen, out var ice);
-                var ships = DockedShips(table, next.Player);
-                var drained = Drain(
-                    ships,
-                    ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce
-                );
-                var liters = drained.Sum(d => d.Liters);
-                var iceTaken = TakeIce(
-                    Cargo(ships).Concat(TurnInventories(shipyard)),
-                    ice - IceFor(liters, up: false)
-                );
-                var request = new BuildRequest
-                {
-                    Verb = BuildVerb.Begin,
-                    Id = next.Id,
-                    Station = next.Station,
-                    Player = next.Player,
-                    Needed = lacking,
-                };
-                if (liters > 0 || iceTaken.Count > 0)
-                    request.Provided[Hydrogen] =
-                        IceFor(liters, up: false) + iceTaken.Sum(t => t.Raw);
-                Builds.Execute(
-                    Guid.NewGuid(),
-                    request,
-                    (ok, message, started) =>
+                Builds.ReadBlueprint(
+                    next.Id,
+                    encoded =>
                     {
-                        beginning.Remove(order.Id);
-                        if (!ok || started == null)
+                        var blueprint = encoded == null ? null : DecodeBlueprint(encoded);
+                        if (blueprint == null || blueprint.Count == 0)
                         {
-                            foreach (var (tank, l) in drained)
-                                AddHydrogen(tank, l);
-                            foreach (var (inventory, raw) in iceTaken)
-                                inventory.AddItems(
-                                    new MyFixedPoint { RawValue = raw },
-                                    MyObjectBuilderSerializer.CreateNewObject(ItemId(Hydrogen))
-                                );
-                            tell(message);
+                            Refuse("Its blueprint could not be read.");
                             return;
                         }
-                        tell(message);
-                        var failed = Create(shipyard, started, blueprint, layout);
-                        if (failed != null)
-                            After(
-                                started,
-                                0,
-                                true,
-                                new Dictionary<string, long>(),
-                                $"'{started.Ship}' can't be built: {failed}. "
-                                    + string.Format(TakeWithin(), shipyard.DisplayName)
+                        var why = Fits(
+                            shipyard,
+                            blueprint,
+                            next.Exempt,
+                            out var layout,
+                            out var pending
+                        );
+                        if (pending)
+                        {
+                            // The press stands: it goes on when the arm is planned
+                            beginning.Remove(order.Id);
+                            ShipyardArm.WhenDone(() => Begin(table, order, tell));
+                            return;
+                        }
+                        if (Obstacle(shipyard) is { } obstacle)
+                            why =
+                                $"Fly '{obstacle.DisplayName}' out of {shipyard.DisplayName}'s build space first{ClearWithin(shipyard, obstacle)}.";
+                        var lacking = Lacking(shipyard, next);
+                        var volume = lacking
+                            .Where(l => l.Key != Hydrogen)
+                            .Sum(l =>
+                                MyDefinitionManager
+                                    .Static.GetPhysicalItemDefinition(ItemId(l.Key))
+                                    .Volume * ((double)l.Value / Amounts.Unit)
                             );
+                        var room = Containers(shipyard)
+                            .Sum(i => (double)(i.MaxVolume - i.CurrentVolume));
+                        if (why == null && volume > room)
+                            why =
+                                $"What is missing takes {volume:N0} m³, {shipyard.DisplayName}'s containers have room for {room:N0} m³. Take something out first.";
+                        if (why != null)
+                        {
+                            Refuse(why);
+                            return;
+                        }
+
+                        next.Items.TryGetValue(Hydrogen, out var ice);
+                        var ships = DockedShips(table, next.Player);
+                        var drained = Drain(
+                            ships,
+                            ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce
+                        );
+                        var liters = drained.Sum(d => d.Liters);
+                        var iceTaken = TakeIce(
+                            Cargo(ships).Concat(TurnInventories(shipyard)),
+                            ice - IceFor(liters, up: false)
+                        );
+                        var request = new BuildRequest
+                        {
+                            Verb = BuildVerb.Begin,
+                            Id = next.Id,
+                            Station = next.Station,
+                            Player = next.Player,
+                            Needed = lacking,
+                        };
+                        if (liters > 0 || iceTaken.Count > 0)
+                            request.Provided[Hydrogen] =
+                                IceFor(liters, up: false) + iceTaken.Sum(t => t.Raw);
+                        Builds.Execute(
+                            Guid.NewGuid(),
+                            request,
+                            (ok, message, started) =>
+                            {
+                                beginning.Remove(order.Id);
+                                if (!ok || started == null)
+                                {
+                                    foreach (var (tank, l) in drained)
+                                        AddHydrogen(tank, l);
+                                    foreach (var (inventory, raw) in iceTaken)
+                                        inventory.AddItems(
+                                            new MyFixedPoint { RawValue = raw },
+                                            MyObjectBuilderSerializer.CreateNewObject(
+                                                ItemId(Hydrogen)
+                                            )
+                                        );
+                                    tell(message);
+                                    return;
+                                }
+                                tell(message);
+                                var failed = Create(shipyard, started, blueprint, layout);
+                                if (failed != null)
+                                    After(
+                                        started,
+                                        0,
+                                        true,
+                                        new Dictionary<string, long>(),
+                                        $"'{started.Ship}' can't be built: {failed}. "
+                                            + string.Format(TakeWithin(), shipyard.DisplayName)
+                                    );
+                            }
+                        );
                     }
                 );
-                });
             }
         );
     }
@@ -471,9 +484,10 @@ internal static partial class ShipyardOrders
                 (text, _) =>
                 {
                     waiting--;
-                    var order = text == null
-                        ? null
-                        : DecodeQueue(text).FirstOrDefault(o => o.Player == player && o.Active);
+                    var order =
+                        text == null
+                            ? null
+                            : DecodeQueue(text).FirstOrDefault(o => o.Player == player && o.Active);
                     if (order != null)
                     {
                         found = true;
@@ -798,6 +812,18 @@ internal static partial class ShipyardOrders
         Retire(station, shipyard, obstacle, ship);
     }
 
+    // " within 5 min (by 03:38 UTC)" when ClearWay acts on the grid in the build space, empty
+    // until it has told the owner and started the clock
+    private static string ClearWithin(MyCubeGrid shipyard, MyCubeGrid obstacle) =>
+        blockers.TryGetValue(shipyard.EntityId, out var blocker)
+        && blocker.Grid == obstacle.EntityId
+            ? " within "
+                + PanelText.Left(
+                    blocker.At.AddMinutes(Config.ShipyardClearMinutes),
+                    DateTime.UtcNow
+                )
+            : "";
+
     // The ships the station's last queue answer named, by shipyard
     private static readonly Dictionary<long, List<BuiltShip>> builtShips = new();
 
@@ -825,7 +851,10 @@ internal static partial class ShipyardOrders
         if (ships.Count == 0)
             return;
         var space = FreeSpace(shipyard);
-        var here = GridsIn(space).Where(g => HasBlockIn(g, space)).Select(g => g.EntityId).ToHashSet();
+        var here = GridsIn(space)
+            .Where(g => HasBlockIn(g, space))
+            .Select(g => g.EntityId)
+            .ToHashSet();
         foreach (
             var ship in ships.Where(s => !here.Contains(s.Grid) && !refunds.ContainsKey(s.Grid))
         )
