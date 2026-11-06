@@ -8,8 +8,11 @@ The steps, with a long build running: OCT_BEAM_STEPS=stream goes beyond sync dis
 comes back, =rejoin leaves the game and joins again; the shipyard is streamed in again each
 time; =off switches the welders off on the client alone, with nothing streamed, which only the
 plugin's switch sent every 30 s turns on again (SE-963); =none stays in range, to count the
-packets. All of its welders must shoot on the client after that, and some must hit, also once
-all blocks are placed and only their integrity is left.
+packets; =handover empties the server's client lists of the shipyard's tools before the order,
+as a cluster node has them after a handover that brought the shipyard and the client along,
+which keeps its tools and so never asks the new node for them again (SE-1115). All of its welders must shoot on the client after that, and some must hit, also once
+all blocks are placed and only their integrity is left. With the OctahedronFilaments tools
+the client must draw their filaments too.
 
     OCT_TASK=SE-782 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_shipyard_beams.py
@@ -117,6 +120,28 @@ def scenario(remote):
     return remote
 
 
+def forget(remote) -> None:
+    """The server forgets the clients of the shipyard's tools once the client has them"""
+    sa.at_table(remote, STATION)
+    server = rig.SERVER_DATA / "beam-probe.log"
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline and not any(
+        int(s["replicated"]) for s in samples(server)[-1:]
+    ):
+        time.sleep(1)
+    mark("the server forgets the clients of the shipyard's tools")
+    (rig.SERVER_DATA / "beam-probe.forget").touch()
+    while time.monotonic() < deadline and "FORGET" not in server.read_text(
+        encoding="utf-8"
+    ):
+        time.sleep(1)
+    log(
+        next(
+            x for x in server.read_text(encoding="utf-8").splitlines() if "FORGET" in x
+        )
+    )
+
+
 def switch_off(user_data: Path) -> None:
     """The probe switches the client's welders off at its next sample"""
     mark(OFF)
@@ -174,7 +199,7 @@ def report() -> None:
     for at, text in marks:
         log(f"mark {at - start:.0f}: {text}")
     log(
-        "time  | client: tools act pow tgt hit stock zone | server: act hit stock | ship unfinished"
+        "time  | client: tools act pow tgt hit stock zone fil drawn | server: act hit stock | ship unfinished"
     )
     step = int(os.environ.get("OCT_BEAM_STEP", "20"))
     for at in range(0, int(client[-1]["t"] - start) + 1, step):
@@ -189,7 +214,8 @@ def report() -> None:
         )
         print(
             f"{at:5d} | {c['tools']:>3} {c['activated']:>3} {c['powered']:>3} {c['target']:>3} "
-            f"{c['hitting']:>3} {c['stocked']:>3} {c['zone_allows']:>5} | {srv} | {c['ship']:>4} {c['unfinished']:>4}",
+            f"{c['hitting']:>3} {c['stocked']:>3} {c['zone_allows']:>5} {c.get('filament_hits', '-'):>3} "
+            f"{c.get('drawn', '-'):>5} | {srv} | {c['ship']:>4} {c['unfinished']:>4}",
             flush=True,
         )
     for name, path in (("client", rig.APPDATA), ("server", rig.SERVER_DATA)):
@@ -256,8 +282,17 @@ def check_beams() -> None:
     the shipyard came back to the client, and once only integrity is left"""
     client = samples(rig.APPDATA / "beam-probe.log")
     for s in client:
-        for name in ("tools", "activated", "hitting", "ship", "unfinished"):
-            s[name] = int(s[name])
+        for name in (
+            "tools",
+            "activated",
+            "hitting",
+            "ship",
+            "unfinished",
+            "filaments",
+            "drawn",
+        ):
+            if name in s:
+                s[name] = int(s[name])
     sa.check(len(client) > 0, "the client's probe logs")
     if not client:
         return
@@ -272,17 +307,25 @@ def check_beams() -> None:
             len(picked) > 0 and not off and hit > 0,
             f"{what}: {len(picked)} samples, {len(off)} with welders off, at most {hit} hitting",
         )
+        if any(s.get("filaments", 0) for s in picked):
+            drawn = max(s.get("drawn", 0) for s in picked)
+            sa.check(drawn > 0, f"{what}: filaments drawn by at most {drawn} tools")
 
-    first = next(
+    step = next(
         (at for at, text in marks if "goes" in text or "leaves" in text or text == OFF),
-        ends,
+        None,
     )
-    # The first blocks may come a moment before the switch, which comes after the welders are on
-    begins = building[0]["t"] + 5 if building else 0
+    first = ends if step is None else step
+    # The first blocks may come a moment before the switch, which comes after the welders are on.
+    # A client the server forgot gets the switch at the next 10 s check of the build if a
+    # tool's packet came before the zone's.
+    settle = 25
+    begins = (
+        building[0]["t"] + (settle if "handover" in STEPS else 5) if building else 0
+    )
     shooting("before any step", [s for s in building if begins <= s["t"] < first])
     # The next 10 s check of the build sends the switch again, 10 s more if a tool's packet
     # came before the zone's
-    settle = 25
     for i, (at, text) in enumerate(marks):
         if "back" in text:
             until = marks[i + 1][0] if i + 1 < len(marks) else ends
@@ -306,7 +349,7 @@ def check_beams() -> None:
         [
             s
             for s in building
-            if s["ship"] == full and (not marks or s["t"] > first + settle)
+            if s["ship"] == full and (step is None or s["t"] > step + settle)
         ],
     )
 
@@ -322,7 +365,10 @@ def summary() -> int:
 def main() -> int:
     grid, blocks = ship()
     tables = list(sa.TABLES)
-    tables[2] = grid
+    # sa.TABLES is in the world's order of the stations
+    tables[
+        ["North", "South", "Alpha", "Beta", "Gamma", "Delta", "Moon"].index(STATION)
+    ] = grid
     sa.CASES["beams"] = (STATION, SHIP, blocks, False, False, "Large")
     rig.stop_client()
     rig.stop_server()
@@ -351,8 +397,10 @@ def main() -> int:
             render=bool(os.environ.get("OCT_BEAM_RENDER")), extra_dev_folders=[PROBE]
         )
         log("joined")
-        mark = sa.order(remote, "beams")
-        assert mark is not None
+        if "handover" in STEPS:
+            forget(remote)
+        ordered = sa.order(remote, "beams")
+        assert ordered is not None
         sa.STALL = 600.0
         if os.environ.get("OCT_BEAM_OFFLINE"):
             offline(remote)
@@ -363,7 +411,7 @@ def main() -> int:
         if so.SHOTS:
             so.screenshots(remote, sa.shipyard_id(remote, STATION), "beams")
         sa.follow(remote, "beams", lambda _: False)
-        log(f"build ended: {sa.wait_chat(remote, f'{SHIP!r} is ready', 60, mark)}")
+        log(f"build ended: {sa.wait_chat(remote, f'{SHIP!r} is ready', 60, ordered)}")
         time.sleep(10)
     finally:
         rig.stop_client()

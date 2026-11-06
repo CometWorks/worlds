@@ -19,7 +19,9 @@ namespace BeamProbe;
 // state says about the tools of shipyard grids, read by reflection as they are the mod's
 // internals, and one line per safe zone event about a shipyard grid. A beam-probe.off file
 // next to the log switches the shipyard's tools off here alone, as a zone that holds the grid
-// makes ToolCore do, and goes away.
+// makes ToolCore do, and goes away. A beam-probe.forget file next to the server's log empties
+// the client lists of the shipyard's tools there, as a cluster node has them after a handover
+// that brought the shipyard and its players' clients along (SE-1115), and goes away.
 // ReSharper disable once UnusedType.Global
 public class Plugin : IPlugin
 {
@@ -170,12 +172,61 @@ public class Plugin : IPlugin
                 }
             Write($"OFF {switched}");
         }
+        var forget = Path.Combine(MyFileSystem.UserDataPath, "beam-probe.forget");
+        if (File.Exists(forget))
+        {
+            File.Delete(forget);
+            var cleared = 0;
+            foreach (var comp in (IEnumerable)Get(Get(instance, "ToolMap"), "Values"))
+                if (IsShipyard(Get(comp, "Grid") as MyCubeGrid))
+                {
+                    cleared += ((IList)Get(comp, "ReplicatedClients")).Count;
+                    ((IList)Get(comp, "ReplicatedClients")).Clear();
+                }
+            Write($"FORGET {cleared}");
+        }
         var allowed = MySessionComponentSafeZones.IsActionAllowed(yard, MySafeZoneAction.Welding);
         Write(
             $"TOOLS tools={tools} activated={activated} track={track} powered={powered} "
                 + $"enabled={enabled} functional={functional} target={target} hitting={hitting} "
                 + $"stocked={stocked} replicated={replicated} sent={sent} zone_allows={allowed} {Ships(yard)}"
+                + Filaments()
         );
+    }
+
+    // The OctahedronFilaments mod's webs on a client (SE-1115): how many tools it knows, how
+    // many ToolCore told it hit, and how many it draws threads for. Nothing without the mod.
+    private Type filamentWeb;
+
+    private static readonly FieldInfo sessionComponents = AccessTools.Field(
+        typeof(MySession),
+        "m_sessionComponents"
+    );
+
+    private string Filaments()
+    {
+        filamentWeb ??= AppDomain
+            .CurrentDomain.GetAssemblies()
+            .Select(a => a.GetType("OctahedronFilaments.FilamentWeb"))
+            .LastOrDefault(t => t != null);
+        if (filamentWeb == null)
+            return "";
+        var components = (IEnumerable)Get(sessionComponents.GetValue(MySession.Static), "Values");
+        var web = components.Cast<object>().FirstOrDefault(c => c.GetType() == filamentWeb);
+        if (web == null)
+            return "";
+        int webs = 0,
+            monitored = 0,
+            hits = 0,
+            drawn = 0;
+        foreach (var state in (IEnumerable)Get(Get(web, "webs"), "Values"))
+        {
+            webs++;
+            monitored += (bool)Get(state, "Monitored") ? 1 : 0;
+            hits += (bool)Get(state, "Hitting") ? 1 : 0;
+            drawn += (double)Get(state, "Extension") > 0 ? 1 : 0;
+        }
+        return $" filaments={webs} monitored={monitored} filament_hits={hits} drawn={drawn}";
     }
 
     // The arm and the ship the shipyard builds: what's mechanically connected to it, and what
