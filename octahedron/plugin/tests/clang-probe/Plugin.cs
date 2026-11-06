@@ -25,9 +25,13 @@ namespace ClangProbe;
 // "CL Push <k> ..." is pushed forward each frame by k times its thrust over mass, as a clang drive would,
 // "CL Spike <k> ..." gets k times its thrust over mass, times a second, as one frame's speed change once,
 // 5 s after it is first seen, and "CL Thrust ..." has its thrusters at full override. Pushes and spikes are
-// forces and impulses, as a clang drive's contacts are. "CL Drag <k> ..." and "CL Set <k> ..." get the
-// same as Push and Spike, but by setting the velocity, as a mod moving the ship does (a Trade Lane pulling
-// it in or dropping it out). 5 s after a grid is
+// impulses straight on the Havok body, past MyPhysicsBody.AddForce, as a clang drive's contacts are.
+// "CL Force <k> ..." gets the push of Push through AddForce, as a mod's force comes (Relative Top Speed's
+// drag). "CL Drag <k> ..." and "CL Set <k> ..." get the same as Push and Spike, but by setting the
+// velocity, as a mod moving the ship does (a Trade Lane pulling it in or dropping it out).
+// "CL Reverse <s> ..." has its thrusters pushing forward at full override, and s seconds in the ones pushing
+// backward instead: flat out in its best direction, then full throttle the other way. "CL Missile ..."
+// has every thruster at full override from the start. 5 s after a grid is
 // first seen, a timer block on it named "CL Start" is triggered and a piston so named is reversed: a
 // clang drive's starter.
 // ReSharper disable once UnusedType.Global
@@ -64,9 +68,13 @@ public class Plugin : IPlugin
             if (grid.Physics == null || grid.IsStatic)
                 continue;
             var thrusters = grid.GetFatBlocks<MyThrust>().Where(t => t.IsFunctional).ToList();
+            // The forward thrust over mass: what Push and Spike are multiples of
             var accel =
-                thrusters.Sum(t => ((IMyThrust)t).MaxEffectiveThrust)
-                / Math.Max(1, grid.Physics.Mass);
+                thrusters
+                    .Where(t =>
+                        Vector3D.Dot(t.WorldMatrix.Backward, grid.WorldMatrix.Forward) > 0.5
+                    )
+                    .Sum(t => ((IMyThrust)t).MaxEffectiveThrust) / Math.Max(1, grid.Physics.Mass);
             var words = name.Split(' ');
             var k =
                 words.Length > 2
@@ -84,6 +92,10 @@ public class Plugin : IPlugin
                 var forward = (Vector3)grid.WorldMatrix.Forward;
                 var mass = grid.Physics.Mass;
                 if (words[1] == "Push")
+                    grid.Physics.RigidBody.ApplyLinearImpulse(
+                        forward * (float)(k * accel * mass / 60)
+                    );
+                else if (words[1] == "Force")
                     grid.Physics.AddForce(
                         MyPhysicsForceType.APPLY_WORLD_FORCE,
                         forward * (float)(k * accel * mass),
@@ -91,17 +103,22 @@ public class Plugin : IPlugin
                         null
                     );
                 else if (words[1] == "Spike" && spike)
-                    grid.Physics.ApplyImpulse(
-                        forward * (float)(k * accel * mass),
-                        grid.Physics.CenterOfMassWorld
-                    );
+                    grid.Physics.RigidBody.ApplyLinearImpulse(forward * (float)(k * accel * mass));
                 else if (words[1] == "Drag")
                     grid.Physics.LinearVelocity += forward * (float)(k * accel / 60);
                 else if (words[1] == "Set" && spike)
                     grid.Physics.LinearVelocity += forward * (float)(k * accel);
-                else if (words[1] == "Thrust")
+                else if (words[1] is "Thrust" or "Missile")
                     foreach (var t in thrusters)
                         ((IMyThrust)t).ThrustOverridePercentage = 1;
+                else if (words[1] == "Reverse")
+                {
+                    // A thruster pushes toward its back, away from its flame
+                    var reversed = frame - firstSeen[grid.EntityId] >= k * 60;
+                    foreach (var t in thrusters)
+                        ((IMyThrust)t).ThrustOverridePercentage =
+                            Vector3.Dot(t.WorldMatrix.Backward, forward) > 0 != reversed ? 1 : 0;
+                }
             }
             // A clang drive's starter, as its pilot would use it
             if (frame - firstSeen[grid.EntityId] == SpikeFrames)
