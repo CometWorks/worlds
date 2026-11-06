@@ -60,7 +60,7 @@ def new_ship_filled(a, what: str, ready: str | None) -> None:
 
 
 def free_build(a, what: str) -> str | None:
-    with_config(a, **tr.CONFIG)
+    with_config(a, **tr.CONFIG, **tt.MONEY)
     mark = tp.latest(a)
     sa.at_table(a, STATION)
     load(a, tt.TANKED)
@@ -101,10 +101,11 @@ def free_docked(a) -> None:
 
 
 def paid_store(a) -> None:
-    """Nobody docked, nothing loaded: the plugin brings the ice from the Store's default stock"""
+    """Nobody docked, nothing loaded: the plugin brings the ice from the Store"""
     with_config(a, **tt.PAY, ShipyardTurnMinutes=tt.WINDOW)
+    sa.admin(a, f"!oct market set {STATION} {ICE} 100000")
     stock = tt.market(a, ICE)[2]
-    check(stock == 100_000, f"the Store's default stock of ice: {stock}")
+    check(stock == 100_000, f"the Store's stock of ice: {stock}")
     tt.turn(a, tt.TANKED)
     log(probe(a, f"yardload {STATION} {tt.PLATE} 200"))
     tt.start(a)
@@ -187,19 +188,12 @@ def main() -> int:
         a = rig.start_client()
         rig.ensure_character(a)
         sa.at_table(a, STATION)
-        with_config(a, **tr.CONFIG)
+        with_config(a, **tr.CONFIG, **tt.MONEY)
         log(tr.remove(a))
         log(probe(a, f"balance {300_000 - tt.money(a)}"))
-        # The default stock has the components for one ship
-        for part in (
-            "SteelPlate",
-            "Construction",
-            "SmallTube",
-            "LargeTube",
-            "Computer",
-        ):
+        # The components for the ships, whatever the default stock has
+        for part in tt.TANKED_PARTS:
             sa.admin(a, f"!oct market set {STATION} Component/{part} 1000")
-        # paid_store reads the default stock of ice: it goes first
         for scenario in (
             paid_store,
             free_alone,

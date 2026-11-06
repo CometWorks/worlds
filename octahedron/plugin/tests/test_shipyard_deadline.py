@@ -291,7 +291,17 @@ def restart_in_wait(a):
     return a
 
 
+def hangar_version() -> tuple[int, ...]:
+    props = tc.HANGAR[1] / "Version.Build.props"
+    found = props.exists() and re.search(r"<Version>([\d.]+)<", props.read_text())
+    return tuple(int(x) for x in found[1].split(".")) if found else ()
+
+
 def main() -> int:
+    # An older Hangar can't take the ships: every Hangar check would fail (SE-1143)
+    if hangar_version() < (1, 2, 0):
+        print(f"Needs Hangar 1.2.0 or later in OCT_HANGAR_REPO: {tc.HANGAR[1]}")
+        return 2
     rig.stop_client()
     rig.stop_server()
     so.prepare(so.SMALL, 60, plugins=[tc.HANGAR])
