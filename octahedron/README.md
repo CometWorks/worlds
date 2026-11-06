@@ -107,20 +107,27 @@ station and shipyard blueprints are in `blueprints/`.
   - Every shipyard starts where Viktor put Gamma Station's on the live cluster
     (`SHIPYARD_PLACE`, in the station's own axes): 180 m from the station, 140 m
     along its up and 112 m behind it, turned the same way against it.
-  - Then it moves along the Sun's axis, away from the station, until its block
-    bounds are 15 m out of the slab of the Sun's rays through the station's
-    bounding sphere, so the Sun never goes behind it as seen from the station
-    (see "The Sun" below). That takes 12 to 58 m at the Earth stations, ending
-    189 to 222 m from them, and 164 m at Moon Station, 248 m from it: Moon
-    Station's front, toward the Moon, is steep against the Sun's path, which
-    stands the shipyard on end there.
+  - Then its center line is made level with the station's deck, and it turns
+    30 degrees about that line (`SHIPYARD_ROLL_DEGREES`), so its open top faces
+    the lobby more. It moves 1.4 times as far out across the deck
+    (`SHIPYARD_REACH`), and North, Alpha and Gamma Station's turn about the
+    station's up (`SHIPYARD_TURN_DEGREES`) toward the side where the Sun's plane
+    lies lowest in the lobby's view; North Station's turn also keeps it over
+    41 degrees from its lanes' rings.
+  - Then it goes down along the station's up as far as keeps each of its blocks
+    15 m out of the slab of the Sun's rays through the station's bounding
+    sphere, so the Sun never goes behind it as seen from the station (see "The
+    Sun" below). Seen from the back of the lobby, its center is then 28 to 33
+    degrees up and 166 to 178 m away
+    ([SE-1128](https://tasks.cometworks.se/tasks/2026)); it was 53 to 61
+    degrees up before, Alpha Station's the highest.
   - The station and its shipyard are centered on the safe zone together. Where a
     gate would still shade the station's hangar deck or lobby, the pair moves
     together by as little as clears them with both block bounds 10 m inside the
     zone's edge. Only Moon Station moves, 57 m: a Moon lane's end gate covers
     its zone from 130 m below the center upward, so the station sits low and
     its shipyard above it. A gate may shade the engineering rooms under the
-    hangar deck. The farthest blocks end up 176 to 222 m from the zone's center.
+    hangar deck. The farthest blocks end up 174 to 178 m from the zone's center.
   - Its blocks are shared with everyone but its 4 large reactors and 72
     batteries. Those start with 10 uranium ingots each and full charge, and on
     the server the Octahedron plugin tops them back up every 10 minutes
@@ -247,7 +254,7 @@ slab through it, and what stays out of that slab can't shade it at any time.
 Some lanes were moved north to keep their gates out of the stations' slabs
 (`EQUATOR_LANE_NORTH`, `NORTH_MOON_LANE_NORTH`); they stay where they are, and
 the stations are placed so no gate's bounding sphere reaches into the slab of a
-station's hangar deck and lobby, block by block. Each shipyard's block bounds
+station's hangar deck and lobby, block by block. Each shipyard's blocks
 stay out of the slab of its station's bounding sphere.
 
 ```bash
