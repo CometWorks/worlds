@@ -148,6 +148,7 @@ def grid(
     up=(0, 1, 0),
     velocity=(0, 0, 0),
     tag: str = "MyObjectBuilder_EntityBase",
+    size: str = "Large",
 ) -> str:
     kind = (
         ' xsi:type="MyObjectBuilder_CubeGrid"'
@@ -163,7 +164,7 @@ def grid(
         + _vec("Forward", forward)
         + _vec("Up", up)
         + "</PositionAndOrientation>"
-        "<GridSizeEnum>Large</GridSizeEnum>"
+        f"<GridSizeEnum>{size}</GridSizeEnum>"
         f"<CubeBlocks>{''.join(blocks)}</CubeBlocks>"
         "<IsStatic>false</IsStatic>"
         + _vec("LinearVelocity", velocity)
