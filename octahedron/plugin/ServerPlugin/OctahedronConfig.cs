@@ -1135,6 +1135,17 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "*/*Prototech*, */Scrap, Component/ZoneChip, Component/*Plushie*, Component/InhibitorChip";
 
+    [BoolOption(
+        "Leave out of the catalog the ingots and components players can't make: those no public production block "
+            + "(refinery, assembler, survival kit) has a blueprint for, like the parts of MES's NPC-only blocks. Ores stay.",
+        Parent = "market"
+    )]
+    public bool MarketCatalogBuildableOnly
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
     [IntOption(
         0,
         description: "OCT buys catalog items at this share of the reference price, the game's minimal price / 10, less the tax (%).",

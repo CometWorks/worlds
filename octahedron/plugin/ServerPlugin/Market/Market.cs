@@ -534,27 +534,55 @@ internal static class Market
     /// <summary>The items OCT trades at every station.</summary>
     public static IReadOnlyList<string> Catalog()
     {
-        string key = Config.MarketCatalog + "\n" + Config.MarketCatalogExcluded;
+        string key =
+            Config.MarketCatalog
+            + "\n"
+            + Config.MarketCatalogExcluded
+            + "\n"
+            + Config.MarketCatalogBuildableOnly;
         if (catalogKey == key)
             return catalog;
         catalogKey = key;
         Regex include = MarketBook.Glob(Config.MarketCatalog),
             exclude = MarketBook.Glob(Config.MarketCatalogExcluded);
-        catalog = MyDefinitionManager
+        var made = Config.MarketCatalogBuildableOnly ? Made() : null;
+        var listed = MyDefinitionManager
             .Static.GetPhysicalItemDefinitions()
             .Where(d => d.Public)
-            .Select(d => Stations.ItemName(d.Id))
-            .Where(i => include?.IsMatch(i) == true && exclude?.IsMatch(i) != true)
-            .Distinct()
-            .OrderBy(i => i, StringComparer.Ordinal)
-            .ToList();
+            .Select(d => (Name: Stations.ItemName(d.Id), d.Id))
+            .Where(i => include?.IsMatch(i.Name) == true && exclude?.IsMatch(i.Name) != true)
+            .ToLookup(i =>
+                made == null || i.Id.TypeId == typeof(MyObjectBuilder_Ore) || made.Contains(i.Id)
+            );
+        catalog = Names(listed[true]);
+        var unbuildable = Names(listed[false]);
+        if (unbuildable.Count > 0)
+            Plugin.Log.Info(
+                $"Market: players can't make {string.Join(", ", unbuildable)}, so no Store trades them"
+            );
         return catalog;
     }
+
+    private static List<string> Names(IEnumerable<(string Name, MyDefinitionId Id)> items) =>
+        items.Select(i => i.Name).Distinct().OrderBy(i => i, StringComparer.Ordinal).ToList();
+
+    // What the blueprints of the public production blocks make
+    private static HashSet<MyDefinitionId> Made() =>
+        MyDefinitionManager
+            .Static.GetAllDefinitions()
+            .OfType<MyProductionBlockDefinition>()
+            .Where(b => b.Public && b.BlueprintClasses != null)
+            .SelectMany(b => b.BlueprintClasses)
+            .SelectMany(c => c)
+            .SelectMany(bp => bp.Results ?? [])
+            .Select(r => r.Id)
+            .ToHashSet();
 
     /// <summary>
     /// The station's profile, raw amounts: what it stocks at least, MarketMinStock and its part of
     /// MarketStationStock, which wins for an item in both. It tells what an hour's restock brings
     /// back and what OCT's acquisition contracts ask for.
+    /// Items out of the catalog are left out: OCT never stocks what its Stores don't trade.
     /// </summary>
     public static IReadOnlyList<KeyValuePair<string, long>> Profile(string station)
     {
@@ -575,7 +603,7 @@ internal static class Market
         var merged = own.TryGetValue(station, out var extra)
             ? common.Where(c => extra.All(e => e.Key != c.Key)).Concat(extra)
             : common;
-        return merged.Where(c => !PlayerMined(c.Key)).ToList();
+        return merged.Where(c => !PlayerMined(c.Key) && Catalog().Contains(c.Key)).ToList();
     }
 
     /// <summary>Whether the station produces the item: it is in the station's part of MarketStationStock, or the station has none.</summary>
