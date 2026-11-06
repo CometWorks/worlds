@@ -476,7 +476,9 @@ presses it, whoever holds the table:
 
 - In a window of their turn (below) the press starts the build: the blueprint they hold
   if any, else their queued paid order. Without either, in the last part of a turn, it
-  only says when the turn ends.
+  only says when the turn ends. When the start is refused, a second press within 10 s
+  gives the turn up, as `!oct shipyard done` does, also after the station moved to
+  another node.
 - With another build or repair slot of theirs in the shipyard's queue or running, the
   press cancels it. It does nothing to the table. A running build is canceled only by a
   second press within 10 s; the first press says how far it is and what the second
@@ -737,8 +739,10 @@ chat messages find the player on any node. One who is logged off misses them.
 - They get `ShipyardTurnMinutes` (10) to load components, and a chat message saying
   so. The details screen lists what is missing. The press starts the build: the
   Store supplies what is missing, into the containers, and the labor fee is paid. The press is refused when the player can't pay all of it, when
-  it doesn't fit the containers, or when a ship is in the way. If they don't press,
-  the order leaves the queue. While it builds they and their faction can put
+  it doesn't fit the containers, or when a ship is in the way. The refusal says why
+  and that a second press within 10 s cancels the order and ends the turn; the server
+  log and the World Authority's log record it. If they don't press, the order leaves
+  the queue. While it builds they and their faction can put
   components in and take them out.
 - After the build, the breakdown or the repair slot they get another
   `ShipyardTurnMinutes` to take what is left. In either window a blueprint they load

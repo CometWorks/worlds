@@ -3,7 +3,9 @@
 the containers the node's that simulates the shipyard. A paid build's turn, a move of the station's
 partition while the player loads and again in the last part of the turn, the deadline sale; a node
 restart in a window nobody uses; a graceful stop and warm start in the last part of a turn; a towed
-grid's breakdown, with and without room, and the chat command.
+grid's breakdown, with and without room, and the chat command. First a start the press can't
+make, on the other node after the station moved, and the second press that cancels it (SE-1198);
+OCT_TURN_ONLY=cancel stops after that.
 
     OCT_TASK=SE-840C OCT_WORLD_SOURCE=<world from build_world.py> \\
         <Test>/.venv/bin/python tests/shipyard_turn_cluster.py <Test>     (from plugin/)
@@ -45,6 +47,7 @@ STATION = "Alpha"
 OCT = "Octahedron_Authority"
 PLATE = "Component/SteelPlate"
 GOLD = "Ingot/Gold"
+STONE = "Ore/Stone"
 WINDOW = 4
 SHIP = "Turn Test"
 BLOCKS = 8
@@ -259,6 +262,51 @@ def run(bench) -> None:
     cluster.wait_ready(nodes=processes)
     api = join()
     home = wait_until(where, 120, "the client's partition")
+
+    # --- a start refused after a move of the station, the second press cancels (SE-1198) ---
+    def press_now(api) -> str:
+        # Shorter than press(): the second press must come within 10 s of the refusal
+        reply = " ".join(rig.chat(api, "!oct order", 4))
+        print(f"!oct order on {where()} -> {reply}", flush=True)
+        return reply
+
+    mark = tp.latest(api)
+    order(api)
+    told = tp.wait_chat(api, "!oct shipyard done gives the turn up", 5, mark)
+    check("cancel: the turn's message names the way out", told, told)
+    print(probe(api, f"yardload {STATION} {GOLD} 5"), flush=True)
+    # Full containers: the press can't start the build
+    print(probe(api, f"yardload {STATION} {STONE} 100000000"), flush=True)
+    to_node(other(home))
+    check(
+        f"cancel: moved to {where()}, still the player's",
+        wait_state(api, theirs),
+        yard(api),
+    )
+    before = money(api)
+    reply = press(api)
+    check(
+        "cancel: the start is refused, the reply offers the cancel",
+        "Take something out first" in reply and "within 10 s to cancel" in reply,
+        reply,
+    )
+    mark = tp.latest(api)
+    reply = press_now(api)
+    reply = press_now(api) if "within 10 s to cancel" in reply else reply
+    told = tp.wait_chat(api, "You canceled", 30, mark)
+    check("cancel: a second press within 10 s cancels", told, f"{reply} {told}")
+    until(lambda: money(api) > before)
+    check(
+        "cancel: what was loaded is sold",
+        money(api) > before,
+        f"{before} -> {money(api)}",
+    )
+    free_again(api, "canceled in the turn")
+    queue = tr.settled(api, "queue", "No ships in the queue")
+    check("cancel: the queue is empty", "No ships in the queue" in queue, queue)
+    if "cancel" in os.environ.get("OCT_TURN_ONLY", "").split(","):
+        return
+    to_node(home)
 
     # --- a paid build, moved between nodes in the window and in the last part of the turn ---
     plate = market(api, PLATE)
