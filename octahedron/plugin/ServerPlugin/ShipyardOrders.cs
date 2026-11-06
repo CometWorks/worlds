@@ -211,6 +211,15 @@ internal static partial class ShipyardOrders
     // station to this node. Who holds the table is the table's owner (Holder).
     private static readonly Dictionary<long, DateTime> loadedAt = new();
 
+    // Tables whose blueprint the shipyard refused, cleared once the clients had the time to show it. Every
+    // client starts showing it on a worker thread as the blueprint arrives, and a removal that comes while
+    // that runs breaks it: the client says "Blueprint can't be found", or keeps the hologram and shows no
+    // later one (SE-1195, SE-1196).
+    private static readonly Dictionary<
+        long,
+        (List<MyObjectBuilder_CubeGrid> Blueprint, DateTime Due)
+    > refused = new();
+
     // The player who last queued a ship at each table: its empty screen offers them the cancel
     private static readonly Dictionary<long, long> placed = new();
 
@@ -1066,15 +1075,9 @@ internal static partial class ShipyardOrders
                     $"'{gridBuilders[0].DisplayName}' has subgrids, which your game damages when it sends a blueprint "
                         + $"without the Multigrid Projector plugin, so the shipyard took it off the table. {WorkshopHint}"
                 );
-                // Once the game has passed the blueprint on to the other clients
-                var table = __instance;
-                MySandboxGame.Static.Invoke(
-                    () =>
-                    {
-                        if (!table.MarkedForClose)
-                            ClearTable(table);
-                    },
-                    "Octahedron damaged blueprint"
+                refused[__instance.EntityId] = (
+                    gridBuilders,
+                    DateTime.UtcNow.AddSeconds(Config.ShipyardTableSettleSeconds)
                 );
                 return;
             }
@@ -1315,6 +1318,8 @@ internal static partial class ShipyardOrders
             UpdateDocks();
         if (trials.Count > 0)
             WatchTrials();
+        if (refused.Count > 0)
+            ClearRefused();
         if (ticks % QuoteTicks == 0 && loaded.Count > 0)
         {
             foreach (var (tableId, player) in loaded.ToList())
@@ -1421,6 +1426,24 @@ internal static partial class ShipyardOrders
         Open(table);
         ShowDetails(table, DetailsIdle);
         WriteTable(table, TableIdle);
+    }
+
+    private static void ClearRefused()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var (tableId, (blueprint, due)) in refused.ToList())
+        {
+            if (now < due)
+                continue;
+            refused.Remove(tableId);
+            // Not if a newer blueprint replaced it meanwhile
+            if (
+                MyEntities.TryGetEntityById(tableId, out MyProjectorBase table)
+                && !table.MarkedForClose
+                && ReferenceEquals(TableHologram.Blueprint(table), blueprint)
+            )
+                ClearTable(table);
+        }
     }
 
     // A table without a blueprint offers the player who just queued a ship the cancel

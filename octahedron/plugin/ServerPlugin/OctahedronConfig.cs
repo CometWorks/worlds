@@ -569,6 +569,18 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 3;
 
+    [IntOption(
+        0,
+        description: "Seconds a blueprint the shipyard refused stays on a station's hologram table before it is cleared. "
+            + "The clients take a moment to show a blueprint, and one cleared before that shows an error or keeps the hologram.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardTableSettleSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
     [StringOption(
         description: "SteamCMD that !bp (!oct workshop) downloads Workshop blueprints with. Empty: Quasar's managed SteamCMD "
             + "(ManagedRuntime/Tools/SteamCMD above this server's data folder), else steamcmd on the PATH.",
