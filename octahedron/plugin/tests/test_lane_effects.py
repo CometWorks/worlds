@@ -47,11 +47,12 @@ SHIP = "SE-1229 Ship"
 SHIP_EFFECTS = ("WarpY", "TradeLaneStarsAndTunnel")
 # TradeLaneComputerBlockLogic.RingOffset: a lane's rings stand this far to its computer's right,
 # one every RingInterval (build_world.py's LANE_RING_INTERVAL). Ships enter at the first ring out
-# from the station, as the sebot traders do (tools/trader/lanes.py), and wait this far before it,
-# in its detect box (the Trade Lanes MP rig's travel.py)
+# from the station the way the sebot traders do (tools/trader/lanes.py): from this far before it,
+# dampeners off and forward thrust for PUSH seconds, so the ring's detect box takes it
 GATE_OFFSET = 220.0
 RING_INTERVAL = 10_000.0
-APPROACH = 150.0
+APPROACH = 400.0
+PUSH = 4.0
 # Where B floats: above the ring, in sync range of the ship until it leaves
 WATCH = 300.0
 # A ship effect B still plays this long after the ship left is stuck
@@ -186,7 +187,24 @@ def main() -> int:
     start = add(ring, axis, -APPROACH)
     log(f"lane {LANE} {name}: ring at {tuple(round(c) for c in ring)}")
     text = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
-    ship = rig.grid(SHIP, SHIP_ID, rig.small_ship_blocks(), start, axis, up)
+    blocks = rig.small_ship_blocks()
+    # A charged battery and thrusters both ways: one of them pushes forward
+    blocks[1] = rig.block(
+        "MyObjectBuilder_BatteryBlock",
+        "LargeBlockBatteryBlock",
+        (0, 0, 1),
+        "<CurrentStoredPower>3</CurrentStoredPower>",
+    )
+    for x, facing in ((1, "Forward"), (-1, "Backward")):
+        blocks.append(
+            rig.block(
+                "MyObjectBuilder_Thrust",
+                "LargeBlockSmallThrust",
+                (x, 0, 1),
+                forward=facing,
+            )
+        )
+    ship = rig.grid(SHIP, SHIP_ID, blocks, start, axis, up)
     (rig.WORLD / "SANDBOX_0_0_0_.sbs").write_text(
         text.replace("</SectorObjects>", ship + "</SectorObjects>", 1), encoding="utf-8"
     )
@@ -221,6 +239,9 @@ def main() -> int:
 
         latest = pilot.get_hud_notifications().get("latest", 0)
         log(f"dampeners: {pilot.set_dampeners(False)}")
+        pilot.set_input_state(keys=["W"])
+        time.sleep(PUSH)
+        pilot.clear_input_state()
         log(f"pilot: {pilot.get_character().get('state')}")
         deadline = time.monotonic() + 120
         while (
