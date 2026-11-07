@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>remap-probe</Id>
+    <GroupId>remap-probe</GroupId>
+    <RepoId>local/remap-probe</RepoId>
+
+    <FriendlyName>Remap Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: holds a projector's clipboard activation mid-remap while a client's blueprint is set</Tooltip>
+    <Description>Test only. When a client's blueprint arrives at a projector, holds the worker that
+        remaps the blueprint's ids right after a rotor, piston or hinge base, until the main thread
+        has run every SetNewBlueprint postfix. Writes remap-probe.log to the server's data folder.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>

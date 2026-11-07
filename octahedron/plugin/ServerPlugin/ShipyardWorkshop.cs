@@ -40,8 +40,9 @@ internal static partial class ShipyardOrders
         "Type !bp and the blueprint's Steam Workshop link or id into chat instead: the shipyard "
         + "loads it from the Workshop. Or load it with the Multigrid Projector plugin of Pulsar.";
 
-    // Tables whose blueprint the server loaded from the Workshop: its own copy, ids intact
-    private static readonly HashSet<long> workshopTables = new();
+    // Tables whose blueprint is intact: the server loaded its own copy from the Workshop, or the
+    // client's showed it came from Multigrid Projector when it arrived
+    private static readonly HashSet<long> provenTables = new();
 
     /// <summary>
     /// A blueprint with subgrids that doesn't show it came intact from Multigrid Projector: the
@@ -64,9 +65,10 @@ internal static partial class ShipyardOrders
         return tops.Count == 0 || !tops.All(ids.Contains);
     }
 
-    // Whether the table's blueprint may be damaged: one the server loaded from the Workshop isn't
+    // Whether the table's blueprint may be damaged: one proven when it arrived isn't. Its ids are read
+    // again only for a blueprint the server loaded itself.
     internal static bool Unproven(MyProjectorBase table) =>
-        !workshopTables.Contains(table.EntityId) && Unproven(TableHologram.Blueprint(table));
+        !provenTables.Contains(table.EntityId) && Unproven(TableHologram.Blueprint(table));
 
     // !bp and !oct workshop: the Workshop blueprint into the nearest table, as if the player loaded it
     public static string Workshop(long identityId, string link, string tableName)
@@ -401,7 +403,7 @@ internal static partial class ShipyardOrders
                 );
         }
         SendNewBlueprint(table, grids);
-        workshopTables.Add(table.EntityId);
+        provenTables.Add(table.EntityId);
         loaded[table.EntityId] = identityId;
         loadedAt[table.EntityId] = DateTime.UtcNow;
         Hold(table, identityId);

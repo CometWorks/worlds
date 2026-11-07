@@ -1075,9 +1075,17 @@ internal static partial class ShipyardOrders
     [HarmonyPatch(typeof(MyProjectorBase), "SetNewBlueprint")]
     private static class SetNewBlueprint
     {
+        // Checked before the game activates the table's clipboard, which remaps these grids' ids on a
+        // worker thread: a check while that runs can see bases that point at no block, and refused a
+        // player's first load from Multigrid Projector (SE-1248)
+        private static void Prefix(List<MyObjectBuilder_CubeGrid> gridBuilders, out bool __state) =>
+            __state =
+                Sync.IsServer && !MyEventContext.Current.IsLocallyInvoked && Unproven(gridBuilders);
+
         private static void Postfix(
             MyProjectorBase __instance,
-            List<MyObjectBuilder_CubeGrid> gridBuilders
+            List<MyObjectBuilder_CubeGrid> gridBuilders,
+            bool __state
         )
         {
             if (!Sync.IsServer || MyEventContext.Current.IsLocallyInvoked)
@@ -1088,10 +1096,14 @@ internal static partial class ShipyardOrders
             // Any projector ends up here: only a station's table is held
             if (identity == 0 || !IsTable(__instance) || StationOf(__instance.CubeGrid) == null)
                 return;
-            workshopTables.Remove(__instance.EntityId);
+            provenTables.Remove(__instance.EntityId);
             // Not from Multigrid Projector: the subgrids may be damaged, so no ship comes of it
-            if (Unproven(gridBuilders))
+            if (__state)
             {
+                Plugin.Log.Info(
+                    $"Hologram table {__instance.EntityId}: '{gridBuilders[0].DisplayName}' of {Name(identity)} "
+                        + "refused, its subgrids don't show it came from Multigrid Projector"
+                );
                 Tell(
                     identity,
                     $"'{gridBuilders[0].DisplayName}' has subgrids, which your game damages when it sends a blueprint "
@@ -1103,6 +1115,7 @@ internal static partial class ShipyardOrders
                 );
                 return;
             }
+            provenTables.Add(__instance.EntityId);
             loaded[__instance.EntityId] = identity;
             loadedAt[__instance.EntityId] = DateTime.UtcNow;
             Hold(__instance, identity);
