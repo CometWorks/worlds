@@ -45,10 +45,12 @@ PROBE = (
 SHIP_ID = 777001229000001
 SHIP = "SE-1229 Ship"
 SHIP_EFFECTS = ("WarpY", "TradeLaneStarsAndTunnel")
-# TradeLaneComputerBlockLogic.RingOffset: the departure ring stands this far to the computer's
-# right. The ship waits this far before it, in the ring's detect box (the Trade Lanes MP rig's
-# travel.py)
+# TradeLaneComputerBlockLogic.RingOffset: a lane's rings stand this far to its computer's right,
+# one every RingInterval (build_world.py's LANE_RING_INTERVAL). Ships enter at the first ring out
+# from the station, as the sebot traders do (tools/trader/lanes.py), and wait this far before it,
+# in its detect box (the Trade Lanes MP rig's travel.py)
 GATE_OFFSET = 220.0
+RING_INTERVAL = 10_000.0
 APPROACH = 150.0
 # Where B floats: above the ring, in sync range of the ship until it leaves
 WATCH = 300.0
@@ -80,8 +82,9 @@ def cross(a, b):
     )
 
 
-def lane_computer() -> tuple[str, tuple, tuple, tuple]:
-    """Name, position, forward and up of the lane computer's grid in the world copy"""
+def lane_computer() -> tuple[str, tuple, tuple, tuple, tuple]:
+    """Name, position, forward and up of the lane computer's grid in the world copy, and its
+    partner's position, from its Target GPS"""
     text = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
     for entity in re.findall(
         r"<MyObjectBuilder_EntityBase .*?</MyObjectBuilder_EntityBase>", text, re.S
@@ -91,12 +94,20 @@ def lane_computer() -> tuple[str, tuple, tuple, tuple]:
             and f"TLID:{LANE}\n" in entity
         ):
             orientation = entity[entity.index("<PositionAndOrientation>") :]
-            name = re.search(r"<DisplayName>(.*?)</DisplayName>", entity)[1]
+            name = re.search(r"<DisplayName>(.*?)</DisplayName>", entity)[1].replace(
+                "&gt;", ">"
+            )
             return (
                 name,
                 vec(orientation, "Position"),
                 vec(orientation, "Forward"),
                 vec(orientation, "Up"),
+                tuple(
+                    float(c)
+                    for c in re.search(
+                        r"Target:GPS:[^:]*:([-\d.]+):([-\d.]+):([-\d.]+):", entity
+                    ).groups()
+                ),
             )
     raise LookupError(f"no lane computer TLID:{LANE}")
 
@@ -167,12 +178,15 @@ def main() -> int:
     rig.stop_server()
 
     rig.prepare_world()
-    name, position, forward, up = lane_computer()
-    ring = add(position, cross(forward, up), GATE_OFFSET)
-    start = add(ring, forward, -APPROACH)
+    name, position, forward, up, partner = lane_computer()
+    length = math.dist(position, partner)
+    axis = tuple((p - q) / length for p, q in zip(partner, position))
+    step = length / max(1, round(length / RING_INTERVAL))
+    ring = add(add(position, cross(forward, up), GATE_OFFSET), axis, step)
+    start = add(ring, axis, -APPROACH)
     log(f"lane {LANE} {name}: ring at {tuple(round(c) for c in ring)}")
     text = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
-    ship = rig.grid(SHIP, SHIP_ID, rig.small_ship_blocks(), start, forward, up)
+    ship = rig.grid(SHIP, SHIP_ID, rig.small_ship_blocks(), start, axis, up)
     (rig.WORLD / "SANDBOX_0_0_0_.sbs").write_text(
         text.replace("</SectorObjects>", ship + "</SectorObjects>", 1), encoding="utf-8"
     )
