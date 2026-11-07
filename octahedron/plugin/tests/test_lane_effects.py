@@ -1,7 +1,7 @@
 """A Trade Lanes ship's lane effects end on a client that watched it leave (SE-1229).
 
-Two clients: A pilots a small ship into the lane of a station's lane computer, B floats by the
-departure ring. A ship in a lane plays two looping particle effects on every client that has it.
+Two clients: A pilots a small ship into a station's lane at its first ring out, the way the sebot
+traders do, and B floats by that ring. A ship in a lane plays two looping particle effects on every client that has it.
 The ship is out of B's sync range a moment into the trip, so B's copy of the grid closes. The mod
 stopped those effects only when the trip ended, so B kept drawing them by the ring (the rings that
 expand along the lane) until the player logged in again. On a cluster the same happens to a client
@@ -15,6 +15,9 @@ the mod's effects play.
 
 OCT_LANE (01) picks the lane computer by its TLID. Prints one line per check and a pass/fail
 summary; exit code 0 = all passed.
+
+Run on nas on 2026-11-07, about 4.5 min each: with Trade Lanes before SE-1229 it fails 1 of 5 checks,
+B still plays both effects 5 s after the ship left; with the fix all 5 pass.
 """
 
 from __future__ import annotations
@@ -229,22 +232,15 @@ def main() -> int:
         observer.character_set_dampeners(True)
         pilot.character_teleport(*add(start, up, 15))
         wait_for(lambda: has_ship(pilot), 60)
-        log(
-            f"pilot grids: {[g for g in pilot.list_grids() if g['entityId'] == SHIP_ID]}"
-        )
         sit(pilot, SHIP_ID)
-        log(
-            f"ship {math.dist(pilot.get_grid(SHIP_ID)['position'], ring):.0f} m from the ring"
-        )
         check(wait_for(lambda: has_ship(observer), 60), "B has the ship by the ring")
         log(f"B before the trip: {probe(observer_data)}")
 
         latest = pilot.get_hud_notifications().get("latest", 0)
-        log(f"dampeners: {pilot.set_dampeners(False)}")
+        pilot.set_dampeners(False)
         pilot.set_input_state(keys=["W"])
         time.sleep(PUSH)
         pilot.clear_input_state()
-        log(f"pilot: {pilot.get_character().get('state')}")
         deadline = time.monotonic() + 120
         while (
             not (played := ship_effects(observer_data, most=True))
@@ -255,8 +251,7 @@ def main() -> int:
             latest = notes.get("latest", latest)
             texts = sorted({n["text"][:60] for n in notes.get("notifications", [])})
             log(
-                f"ship {math.dist(grid['position'], ring):.0f} m from the ring, "
-                f"{ {k: v for k, v in grid.items() if 'amp' in k.lower()} }, hud {texts[:4]}"
+                f"ship {math.dist(grid['position'], ring):.0f} m from the ring, hud {texts[:2]}"
             )
             time.sleep(5)
         check(
