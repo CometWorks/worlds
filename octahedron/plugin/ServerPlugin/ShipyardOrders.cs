@@ -42,8 +42,9 @@ namespace ServerPlugin;
 // the ship at the station's shipyard. Who presses decides what the press means, whoever holds the
 // table: it queues the ship of the presser's blueprint, or else cancels their queue entry or
 // running build (a build only on a second press within CancelConfirmSeconds), or else books
-// them a repair slot. A blueprint pressed during their repair slot ends the slot and is
-// ordered. The queue is kept by Builds, on the authority; the station's queue panels show it.
+// them a repair slot. In their paid build's turn it starts the build, and a second press within
+// CancelConfirmSeconds of a refused start gives the turn up. A blueprint pressed during their
+// repair slot ends the slot and is ordered. The queue is kept by Builds, on the authority; the station's queue panels show it.
 //
 // A repair slot is a queue entry too. When its turn comes the shipyard's welders go on and
 // ShipyardTurn gives its blocks to the player, who docks a ship with a repair projector and the
@@ -657,7 +658,7 @@ internal static partial class ShipyardOrders
             + (queue == null ? "none" : Screen(queue, 0));
     }
 
-    /// <summary>A press of the table's button. Who presses decides what it means: the presser's own queue entry or running build is canceled (a running build on the second press), else the blueprint they hold is ordered, ending their repair slot first, else they get a repair slot. Nobody else's blueprint or queue entry is touched.</summary>
+    /// <summary>A press of the table's button. Who presses decides what it means: the presser's own queue entry or running build is canceled (a running build on the second press), else the blueprint they hold is ordered, ending their repair slot first, else their paid build's turn starts the build (a second press right after a refused start gives the turn up), else they get a repair slot. Nobody else's blueprint or queue entry is touched.</summary>
     public static void Press(long identityId, MyProjectorBase table, Action<string> tell)
     {
         if (Config.ShipyardOrderMinutes <= 0)
@@ -696,7 +697,10 @@ internal static partial class ShipyardOrders
                 var holder = Holder(table);
                 var hasBlueprint =
                     TableHologram.Blueprint(table) != null && (holder == 0 || holder == identityId);
-                if (
+                if (mine?.Phase == BuildPhase.Loading && CancelConfirmed(identityId, mine))
+                    // Its start was just refused: the second press gives the turn up
+                    CancelTurn(shipyard, mine, tell);
+                else if (
                     mine != null
                     && mine.Phase is BuildPhase.Waiting or BuildPhase.Building
                     && !(mine.Repair && hasBlueprint)
@@ -1105,6 +1109,11 @@ internal static partial class ShipyardOrders
                     mine?.Phase == BuildPhase.After && !plan.Free ? null
                     // The press ends the slot and orders this
                     : mine?.Repair == true && mine.Phase != BuildPhase.After ? null
+                    // The press orders this into the turn, which a free ship can't use
+                    : mine?.Phase == BuildPhase.Loading
+                        ? plan.Free
+                                ? $"It is your turn for '{mine.Ship}': end it first with !oct shipyard done."
+                            : null
                     : mine != null
                         ? mine.Active
                                 ? $"'{mine.Ship}' is running for you. Press the button twice to cancel it first."

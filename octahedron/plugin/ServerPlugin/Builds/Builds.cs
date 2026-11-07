@@ -144,11 +144,13 @@ internal static class Builds
         {
             answer = "0\tThe amount is too large.";
         }
-        if (!request.Reads && answer.StartsWith("1"))
+        if (!request.Reads)
         {
-            dirty = true;
+            // A refusal too: the player only sees it in chat
+            var ok = answer.StartsWith("1");
+            dirty |= ok;
             Plugin.Log.Info(
-                $"Shipyard {request.Verb} at {request.Station} by {request.Player} {request.Id}: {answer.Split('\n')[0].Substring(2)}"
+                $"Shipyard {request.Verb} at {request.Station} by {request.Player} {request.Id}{(ok ? "" : " refused")}: {Message(answer)}"
             );
         }
         return answer;

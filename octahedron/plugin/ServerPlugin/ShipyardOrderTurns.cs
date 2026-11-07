@@ -19,10 +19,11 @@ namespace ServerPlugin;
 //
 // A paid build's turn starts with the player getting the shipyard's blocks (ShipyardTurn) and
 // ShipyardTurnMinutes to load components and press the button, which buys what is missing. If they
-// don't, the order is dropped. After the build or breakdown they have ShipyardTurnMinutes to take
-// what is in the containers. A turn ends at the deadline, once the containers are empty, or by
-// !oct shipyard done: the blocks go back to OCT, a docked ship floats free, and what is left is
-// sold to the station for the player.
+// don't, the order is dropped. A press whose start is refused offers to give the turn up: a second
+// press within CancelConfirmSeconds ends it, as !oct shipyard done does. After the build or
+// breakdown they have ShipyardTurnMinutes to take what is in the containers. A turn ends at the
+// deadline, once the containers are empty, or by !oct shipyard done: the blocks go back to OCT, a
+// docked ship floats free, and what is left is sold to the station for the player.
 internal static partial class ShipyardOrders
 {
     // Orders whose build is starting and turns that are ending, waiting for the authority's answer
@@ -86,7 +87,8 @@ internal static partial class ShipyardOrders
                     next.Player,
                     $"It is your turn at {shipyard.DisplayName}: its cargo containers, connectors and welders are yours and your faction's. "
                         + $"Load the components for '{next.Ship}' within {Config.ShipyardTurnMinutes} min and press the button. "
-                        + "The screen by the button shows what is missing, the press buys it for SC."
+                        + "The screen by the button shows what is missing, the press buys it for SC. "
+                        + "!oct shipyard done gives the turn up."
                 );
             }
         );
@@ -167,10 +169,18 @@ internal static partial class ShipyardOrders
         var shipyard = FindShipyard(table);
         if (shipyard == null || !beginning.Add(order.Id))
             return;
+        // The player can load more and press again, or give the turn up with a second press
         void Refuse(string why)
         {
             beginning.Remove(order.Id);
-            tell(why);
+            Plugin.Log.Info(
+                $"Shipyard order {order.Id} '{order.Ship}' of {Name(order.Player)}: no start: {why}"
+            );
+            cancelAsked[order.Player] = (order.Id, DateTime.UtcNow);
+            tell(
+                $"{why} Press the button again within {CancelConfirmSeconds} s to cancel '{order.Ship}' and end your turn: "
+                    + "what is in the shipyard is then sold to the station."
+            );
         }
         Builds.Read(
             new BuildRequest { Verb = BuildVerb.Next, Station = order.Station },
@@ -267,7 +277,7 @@ internal static partial class ShipyardOrders
                                                 ItemId(Hydrogen)
                                             )
                                         );
-                                    tell(message);
+                                    Refuse(message);
                                     return;
                                 }
                                 tell(message);
@@ -286,6 +296,24 @@ internal static partial class ShipyardOrders
                     }
                 );
             }
+        );
+    }
+
+    // The second press after a refused start: the turn ends, as by !oct shipyard done
+    private static void CancelTurn(MyCubeGrid shipyard, BuildOrder order, Action<string> tell)
+    {
+        if (beginning.Contains(order.Id))
+        {
+            tell("The shipyard is busy, try again in a few seconds.");
+            return;
+        }
+        Plugin.Log.Info(
+            $"Shipyard order {order.Id} '{order.Ship}' of {Name(order.Player)}: canceled in the turn"
+        );
+        EndTurn(
+            shipyard,
+            order,
+            $"You canceled '{order.Ship}' and ended your turn at {shipyard.DisplayName}."
         );
     }
 

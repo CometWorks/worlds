@@ -4,7 +4,8 @@ are the player's, shared with nobody in OCT (SE-975) and with their faction in o
 connectors on and not trading, reactors OCT's. The press buys what isn't loaded, from the player's
 own account. A window nobody uses drops the order;
 after the build the deadline, the chat command or empty containers end the turn, what is left is sold
-to the station, and a docked ship floats free. Also: a ship in the way, a build running
+to the station, and a docked ship floats free. A start the press can't make offers the cancel, which a
+second press makes (SE-1198). Also: a ship in the way, a build running
 short, a press that hands the ship over unfinished, a blueprint loaded in the window, hydrogen from
 ice in the containers, a towed grid's breakdown with the shipyard free and busy, overflow, a grid
 just given by a tow, and a restart in a turn and in a build. On a world built by build_world.py. The
@@ -15,6 +16,7 @@ of 10 is in BuildTests.
         uv run --no-project --with httpx python tests/test_shipyard_turn.py
 
 Prints one line per check and a pass/fail summary; exit code 0 = all passed. About an hour.
+OCT_TURN_ONLY=cancel_while_loading,... runs only those scenarios, without the restarts.
 Not covered: a cluster (tests/shipyard_turn_cluster.py), and a player moving items by hand: the
 probe plugin puts them in and takes them out.
 """
@@ -483,6 +485,62 @@ def done_while_loading(a) -> None:
     tr.remove(a)
 
 
+def cancel_while_loading(a) -> None:
+    """A start the press can't make, the containers being full: the reply offers the cancel, a
+    press after 10 s tries the start again, a second press within 10 s gives the turn up and sells
+    what is loaded. Also with the order's blueprint loaded again, as the player of SE-1198 did
+    """
+    with_config(a, **PAY, ShipyardTurnMinutes=WINDOW)
+    mark = tp.latest(a)
+    turn(a)
+    told = tp.wait_chat(a, "!oct shipyard done gives the turn up", 5, mark)
+    check(told is not None, f"the turn's message names the way out: {told}")
+    log(probe(a, f"yardload {STATION} {GOLD} 5"))
+    # A ship in the build space: the press can't start the build. Not full containers, which
+    # would sell for over the 1,000,000 SC a client without Steam crashes at
+    log(probe(a, f"yardblocker {STATION}"))
+    reply = start(a)
+    check(
+        "out of" in reply and "within 10 s to cancel" in reply,
+        f"the start is refused and the reply offers the cancel: {reply}",
+    )
+    time.sleep(11)
+    check(rs.theirs(yard(a), "OctTester"), "the turn goes on")
+    before = money(a)
+    mark = tp.latest(a)
+    # The chat replies take 5 s: the next press comes within the 10 s
+    reply = press(a)
+    check(
+        "within 10 s to cancel" in reply and "You canceled" not in reply,
+        f"a press after 10 s tries the start again: {reply}",
+    )
+    reply = press(a)
+    told = tp.wait_chat(a, "You canceled", 15, mark)
+    check(told is not None, f"a second press within 10 s cancels: {reply} {told}")
+    free_at_end(a, "canceled in the turn")
+    check(money(a) > before, f"what was loaded is sold: {before} -> {money(a)}")
+
+    # Out of the way of the next turn's start, which would wait for it
+    log(probe(a, "removegrid Blocker"))
+
+    # The blueprint on the table during the turn: the press orders it into the turn, the start
+    # is refused, and the next press still cancels
+    turn(a)
+    log(probe(a, f"yardblocker {STATION}"))
+    mark = tp.latest(a)
+    reply = order(a)
+    check(
+        "goes on with your turn" in reply and "within 10 s to cancel" in reply,
+        f"ordered into the turn, the start refused: {reply}",
+    )
+    reply = press(a)
+    told = tp.wait_chat(a, "You canceled", 15, mark)
+    check(told is not None, f"the next press cancels: {reply} {told}")
+    free_at_end(a, "canceled with the blueprint loaded")
+    log(probe(a, "removegrid Blocker"))
+    tr.remove(a)
+
+
 def cancel_running(a) -> None:
     """Two presses on a running paid build hand the ship over unfinished, what is left stays for
     the window. A free one's is in test_repair_slot.py and test_cancel_confirm.py"""
@@ -813,13 +871,14 @@ def main() -> int:
         for part in TANKED_PARTS:
             sa.admin(a, f"!oct market set {STATION} Component/{part} 1000")
         sa.admin(a, f"!oct market set {STATION} {PLATE} 10000")
-        for scenario in (
+        scenarios = (
             free_build,
             blocker,
             lambda r: turn_starts_and_expires(r, b),
             build_and_deadline,
             running_short,
             done_while_loading,
+            cancel_while_loading,
             cancel_running,
             next_in_same_turn,
             hydrogen,
@@ -827,7 +886,12 @@ def main() -> int:
             lambda r: breakdown(r, b),
             towed_in,
             tow_given,
-        ):
+        )
+        # OCT_TURN_ONLY=name,...: only those scenarios, without the restarts
+        only = [n for n in os.environ.get("OCT_TURN_ONLY", "").split(",") if n]
+        for scenario in scenarios:
+            if only and getattr(scenario, "__name__", "") not in only:
+                continue
             probe(a, "air")
             # A client without Steam crashes on the millionaire achievement
             if money(a) > 400_000:
@@ -835,7 +899,8 @@ def main() -> int:
             scenario(a)
         with Second():
             rig.stop_client()
-        a = restarts(a)
+        if not only:
+            a = restarts(a)
     finally:
         rig.stop_client()
         with Second():
