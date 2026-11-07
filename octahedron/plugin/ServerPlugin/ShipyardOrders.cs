@@ -155,6 +155,9 @@ internal static partial class ShipyardOrders
         // The player canceled the running build
         public bool Canceled;
 
+        // An admin did, by clearing the shipyard (!oct shipyard clear)
+        public bool Cleared;
+
         // What a removed paid build's containers had no room for, to be sold, raw
         public Dictionary<string, long> Sold = [];
     }
@@ -2172,12 +2175,13 @@ internal static partial class ShipyardOrders
         var gone = missing != null;
         var stalled =
             $"{shipyard.DisplayName} stopped building '{name}': its welders made no progress for {StallChecks * UpdateTicks / 60} s";
+        var canceled = order.Cleared ? "An admin canceled" : "You canceled";
         var message = order.Canceled
             ? order.Free
-                ? $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The ship was removed, and the free build doesn't count."
+                ? $"{canceled} '{name}' at {shipyard.DisplayName} with {why}. The ship was removed, and the free build doesn't count."
                 : missing != null
-                    ? $"You canceled '{name}' at {shipyard.DisplayName}, no ship was built."
-                    : $"You canceled '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
+                    ? $"{canceled} '{name}' at {shipyard.DisplayName}, no ship was built."
+                    : $"{canceled} '{name}' at {shipyard.DisplayName} with {why}. The unfinished ship is yours."
             : order.Clang != null
                 ? $"{shipyard.DisplayName} stopped building '{name}': {order.Clang} placed where another part of the ship is made it shake. The ship was removed, "
                     + (
