@@ -607,7 +607,10 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   Multigrid Projector on the client remaps them together. The server can't see
   the plugin, so it takes a blueprint with subgrids as Multigrid Projector's only
   when every base points at a block of the blueprint, and at least one does. It
-  clears any other blueprint with subgrids off the table after
+  checks that when the blueprint arrives, before the game starts showing it on
+  the server: that remaps the same ids on a worker thread, and a check during it
+  refused an intact blueprint, most often a player's first (SE-1248). A refusal
+  is logged. It clears any other blueprint with subgrids off the table after
   `ShipyardTableSettleSeconds` (10) and tells the player in chat to use the blueprint's Steam Workshop link or id with
   `!bp <link or id> [table name]` (or `!oct workshop`), which needs no plugin, or
   the Multigrid Projector plugin of Pulsar. The wait is for the clients: each
@@ -1632,6 +1635,10 @@ connectors join) gives the player watching no "Blueprint can't be found" box and
 leaves no hologram once cleared, and one it takes shows for the watcher and for a
 player who joins later. The `tests/table-probe` test plugin on the server and the
 clients logs any change to the table's clipboard while its activation runs.
+`tests/test_first_load_mgp.py` checks that a player's first blueprint with a rotor
+from Multigrid Projector after joining is taken. The `tests/remap-probe` test plugin
+on the server holds the activation's id remap after the rotor's base until the
+server has handled the blueprint, so every run hits the timing that refused it.
 `tests/arm/ArmTests` checks the support arm's path planning without the game
 (`dotnet run -c Release --project tests/arm/ArmTests`): pipes around the ship and
 obstacles, the turn cost, docking, the cap, giving up an armor block, no plan when
