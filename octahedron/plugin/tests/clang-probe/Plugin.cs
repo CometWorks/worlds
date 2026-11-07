@@ -11,6 +11,7 @@ using Sandbox.Game.World;
 using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.Entities.Blocks;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using VRage;
 using VRage.FileSystem;
 using VRage.Game.Components;
 using VRage.Plugins;
@@ -21,7 +22,8 @@ namespace ClangProbe;
 
 // Test only, for tests/test_clang_drive.py. Every grid named "CL ..." gets a line in clang-probe.txt with
 // its name, speed, fastest speed so far, power switch, working power producers, thrust over mass, gravity
-// and position; the line of a grid that is gone stays. While its power is on, a grid named
+// and position; the line of a grid that is gone stays. While its power is on, any power producer on
+// whatever the power switch says, a grid named
 // "CL Push <k> ..." is pushed forward each frame by k times its thrust over mass, as a clang drive would,
 // "CL Spike <k> ..." gets k times its thrust over mass, times a second, as one frame's speed change once,
 // 5 s after it is first seen, and "CL Thrust ..." has its thrusters at full override. Pushes and spikes are
@@ -33,7 +35,9 @@ namespace ClangProbe;
 // backward instead: flat out in its best direction, then full throttle the other way. "CL Missile ..."
 // has every thruster at full override from the start. 5 s after a grid is
 // first seen, a timer block on it named "CL Start" is triggered and a piston so named is reversed: a
-// clang drive's starter.
+// clang drive's starter. A grid named "... Again" is switched back on 1 s after the rule switched it off,
+// as the grid event the Y key sends does it on the server (a sebot trader sends it, SE-1132), and isn't
+// pushed after that.
 // ReSharper disable once UnusedType.Global
 public class Plugin : IPlugin
 {
@@ -42,6 +46,7 @@ public class Plugin : IPlugin
     private readonly Dictionary<string, string> lines = new();
     private readonly Dictionary<string, float> fastest = new();
     private readonly Dictionary<long, int> firstSeen = new();
+    private readonly Dictionary<long, int> switchedOff = new();
     private int frame;
 
     public void Init(object gameInstance) { }
@@ -86,7 +91,14 @@ public class Plugin : IPlugin
                 )
                     ? x
                     : 0;
-            if (grid.IsPowerSwitchOn)
+            var producers = grid.GetFatBlocks<MyFunctionalBlock>()
+                .Count(b => b is IMyPowerProducer && b.Enabled);
+            var again = name.EndsWith(" Again");
+            if (again && producers == 0 && !switchedOff.ContainsKey(grid.EntityId))
+                switchedOff[grid.EntityId] = frame;
+            if (again && switchedOff.TryGetValue(grid.EntityId, out var off) && frame - off == 60)
+                grid.ChangePowerProducerStateInternal(MyMultipleEnabledEnum.AllEnabled, -1);
+            if (producers > 0 && !switchedOff.ContainsKey(grid.EntityId))
             {
                 var spike = frame - firstSeen[grid.EntityId] == SpikeFrames;
                 var forward = (Vector3)grid.WorldMatrix.Forward;
@@ -137,8 +149,6 @@ public class Plugin : IPlugin
                 continue;
             var speed = grid.Physics.LinearVelocity.Length();
             fastest[name] = fastest.TryGetValue(name, out var most) ? Math.Max(most, speed) : speed;
-            var producers = grid.GetFatBlocks<MyFunctionalBlock>()
-                .Count(b => b is IMyPowerProducer && b.Enabled);
             var p = grid.Physics.CenterOfMassWorld;
             var gravity = MyGravityProviderSystem.CalculateNaturalGravityInPoint(p).Length();
             File.AppendAllText(
