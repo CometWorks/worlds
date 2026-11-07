@@ -16,7 +16,12 @@ namespace LaneEffectsProbe;
 // ReSharper disable once UnusedType.Global
 public class Plugin : IPlugin
 {
-    private static readonly string[] Names = ["WarpY", "TradeLaneStarsAndTunnel", "RingsActivateAndIdle"];
+    private static readonly string[] Names =
+    [
+        "WarpY",
+        "TradeLaneStarsAndTunnel",
+        "RingsActivateAndIdle",
+    ];
     private int frame;
 
     public void Init(object gameInstance) { }

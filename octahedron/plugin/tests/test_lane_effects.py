@@ -86,10 +86,18 @@ def lane_computer() -> tuple[str, tuple, tuple, tuple]:
     for entity in re.findall(
         r"<MyObjectBuilder_EntityBase .*?</MyObjectBuilder_EntityBase>", text, re.S
     ):
-        if "<SubtypeName>TradeLaneComputer</SubtypeName>" in entity and f"TLID:{LANE}\n" in entity:
+        if (
+            "<SubtypeName>TradeLaneComputer</SubtypeName>" in entity
+            and f"TLID:{LANE}\n" in entity
+        ):
             orientation = entity[entity.index("<PositionAndOrientation>") :]
             name = re.search(r"<DisplayName>(.*?)</DisplayName>", entity)[1]
-            return name, vec(orientation, "Position"), vec(orientation, "Forward"), vec(orientation, "Up")
+            return (
+                name,
+                vec(orientation, "Position"),
+                vec(orientation, "Forward"),
+                vec(orientation, "Up"),
+            )
     raise LookupError(f"no lane computer TLID:{LANE}")
 
 
@@ -102,7 +110,9 @@ def with_trade_lanes() -> None:
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
         path = rig.WORLD / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("<Mods />", f"<Mods>{item}</Mods>", 1), encoding="utf-8")
+        path.write_text(
+            text.replace("<Mods />", f"<Mods>{item}</Mods>", 1), encoding="utf-8"
+        )
     folders = [rig.SERVER_DATA / "Mods", rig.APPDATA / "Mods"]
     with Second():
         folders.append(rig.APPDATA / "Mods")
@@ -188,9 +198,26 @@ def main() -> int:
         check(wait_for(lambda: has_ship(observer), 60), "B has the ship by the ring")
         log(f"B before the trip: {probe(observer_data)}")
 
-        pilot.set_dampeners(False)
-        played = wait_for(lambda: ship_effects(observer_data), 120)
-        check(played > 0, f"B plays the ship's lane effects in the lane: {probe(observer_data)}")
+        latest = pilot.get_hud_notifications().get("latest", 0)
+        log(f"dampeners: {pilot.set_dampeners(False)}")
+        log(f"pilot: {pilot.get_character().get('state')}")
+        deadline = time.monotonic() + 120
+        while (
+            not (played := ship_effects(observer_data)) and time.monotonic() < deadline
+        ):
+            grid = pilot.get_grid(SHIP_ID)
+            notes = pilot.get_hud_notifications(after=latest)
+            latest = notes.get("latest", latest)
+            texts = sorted({n["text"][:60] for n in notes.get("notifications", [])})
+            log(
+                f"ship {math.dist(grid['position'], ring):.0f} m from the ring, "
+                f"{ {k: v for k, v in grid.items() if 'amp' in k.lower()} }, hud {texts[:4]}"
+            )
+            time.sleep(5)
+        check(
+            played > 0,
+            f"B plays the ship's lane effects in the lane: {probe(observer_data)}",
+        )
         left = wait_for(lambda: not has_ship(observer), 60)
         check(left, "the ship left B's sync range")
         time.sleep(SETTLE)
@@ -212,7 +239,10 @@ def main() -> int:
                 rig.stop_client()
         rig.stop_server()
     failed = [what for ok, what in checks if not ok]
-    print(f"{len(checks) - len(failed)}/{len(checks)} lane effect checks passed", flush=True)
+    print(
+        f"{len(checks) - len(failed)}/{len(checks)} lane effect checks passed",
+        flush=True,
+    )
     for what in failed:
         print("FAILED", what, flush=True)
     return 0 if not failed else 1
