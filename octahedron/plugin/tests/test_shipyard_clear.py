@@ -100,6 +100,16 @@ def running_build(a) -> None:
     log(t.probe(a, f"yardload {STATION} {t.PLATE} {t.BIG_PLATES + 100}"))
     t.start(a)
     t.placed(a)
+
+    def welded() -> bool:
+        grids = t.grid_there(a)
+        return (
+            bool(grids)
+            and len(a.list_blocks(grids[0]["entityId"], 0, 500)["blocks"]) > 4
+        )
+
+    # A ship with no block welded yet ends with none, as at a player's cancel
+    check(t.wait_for(welded, 60, 2), "the welders have started on the ship")
     paid = t.money(a)
     mark = tp.latest(a)
     # No station named: the admin stands in the station's safe zone, by its table
