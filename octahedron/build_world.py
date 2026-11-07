@@ -312,8 +312,9 @@ SETTINGS = {
     # The "Share inertia tensor" option of rotors, hinges and pistons (off on each block until a
     # player ticks it): the head's grid shares one inertia tensor with the base's, which steadies
     # heavy subgrids on light bases. Wheels can't use it. An experimental setting, like the one
-    # above. A cluster's profile carries it too: SESSION_SETTINGS in deploy.py (SE-1206)
-    "EnableShareInertiaTensor": "true",
+    # above. Off for now (SE-1206); a cluster's profile carries it too, so turning it on also
+    # takes SESSION_SETTINGS in deploy.py
+    "EnableShareInertiaTensor": "false",
     "ProceduralDensity": 0,
     "ProceduralSeed": 0,
     "RandomizeSeed": "false",
