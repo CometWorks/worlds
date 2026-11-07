@@ -194,7 +194,14 @@ def main() -> int:
         observer.character_teleport(*add(ring, up, WATCH))
         observer.character_set_dampeners(True)
         pilot.character_teleport(*add(start, up, 15))
+        wait_for(lambda: has_ship(pilot), 60)
+        log(
+            f"pilot grids: {[g for g in pilot.list_grids() if g['entityId'] == SHIP_ID]}"
+        )
         sit(pilot, SHIP_ID)
+        log(
+            f"ship {math.dist(pilot.get_grid(SHIP_ID)['position'], ring):.0f} m from the ring"
+        )
         check(wait_for(lambda: has_ship(observer), 60), "B has the ship by the ring")
         log(f"B before the trip: {probe(observer_data)}")
 
