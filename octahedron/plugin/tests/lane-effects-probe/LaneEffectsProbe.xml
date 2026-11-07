@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>lane-effects-probe</Id>
+    <GroupId>lane-effects-probe</GroupId>
+    <RepoId>local/lane-effects-probe</RepoId>
+
+    <FriendlyName>Lane Effects Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: the Trade Lanes particle effects a client plays</Tooltip>
+    <Description>Test only. On a client, writes how many of the Trade Lanes mod's particle effects
+        are playing to lane-effects-probe.txt in the game's user data folder.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>
