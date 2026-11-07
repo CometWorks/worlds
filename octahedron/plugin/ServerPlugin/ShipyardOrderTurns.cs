@@ -6,6 +6,7 @@ using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.World;
 using VRage;
 using VRage.Game;
 using VRage.ObjectBuilders;
@@ -622,6 +623,39 @@ internal static partial class ShipyardOrders
             }
         );
         return "The shipyard answers in chat.";
+    }
+
+    /// <summary>
+    /// The station whose hologram table is in the admin safe zone the player stands in, so a
+    /// command without a station name can't pick the wrong one; null with why otherwise.
+    /// </summary>
+    public static string StationAround(long player, out string error)
+    {
+        error = null;
+        var character = MySession.Static.Players.TryGetIdentity(player)?.Character;
+        if (character == null || character.IsDead || character.MarkedForClose)
+        {
+            error = "Name the station, or stand in its safe zone.";
+            return null;
+        }
+        var position = character.PositionComp.GetPosition();
+        // A zone of a safe zone block is a player's, not a station's
+        var zones = MySessionComponentSafeZones
+            .SafeZones.Where(z =>
+                z.Enabled && !z.MarkedForClose && z.SafeZoneBlockId == 0 && z.Contains(position)
+            )
+            .ToList();
+        var stations = StationTables()
+            .Where(s => s.Value.Any(t => zones.Any(z => z.Contains(t.PositionComp.GetPosition()))))
+            .Select(s => s.Key)
+            .ToList();
+        if (stations.Count == 1)
+            return stations[0];
+        error =
+            stations.Count == 0
+                ? "Name the station, or stand in its safe zone."
+                : $"This safe zone has the tables of {string.Join(", ", stations)}: name the station.";
+        return null;
     }
 
     // --- a towed grid's breakdown ---

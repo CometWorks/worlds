@@ -843,7 +843,9 @@ the player's turn. The `!oct shipyards` admin command lists the shipyards, their
 rotors and the running builds with their arm.
 `!oct shipyard strip <station> <item>` takes an item out of a shipyard's
 containers and welders, so tests can stall a build.
-`!oct shipyard clear <station>` (admin, on the node that simulates the station)
+`!oct shipyard clear [station]` (admin, on the node that simulates the station)
+without a station clears the one whose hologram table is in the admin safe zone the
+admin stands in, and asks for the name anywhere else or in a zone with several. It
 empties a shipyard's queue the way each player's own cancel or `!oct shipyard done`
 would: waiting orders leave the queue, a running build is canceled (a paid one's
 unfinished ship is handed over, a free one's removed), a repair slot ends, and every

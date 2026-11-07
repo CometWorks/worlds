@@ -1,7 +1,8 @@
 """!oct shipyard clear (SE-1198): an admin empties a station's shipyard queue. A held turn with
 another player's order waiting behind it, then a running paid build: each entry ends as its
 player's own cancel or !oct shipyard done would, the players are told, and nothing is paid twice
-or lost. Two players on one server, on a world built by build_world.py; the helpers are
+or lost. Without a station name it clears the station of the admin safe zone the admin stands
+in, and away from any it asks for the name. Two players on one server, on a world built by build_world.py; the helpers are
 test_shipyard_turn.py's.
 
     OCT_TASK=SE-1198C OCT_WORLD_SOURCE=<world from build_world.py> \\
@@ -29,8 +30,20 @@ from test_table_rules import Second, check, checks, load, press, settled  # noqa
 STATION = t.STATION
 
 
-def clear(a) -> str:
-    return " ".join(rig.chat(a, f"!oct shipyard clear {STATION}", 5))
+def clear(a, station: str = STATION) -> str:
+    return " ".join(rig.chat(a, f"!oct shipyard clear {station}".strip(), 5))
+
+
+def no_station_away(a) -> None:
+    """Without a station name, away from any station's safe zone: nothing is cleared"""
+    x, y, z = sa.station_tables()[STATION]
+    a.character_teleport(x + 5000, y, z)
+    reply = clear(a, "")
+    check(
+        "Name the station" in reply,
+        f"away from a station it asks for the name: {reply}",
+    )
+    sa.at_table(a, STATION)
 
 
 def turn_and_waiting(a, b) -> None:
@@ -89,10 +102,11 @@ def running_build(a) -> None:
     t.placed(a)
     paid = t.money(a)
     mark = tp.latest(a)
-    reply = clear(a)
+    # No station named: the admin stands in the station's safe zone, by its table
+    reply = clear(a, "")
     check(
         "the unfinished ship handed over" in reply,
-        f"the reply names the build: {reply}",
+        f"without a name, the station of the zone; the reply names the build: {reply}",
     )
     told = tp.wait_chat(a, "An admin canceled", 30, mark)
     check(
@@ -138,6 +152,7 @@ def main() -> int:
         t.probe(a, "air")
         turn_and_waiting(a, b)
         t.probe(a, "air")
+        no_station_away(a)
         running_build(a)
     finally:
         rig.stop_client()
