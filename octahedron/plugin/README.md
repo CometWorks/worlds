@@ -567,7 +567,19 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   components, whatever the Store has.
 - The queue of each shipyard holds at most `ShipyardQueueMax` (6) orders, the one
   being built included, one per player: more don't fit the queue panel above the
-  table. A full queue shows on the table's screen and refuses the press. The
+  table. A full queue shows on the table's screen and refuses the press.
+- Human players' orders go before the bots' (SE-1207), the bots being the Steam IDs
+  `ShipyardBotSteamIds` names (`first-last` ranges, comma separated; the trader bots'
+  on the Octahedron). A human player's order goes ahead of every bot order waiting.
+  A bot's build in progress, or its turn before the build started, is canceled when a
+  human player orders, and so is the last bot order waiting when the human player's
+  would make the queue longer than `ShipyardQueueMax`. A queue full of human players'
+  orders refuses a new one and cancels nothing. The node that simulates the shipyard
+  ends a canceled bot order at its next check, as the bot's own cancel would, and tells
+  the bot "a player's order took its place", so it orders again: a free build's ship is
+  removed and the build doesn't count toward the cool-down; a paid build gets its labor
+  fee back and its components are sold for it. Nothing was paid for a waiting order.
+  Orders from before keep their places and count as human players'. The
   station's queue panels (`ShipyardQueuePanelName`, `Text Panel - Station
   ShipyardQueue`) show it, and which ship blocks the shipyard with the time it has
   left to leave, once its owner was told. The first entry says how far it is, then
@@ -1579,8 +1591,13 @@ filaments too.
 `tests/builds/BuildTests` checks the queues without the game
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
 from OCT's stock, paid orders and their turns, the purchase at the start all or none,
-hydrogen, the sale of what a turn leaves, towed grids, free orders, the queue, the
-formats, blueprints in parts, and that no money is made or lost. `tests/test_shipyard_turn.py` checks a
+hydrogen, the sale of what a turn leaves, towed grids, free orders, the queue, human
+players' orders before the bots', the formats, blueprints in parts, and that no money
+is made or lost. `tests/test_shipyard_human_priority.py` checks in game, with a
+second client as the bot, that a human player's order cancels the bot's running free
+build (its ship removed, the free build not counted), pushes the bot's waiting order
+out of a full queue, and that a queue full of human players' orders refuses another
+one. `tests/test_shipyard_turn.py` checks a
 player's turn in game at Alpha Station: who owns what, the window, the purchase, the
 sale, overflow, a ship in the way, a tow reaching the shipyard, restarts;
 `tests/shipyard_turn_cluster.py` does the same on a cluster with moves of the station's

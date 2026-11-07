@@ -158,6 +158,9 @@ internal static partial class ShipyardOrders
         // An admin did, by clearing the shipyard (!oct shipyard clear)
         public bool Cleared;
 
+        // A bot's build a human player's order took the place of: canceled and refunded
+        public bool Bumped;
+
         // What a removed paid build's containers had no room for, to be sold, raw
         public Dictionary<string, long> Sold = [];
     }
@@ -1020,6 +1023,7 @@ internal static partial class ShipyardOrders
             Pcu = plan.Pcu,
             Blueprint = EncodeBlueprint(plan.Blueprint),
             Exempt = plan.Exempt,
+            Bot = IsBot(plan.Player),
         };
         if (!plan.Free)
         {
@@ -1721,7 +1725,12 @@ internal static partial class ShipyardOrders
                         blockers.Remove(shipyard.EntityId);
                     return;
                 }
+                bumping.IntersectWith(queue.Select(o => o.Id));
+                foreach (var entry in queue.Where(o => o.Bumped))
+                    Bump(shipyard, entry);
                 var next = queue[0];
+                if (next.Bumped)
+                    return;
                 if (next.Phase == BuildPhase.After)
                 {
                     if (!ending.Contains(next.Id))
@@ -2206,6 +2215,15 @@ internal static partial class ShipyardOrders
                                     ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
                                     : $"{shipyard.DisplayName} stopped after {OrderMinutes(StationOf(shipyard))} min with {why} of '{name}'. "
                                         + "The unfinished ship is yours.";
+        if (order.Bumped)
+            message =
+                $"'{name}' at {shipyard.DisplayName} was canceled with {why}: {Bumped} The ship was removed, "
+                + (
+                    order.Free
+                        ? "and the free build doesn't count."
+                        : "its components are sold for you."
+                )
+                + " Order again later.";
         if (!order.Free)
         {
             if (order.Hydrogen > 0 && !gone)
@@ -2235,7 +2253,9 @@ internal static partial class ShipyardOrders
                     : 0,
                 order.Refund,
                 order.Sold,
-                $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}",
+                order.Bumped
+                    ? message
+                    : $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}",
                 ship: left,
                 percent: why == null || left == 0 || order.Blocks == 0
                     ? 100

@@ -686,6 +686,119 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(old, "saved format: the format before the turns is refused");
 }
 
+// Human players' orders before the bots' (SE-1207): ahead of the bots' waiting orders; a bot's
+// build or turn, and the last bot order of a full queue, bumped; a queue of humans full
+{
+    var (w, m, market, b) = Setup();
+    BuildOrder Free(long player, bool bot = false) =>
+        new()
+        {
+            Station = A,
+            Player = player,
+            Ship = (bot ? "Bot" : "Human") + player,
+            Blueprint = "QQ==",
+            Bot = bot,
+        };
+    long[] Players() => b.Queue(A).Select(o => o.Player).ToArray();
+    long[] BumpedOnes() => b.Queue(A).Where(o => o.Bumped).Select(o => o.Player).ToArray();
+
+    var bot11 = Ok(w, "bot 11 orders", () => b.Order(w, s, Free(11, true), none)).Order;
+    w.Now += 10;
+    Ok(w, "human 1 orders", () => b.Order(w, s, Free(1), none));
+    Check(Players().SequenceEqual(new long[] { 1, 11 }), "priority: the human first");
+    Check(b.Next(A).Player == 1 && BumpedOnes().Length == 0, "priority: next, nothing bumped");
+    Ok(w, "human 1 cancels", () => b.Cancel(A, 1));
+
+    // A bot's build in progress is bumped by a human's order, also with room in the queue
+    b.Start(bot11.Id);
+    w.Now += 10;
+    Ok(w, "bot 12 orders", () => b.Order(w, s, Free(12, true), none));
+    Check(BumpedOnes().Length == 0, "a bot's order bumps nothing");
+    w.Now += 10;
+    Ok(w, "human 2 orders", () => b.Order(w, s, Free(2), none));
+    Check(BumpedOnes().SequenceEqual(new long[] { 11 }), "the bot's build is bumped");
+    Check(Players().SequenceEqual(new long[] { 11, 2, 12 }), "the bumped build stays first");
+    Check(b.Next(A) == null, "nothing next while the bumped build ends");
+    Ok(w, "the bumped build ends", () => b.Finish(bot11.Id));
+    Check(b.Next(A).Player == 2, "then the human's turn");
+
+    // A full queue (3): the last bot order waiting makes way for a human's
+    var human2 = b.Next(A);
+    b.Start(human2.Id);
+    w.Now += 10;
+    Ok(w, "bot 13 orders", () => b.Order(w, s, Free(13, true), none));
+    Check(Players().SequenceEqual(new long[] { 2, 12, 13 }), "full: human building, two bots");
+    Refused(
+        w,
+        b,
+        m,
+        "a bot's order in a full queue",
+        () => b.Order(w, s, Free(14, true), none),
+        "queue is full"
+    );
+    w.Now += 10;
+    Ok(w, "human 3 orders into the full queue", () => b.Order(w, s, Free(3), none));
+    Check(BumpedOnes().SequenceEqual(new long[] { 13 }), "full: the last bot order is bumped");
+    Check(Players().SequenceEqual(new long[] { 2, 3, 12, 13 }), "full: the new human 2nd");
+    w.Now += 10;
+    Ok(w, "human 4 orders into the full queue", () => b.Order(w, s, Free(4), none));
+    Check(BumpedOnes().SequenceEqual(new long[] { 12, 13 }), "full: the next bot is bumped");
+    Refused(w, b, m, "a full queue of humans", () => b.Order(w, s, Free(5), none), "queue is full");
+    Refused(
+        w,
+        b,
+        m,
+        "the bumped bot orders again before its order left",
+        () => b.Order(w, s, Free(12, true), none),
+        "for you already"
+    );
+
+    // A bot's paid turn before the start is bumped; its build's After isn't
+    var (w2, m2, market2, b2) = Setup();
+    var paidBot = Paid(3, player: 3);
+    paidBot.Bot = true;
+    Ok(w2, "a bot's paid order", () => b2.Order(w2, s, paidBot, Needs((Plate, 1 * U))));
+    b2.Turn(w2, s, paidBot.Id);
+    Ok(w2, "a human's order", () => b2.Order(w2, s, Paid(P1), Needs((Plate, 1 * U))));
+    Check(paidBot.Bumped, "a bot's turn before the start is bumped");
+    paidBot.Bumped = false;
+    paidBot.Phase = BuildPhase.After;
+    Ok(w2, "human 1 cancels", () => b2.Cancel(A, 1));
+    Ok(w2, "a human's order again", () => b2.Order(w2, s, Paid(P1), Needs((Plate, 1 * U))));
+    Check(!paidBot.Bumped, "a bot's turn after its build stays");
+
+    // Saved and on the wire; a book and a request from before the bots load as human players'
+    string saved = b.Serialize();
+    var loaded = BuildBook.Deserialize(saved);
+    Check(loaded.Serialize() == saved, "bots: saved format round trip");
+    var bumped = loaded.Queue(A).Last();
+    Check(bumped.Bot && bumped.Bumped && bumped.Player == 13, "bots: the flags saved");
+    var wire = BuildBook.DecodeOrder(BuildBook.EncodeOrder(bumped, blueprint: false));
+    Check(wire.Bot && wire.Bumped, "bots: the flags on the wire");
+    var old = BuildBook
+        .Deserialize(
+            "octahedron-builds 3\nN\t5\n"
+                + "O\tb5\tAlpha Station\t1\t0\t0\t100\tOld\t1000\t0\t\t0\t0\t0\t0\n"
+        )
+        .Get("b5");
+    Check(!old.Bot && !old.Bumped, "bots: an order from before is a human player's");
+    var request = new BuildRequest
+    {
+        Verb = BuildVerb.Order,
+        Station = A,
+        Player = 21,
+        Blueprint = "QQ==",
+        Bot = true,
+    };
+    Check(BuildRequest.Decode(request.Encode()).Bot, "bots: the request carries the flag");
+    var lines = request.Encode().Split('\n');
+    var before = string.Join("\t", lines[0].Split('\t').Take(16)) + "\n\n";
+    Check(!BuildRequest.Decode(before).Bot, "bots: a request from before is a human player's");
+    var (w3, _, market3, b3) = Setup();
+    Check(request.Run(b3, w3, market3, s).StartsWith("1"), "bots: ordered by request");
+    Check(b3.Queue(A).Single().Bot, "bots: the order is a bot's");
+}
+
 // A blueprint over a plugin message's 64 KiB goes up and down in parts, as Builds does (SE-805)
 {
     const int MaxPayload = 64 * 1024;
@@ -1018,6 +1131,8 @@ sealed class FakeWorld : IMarketWorld
         integral = info.Integral;
         return known;
     }
+
+    public long Target(string station, string item) => 0;
 
     public long Reference(string station, string item) =>
         Items.TryGetValue(item, out var info) ? info.Price : 0;

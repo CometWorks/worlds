@@ -407,6 +407,10 @@ two blocks.
   its leader can take money out. Nobody grinds OCT's grids or the trader bots'
   ships, anywhere (`OctGridsNoGrinding`, the bots by `OctProtectedSteamIds`)
   ([SE-1160](https://tasks.cometworks.se/tasks/2060)).
+- Human players' shipyard orders go before the trader bots' (`ShipyardBotSteamIds`):
+  a human player's order takes the place of a bot's running build or of the last bot
+  order of a full queue, and the bot orders again later
+  ([SE-1207](https://tasks.cometworks.se/tasks/2112)).
 - Players don't spawn at Moon Station (`NO_SPAWN_STATIONS`): its medical room is
   shared with nobody, so the spawn screen lists it only for an admin with "Use
   terminals" on in the admin menu. It doesn't heal other players either.
