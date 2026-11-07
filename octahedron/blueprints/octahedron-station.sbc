@@ -2668,7 +2668,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <MasterToSlaveGrid xsi:nil="true" />
               <IsMaster>true</IsMaster>
               <TradingEnabled>true</TradingEnabled>
-              <AutoUnlockTime>600</AutoUnlockTime>
+              <AutoUnlockTime>0</AutoUnlockTime>
               <TimeOfConnection>0</TimeOfConnection>
               <IsParkingEnabled>false</IsParkingEnabled>
               <IsPowerTransferOverrideEnabled>true</IsPowerTransferOverrideEnabled>
@@ -2743,7 +2743,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <MasterToSlaveGrid xsi:nil="true" />
               <IsMaster>true</IsMaster>
               <TradingEnabled>true</TradingEnabled>
-              <AutoUnlockTime>600</AutoUnlockTime>
+              <AutoUnlockTime>0</AutoUnlockTime>
               <TimeOfConnection>0</TimeOfConnection>
               <IsParkingEnabled>false</IsParkingEnabled>
               <IsPowerTransferOverrideEnabled>true</IsPowerTransferOverrideEnabled>
@@ -2819,7 +2819,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <MasterToSlaveGrid xsi:nil="true" />
               <IsMaster>true</IsMaster>
               <TradingEnabled>true</TradingEnabled>
-              <AutoUnlockTime>600</AutoUnlockTime>
+              <AutoUnlockTime>0</AutoUnlockTime>
               <TimeOfConnection>0</TimeOfConnection>
               <IsParkingEnabled>false</IsParkingEnabled>
               <IsPowerTransferOverrideEnabled>true</IsPowerTransferOverrideEnabled>
@@ -2894,7 +2894,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <MasterToSlaveGrid xsi:nil="true" />
               <IsMaster>true</IsMaster>
               <TradingEnabled>true</TradingEnabled>
-              <AutoUnlockTime>600</AutoUnlockTime>
+              <AutoUnlockTime>0</AutoUnlockTime>
               <TimeOfConnection>0</TimeOfConnection>
               <IsParkingEnabled>false</IsParkingEnabled>
               <IsPowerTransferOverrideEnabled>true</IsPowerTransferOverrideEnabled>
@@ -13266,7 +13266,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <MasterToSlaveGrid xsi:nil="true" />
               <IsMaster>true</IsMaster>
               <TradingEnabled>true</TradingEnabled>
-              <AutoUnlockTime>600</AutoUnlockTime>
+              <AutoUnlockTime>0</AutoUnlockTime>
               <TimeOfConnection>0</TimeOfConnection>
               <IsParkingEnabled>false</IsParkingEnabled>
               <IsPowerTransferOverrideEnabled>true</IsPowerTransferOverrideEnabled>
@@ -13380,7 +13380,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <MasterToSlaveGrid xsi:nil="true" />
               <IsMaster>true</IsMaster>
               <TradingEnabled>true</TradingEnabled>
-              <AutoUnlockTime>600</AutoUnlockTime>
+              <AutoUnlockTime>0</AutoUnlockTime>
               <TimeOfConnection>0</TimeOfConnection>
               <IsParkingEnabled>false</IsParkingEnabled>
               <IsPowerTransferOverrideEnabled>true</IsPowerTransferOverrideEnabled>
@@ -13495,7 +13495,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <MasterToSlaveGrid xsi:nil="true" />
               <IsMaster>true</IsMaster>
               <TradingEnabled>true</TradingEnabled>
-              <AutoUnlockTime>600</AutoUnlockTime>
+              <AutoUnlockTime>0</AutoUnlockTime>
               <TimeOfConnection>0</TimeOfConnection>
               <IsParkingEnabled>false</IsParkingEnabled>
               <IsPowerTransferOverrideEnabled>true</IsPowerTransferOverrideEnabled>
@@ -13610,7 +13610,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <MasterToSlaveGrid xsi:nil="true" />
               <IsMaster>true</IsMaster>
               <TradingEnabled>true</TradingEnabled>
-              <AutoUnlockTime>600</AutoUnlockTime>
+              <AutoUnlockTime>0</AutoUnlockTime>
               <TimeOfConnection>0</TimeOfConnection>
               <IsParkingEnabled>false</IsParkingEnabled>
               <IsPowerTransferOverrideEnabled>true</IsPowerTransferOverrideEnabled>

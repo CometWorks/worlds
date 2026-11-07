@@ -112,7 +112,7 @@ public sealed class ProbeCommands : CommandModule
     [Command(
         "dock",
         "Builds a ship with a cargo container at a free connector of the station and connects it: SHIP grid-id",
-        "!sprobe dock <station> <mine|stranger> [Type/Subtype=amount,...,AT=x;y;z]"
+        "!sprobe dock <station> <mine|stranger|mate> [Type/Subtype=amount,...,AT=x;y;z]"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Dock(
@@ -125,6 +125,15 @@ public sealed class ProbeCommands : CommandModule
             owner == "mine"
                 ? Context.Caller.IdentityId
                 : MySession.Static.Players.CreateNewIdentity("Dock Stranger").IdentityId;
+        // mate: a stranger in the caller's faction
+        if (owner == "mate")
+        {
+            var faction = MySession.Static.Factions.GetPlayerFaction(Context.Caller.IdentityId);
+            if (faction == null)
+                return "NOFACTION";
+            MyAPIGateway.Session.Factions.SendJoinRequest(faction.FactionId, ownerId);
+            MyAPIGateway.Session.Factions.AcceptJoin(faction.FactionId, ownerId);
+        }
         // AT=x,y,z: the station connector at that cell, else the first free one
         var at = items
             .Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -1263,21 +1272,60 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "connectors",
-        "The station's connectors: CONNECTOR grid-id x,y,z trading=yes|no share=mode connected=yes|no, one per connector",
+        "The station's connectors: CONNECTOR grid-id x,y,z trading=yes|no share=mode connected=yes|no unlock=s release=ship:docked:left:told|none, one per connector",
         "!sprobe connectors <station>"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Connectors(string station) =>
-        string.Join(
+        $"FRAME {MySession.Static.GameplayFrameCounter} "
+        + string.Join(
             " ",
             StationGrids(station)
                 .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
                 .Select(c =>
                     $"CONNECTOR {c.CubeGrid.EntityId} {c.Min.X},{c.Min.Y},{c.Min.Z} "
                     + $"trading={((bool)c.TradingEnabled ? "yes" : "no")} share={c.IDModule?.ShareMode} "
-                    + $"connected={(c.Connected ? "yes" : "no")}"
+                    + $"connected={(c.Connected ? "yes" : "no")} unlock={(float)c.AutoUnlockTime:0} "
+                    + $"release={(c.Storage?.TryGetValue(ReleaseKey, out var r) == true ? r.Replace(' ', ':') : "none")}"
                 )
         );
+
+    // The Octahedron plugin's StationRelease.StorageKey
+    private static readonly Guid ReleaseKey = new("3E7B5D21-9C4A-4F86-B1D2-6A0C8E5F7B13");
+
+    [Command(
+        "connectorpower",
+        "Turns the station's free connectors on or off: CONNECTORPOWER station on|off count",
+        "!sprobe connectorpower <station> <on|off>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ConnectorPower(string station, string state)
+    {
+        var free = StationGrids(station)
+            .SelectMany(g => g.GetFatBlocks<MyShipConnector>())
+            .Where(c => !c.Connected)
+            .ToList();
+        foreach (var c in free)
+            c.Enabled = state == "on";
+        return $"CONNECTORPOWER {station} {state} {free.Count}";
+    }
+
+    [Command(
+        "letgo",
+        "Disconnects the ship from the station: LETGO grid-id",
+        "!sprobe letgo <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string LetGo(string gridId)
+    {
+        if (
+            !long.TryParse(gridId, out long id)
+            || !MyEntities.TryGetEntityById(id, out MyCubeGrid grid)
+        )
+            return $"LETGO {gridId} gone";
+        grid.GetFatBlocks<MyShipConnector>().First().TryDisconnect();
+        return $"LETGO {gridId}";
+    }
 
     [Command(
         "ice",

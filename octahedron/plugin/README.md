@@ -47,6 +47,30 @@ seconds each connector found otherwise is put right, and a ship docked to one th
 didn't trade is let go first. Players dock just the same: that needs no access to
 the connector. On a cluster each node does this for the stations it simulates.
 
+### Station connector release
+
+With `StationConnectorRelease` on, the plugin decides when a station's connector
+lets go of a docked ship. The game's own auto unlock let go of every ship 10
+minutes after it docked, whoever was aboard; the plugin sets it to 0 on every
+station connector it finds. Every `StationConnectorCheckSeconds` (60) it looks
+at each docked ship:
+
+- A player who is online, inside the station's admin safe zone, and is one of
+  the ship's biggest owners or in a biggest owner's faction keeps it docked.
+  OCT, which every player is in, doesn't count as a shared faction.
+- With none of them there, a countdown of `StationConnectorCountdownSeconds`
+  (600) starts, and the ship is let go at its end. One of them coming back stops
+  it; leaving again starts it over.
+- While no connector of the station is free, the ship docked there the longest
+  gets the countdown even with its owners there, and its biggest owners online
+  are told by chat. A connector freeing up stops it again.
+
+The biggest owners are those of the ship's largest grid. Both the docked time
+and the countdown count simulation time, and the connector keeps them in its
+storage, so they are saved with the world and go with the station to another
+cluster node in a handover. A node that just got a station counts its first
+check from zero. On a cluster each node does this for the stations it simulates.
+
 ### Station charging
 
 With `StationDockCharging` on, a ship docked at a trade station's trading
