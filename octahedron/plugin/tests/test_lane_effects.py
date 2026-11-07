@@ -135,16 +135,18 @@ def with_trade_lanes() -> None:
         link.symlink_to(MOD)
 
 
-def probe(appdata: Path) -> dict[str, int]:
+def probe(appdata: Path, most: bool = False) -> dict[str, int]:
+    """How many of each effect play, or with most, the most that played at once"""
     path = appdata / "lane-effects-probe.txt"
     try:
-        return {k: int(v) for k, v in re.findall(r"(\w+)=(\d+)", path.read_text())}
+        found = re.findall(r"(\w+)=(\d+)/(\d+)", path.read_text())
     except OSError:
         return {}
+    return {name: int(top if most else now) for name, now, top in found}
 
 
-def ship_effects(appdata: Path) -> int:
-    counts = probe(appdata)
+def ship_effects(appdata: Path, most: bool = False) -> int:
+    counts = probe(appdata, most)
     return sum(counts.get(name, 0) for name in SHIP_EFFECTS)
 
 
@@ -245,7 +247,8 @@ def main() -> int:
         log(f"pilot: {pilot.get_character().get('state')}")
         deadline = time.monotonic() + 120
         while (
-            not (played := ship_effects(observer_data)) and time.monotonic() < deadline
+            not (played := ship_effects(observer_data, most=True))
+            and time.monotonic() < deadline
         ):
             grid = pilot.get_grid(SHIP_ID)
             notes = pilot.get_hud_notifications(after=latest)
@@ -258,7 +261,7 @@ def main() -> int:
             time.sleep(5)
         check(
             played > 0,
-            f"B plays the ship's lane effects in the lane: {probe(observer_data)}",
+            f"B played the ship's lane effects in the lane: {probe(observer_data, most=True)}",
         )
         left = wait_for(lambda: not has_ship(observer), 60)
         check(left, "the ship left B's sync range")
