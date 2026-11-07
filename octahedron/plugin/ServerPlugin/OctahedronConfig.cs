@@ -700,6 +700,18 @@ public class OctahedronConfig : PluginConfig
     } = 6;
 
     [StringOption(
+        description: "Steam IDs of bots whose shipyard orders give way to human players', comma separated; first-last is a range. "
+            + "A human player's order goes ahead of the bots' waiting ones and cancels a bot's build in progress, "
+            + "and a full queue drops its last bot order for it. The trader bots' on the Octahedron.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardBotSteamIds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
+
+    [StringOption(
         description: "Name of the station button panel next to the hologram table. Its first button orders the blueprint "
             + "loaded into the table, or cancels the presser's queue entry, a running build on a second press within 10 s.",
         Parent = "shipyard"

@@ -158,6 +158,9 @@ internal static partial class ShipyardOrders
         // An admin did, by clearing the shipyard (!oct shipyard clear)
         public bool Cleared;
 
+        // A bot's build a human player's order took the place of: canceled and refunded
+        public bool Bumped;
+
         // What a removed paid build's containers had no room for, to be sold, raw
         public Dictionary<string, long> Sold = [];
     }
@@ -326,7 +329,16 @@ internal static partial class ShipyardOrders
         plan.Pcu = blueprint.Sum(g => g.CalculatePCUs());
         // The player is on this node, so its copy of their admin settings is current
         plan.Exempt = FreePrints.Exempt(identityId);
-        var error = Fits(plan.Shipyard, blueprint, plan.Exempt, out _, out plan.Pending);
+        // A running build's arm and ship are on the heads, growing as it welds: an arm planned
+        // around them is for the wrong heads and never settles, so its start plans the arm
+        var error = Fits(
+            plan.Shipyard,
+            blueprint,
+            plan.Exempt,
+            out _,
+            out plan.Pending,
+            planArm: !orders.ContainsKey(plan.Shipyard.EntityId)
+        );
         if (plan.Pending)
             // Quoted again when the plan is done
             ShipyardArm.WhenDone(() => loaded[table.EntityId] = identityId);
@@ -386,12 +398,14 @@ internal static partial class ShipyardOrders
 
     // Why the shipyard can't build the blueprint at all, or null, with the arm if it needs one.
     // Pending: the arm is still being planned, that is the reason given for now.
+    // Without planArm the arm is left out.
     private static string Fits(
         MyCubeGrid shipyard,
         List<MyObjectBuilder_CubeGrid> blueprint,
         bool exempt,
         out ShipyardArm.Layout layout,
-        out bool pending
+        out bool pending,
+        bool planArm = true
     )
     {
         layout = null;
@@ -424,7 +438,7 @@ internal static partial class ShipyardOrders
         var capacity = Containers(shipyard).Sum(i => (double)i.MaxVolume);
         if (needed > capacity)
             return $"The ship's components take {needed:N0} m³, {shipyard.DisplayName}'s containers hold {capacity:N0} m³.";
-        if (arms)
+        if (arms && planArm)
         {
             layout = ShipyardArm.Plan(
                 shipyard,
@@ -1020,6 +1034,7 @@ internal static partial class ShipyardOrders
             Pcu = plan.Pcu,
             Blueprint = EncodeBlueprint(plan.Blueprint),
             Exempt = plan.Exempt,
+            Bot = IsBot(plan.Player),
         };
         if (!plan.Free)
         {
@@ -1721,7 +1736,12 @@ internal static partial class ShipyardOrders
                         blockers.Remove(shipyard.EntityId);
                     return;
                 }
+                bumping.IntersectWith(queue.Select(o => o.Id));
+                foreach (var entry in queue.Where(o => o.Bumped))
+                    Bump(shipyard, entry);
                 var next = queue[0];
+                if (next.Bumped)
+                    return;
                 if (next.Phase == BuildPhase.After)
                 {
                     if (!ending.Contains(next.Id))
@@ -2206,6 +2226,15 @@ internal static partial class ShipyardOrders
                                     ? $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
                                     : $"{shipyard.DisplayName} stopped after {OrderMinutes(StationOf(shipyard))} min with {why} of '{name}'. "
                                         + "The unfinished ship is yours.";
+        if (order.Bumped)
+            message =
+                $"'{name}' at {shipyard.DisplayName} was canceled with {why}: {Bumped} The ship was removed, "
+                + (
+                    order.Free
+                        ? "and the free build doesn't count."
+                        : "its components are sold for you."
+                )
+                + " Order again later.";
         if (!order.Free)
         {
             if (order.Hydrogen > 0 && !gone)
@@ -2235,7 +2264,9 @@ internal static partial class ShipyardOrders
                     : 0,
                 order.Refund,
                 order.Sold,
-                $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}",
+                order.Bumped
+                    ? message
+                    : $"{message} {string.Format(TakeWithin(), shipyard.DisplayName)}",
                 ship: left,
                 percent: why == null || left == 0 || order.Blocks == 0
                     ? 100

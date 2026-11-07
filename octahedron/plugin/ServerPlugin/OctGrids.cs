@@ -17,41 +17,17 @@ namespace ServerPlugin;
 // grinder, a ship grinder and ToolCore's tools. Only the owner gets through.
 internal static class OctGrids
 {
-    private static string parsed;
-    private static List<(ulong First, ulong Last)> ranges = [];
-
-    private static List<(ulong First, ulong Last)> Ranges
-    {
-        get
-        {
-            var text = Plugin.Config.OctProtectedSteamIds ?? "";
-            if (text == parsed)
-                return ranges;
-            ranges = [];
-            foreach (var part in text.Split(',', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var ends = part.Split('-');
-                if (
-                    ends.Length <= 2
-                    && ulong.TryParse(ends[0].Trim(), out var first)
-                    && ulong.TryParse(ends[ends.Length - 1].Trim(), out var last)
-                )
-                    ranges.Add((first, last));
-                else
-                    Plugin.Log.Error($"OctProtectedSteamIds: '{part}' is no Steam ID or range");
-            }
-            parsed = text;
-            return ranges;
-        }
-    }
+    private static readonly SteamIdRanges Bots = new(
+        nameof(OctahedronConfig.OctProtectedSteamIds),
+        () => Plugin.Config.OctProtectedSteamIds
+    );
 
     private static bool Protected(long owner)
     {
         var players = MySession.Static.Players;
         if (players.IdentityIsNpc(owner))
             return OctFaction.Faction?.IsMember(owner) == true;
-        var steamId = players.TryGetSteamId(owner);
-        return steamId != 0 && Ranges.Any(r => steamId >= r.First && steamId <= r.Last);
+        return Bots.Contains(players.TryGetSteamId(owner));
     }
 
     private static readonly List<MyCubeGrid> joined = [];

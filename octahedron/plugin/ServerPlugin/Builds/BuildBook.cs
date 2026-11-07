@@ -58,6 +58,13 @@ public sealed class BuildOrder
     // A slot for the player to repair a ship with the shipyard's welders: no blueprint or payer
     public bool Repair;
 
+    // A bot ordered it (ShipyardBotSteamIds): a human player's order goes first
+    public bool Bot;
+
+    // A bot's order a human player's took the place of: the shipyard's node ends it at its next
+    // check and tells the bot, which orders again
+    public bool Bumped;
+
     // The blueprint, opaque here: base64, no tabs or line breaks
     public string Blueprint = "";
 
@@ -282,11 +289,16 @@ public sealed class BuildBook
 
     public BuildOrder Get(string id) => id != null && orders.TryGetValue(id, out var o) ? o : null;
 
-    /// <summary>The station's queue in order: the build running first, then by when they were ordered.</summary>
+    /// <summary>
+    /// The station's queue in order: the build running first, then the human players' orders
+    /// before the bots', each by when they were ordered. Bumped orders, on their way out, last.
+    /// </summary>
     public List<BuildOrder> Queue(string station) =>
         orders
             .Values.Where(o => o.Station == station)
             .OrderByDescending(o => o.Active)
+            .ThenBy(o => o.Bumped)
+            .ThenBy(o => o.Bot)
             .ThenBy(o => o.Created)
             .ThenBy(o => o.Id.Length)
             .ThenBy(o => o.Id, StringComparer.Ordinal)
@@ -296,7 +308,10 @@ public sealed class BuildBook
     public BuildOrder Next(string station)
     {
         var queue = Queue(station);
-        return queue.Count == 0 || queue[0].Phase is BuildPhase.Building or BuildPhase.After
+        return
+            queue.Count == 0
+            || queue[0].Bumped
+            || queue[0].Phase is BuildPhase.Building or BuildPhase.After
             ? null
             : queue[0];
     }
@@ -387,7 +402,9 @@ public sealed class BuildBook
     /// <summary>
     /// Queues an order. A paid one (Payer set) keeps <paramref name="needed"/> as its bill. A player
     /// in the window of their turn goes on with it instead, for a paid order, in the Loading phase:
-    /// what they have in the containers can go into this ship.
+    /// what they have in the containers can go into this ship. A human player's order bumps a bot's
+    /// turn or build that hasn't started or is building, and, should the queue be full, the last
+    /// bot order waiting; with only human players' orders a full queue refuses.
     /// </summary>
     public BuildResult Order(
         IMarketWorld w,
@@ -423,9 +440,19 @@ public sealed class BuildBook
             return BuildResult.No(
                 $"'{mine.Ship}' is in a shipyard's queue for you already, one entry at a time."
             );
-        if (orders.Values.Count(o => o.Station == order.Station) >= s.QueueMax)
+        var queue = Queue(order.Station).Where(o => !o.Bumped).ToList();
+        var bumped = new List<BuildOrder>();
+        if (!order.Bot)
+        {
+            bumped.AddRange(queue.Where(o => o.Bot && Bumpable(o)));
+            if (queue.Count - bumped.Count >= s.QueueMax)
+                bumped.AddRange(queue.Where(o => o.Bot && !o.Active).TakeLast(1));
+        }
+        if (queue.Count - bumped.Count >= s.QueueMax)
             return BuildResult.No($"The shipyard's queue is full, {s.QueueMax} ships.");
 
+        foreach (var bot in bumped)
+            bot.Bumped = true;
         Add(w, order);
         order.Items = order.Free ? new Dictionary<string, long>() : Bill(needed);
         return new BuildResult(
@@ -472,6 +499,11 @@ public sealed class BuildBook
         order.Items = new Dictionary<string, long>();
         orders[order.Id] = order;
     }
+
+    // A bot's turn before its build started, or its build: a breakdown, a repair slot and what is
+    // left after a build stay
+    private static bool Bumpable(BuildOrder o) =>
+        o.Phase is BuildPhase.Loading or BuildPhase.Building && o.Grid == 0 && !o.Repair;
 
     private static Dictionary<string, long> Bill(IReadOnlyDictionary<string, long> needed) =>
         needed.Where(n => n.Value > 0).ToDictionary(n => n.Key, n => n.Value);
@@ -787,8 +819,10 @@ public sealed class BuildBook
                 o.Pcu.ToString(CultureInfo.InvariantCulture),
                 Clean(o.Ship),
                 BuildQuote.N(o.Created),
-                // Flags: 2 exempt, 4 repair
-                ((o.Exempt ? 2 : 0) | (o.Repair ? 4 : 0)).ToString(CultureInfo.InvariantCulture),
+                // Flags: 2 exempt, 4 repair, 8 bot, 16 bumped
+                (
+                    (o.Exempt ? 2 : 0) | (o.Repair ? 4 : 0) | (o.Bot ? 8 : 0) | (o.Bumped ? 16 : 0)
+                ).ToString(CultureInfo.InvariantCulture),
                 blueprint ? o.Blueprint ?? "" : "",
                 ((int)o.Phase).ToString(CultureInfo.InvariantCulture),
                 BuildQuote.N(o.TurnEnds),
@@ -827,6 +861,8 @@ public sealed class BuildBook
         var flags = int.Parse(f[9], CultureInfo.InvariantCulture);
         order.Exempt = (flags & 2) != 0;
         order.Repair = (flags & 4) != 0;
+        order.Bot = (flags & 8) != 0;
+        order.Bumped = (flags & 16) != 0;
         for (int i = items; i < f.Length; i += 2)
             order.Items[f[i]] = BuildQuote.L(f[i + 1]);
         return order;
@@ -985,6 +1021,7 @@ public sealed class BuildRequest
     public bool Refund;
     public bool Exempt;
     public bool Repair;
+    public bool Bot;
     public long Grid;
     public int Part;
     public int Percent = 100;
@@ -1019,7 +1056,8 @@ public sealed class BuildRequest
             Repair ? "1" : "0",
             BuildQuote.N(Grid),
             Part.ToString(CultureInfo.InvariantCulture),
-            Percent.ToString(CultureInfo.InvariantCulture)
+            Percent.ToString(CultureInfo.InvariantCulture),
+            Bot ? "1" : "0"
         )
         + "\n"
         + Items(Needed)
@@ -1047,7 +1085,8 @@ public sealed class BuildRequest
     {
         var lines = text.Split('\n');
         var f = lines[0].Split('\t');
-        if (lines.Length != 3 || f.Length != 16)
+        // A node from before the bots' field sends 16
+        if (lines.Length != 3 || f.Length is not (16 or 17))
             throw new FormatException("Malformed build request");
         return new BuildRequest
         {
@@ -1067,6 +1106,7 @@ public sealed class BuildRequest
             Grid = BuildQuote.L(f[13]),
             Part = int.Parse(f[14], CultureInfo.InvariantCulture),
             Percent = int.Parse(f[15], CultureInfo.InvariantCulture),
+            Bot = f.Length > 16 && f[16] == "1",
             Needed = Items(lines[1]),
             Provided = Items(lines[2]),
         };
@@ -1127,6 +1167,7 @@ public sealed class BuildRequest
                     Blueprint = Blueprint,
                     Exempt = Exempt,
                     Repair = Repair,
+                    Bot = Bot,
                 },
                 Needed
             ),
