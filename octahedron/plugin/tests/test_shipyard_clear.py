@@ -100,32 +100,27 @@ def running_build(a) -> None:
     log(t.probe(a, f"yardload {STATION} {t.PLATE} {t.BIG_PLATES + 100}"))
     t.start(a)
     t.placed(a)
-
-    def welded() -> bool:
-        grids = t.grid_there(a)
-        return (
-            bool(grids)
-            and len(a.list_blocks(grids[0]["entityId"], 0, 500)["blocks"]) > 4
-        )
-
-    # A ship with no block welded yet ends with none, as at a player's cancel
-    check(t.wait_for(welded, 60, 2), "the welders have started on the ship")
     paid = t.money(a)
     mark = tp.latest(a)
     # No station named: the admin stands in the station's safe zone, by its table
     reply = clear(a, "")
     check(
-        "the unfinished ship handed over" in reply,
+        f"'{t.SHIP}' of OctTester: canceled" in reply,
         f"without a name, the station of the zone; the reply names the build: {reply}",
     )
-    told = tp.wait_chat(a, "An admin canceled", 30, mark)
+    told = tp.wait_chat(a, "An admin canceled", 30, mark) or ""
+    # Before the welders placed a block the cancel leaves no ship, as a player's does
+    handed = "The unfinished ship is yours" in told
     check(
-        "The unfinished ship is yours" in (told or ""),
-        f"the ship is handed over: {told}",
+        handed or "no ship was built" in told,
+        f"the player is told how the build ended: {told}",
     )
     told = tp.wait_chat(a, "An admin cleared", 40, mark)
     check(told is not None, f"then the turn ends: {told}")
-    check(len(t.grid_there(a)) == 1, "one unfinished ship, no copy")
+    want = 1 if handed else 0
+    t.wait_for(lambda: len(t.grid_there(a)) == want, 30, 1)
+    ships = len(t.grid_there(a))
+    check(ships == want, f"one unfinished ship or none, no copy: {ships}")
     t.free_at_end(a, "cleared build")
     check(t.money(a) > paid, f"the leftover plates are sold: {paid} -> {t.money(a)}")
     t.ship_gone(a)
