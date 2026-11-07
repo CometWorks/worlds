@@ -77,6 +77,7 @@ public class Plugin : IPlugin
             StationRefillPatch.UpdateNode();
             StationConnectors.Update();
             StationCharging.Update();
+            StationRelease.Update();
             worldEdge.Update();
             NoGravityDrives.Update();
             ClangDrives.Update();

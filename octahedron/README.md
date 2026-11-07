@@ -391,6 +391,13 @@ two blocks.
   the Octahedron plugin keeps them that way (`StationConnectorsTrade`), in a
   world from before the rule too, and charges a docked ship's batteries from
   the station (`StationDockCharging`).
+- A ship stays docked at a station while one of its owners or their faction
+  is online in the station's safe zone. Without them it is let go after 10
+  minutes, and so is the ship docked the longest while every connector of
+  the station is in use, so nobody can hold a station's connectors
+  (`StationConnectorRelease`,
+  [SE-1237](https://tasks.cometworks.se/tasks/2143)). The connectors have the
+  game's own auto unlock off.
 - Every new player joins OCT's faction (`NewPlayersJoinOct`) as a plain member,
   and Viktor as its leader (`OctLeaders`), so the stations'
   and shipyards' blocks are shared with nobody instead of with the faction

@@ -323,22 +323,19 @@ internal static class EncounterData
         }
         Groups = list.Groups;
         ByName = Groups.ToDictionary(g => g.Name);
-        ClaimStorage();
+        ClaimStorage("OctahedronEncounters", Encounters.StorageKey);
         Plugin.Log.Info($"Loaded {Groups.Count} encounter spawn groups from {path}");
         return true;
     }
 
-    // The game saves only the grid storage keys a mod storage definition claims, so the plugin
-    // adds one for its key, as a mod's EntityComponents definition would
-    private static void ClaimStorage()
+    // The game saves only the entity storage keys a mod storage definition claims, so the plugin
+    // adds one for each of its keys, as a mod's EntityComponents definition would
+    internal static void ClaimStorage(string name, Guid key)
     {
         var builder = new MyObjectBuilder_ModStorageComponentDefinition
         {
-            Id = new SerializableDefinitionId(
-                typeof(MyObjectBuilder_ModStorageComponent),
-                "OctahedronEncounters"
-            ),
-            RegisteredStorageGuids = [Encounters.StorageKey],
+            Id = new SerializableDefinitionId(typeof(MyObjectBuilder_ModStorageComponent), name),
+            RegisteredStorageGuids = [key],
         };
         var definition = new MyModStorageComponentDefinition();
         definition.Init(builder, MyModContext.BaseGame);

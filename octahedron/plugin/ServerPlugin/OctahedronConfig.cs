@@ -127,6 +127,42 @@ public class OctahedronConfig : PluginConfig
     } = true;
 
     [BoolOption(
+        "Station connectors hold a docked ship while one of its biggest owners or their faction (not OCT) is online in the station's safe zone, "
+            + "and let it go after a countdown otherwise. While no connector of a station is free, the ship docked there the longest gets "
+            + "the countdown anyway, until one frees up. Turns the game's own auto unlock off on the stations' connectors.",
+        Parent = "stations"
+    )]
+    public bool StationConnectorRelease
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [IntOption(
+        1,
+        3600,
+        "How often the stations' connectors check who is there and count down, in seconds of simulation time.",
+        Parent = "stations"
+    )]
+    public int StationConnectorCheckSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60;
+
+    [IntOption(
+        0,
+        86400,
+        "Seconds of simulation time a station connector waits before letting go of a ship whose owners left, or of the longest docked ship of a full station.",
+        Parent = "stations"
+    )]
+    public int StationConnectorCountdownSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 600;
+
+    [BoolOption(
         "Players use the blocks an NPC shares with everyone (inventories, doors, buttons, seats, medical rooms, stores, contracts, "
             + "loading a hologram table) but can't change their settings, names, texts, toolbars or the grid's groups.",
         Parent = "stations"
