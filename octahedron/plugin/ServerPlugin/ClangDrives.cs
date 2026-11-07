@@ -14,9 +14,9 @@ using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
 using Sandbox.Game.World;
 using SpaceEngineers.Game.Entities.Blocks;
-using VRage;
 using VRage.Game.Components;
 using VRageMath;
+using IMyPowerProducer = Sandbox.ModAPI.Ingame.IMyPowerProducer;
 using IMyThrust = Sandbox.ModAPI.Ingame.IMyThrust;
 
 namespace ServerPlugin;
@@ -42,7 +42,7 @@ namespace ServerPlugin;
 // pull toward the other is, a merge block clang drive's means. The server
 // never sets a ship's velocity from a client, so contacts and thrusters, a clang drive's means, are
 // never writes. Skipped: groups with a static grid (docked to a station), with no player's grid but
-// an NPC's, in a shipyard's build space or switched off already. Each cluster node checks what it
+// an NPC's, in a shipyard's build space or with no power producer on. Each cluster node checks what it
 // simulates.
 internal static class ClangDrives
 {
@@ -225,7 +225,9 @@ internal static class ClangDrives
             config.ClangDriveMinAcceleration
             + (config.ClangDriveFactor - 1) * accel
             + gravity.Length();
-        if (unexplained <= limit || group.All(g => !g.IsPowerSwitchOn))
+        // Not the power switch: it cuts no power, a ship switched off with Y runs on any battery turned
+        // on again in its terminal
+        if (unexplained <= limit || !group.Any(g => Producers(g).Any(p => p.Enabled)))
             return;
 
         // The ship is a player's when any grid of it is: an NPC's derelict a player's tug tows doesn't
@@ -376,16 +378,22 @@ internal static class ClangDrives
         return tracks.TryGetValue(key, out var track) ? track.Speed : 0;
     }
 
-    // What the Y key does, on every grid of the group: the power switch and every power producer off
+    // The power switch and every power producer off on every grid of the group, whatever state each is
+    // in. The switch is for the Y key: pressed, it turns the switch and every producer back on.
     private static void SwitchOff(List<MyCubeGrid> group)
     {
         foreach (var grid in group)
         {
             if (grid.IsPowerSwitchOn)
                 grid.SwitchPower();
-            grid.ChangePowerProducerStateInternal(MyMultipleEnabledEnum.AllDisabled, -1);
+            foreach (var producer in Producers(grid))
+                producer.Enabled = false;
         }
     }
+
+    // Batteries, reactors, hydrogen engines, solar panels, wind turbines and modded producers
+    private static IEnumerable<MyFunctionalBlock> Producers(MyCubeGrid grid) =>
+        grid.GetFatBlocks<MyFunctionalBlock>().Where(b => b is IMyPowerProducer);
 
     // Every velocity setter of a body ends here: LinearVelocity, LinearVelocityUnsafe, SetSpeeds
     [HarmonyPatch(typeof(MyPhysicsBody), "SetLinearVelocity")]

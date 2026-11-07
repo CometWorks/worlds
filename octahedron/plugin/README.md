@@ -329,9 +329,8 @@ it and turns the world setting on.
 ### Clang drives
 
 With `ClangDrivesEnabled` on (the default), the server switches a ship off when its speed
-changes in a way the forces on it don't explain, the way the Y key in its cockpit does:
-the power switch and every battery, reactor, engine and other power producer of the ship go
-off. This stops clang drives, and a ship that brakes by ramming a station or another ship in
+changes in a way the forces on it don't explain: the power switch and every battery,
+reactor, engine and other power producer of the ship go off, whatever state each one was in. This stops clang drives, and a ship that brakes by ramming a station or another ship in
 a safe zone. The log names the grid, its owner, the acceleration left unexplained, the one
 measured and the one allowed, and the owner gets a chat message, at most one a minute. A ship over the limit that
 one of the exceptions below leaves on gets a log line too, with the reason. Nothing switches
@@ -372,7 +371,8 @@ the ship back on; the player can, with Y.
 - Ships with a static grid (one docked or landed on a station), NPC ships, ships in a
   shipyard's build space and ships already switched off are left alone. A ship is an NPC's
   only when none of its grids is a player's: a player's tug towing an NPC wreck is checked.
-  It is off when every grid's switch is.
+  It is off when none of its power producers is on. The power switch doesn't count: it cuts
+  no power, and a ship switched off with Y runs on any battery turned back on in its terminal.
 
 On a cluster each node checks the ships it simulates.
 

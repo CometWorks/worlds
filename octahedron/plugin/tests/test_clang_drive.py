@@ -20,13 +20,20 @@ flying at Relative Top Speed's boost ceiling, and 1 s after flying near the spee
 drag, and a small grid missile at 355 m/s thrusting in two directions across its flight. The merge block
 drive counts although its merge blocks set the velocity: their pull is its means.
 
+The rule switches off every power producer, whatever state each is in, and doesn't take the power switch for
+power (SE-1249): pushed at 3x, a ship with two of its three batteries off and one on is switched off with its
+power switch on, and with it off as Y leaves it before a battery is turned back on in the terminal. One more
+of the first kind is switched back on by the grid event the Y key sends, as a sebot trader does (SE-1132),
+and comes back with all three batteries on.
+
 Relative Top Speed comes from OCT_WORKSHOP (the Workshop content folder, as tests/test_projection_limits.py
 takes it):
 
     steamcmd +force_install_dir DIR +login anonymous +workshop_download_item 244850 1359618037 +quit
 
 Two clang drives from the Workshop are switched off once started, a sliding door one and a merge block one,
-when CLANG_BLUEPRINTS names a steamcmd folder that has them (see DRIVES):
+when CLANG_BLUEPRINTS names a steamcmd folder that has them (see DRIVES). So is the merge block one with 10 of
+its 13 batteries off, with its power switch on and off (SE-1249):
 
     steamcmd +force_install_dir DIR +login anonymous +workshop_download_item 244850 2882012087 +workshop_download_item 244850 2889439688 +quit
     CLANG_BLUEPRINTS=DIR/steamapps/workshop/content/244850 OCT_WORKSHOP=DIR/steamapps/workshop/content/244850 \
@@ -107,6 +114,9 @@ SHIPS = {
     "CL Reverse 0.5": (False, True, False),
     "CL Reverse 1": (False, True, False),
     "CL Missile": (False, True, False),
+    "CL Push 3 Most Off": (True, True, False),
+    "CL Push 3 Y Off": (True, True, False),
+    "CL Push 3 Most Off Again": (True, True, False),
 }
 # Relative Top Speed's boost ceilings in config/relative-top-speed.xml: large grids 300 m/s, cruising at 250
 # below 500 t; small grids 360, cruising at 300 below 50 t
@@ -123,16 +133,22 @@ PLAYER = 144115188075855999
 TOW = "CL Push 3 Tow"
 # The log names a ship by its biggest grid: the tug's by the wreck it holds
 LOGGED = {TOW: TOW + " Wreck"}
+# Switched back on by the probe after the rule switched it off
+AGAIN = "CL Push 3 Most Off Again"
 RAMS = ("CL Ram Zone", "CL Ram Crash", "CL Ram Bare", "CL Ram Victim")
 CLANG = "CL Clang"
 CLANG_AT = (SPACE[0], SPACE[1] + 5000, SPACE[2])
 # Workshop clang drives, each under CLANG_BLUEPRINTS/<item>/bp.sbc as steamcmd leaves them:
-# name -> (item, the block the probe starts 5 s in: a timer it triggers or a piston it reverses)
+# name -> (item, the block the probe starts 5 s in: a timer it triggers or a piston it reverses,
+# batteries switched off, power switch on)
 DRIVES = {
     # Zer0's "Piston Door Clang Drive": a piston pushing its head into a sliding door
-    "CL Door": (2882012087, "Piston"),
+    "CL Door": (2882012087, "Piston", 0, True),
     # Capt_Derpy's "Clang Drives Demonstration", its CG 3: pistons with merge blocks on their heads
-    "CL Merge": (2889439688, "Timer Block  - CG 3"),
+    "CL Merge": (2889439688, "Timer Block  - CG 3", 0, True),
+    # The same with most of its 13 batteries off: the others run the drive (SE-1249)
+    "CL Merge Most Off": (2889439688, "Timer Block  - CG 3", 10, True),
+    "CL Merge Y Off": (2889439688, "Timer Block  - CG 3", 10, False),
 }
 BLUEPRINTS = os.environ.get("CLANG_BLUEPRINTS")
 LOG_MARK = "Clang drive: "
@@ -145,8 +161,16 @@ def npc_identity() -> int:
 
 
 def ship(
-    name: str, index: int, position, velocity=(0, 0, 0), heavy: int = 0, **kwargs
+    name: str,
+    index: int,
+    position,
+    velocity=(0, 0, 0),
+    heavy: int = 0,
+    batteries_off: int = 0,
+    powered: bool = True,
+    **kwargs,
 ) -> str:
+    """batteries_off more batteries beside the one that is on, switched off"""
     _, thruster, npc = SHIPS[name]
     own = f"<Owner>{npc_identity()}</Owner><ShareMode>None</ShareMode>" if npc else ""
     blocks = [
@@ -178,7 +202,28 @@ def ship(
         for x in range(1, 6)
         for y in range(6)
     ][:heavy]
-    return rig.grid(name, BASE + index, blocks, position, velocity=velocity, **kwargs)
+    blocks += [
+        rig.block(
+            "MyObjectBuilder_BatteryBlock",
+            "LargeBlockBatteryBlock",
+            (-1, y, 1),
+            "<Enabled>false</Enabled><CurrentStoredPower>3</CurrentStoredPower>",
+        )
+        for y in range(batteries_off)
+    ]
+    return power_switch(
+        rig.grid(name, BASE + index, blocks, position, velocity=velocity, **kwargs),
+        powered,
+    )
+
+
+def power_switch(grids: str, on: bool) -> str:
+    """The grids with their power switch on or off; a grid without one in it has it on"""
+    return re.sub(
+        r"(<GridSizeEnum>\w+</GridSizeEnum>)",
+        rf"\1<IsPowered>{str(on).lower()}</IsPowered>",
+        grids,
+    )
 
 
 def reverse(name: str, index: int, position, speed: float) -> str:
@@ -346,11 +391,14 @@ def blueprint(
     start: str | None = None,
     piston_velocity: float | None = None,
     thruster: bool = False,
+    batteries_off: int = 0,
+    powered: bool = True,
 ) -> list[str]:
     """The grids of a blueprint, its first one at the given position and named name, the others "name Head",
     owner and builder dropped and entity ids renumbered from base. The block named start is renamed "CL Start"
     for the probe to start the drive with. For Viktor's "Clang with Piston" (se-clang-slayer), a piston on a
-    C frame pushing its head into the frame: the piston's speed, and a thruster added to the frame.
+    C frame pushing its head into the frame: the piston's speed, and a thruster added to the frame. The first
+    batteries_off batteries are switched off, and the power switch of every grid is set to powered.
     """
     text = path.read_text(encoding="utf-8")
     text = re.sub(r"<(Owner|BuiltBy)>\d+</\1>", "", text)
@@ -363,6 +411,17 @@ def blueprint(
         text = text.replace(
             f"<CustomName>{start}</CustomName>", "<CustomName>CL Start</CustomName>"
         )
+    batteries = re.findall(
+        r'<MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_BatteryBlock">.*?</MyObjectBuilder_CubeBlock>',
+        text,
+        re.S,
+    )
+    for battery in batteries[:batteries_off]:
+        text = text.replace(
+            battery,
+            battery.replace("<Enabled>true</Enabled>", "<Enabled>false</Enabled>"),
+        )
+    text = power_switch(re.sub(r"<IsPowered>\w+</IsPowered>", "", text), powered)
     if piston_velocity is not None:
         text = re.sub(
             r"<Velocity>[^<]*</Velocity>",
@@ -422,12 +481,22 @@ def world_grids() -> list[str]:
         "CL Thrust",
         "CL Drag 3",
         "CL Set 3",
+        "CL Push 3 Most Off",
+        "CL Push 3 Y Off",
+        AGAIN,
     ]
     for i, name in enumerate(spaced):
         # The spike that is to be absorbed comes on a ship already moving: a slow one doesn't count
         velocity = (0, 0, 30) if name == "CL Spike 0.1" else (0, 0, 0)
         grids.append(
-            ship(name, 30 + i, (SPACE[0] + 1000 * i, SPACE[1], SPACE[2]), velocity)
+            ship(
+                name,
+                30 + i,
+                (SPACE[0] + 1000 * i, SPACE[1], SPACE[2]),
+                velocity,
+                batteries_off=2 if "Off" in name else 0,
+                powered="Y Off" not in name,
+            )
         )
     # Ramming toward -Z at 50 m/s: in the safe zone from outside it, onto a wall 105 m ahead; the crash 45 m ahead
     ram = (0, 0, -RAM_SPEED)
@@ -484,7 +553,9 @@ def world_grids() -> list[str]:
         piston_velocity=CLANG_SPEED,
         thruster=True,
     )
-    for i, (name, (item, start)) in enumerate(DRIVES.items() if BLUEPRINTS else []):
+    for i, (name, (item, start, off, powered)) in enumerate(
+        DRIVES.items() if BLUEPRINTS else []
+    ):
         grids += blueprint(
             Path(BLUEPRINTS) / str(item) / "bp.sbc",
             name,
@@ -492,6 +563,8 @@ def world_grids() -> list[str]:
             # Every block has an entity id too
             BASE + 100_000 * (i + 1),
             start=start,
+            batteries_off=off,
+            powered=powered,
         )
     return grids
 
@@ -650,7 +723,12 @@ def main() -> int:
 
     for name, (expected_off, *_) in SHIPS.items():
         state = show(name)
-        if expected_off:
+        if name == AGAIN:
+            check(
+                state["on"] and state["producers"] == 3 and name in off,
+                f"{name}: switched off, then back on with all three batteries by the Y key's grid event",
+            )
+        elif expected_off:
             check(
                 not state["on"]
                 and state["producers"] == 0
@@ -712,8 +790,8 @@ def main() -> int:
     for name in DRIVES if BLUEPRINTS else ():
         state = show(name)
         check(
-            bool(state) and not state["on"] and name in off,
-            f"{name}: the Workshop clang drive was switched off",
+            bool(state) and not state["on"] and state["producers"] == 0 and name in off,
+            f"{name}: the Workshop clang drive was switched off, power and every battery",
         )
     check(
         f"({PLAYER}) switched off" in off.get(LOGGED[TOW], ""),
