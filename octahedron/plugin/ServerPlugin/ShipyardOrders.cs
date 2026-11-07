@@ -329,7 +329,16 @@ internal static partial class ShipyardOrders
         plan.Pcu = blueprint.Sum(g => g.CalculatePCUs());
         // The player is on this node, so its copy of their admin settings is current
         plan.Exempt = FreePrints.Exempt(identityId);
-        var error = Fits(plan.Shipyard, blueprint, plan.Exempt, out _, out plan.Pending);
+        // A running build's arm and ship are on the heads, growing as it welds: an arm planned
+        // around them is for the wrong heads and never settles, so its start plans the arm
+        var error = Fits(
+            plan.Shipyard,
+            blueprint,
+            plan.Exempt,
+            out _,
+            out plan.Pending,
+            planArm: !orders.ContainsKey(plan.Shipyard.EntityId)
+        );
         if (plan.Pending)
             // Quoted again when the plan is done
             ShipyardArm.WhenDone(() => loaded[table.EntityId] = identityId);
@@ -389,12 +398,14 @@ internal static partial class ShipyardOrders
 
     // Why the shipyard can't build the blueprint at all, or null, with the arm if it needs one.
     // Pending: the arm is still being planned, that is the reason given for now.
+    // Without planArm the arm is left out.
     private static string Fits(
         MyCubeGrid shipyard,
         List<MyObjectBuilder_CubeGrid> blueprint,
         bool exempt,
         out ShipyardArm.Layout layout,
-        out bool pending
+        out bool pending,
+        bool planArm = true
     )
     {
         layout = null;
@@ -427,7 +438,7 @@ internal static partial class ShipyardOrders
         var capacity = Containers(shipyard).Sum(i => (double)i.MaxVolume);
         if (needed > capacity)
             return $"The ship's components take {needed:N0} m³, {shipyard.DisplayName}'s containers hold {capacity:N0} m³.";
-        if (arms)
+        if (arms && planArm)
         {
             layout = ShipyardArm.Plan(
                 shipyard,
