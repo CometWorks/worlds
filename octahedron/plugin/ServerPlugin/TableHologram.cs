@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using HarmonyLib;
 using Sandbox;
@@ -20,8 +21,12 @@ namespace ServerPlugin;
 // server broadcasts to the clients.
 internal static class TableHologram
 {
-    private static readonly Dictionary<MyProjectorBase, List<MyObjectBuilder_CubeGrid>> pending =
-        new();
+    // Written from worker threads too: the cluster's handover import builds grids in parallel,
+    // and each projector holding a blueprint remaps it in OnRegisteredToGridSystems (SE-1230)
+    private static readonly ConcurrentDictionary<
+        MyProjectorBase,
+        List<MyObjectBuilder_CubeGrid>
+    > pending = new();
 
     internal static readonly AccessTools.FieldRef<
         MyProjectorBase,
@@ -47,14 +52,15 @@ internal static class TableHologram
 
     public static void Update()
     {
-        if (pending.Count == 0)
+        if (pending.IsEmpty)
             return;
-        var tables = new List<KeyValuePair<MyProjectorBase, List<MyObjectBuilder_CubeGrid>>>(
-            pending
-        );
-        pending.Clear();
-        foreach (var entry in tables)
-            Fit(entry.Key, entry.Value);
+        // Keys is a snapshot. A table set again meanwhile is fitted with its latest blueprint
+        // now or on the next update.
+        foreach (var table in pending.Keys)
+        {
+            if (pending.TryRemove(table, out var grids))
+                Fit(table, grids);
+        }
     }
 
     // Fits every station table that holds a blueprint, for example after a config change
