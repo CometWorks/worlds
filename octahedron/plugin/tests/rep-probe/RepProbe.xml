@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<PluginData
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="GitHubPlugin"
+>
+  <Id>rep-probe</Id>
+  <GroupId>rep-probe</GroupId>
+  <RepoId>local/rep-probe</RepoId>
+
+  <FriendlyName>Reputation Probe</FriendlyName>
+  <Author>Viktor</Author>
+
+  <Tooltip>Test only: the share box, ownership and deposit requests through chat commands</Tooltip>
+  <Description>Test only. /rep claim, share and deposit send the requests a block's
+        terminal and the faction screen send, from the client.
+    </Description>
+
+  <Runtimes>CoreCLR</Runtimes>
+
+  <Hidden>true</Hidden>
+
+  <Commit>TODO</Commit>
+</PluginData>

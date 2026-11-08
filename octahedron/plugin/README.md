@@ -328,6 +328,50 @@ there and the player hears why. Grids of the encounters' NPCs and of other playe
 no money, a hand grinder does nothing to OCT's and a bot's hull but grinds a player's and a
 pirate's, and after `!oct reload` with the options off the same deposit and grinders work.
 
+### OCT reputation
+
+With `ReputationEnabled` on, every OCT member has a reputation, counted in SC
+([SE-1283](https://tasks.cometworks.se/tasks/2199)). It starts at `ReputationStart` (10,000) and
+`!oct rep` shows it; `!oct rep add <amount> [player name]` (admin) changes it.
+
+- **Down:** grinding, shooting, blowing up or ramming a grid that another member owns most of
+  costs the value lost: the block's components at their reference prices (`MarketPrices`, else
+  the game's minimal price / 10, the prices the stores and the market start from) times the share
+  of the block's integrity lost. "Owns most of" is the game's `BigOwners`, the owners of the most
+  ownable blocks; a grid with none, like a rotor top of armor, counts with the largest grid of its
+  mechanical group. Grids shared with OCT count as their owner's. OCT's NPC and the trader bots
+  are members too, so taking a station block or a trader's ship apart costs.
+- **Up:** a deposit into OCT's account adds the SC paid, so 1 SC paid makes up for 1 SC of grid
+  taken apart. Sharing a block with OCT in its terminal adds its value, unsharing takes it off
+  again, and so does taking apart a block of your own that you share, so sharing can't be farmed.
+- **Free:** grids the member owns most of, grids of no one and of other factions, and the first
+  ram in `ReputationRamGraceSeconds` (an hour). A ram is the collision damage one member's ship,
+  the faster of the two, does to other members' grids until `ReputationRamGapSeconds` (10) pass
+  without one; its pilot pays. The trader bots (`OctProtectedSteamIds`) have no reputation.
+
+Below zero the member is told. Below `ReputationKickBelow` (-10,000) a countdown of
+`ReputationKickAfterSeconds` (an hour) starts, with a warning at its start and at
+`ReputationWarnSeconds` (30, 10 and 5 minutes) before its end. Back above, it stops and starts
+over in full next time. At its end the member is removed from OCT and told why; their reputation
+stays as it was. The countdown counts the time the server runs, whether the member is online or not.
+
+The reputations live where the faction and the bank accounts do: on a plain server, or on the
+World Authority of a cluster, in the world variable `Octahedron.Reputation`, saved with them. The
+countdowns run there. The nodes, which see the damage, deposits and shares, send their changes
+every second as a global command, which the World Authority runs once even when a node sends
+it again after a timeout. So the reputation follows the player to any node and through restarts.
+
+`OctNoDeposits` refuses a member's deposit, so with it on, paying in can't raise the reputation.
+ToolCore's tools grind without a player (`identityId` 0) and cost no one reputation.
+
+`tests/reputation/ReputationTests` checks the countdown, its warnings, the forgiven ram and the
+save without a game. `tests/test_reputation.py` checks it with the client and
+`tests/rep-probe`, a client plugin that sends a block terminal's share box, the ownership claim
+and the faction screen's Deposit: grinding, the share, a deposit, two rams and the removal with a
+20 s countdown. `tests/reputation_cluster.py` checks it on a cluster: a change on
+one node reaches the World Authority once, the reputation is the same after a handover and a warm
+start, and the warnings and the removal reach the player on the node they moved to.
+
 ### Refill containers
 
 `RefillContainers` keeps blocks stocked with fixed items, independent of the

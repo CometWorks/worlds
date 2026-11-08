@@ -239,6 +239,83 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "";
 
+    [BoolOption(
+        "OCT members have a reputation, in SC: damaging or grinding a grid another member owns most of lowers it by the "
+            + "value lost, paying into OCT's account and sharing blocks with OCT raise it, unsharing lowers it. A member below "
+            + "ReputationKickBelow for ReputationKickAfterSeconds is removed from OCT. !oct rep shows it.",
+        Parent = "faction"
+    )]
+    public bool ReputationEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [LongOption(description: "Reputation every OCT member starts with.", Parent = "faction")]
+    public long ReputationStart
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10_000;
+
+    [LongOption(
+        description: "A member whose reputation stays below this for ReputationKickAfterSeconds is removed from OCT.",
+        Parent = "faction"
+    )]
+    public long ReputationKickBelow
+    {
+        get;
+        set => SetField(ref field, value);
+    } = -10_000;
+
+    [IntOption(
+        1,
+        int.MaxValue,
+        "Seconds a member's reputation may stay below ReputationKickBelow before they are removed from OCT. "
+            + "The count runs while the server runs, online or not, and starts over once the reputation is back above.",
+        Parent = "faction"
+    )]
+    public int ReputationKickAfterSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 3600;
+
+    [StringOption(
+        description: "Seconds before the removal from OCT at which the member is warned again, comma separated. "
+            + "They are warned when the count starts too.",
+        Parent = "faction"
+    )]
+    public string ReputationWarnSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "1800,600,300";
+
+    [IntOption(
+        0,
+        int.MaxValue,
+        "A member's first ram of another member's grid in this many seconds is taken as an accident and costs no reputation. 0: every ram costs.",
+        Parent = "faction"
+    )]
+    public int ReputationRamGraceSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 3600;
+
+    [IntOption(
+        1,
+        3600,
+        "Collisions of one member's ship with other members' grids less than this many seconds apart are one ram.",
+        Parent = "faction"
+    )]
+    public int ReputationRamGapSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
     [BoolOption("Fill the turrets with ammo.", Parent = "stations")]
     public bool StationReloadTurrets
     {

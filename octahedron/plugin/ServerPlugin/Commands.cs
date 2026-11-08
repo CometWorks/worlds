@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using PluginSdk.Commands;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
@@ -281,6 +282,51 @@ public sealed class Commands : CommandModule
 
     private MyCharacter CallerCharacter() =>
         MySession.Static.Players.TryGetIdentity(Context.Caller.IdentityId)?.Character;
+
+    [Command(
+        "rep",
+        "Shows your reputation in OCT",
+        "!oct rep: damaging grids of other members lowers it, paying into OCT's account and sharing your grids with OCT raise it."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public void Rep()
+    {
+        var context = Context;
+        Reputation.Read(
+            Context.Caller.IdentityId,
+            (text, error) =>
+            {
+                if (text != null)
+                    context.Respond(text);
+                else
+                    context.Respond(CommandReply.Error(error));
+            }
+        );
+    }
+
+    [Command(
+        "rep add",
+        "Changes a member's reputation in OCT, for tests",
+        "!oct rep add <amount> [player name]: yours without a name."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string RepAdd(long amount, params string[] name)
+    {
+        var identity = Context.Caller.IdentityId;
+        if (name.Length > 0)
+        {
+            var wanted = string.Join(" ", name);
+            identity =
+                MySession
+                    .Static.Players.GetAllIdentities()
+                    .FirstOrDefault(i => i.DisplayName == wanted)
+                    ?.IdentityId
+                ?? 0;
+            if (identity == 0)
+                return $"No player named {wanted}.";
+        }
+        return Reputation.Change(identity, amount);
+    }
 
     [Command("money", "Shows OCT's balance, yours and the state of the tax and the payouts")]
     [Permission(MyPromoteLevel.Admin)]
