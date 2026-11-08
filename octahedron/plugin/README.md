@@ -283,6 +283,11 @@ client. The offset moves in whole scaled cubes and the game keeps it within 50 o
 them, so a blueprint longer than about 150 m may sit a little off center.
 `!oct holograms` (admin) fits every station table again, for example after a
 config change.
+A cluster node builds a handover's grids on parallel threads, so a table's new
+blueprint can arrive off the game thread. `tests/table-hologram/TableHologramTests`
+calls the plugin's hook from 16 threads at once and checks that every table is queued
+for fitting
+(`dotnet run -c Release --project tests/table-hologram/TableHologramTests`).
 
 ### Projection limits
 
