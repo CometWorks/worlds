@@ -9,10 +9,17 @@ in unprepared.
 From is the blueprint and build_world.py of the commit the live world was built from (--since),
 To those of the working tree, so a change to the preparation is part of the patch too.
 
-    python station_patch.py 2026-12-station-v2 "Beta Station" --since 04f52f6 --out config
+    python station_patch.py 2026-12-station-v2 "Beta Station" --since 04f52f6
 
-writes 2026-12-station-v2-from.sbc and -to.sbc to the config folder and prints the entry for
-octahedron.cfg. A grid named "<station> Shipyard" is that station's shipyard.
+writes 2026-12-station-v2-from.sbc and -to.sbc to config/storage/Octahedron and prints the entry
+for octahedron.cfg. A grid named "<station> Shipyard" is that station's shipyard. With --stations
+it makes a pair for every station built from the station blueprint, each patch id ending in the
+station's first word: 2026-12-station-v2-beta.
+
+Both files keep only the main grid and its blocks that differ between them, by min cell: the plugin
+compares just those, and a pair per station stays a few kB. config/storage goes into every new
+world's Storage folder, and Deploy Octahedron stages it into a kept world's, where the plugin finds
+the files.
 """
 
 import argparse
@@ -84,6 +91,44 @@ def prepare(world, grid: str, blueprint: Path | None = None) -> ET.ElementTree:
     return tree
 
 
+def trim(old: ET.ElementTree, new: ET.ElementTree):
+    """Leaves only the main grid in both, with the blocks whose min cell is in one of them alone or
+    holds a block that differs in anything but its entity id."""
+
+    def main_grid(tree):
+        holder = tree.getroot().find(".//CubeGrids")
+        grid = max(holder, key=lambda g: len(g.find("CubeBlocks")))
+        for other in [g for g in holder if g is not grid]:
+            holder.remove(other)
+        return grid.find("CubeBlocks")
+
+    def by_cell(blocks):
+        cells = {}
+        for block in blocks:
+            m = block.find("Min")
+            cell = (
+                tuple(int(m.get(a, 0)) for a in "xyz") if m is not None else (0, 0, 0)
+            )
+            copy = ET.fromstring(ET.tostring(block))
+            for field in copy.findall("EntityId"):
+                copy.remove(field)
+            cells[cell] = (block, ET.tostring(copy))
+        return cells
+
+    blocks = main_grid(old), main_grid(new)
+    cells = [by_cell(b) for b in blocks]
+    keep = {
+        c
+        for c in cells[0].keys() | cells[1].keys()
+        if cells[0].get(c, (0, 0))[1] != cells[1].get(c, (0, 0))[1]
+    }
+    for holder, found in zip(blocks, cells):
+        for cell, (block, _) in found.items():
+            if cell not in keep:
+                holder.remove(block)
+    return len(keep)
+
+
 def write(world, tree: ET.ElementTree, path: Path):
     ET.indent(tree, "  ")
     world.write_xml(tree, path)
@@ -92,28 +137,50 @@ def write(world, tree: ET.ElementTree, path: Path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("id", help="the patch id, unique in the config")
-    parser.add_argument("grid", help='the grid, like "Beta Station"')
+    parser.add_argument(
+        "grids", nargs="*", help='the grids, like "Beta Station" (none with --stations)'
+    )
+    parser.add_argument(
+        "--stations",
+        action="store_true",
+        help="every station built from the station blueprint, the patch id ending in its first word",
+    )
     parser.add_argument(
         "--since",
         default="HEAD",
         help="the commit the live world was built from (default HEAD)",
     )
     parser.add_argument(
-        "--out", type=Path, default=HERE / "config", help="where to write the files"
+        "--out",
+        type=Path,
+        default=HERE / "config/storage/Octahedron",
+        help="where to write the files",
     )
     args = parser.parse_args()
+    if args.stations == bool(args.grids):
+        parser.error("name the grids or give --stations")
     ET.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
     ET.register_namespace("xsd", "http://www.w3.org/2001/XMLSchema")
     with tempfile.TemporaryDirectory() as temp:
         old = load(checkout(args.since, Path(temp)), "build_world_since")
         new = load(HERE, "build_world")
-        source, target = f"{args.id}-from.sbc", f"{args.id}-to.sbc"
-        write(old, prepare(old, args.grid), args.out / source)
-        write(new, prepare(new, args.grid), args.out / target)
-    print(
-        f"<StationPatchEntry>\n  <Id>{args.id}</Id>\n  <Grid>{args.grid}</Grid>\n"
-        f"  <From>{source}</From>\n  <To>{target}</To>\n</StationPatchEntry>"
-    )
+        args.out.mkdir(parents=True, exist_ok=True)
+        stations = [
+            (f"{args.id}-{g.split()[0].lower()}", g) for g in new.STATION_COLORS
+        ]
+        for id_, grid in (
+            stations if args.stations else [(args.id, g) for g in args.grids]
+        ):
+            source, target = f"{id_}-from.sbc", f"{id_}-to.sbc"
+            pair = prepare(old, grid), prepare(new, grid)
+            changed = trim(*pair)
+            write(old, pair[0], args.out / source)
+            write(new, pair[1], args.out / target)
+            print(f"<!-- {grid}: {changed} blocks differ -->", file=sys.stderr)
+            print(
+                f"<StationPatchEntry>\n  <Id>{id_}</Id>\n  <Grid>{grid}</Grid>\n"
+                f"  <From>{source}</From>\n  <To>{target}</To>\n</StationPatchEntry>"
+            )
 
 
 if __name__ == "__main__":

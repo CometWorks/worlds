@@ -108,8 +108,8 @@
               <SubtypeName>LargeBlockBillboardRound</SubtypeName>
               <EntityId>77629830715103877</EntityId>
               <Min x="-6" y="1" z="0" />
-              <ColorMaskHSV x="0" y="-0.8" z="0" />
-              <SkinSubtypeId>Retrofuture_Armor</SkinSubtypeId>
+              <ColorMaskHSV x="0.7777778" y="0.2" z="-0.08" />
+              <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
               <Owner>196498773398234354</Owner>
               <ShareMode>Faction</ShareMode>
               <ComponentContainer>
@@ -132,6 +132,7 @@
                           <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
                           <FontSize>0.8</FontSize>
                           <Text>            = Welcome! =
+
  Please apprise yourself
  of our server rules. Not
  reading them isn't an
@@ -142,8 +143,7 @@
  first 10,000 PCU is free!
 
  Vye for control of the asteroid
- field, or dominate the market
- for top slots on the leaderboards!</Text>
+ field, or dominate the market!</Text>
                           <ShowText>NONE</ShowText>
                           <FontColor>
                             <PackedValue>4285909247</PackedValue>
@@ -347,7 +347,7 @@
                   </ComponentData>
                 </Components>
               </ComponentContainer>
-              <CustomName>Billboard LCD Round - Station Lounge rules</CustomName>
+              <CustomName>Billboard LCD Round - Station Hangar rules</CustomName>
               <ShowOnHUD>false</ShowOnHUD>
               <ShowInTerminal>true</ShowInTerminal>
               <ShowInToolbarConfig>true</ShowInToolbarConfig>
@@ -1757,8 +1757,8 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
               <EntityId>128305255757267734</EntityId>
               <Min x="6" y="1" z="0" />
               <BlockOrientation Forward="Backward" Up="Up" />
-              <ColorMaskHSV x="0" y="-0.8" z="0" />
-              <SkinSubtypeId>Retrofuture_Armor</SkinSubtypeId>
+              <ColorMaskHSV x="0.7777778" y="0.2" z="-0.08" />
+              <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
               <Owner>196498773398234354</Owner>
               <ShareMode>Faction</ShareMode>
               <ComponentContainer>
@@ -1781,6 +1781,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
                           <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
                           <FontSize>0.8</FontSize>
                           <Text>            = Welcome! =
+
  Please apprise yourself
  of our server rules. Not
  reading them isn't an
@@ -1791,8 +1792,7 @@ ConsumableItem/MealPack_KelpCrisp=32</Value>
  first 10,000 PCU is free!
 
  Vye for control of the asteroid
- field, or dominate the market
- for top slots on the leaderboards!</Text>
+ field, or dominate the market!</Text>
                           <ShowText>NONE</ShowText>
                           <FontColor>
                             <PackedValue>4285909247</PackedValue>
@@ -29516,20 +29516,8 @@ by organic, free-range catgirls
                           <string>LCD_Economy_Clear</string>
                         </SelectedImages>
                         <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
-                        <FontSize>0.7</FontSize>
-                        <Text>=== Octahedron Credits ===
-
-Space, Viktor, Owen: CometWorks, Pulsar Magnetar,
-Quasar, Cluster, plugins, skills, dev work
-
-void catgirl rglx: Station and Shipyard design, testing
-
-Mods: Omni Arc, Relative Top Speed, MES, Binoculars
-[Psycho]: Trade Lanes (gates) + Viktor for MP upgrade
-
-Keen Software House: SE1 game+DS and SE2 skybox
-
-Anthropic, OpenAI: AI models and subscriptions</Text>
+                        <FontSize>1</FontSize>
+                        <Text>Faction Leaderboard</Text>
                         <ShowText>NONE</ShowText>
                         <FontColor>
                           <PackedValue>4285909247</PackedValue>
@@ -29555,7 +29543,7 @@ Anthropic, OpenAI: AI models and subscriptions</Text>
                         <Alignment>2</Alignment>
                         <ContentType>TEXT_AND_IMAGE</ContentType>
                         <SelectedScript />
-                        <TextPadding>2</TextPadding>
+                        <TextPadding>4</TextPadding>
                         <ScriptBackgroundColor>
                           <PackedValue>4288108544</PackedValue>
                           <X>0</X>
@@ -29599,7 +29587,7 @@ Anthropic, OpenAI: AI models and subscriptions</Text>
                   </ComponentData>
                 </Components>
               </ComponentContainer>
-              <CustomName>Curved LCD Panel - Octahedron Credits</CustomName>
+              <CustomName>Curved LCD Panel - Station Lounge Leaderboard</CustomName>
               <ShowOnHUD>false</ShowOnHUD>
               <ShowInTerminal>true</ShowInTerminal>
               <ShowInToolbarConfig>true</ShowInToolbarConfig>
@@ -30575,7 +30563,7 @@ Anthropic, OpenAI: AI models and subscriptions</Text>
                   </ComponentData>
                 </Components>
               </ComponentContainer>
-              <CustomName>Curved LCD Panel - Station Lounge Free 2</CustomName>
+              <CustomName>Curved LCD Panel - Station Lounge Free 1</CustomName>
               <ShowOnHUD>false</ShowOnHUD>
               <ShowInTerminal>true</ShowInTerminal>
               <ShowInToolbarConfig>true</ShowInToolbarConfig>
@@ -30729,7 +30717,20 @@ Anthropic, OpenAI: AI models and subscriptions</Text>
                           <string>LCD_Economy_Clear</string>
                         </SelectedImages>
                         <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
-                        <FontSize>2</FontSize>
+                        <FontSize>0.7</FontSize>
+                        <Text>=== Octahedron Credits ===
+
+Space, Viktor, Owen: CometWorks, Pulsar Magnetar,
+Quasar, Cluster, plugins, skills, dev work
+
+void catgirl rglx: Station and Shipyard design, testing
+
+Mods: Omni Arc, Relative Top Speed, MES, Binoculars
+[Psycho]: Trade Lanes (gates) + Viktor for MP upgrade
+
+Keen Software House: SE1 game+DS and SE2 skybox
+
+Anthropic, OpenAI: AI models and subscriptions</Text>
                         <ShowText>NONE</ShowText>
                         <FontColor>
                           <PackedValue>4285909247</PackedValue>
@@ -30755,7 +30756,7 @@ Anthropic, OpenAI: AI models and subscriptions</Text>
                         <Alignment>2</Alignment>
                         <ContentType>TEXT_AND_IMAGE</ContentType>
                         <SelectedScript />
-                        <TextPadding>4</TextPadding>
+                        <TextPadding>2</TextPadding>
                         <ScriptBackgroundColor>
                           <PackedValue>4288108544</PackedValue>
                           <X>0</X>
@@ -30799,7 +30800,7 @@ Anthropic, OpenAI: AI models and subscriptions</Text>
                   </ComponentData>
                 </Components>
               </ComponentContainer>
-              <CustomName>Curved LCD Panel - Station Lounge Free 1</CustomName>
+              <CustomName>Curved LCD Panel - Octahedron Credits</CustomName>
               <ShowOnHUD>false</ShowOnHUD>
               <ShowInTerminal>true</ShowInTerminal>
               <ShowInToolbarConfig>true</ShowInToolbarConfig>

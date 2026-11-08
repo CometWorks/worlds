@@ -172,7 +172,8 @@ compared; subgrids are left as they are.
 
 - `!oct patch diff <id> "<grid>" <from.sbc> <to.sbc>` checks a replacement and lists
   its ops; `!oct patch replace` with the same arguments applies it. The blueprint
-  files are found next to the config file unless their path is absolute.
+  files are found next to the config file, else in the world's `Storage/Octahedron`
+  folder, unless their path is absolute.
 - A staged entry with `From` and `To` instead of `Ops` replaces the grid the same way
   when a process loads it.
 
@@ -185,12 +186,25 @@ the commit the live world was built from, `To` those of the working tree, so a
 change to the preparation becomes part of the patch too:
 
 ```sh
-python station_patch.py 2026-12-station-v2 "Beta Station" --since 04f52f6 --out config
+python station_patch.py 2026-12-station-v2 "Beta Station" --since 04f52f6
+python station_patch.py 2026-12-station-v2 --stations --since 04f52f6
 ```
 
-It writes `2026-12-station-v2-from.sbc` and `-to.sbc` and prints the staged entry.
-Each station needs its own pair: the preparation depends on the station's name. A
-grid named `<station> Shipyard` is that station's shipyard.
+It writes `2026-12-station-v2-from.sbc` and `-to.sbc` to `config/storage/Octahedron`
+and prints the staged entry. Each station needs its own pair: the preparation depends
+on the station's name. `--stations` makes one for every station built from the station
+blueprint, the id ending in the station's first word (`2026-12-station-v2-beta`). A
+grid named `<station> Shipyard` is that station's shipyard. Both files keep only the
+main grid and the blocks that differ between them, which is all the plugin compares,
+so a pair is a few kB. `config/storage` goes into a new world's `Storage` folder, and
+Deploy Octahedron stages it into a kept world's (SE-1235), where the plugin finds the
+pair.
+
+`--since` is the commit the live world was built from. A blueprint change that only
+matters for new worlds (like the station connectors' `AutoUnlockTime` of SE-1237, which
+the plugin sets on a kept world at run time) is better left out of a patch: diff
+against a later commit, as long as the blocks the patch changes are the same there.
+The deploy checks the From blocks against the cluster's source world before its stop.
 
 `StationPatches` in the config is the staged list, shipped with
 `octahedron.cfg`. Every process applies its patches, in the list's order, to the
@@ -214,6 +228,21 @@ grid, and is tried again every minute. In `octahedron.cfg`:
   </StationPatchEntry>
 </StationPatches>
 ```
+
+Once a process has gone through the staged patches of a grid it loaded, it logs the
+grid's status and what its station answers, for the deploy's report (SE-1235):
+
+```
+Station patch STATUS Alpha Station 81057932184256363 blocks=1984 hash=… ledger=2026-11-08-lounge-lcds-alpha islands=0
+Station patch ANSWERS Alpha Station: store 61 offers, market 48 items, queue 0 orders and ships
+```
+
+again after a patch applies there. A market or queue that doesn't answer yet is asked
+again every 5 s, six times at most.
+
+After a wipe the stations are built from the new blueprint, and the staged pairs
+rebuild their blocks to what they already are. Entries can be dropped from the list
+once every kept world they were for has been wiped.
 
 Patches don't change grid ids, partitions or names the plugin keys on: don't
 rename a station's hologram tables, buttons, panels or arm rotors with them.
@@ -1362,7 +1391,7 @@ salvage) a contract as the caller, for tests and support.
 ### Leaderboard
 
 The station panels named `LeaderboardBlockName` ("Curved LCD Panel - Station Lounge
-Leaderboard", 1 at every station) rank the factions by their value in SC: the cash in
+Leaderboard", 2 side by side in every station's lounge) rank the factions by their value in SC: the cash in
 the faction's bank account, with the money held for its market orders, plus its grids.
 They also show each faction's PCU. A grid is the faction's when its biggest owner is a
 member. Its value is what its blocks are built of, their mounted components, plus its
