@@ -95,6 +95,7 @@ public class Plugin : IPlugin
             OctFaction.Update();
             Contracts.Update();
             OfflineCharacters.Update();
+            Reputation.Update();
         }
         catch (Exception e)
         {
@@ -166,6 +167,7 @@ public class Plugin : IPlugin
     {
         MesCluster.Dispose();
         ShipyardArm.Dispose();
+        Reputation.Dispose();
         // Harmony patches stay: unpatching all may break other plugins
     }
 }

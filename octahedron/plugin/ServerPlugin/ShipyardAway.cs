@@ -97,16 +97,16 @@ internal static class ShipyardAway
     // --- they are told where they are ---
 
     /// <summary>A chat message to a player, on the node they are on. One who is logged off gets none.</summary>
-    public static void Tell(long player, string text)
+    public static void Tell(long player, string text, string from = "Shipyard")
     {
         if (Plugin.Cluster == null || MySession.Static.Players.IsPlayerOnline(player))
         {
-            MyVisualScriptLogicProvider.SendChatMessage(text, "Shipyard", player);
+            MyVisualScriptLogicProvider.SendChatMessage(text, from, player);
             return;
         }
         _ = Plugin.Cluster.BroadcastAsync(
             TellTopic,
-            Encoding.UTF8.GetBytes($"{player}\n{text}"),
+            Encoding.UTF8.GetBytes($"{player}\n{from}\n{text}"),
             Guid.NewGuid(),
             TimeSpan.FromSeconds(30),
             includeWorldAuthority: false
@@ -115,9 +115,9 @@ internal static class ShipyardAway
 
     private static Task<byte[]> Told(PluginMessage message)
     {
-        var parts = Encoding.UTF8.GetString(message.Payload).Split('\n', 2);
+        var parts = Encoding.UTF8.GetString(message.Payload).Split('\n', 3);
         if (long.Parse(parts[0]) is var player && MySession.Static.Players.IsPlayerOnline(player))
-            MyVisualScriptLogicProvider.SendChatMessage(parts[1], "Shipyard", player);
+            MyVisualScriptLogicProvider.SendChatMessage(parts[2], parts[1], player);
         return Task.FromResult<byte[]>([]);
     }
 }
