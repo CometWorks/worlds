@@ -1283,7 +1283,7 @@ public class OctahedronConfig : PluginConfig
     } = 300;
 
     [StringOption(
-        description: "MES versions (MES_SessionCore.ModVersion) the patches were checked against, comma separated",
+        description: "MES versions (MES_SessionCore.ModVersion) the patches were reviewed against, comma separated. Informational: another version with an accepted hash is patched, with a Warning",
         Parent = "mes"
     )]
     public string MesAcceptedVersions
@@ -1293,14 +1293,14 @@ public class OctahedronConfig : PluginConfig
     } = "2.75.02,2.75.03";
 
     [StringOption(
-        description: "Accepted instruction hashes of the MES methods the plugin depends on, comma separated (each startup logs the current one)",
+        description: "Accepted hashes of the MES code the spawn gate relies on, comma separated (each startup logs the current one). MES with any other hash runs unpatched",
         Parent = "mes"
     )]
     public string MesAcceptedMethodHashes
     {
         get;
         set => SetField(ref field, value);
-    } = "b6de8061483bbd9a";
+    } = "dc61793223c115b7";
 
     // MES reputation triggers (SE-1294): see MesCluster/MesReputation.cs
     [BoolOption(
