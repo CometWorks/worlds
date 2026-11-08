@@ -908,8 +908,8 @@ public sealed class BuildBook
     /// <summary>The quote as text for the hologram table's screen.</summary>
     public static string QuoteText(
         BuildQuote quote,
-        string hydrogenItem,
-        long hydrogenFromShip,
+        string iceItem,
+        long iceFromShip,
         Func<string, string> title,
         Func<string, long, string> units
     )
@@ -925,10 +925,8 @@ public sealed class BuildBook
             if (l.Missing > 0)
                 text.AppendLine($"  {units(l.Item, l.Missing)} not for sale");
         }
-        if (hydrogenFromShip > 0)
-            text.AppendLine(
-                $"Hydrogen: {units(hydrogenItem, hydrogenFromShip)} ice worth from your ship"
-            );
+        if (iceFromShip > 0)
+            text.AppendLine($"H2 and O2: {units(iceItem, iceFromShip)} ice worth from your ship");
         text.AppendLine();
         text.AppendLine($"From the Store: {quote.Cost:N0} SC");
         if (quote.Fee > 0)
