@@ -33,6 +33,18 @@ internal static class MesCluster
             {
                 Plugin.Log.Critical("Patching MES failed; MES runs UNGATED", e);
             }
+            try
+            {
+                if (MesSpawnGate.FindMes() is { } mes)
+                    MesReputation.Install(new Harmony(Plugin.Name + ".MesReputation"), mes);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.Critical(
+                    "Patching MES reputation failed; collisions cost reputation and attacks charge every OCT member",
+                    e
+                );
+            }
             nextStats = DateTime.UtcNow + StatsInterval;
         }
 

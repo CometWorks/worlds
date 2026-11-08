@@ -1548,6 +1548,27 @@ same ones, and each logs them with a pattern fingerprint, which must be equal on
 nodes. The other options apply at once. Each spawn the gate decides logs
 `spawn placed` or `spawn refused`, and a summary every 10 minutes.
 
+### MES reputation triggers
+
+THIE's trigger `THIE-Bullet-Reputation-Loss-TriggerA` takes 5 reputation for any damage
+to its ships, collisions included, with no cooldown, and from every member of the
+attacker's faction. Every player is in OCT, so one player bumping a THIE ship cost all
+of them 5 per damage event (SE-1294). With `MesReputationFix` on (the default):
+
+- A damage trigger of any MES ship that changes the attacker's reputation ignores
+  collision (`Deformation`) and `Environment` damage, and fires at most once per
+  `MesReputationCooldownMs` (1000) on that ship. Triggers with a longer cooldown of
+  their own keep it. The trigger is fixed the first time its ship takes damage, so
+  ships from an older save get it too.
+- A reputation change that MES would apply to every member of the attacker's faction
+  stays with the attacker when that faction is OCT. Members of other factions are
+  still charged together, as MES does.
+
+How: Harmony prefixes on MES's `TriggerSystem.ProcessDamageTriggerWatchers` and
+`FactionHelper.ChangePlayerReputationWithFactions`. If MES no longer has the members
+they use, the plugin logs a Critical line and MES runs unpatched. Turning the option
+off at runtime leaves triggers that were already fixed as they are until the next start.
+
 ### Encounters
 
 On hold since 2026-10-24 (SE-653): the world runs MES and its encounter mods again,
@@ -1963,6 +1984,10 @@ runs a standalone server with MES, a few encounter mods and a probe plugin that 
 MES spawn requests, and `ds/check.py gate|guard` judges it; `cluster/mes_cluster.py`
 runs the same with the cluster's NPC census on a local test cluster;
 `check_placements.py LOG...` checks the gate's decisions in any server logs.
+`ds/plan-reputation.txt` with `ds/reputation.cfg` checks the MES reputation fix
+(`ds/check_reputation.py fix`): a player rams a THIE Atlas and two players hit it
+with bullets; with `ds/reputation-off.cfg`, `check_reputation.py off` shows the old
+behavior the test catches.
 `tests/test_encounters.py` checks the encounters with a client that has no mods:
 the timer's first space cargo ship, each spawn type spawned by command in space, on
 EarthLike, high above it and on the Moon, the client seeing the spawned grids, and

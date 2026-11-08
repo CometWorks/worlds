@@ -68,12 +68,16 @@ internal static class MesSpawnGate
         Unknown,
     }
 
+    /// <summary>The compiled MES mod assembly, null when the world doesn't load MES</summary>
+    public static Assembly FindMes() =>
+        MyScriptManager.Static?.Scripts.Values.FirstOrDefault(a =>
+            a.GetType(PathPlacementsType) != null
+        );
+
     /// <summary>Looks for MES and patches it. Call once, after the session has loaded.</summary>
     public static void Install(Harmony harmony, OctahedronConfig config)
     {
-        var assembly = MyScriptManager.Static?.Scripts.Values.FirstOrDefault(a =>
-            a.GetType(PathPlacementsType) != null
-        );
+        var assembly = FindMes();
         if (assembly == null)
         {
             Log.Info("MES (Workshop 1521905890) is not loaded in this world: nothing to patch");

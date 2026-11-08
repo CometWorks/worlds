@@ -32,6 +32,8 @@ PLUGIN = MES_TESTS.parents[1]
 WORKSPACE = Path(os.environ.get("MES_WORKSPACE", HOME / "ws/se"))
 PARALLEL = WORKSPACE / "testing/parallel-test-work"
 MAGNETAR = HOME / ".config/Magnetar"
+# MES_MAGNETAR_BIN: a Magnetar build to run instead of the install (its config still comes from the install)
+MAGNETAR_BIN = Path(os.environ.get("MES_MAGNETAR_BIN", MAGNETAR))
 DS64 = (
     HOME
     / ".steam/steam/steamapps/common/SpaceEngineersDedicatedServer/DedicatedServer64"
@@ -178,7 +180,7 @@ def main() -> int:
                 str(PARALLEL / "run-test.sh"),
                 str(SERVER_GIB),
                 "--",
-                str(MAGNETAR / "MagnetarInterim.bin"),
+                str(MAGNETAR_BIN / "MagnetarInterim.bin"),
                 "-multiInstance",
                 "-stableLogs",
                 "-noimplicitmod",
@@ -191,7 +193,7 @@ def main() -> int:
                 "-path",
                 str(ROOT / "data"),
             ],
-            cwd=MAGNETAR,
+            cwd=MAGNETAR_BIN,
             stdout=out,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
