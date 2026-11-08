@@ -362,13 +362,16 @@ every second as a global command, which the World Authority runs once even when 
 it again after a timeout. So the reputation follows the player to any node and through restarts.
 
 `OctNoDeposits` refuses a member's deposit, so with it on, paying in can't raise the reputation.
-ToolCore's tools grind without a player (`identityId` 0) and cost no one reputation.
+ToolCore's tools, like the OmniArc Destro, grind with no player at them (`identityId` 0), so the
+tool block's owner pays, the way a weapon block's owner pays for its damage. ToolCore names the
+tool block to the game's damage system just before it grinds, and the plugin takes it from there.
 
 `tests/reputation/ReputationTests` checks the countdown, its warnings, the forgiven ram and the
 save without a game. `tests/test_reputation.py` checks it with the client and
 `tests/rep-probe`, a client plugin that sends a block terminal's share box, the ownership claim
 and the faction screen's Deposit: grinding, the share, a deposit, two rams and the removal with a
-20 s countdown. `tests/reputation_cluster.py` checks it on a cluster: a change on
+20 s countdown. A second run of the server alone, with ToolCore and OmniArc, has a member's OmniArc
+Destro grind another member's hull and checks that its owner pays. `tests/reputation_cluster.py` checks it on a cluster: a change on
 one node reaches the World Authority once, the reputation is the same after a handover and a warm
 start, and the warnings and the removal reach the player on the node they moved to.
 

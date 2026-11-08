@@ -10,6 +10,7 @@ using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.GameSystems;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.Multiplayer;
 using Sandbox.Game.Weapons;
@@ -17,6 +18,7 @@ using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Entity;
+using VRage.Game.ModAPI;
 using VRage.Network;
 using VRage.Utils;
 
@@ -113,6 +115,7 @@ internal static class Reputation
     {
         if (!On || MySession.Static?.Ready != true)
             return;
+        WatchGrinding();
         CheckShares();
         var now = DateTime.UtcNow;
         if (now < nextSend)
@@ -283,7 +286,29 @@ internal static class Reputation
         }
     }
 
-    // Hand, ship and ToolCore grinders: who grinds, when the tool says
+    // ToolCore grinds with no player (identityId 0), but tells the damage system first which tool
+    // block grinds, so its owner pays. The last grind announced on this thread, until the block's grinding.
+    [ThreadStatic]
+    private static (MySlimBlock Block, long AttackerId) announced;
+    private static MyDamageSystem watched;
+
+    private static void WatchGrinding()
+    {
+        var system = MyDamageSystem.Static;
+        if (system == null || system == watched)
+            return;
+        watched = system;
+        system.RegisterBeforeDamageHandler(
+            int.MaxValue,
+            (object target, ref MyDamageInformation info) =>
+            {
+                if (target is MySlimBlock block && info.Type == MyDamageType.Grind)
+                    announced = (block, info.AttackerId);
+            }
+        );
+    }
+
+    // Hand and ship grinders say who grinds; ToolCore's say which tool block
     [HarmonyPatch(typeof(MySlimBlock), nameof(MySlimBlock.DecreaseMountLevel))]
     private static class Ground
     {
@@ -292,6 +317,14 @@ internal static class Reputation
 
         private static void Postfix(MySlimBlock __instance, float __state, long identityId)
         {
+            var (block, attackerId) = announced;
+            announced = default;
+            if (
+                identityId == 0
+                && block == __instance
+                && MyEntities.TryGetEntityById(attackerId, out MyEntity tool, allowClosed: true)
+            )
+                identityId = Attacker(tool);
             if (identityId != 0 && Counts(__instance))
                 Lost(__instance, __state - __instance.Integrity, identityId, null);
         }

@@ -12,8 +12,10 @@ ownership claim and the faction screen's Deposit:
 - The server log's changes add up to what !oct rep showed.
 - Below -10,000 the countdown (20 s in the test) warns at its start and at 15, 10 and 5 s left,
   then removes the player from OCT, telling them why.
+- A second server run, without the client, has ToolCore and OmniArc: an OmniArc Destro owned by a
+  third member grinds another member's hull with no player at it, which costs the tool's owner.
 
-One server run, about 7 minutes, half of it the server and client starting.
+Two server runs, about 9 minutes, half of it the server and client starting.
 
     uv run --no-project --with httpx python tests/test_reputation.py
 
@@ -22,6 +24,7 @@ Prints one line per check and a pass/fail summary; exit code 0 = all passed.
 
 from __future__ import annotations
 
+import base64
 import os
 import re
 import sys
@@ -63,6 +66,31 @@ SHIP_BACK = 15
 # The ship's nose: two armor blocks ahead of its cockpit
 NOSE = 5
 
+# ToolCore: an OmniArc Destro grinder of TOOLER's, its target a hull of PLAYER's
+MODS = {3040438530: "ToolCore", 3412657089: "OmniCorp The OmniArc Project: Adv Tools"}
+TOOLER = 144115188075990003
+TOOLER_STEAM_ID = 76561198000000078
+TOOL_AT = (RIG_AT[0], RIG_AT[1] + 400, RIG_AT[2])
+TOOL_GRID = 777001283000020
+TOOL_TARGET = 777001283000021
+TOOL_SECONDS = 120
+# ToolCore's ToolRepo in the block's mod storage (protobuf): the shipyard welders' value with
+# Activated, Mode Grind (16), Targets Friendly (2) and TrackTargets. Friendly leaves out the tool's
+# own grid, which the Destro may grind
+TOOL_REPO = bytearray(base64.b64decode("CAAQABgIIAAoDzAAOg8NAAAAACUAAAAAPQAAAABAAA=="))
+TOOL_REPO[1] = TOOL_REPO[-1] = 1
+TOOL_REPO[5] = 16
+TOOL_REPO[9] = 2
+TOOL_COMPONENTS = (
+    "<ComponentContainer><Components>"
+    "<ComponentData><TypeId>MyModStorageComponent</TypeId>"
+    '<Component xsi:type="MyObjectBuilder_ModStorageComponent"><Storage><dictionary><item>'
+    "<Key>75bbb4f5-4fb9-4230-aaaa-bb79c9811618</Key>"
+    f"<Value>{base64.b64encode(TOOL_REPO).decode()}</Value>"
+    "</item></dictionary></Storage></Component></ComponentData>"
+    "</Components></ComponentContainer>"
+)
+
 
 def hull_at(name: str) -> tuple[float, float, float]:
     return (RIG_AT[0] + list(HULLS).index(name) * 60, RIG_AT[1], RIG_AT[2])
@@ -103,6 +131,41 @@ def ship(name: str) -> str:
     return rig.grid(f"{name} Ship", SHIPS[name], blocks, (x + 5, y, z + SHIP_BACK))
 
 
+def owned(owner: int) -> str:
+    return (
+        f"<Owner>{owner}</Owner><BuiltBy>{owner}</BuiltBy><ShareMode>None</ShareMode>"
+    )
+
+
+def tool_grids() -> list[str]:
+    """The Destro on four batteries (it draws 25 MW), and 15 m away a hull of PLAYER's"""
+    battery = (
+        owned(TOOLER)
+        + "<Enabled>true</Enabled><CurrentStoredPower>3</CurrentStoredPower>"
+    )
+    tool = [
+        rig.block("MyObjectBuilder_ConveyorSorter", "OmniArcDestro", (0, 0, 0),
+                  owned(TOOLER) + TOOL_COMPONENTS + "<Enabled>true</Enabled>"),
+        *(rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (-x, 0, 0), battery)
+          for x in range(1, 5)),
+    ]  # fmt: skip
+    target = [
+        rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", BATTERY, owned(PLAYER)),
+        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (1, 0, 0)),
+        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", TARGET),
+    ]  # fmt: skip
+    x, y, z = TOOL_AT
+    return [
+        rig.grid(name, entity_id, blocks, at).replace(
+            "<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>"
+        )
+        for name, entity_id, blocks, at in (
+            ("Tool Rig", TOOL_GRID, tool, TOOL_AT),
+            ("Tool Target", TOOL_TARGET, target, (x + 15, y, z)),
+        )
+    ]
+
+
 def player(identity: int, steam_id: int, name: str) -> tuple[str, str]:
     """An offline player: its identity and its player data"""
     return (
@@ -115,15 +178,35 @@ def player(identity: int, steam_id: int, name: str) -> tuple[str, str]:
     )
 
 
-def prepare() -> None:
+def prepare(toolcore: bool = False) -> None:
+    """The hulls and ships, or with toolcore, the ToolCore rig and its mods"""
     rig.prepare_world(
-        extra_grids=[*(hull(n) for n in HULLS), *(ship(n) for n in SHIPS)]
+        extra_grids=(
+            tool_grids()
+            if toolcore
+            else [*(hull(n) for n in HULLS), *(ship(n) for n in SHIPS)]
+        )
     )
+    if toolcore:
+        for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
+            path = rig.WORLD / name
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace("<Mods>", f"<Mods>{rig.mod_items(MODS)}", 1),
+                encoding="utf-8",
+            )
+        mods = rig.SERVER_DATA / "Mods"
+        mods.mkdir(parents=True, exist_ok=True)
+        for id_ in MODS:
+            link = mods / f"{id_}.sbm"
+            link.unlink(missing_ok=True)
+            link.symlink_to(rig.WORKSHOP / str(id_))
     path = rig.WORLD / "Sandbox.sbc"
     text = path.read_text(encoding="utf-8")
     people = [
         player(BOT, BOT_STEAM_ID, "[B] Test Trader"),
         player(PLAYER, PLAYER_STEAM_ID, "Test Player"),
+        player(TOOLER, TOOLER_STEAM_ID, "Tool Owner"),
     ]
     text = text.replace(
         "</Identities>", "".join(p[0] for p in people) + "</Identities>", 1
@@ -139,7 +222,7 @@ def prepare() -> None:
     members = "".join(
         f"<MyObjectBuilder_FactionMember><PlayerId>{i}</PlayerId><IsLeader>false</IsLeader>"
         "<IsFounder>false</IsFounder></MyObjectBuilder_FactionMember>"
-        for i in (BOT, PLAYER)
+        for i in (BOT, PLAYER, TOOLER)
     )
     text, count = re.subn(
         r"(<Tag>OCT</Tag>.*?<Members>)",
@@ -155,7 +238,7 @@ def prepare() -> None:
         lambda m: m[1]
         + "".join(
             f'<item><Key xsi:type="xsd:long">{i}</Key><Value xsi:type="xsd:long">{oct_id}</Value></item>'
-            for i in (BOT, PLAYER)
+            for i in (BOT, PLAYER, TOOLER)
         ),
         text[start:],
         count=1,
@@ -206,12 +289,12 @@ def reputation(remote) -> float | None:
     raise AssertionError("no answer to !oct rep")
 
 
-def changes() -> list[tuple[str, float, bool]]:
+def changes(identity: str = r"\d+") -> list[tuple[str, float, bool]]:
     """The server log's reputation changes so far: kind, amount, forgiven"""
     return [
         (m[1], float(m[2]), bool(m[3]))
         for m in re.finditer(
-            r"Reputation of [^(]*\(\d+\): (\w+) (-?[\d.]+), [-\d.]+ -> [-\d.]+( forgiven)?",
+            rf"Reputation of [^(]*\({identity}\): (\w+) (-?[\d.]+), [-\d.]+ -> [-\d.]+( forgiven)?",
             rig.server_game_log(),
         )
     ]
@@ -463,6 +546,35 @@ def check_removal(remote) -> None:
     check(reputation(remote) is None, "the player is out of OCT, !oct rep says so")
 
 
+def check_toolcore() -> None:
+    """Server only: the Destro grinds PLAYER's hull; TOOLER, its owner, pays"""
+    deadline = time.monotonic() + TOOL_SECONDS
+    while not (found := changes(str(TOOLER))) and time.monotonic() < deadline:
+        time.sleep(3)
+    time.sleep(10)
+    found = changes(str(TOOLER))
+    others = [c for c in changes() if c not in found]
+    lost = sum(a for _, a, _ in found)
+    check(
+        found and all(kind == "Damage" and a < 0 for kind, a, _ in found),
+        f"ToolCore grinding another member's hull costs the tool's owner: {len(found)} changes, "
+        f"{lost:.0f} in all",
+    )
+    check(not others, f"and no one else: {others[:5]}")
+
+
+def run_toolcore() -> None:
+    rig.stop_server()
+    prepare(toolcore=True)
+    rig.write_plugin_config(config())
+    rig.prepare_server()
+    rig.start_server()
+    try:
+        check_toolcore()
+    finally:
+        rig.stop_server()
+
+
 def run() -> None:
     rig.stop_client()
     rig.stop_server()
@@ -488,5 +600,8 @@ def run() -> None:
 
 
 if __name__ == "__main__":
-    run()
+    if "toolcore" not in sys.argv[1:]:
+        run()
+    if "client" not in sys.argv[1:]:
+        run_toolcore()
     sys.exit(st.summary("Reputation"))
