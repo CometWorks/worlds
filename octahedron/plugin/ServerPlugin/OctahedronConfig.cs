@@ -218,8 +218,8 @@ public class OctahedronConfig : PluginConfig
     } = true;
 
     [BoolOption(
-        "Nobody but the owner grinds a grid of OCT's NPCs, as the stations are, or of a player OctProtectedSteamIds names, "
-            + "the trader bots. Hand, ship and ToolCore grinders do nothing to them, anywhere.",
+        "Nobody but the owner grinds a grid of OCT's NPCs, as the stations are, or of a player OctProtectedSteamIds names. "
+            + "Hand, ship and ToolCore grinders do nothing to them, anywhere.",
         Parent = "faction"
     )]
     public bool OctGridsNoGrinding
@@ -230,7 +230,7 @@ public class OctahedronConfig : PluginConfig
 
     [StringOption(
         description: "Steam IDs whose grids OctGridsNoGrinding protects like OCT's own, comma separated; first-last is a range. "
-            + "The trader bots' on the Octahedron.",
+            + "Empty on the Octahedron: players may grind the trader bots' ships.",
         Parent = "faction"
     )]
     public string OctProtectedSteamIds

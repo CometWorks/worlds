@@ -411,9 +411,11 @@ two blocks.
   players' changes to them (`NpcBlocksLocked`): no settings, names, texts or
   toolbars.
 - OCT's account takes no deposits from its members (`OctNoDeposits`), since only
-  its leader can take money out. Nobody grinds OCT's grids or the trader bots'
-  ships, anywhere (`OctGridsNoGrinding`, the bots by `OctProtectedSteamIds`)
-  ([SE-1160](https://tasks.cometworks.se/tasks/2060)).
+  its leader can take money out. Nobody grinds OCT's grids, anywhere
+  (`OctGridsNoGrinding`, [SE-1160](https://tasks.cometworks.se/tasks/2060)). The
+  trader bots' ships are open to grinding, as any member's ship
+  ([SE-1282](https://tasks.cometworks.se/tasks/2198)); `OctProtectedSteamIds`
+  with the bots' Steam ID range would protect them again.
 - Human players' shipyard orders go before the trader bots' (`ShipyardBotSteamIds`):
   a human player's order takes the place of a bot's running build or of the last bot
   order of a full queue, and the bot orders again later
