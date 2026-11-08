@@ -1405,14 +1405,22 @@ one by one by name with their own bank account and grids, and the board's title 
 "FACTION". The panels show the first `LeaderboardRows` (15)
 in Monospace at `LeaderboardFontSize` (0.45), 45 characters a line.
 
-Every `LeaderboardIntervalSeconds` (300) the server counts the world's grids, a few
+Every `LeaderboardIntervalSeconds` (600) the server counts the world's grids, a few
 per tick (2 ms at most), and then writes the board to the panels. The log has the
 count: `Leaderboard: counted N grids in T ticks, X ms of work`. On a cluster every
 node counts the grids it simulates: it asks the World Authority for the prices, sends
-it the totals per faction and gets the ranked factions back, summed over the latest
-totals of every node. The World Authority adds the bank accounts and the market's
-held money, and forgets a node's totals after three intervals without news. Grids
-stored in Hangar don't count.
+it every grid's value, PCU and biggest owner, and gets the ranked factions back. The
+World Authority keeps each grid's latest count, whichever node made it, in its world
+(the `Octahedron-Leaderboard-Grids` variable), and sums them per faction by the
+owners' factions as they are now. A grid in an offline partition, as the gateway's
+`/registry/partitions/offline` lists them, counts as it was last counted before it
+went offline, until it wakes and its node counts it again; this survives a cluster
+stop. A grid its node has reported without for two intervals and two minutes (the
+gateway's table is read every minute), and in no offline partition, is gone; so are the grids of a node silent for that and one interval more. The World
+Authority adds the bank accounts and the market's held money, and logs each ranking:
+`Leaderboard: N grids from node, ranking G grids, O in offline partitions`. A
+partition that went offline before the World Authority kept grids counts once it
+wakes. Grids stored in Hangar don't count.
 
 `!oct leaderboard` (admin) counts now and lists every faction with its cash, grids
 and PCU; on a cluster, run it on a node.
@@ -1953,7 +1961,8 @@ text and wire formats alone (`dotnet run -c Release --project tests/leaderboard/
 players' factions and no NPC ones ranked, a faction's cash, a docked ship's value and
 PCU against the game's block definitions and OCT's prices at every station, the station panels and their refresh, and how long a count of the
 world takes. `tests/leaderboard/leaderboard_cluster.py` checks it on a local test
-cluster with the World Authority and a node.
+cluster with the World Authority and a node, and that the grids of offline partitions
+keep counting, across a warm start too, until they wake or are deleted.
 `tests/offline-characters/ParkingTests` checks the bookkeeping of offline characters
 alone (`dotnet run -c Release --project tests/offline-characters/ParkingTests`).
 `tests/test_offline_characters.py` checks them with the client and the character probe

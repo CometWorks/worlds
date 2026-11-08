@@ -17,6 +17,13 @@ Checks: the WA serves the leaderboard and counts no grids; both factions ranked 
 accounts, the NPC factions and OCT not; the ship's value and PCU as worked out from the game's
 block definitions and OCT's prices (test_leaderboard.py); money held for a market order counted;
 Alpha's 8 panels written on node-1 in Monospace; a second ship, and the panel refreshes with both.
+
+SE-1270, offline partitions: LBD gets a ship far from Alpha, in a partition of its own. Then every
+partition goes offline (offline grace 0), LBC's ships at Alpha and LBD's far ship with them. Both
+factions keep their grids' value and PCU on the board, counts after the partitions went offline,
+and across a graceful stop and warm start of the cluster (the World Authority keeps the grids in
+its world). LBD's partition wakes on node-1: its ship counts once. Deleted, it drops off the board.
+Every board is printed as a BOARD line, so a run on the plugin before the fix shows the zeros.
 """
 
 from __future__ import annotations
@@ -39,7 +46,7 @@ import hostenv  # noqa: E402,F401  (loads host.env: MAGNETAR_HOME for the build)
 import rig  # noqa: E402  (the world copy; claims the task's slot, starts nothing)
 import test_leaderboard as lb  # noqa: E402
 
-ROOT = Path.home() / "cluster-runs/leaderboard-1573"
+ROOT = Path.home() / f"cluster-runs/leaderboard-{os.environ['OCT_TASK']}"
 PLUGINS = ROOT / "plugins"
 PLAN = ROOT / "probe-plan.txt"
 OUT = ROOT / "probe-out.txt"
@@ -47,6 +54,11 @@ CONFIG = ROOT / "Octahedron.cfg"
 NODE = "node-1"
 PROBE_ID = "6D2F4A18-9B53-4E07-8C61-2E5B1F1573AA"
 INTERVAL = 10
+# LBD's ship, meters to the right of Alpha: far past the partition split distance
+FAR = 40_000
+# How long the World Authority counts a grid its node reports without: two intervals and two
+# reads of the gateway's offline table
+GONE = 2 * INTERVAL + 120
 
 
 def build() -> None:
@@ -174,7 +186,14 @@ def run(bench) -> None:
         return rows
 
     processes = [NODE, "wa-1"]
-    bench.start_cluster(processes)
+    cluster = bench.cluster
+    cluster.kill()
+    cluster.prepare(wipe=True)
+    # The world's station mod, which the servers can't download
+    for process in processes:
+        rig.link_mods(bench.run_root / f"{process}-data" / "Mods", rig.STATION_MODS)
+    cluster.start(processes)
+    cluster.wait_ready(nodes=processes)
     check(
         "the WA ranks the leaderboard",
         "Ranking the leaderboard on the World Authority" in log("wa-1"),
@@ -204,6 +223,7 @@ def run(bench) -> None:
 
     reply = probe.run(f"!lbprobe ship LBC Alpha {lb.IRON}=1000")
     check("the probe built LBC's ship near Alpha", "SHIP " in reply, reply)
+    ships = [int(m) for m in re.findall(r"SHIP (\d+)", reply)]
     names = [s.strip() for s in probe.run("!oct market stations").split(",")]
     check("7 stations", len(names) == 7, names)
     price = lb.prices(
@@ -235,7 +255,12 @@ def run(bench) -> None:
     # A second ship: the panel refreshes on its own with both
     both, both_pcu = lb.expected(price, iron=1500, ships=2)
     bench.record("grids-before-second", probe.run("!lbprobe grids LBC"))
-    probe.run(f"!lbprobe ship LBC Alpha {lb.IRON}=500 -200")
+    ships += [
+        int(m)
+        for m in re.findall(
+            r"SHIP (\d+)", probe.run(f"!lbprobe ship LBC Alpha {lb.IRON}=500 -200")
+        )
+    ]
     ending = f"{both:,} {both_pcu:>7,}"
     deadline = time.monotonic() + 6 * INTERVAL
     line = ""
@@ -265,6 +290,197 @@ def run(bench) -> None:
         "leaderboard-lines",
         "\n".join(l for l in (wa + node).splitlines() if "eaderboard" in l)[-20000:],
     )
+    offline_partitions(bench, probe, check, log, ships, cash)
+
+
+def offline_partitions(bench, probe, check, log, lbc_ships, cash) -> None:
+    """SE-1270: the grids of offline partitions stay on the board"""
+    cluster = bench.cluster
+    processes = [NODE, "wa-1"]
+
+    def board(label: str) -> dict[str, dict]:
+        reply = probe.ask("!oct leaderboard", settle=4)
+        print(f"BOARD {label}: {reply}", flush=True)
+        bench.record(f"board-{label}", reply)
+        return lb.rows_of(reply)
+
+    def offline() -> dict[int, list[int]]:
+        return {
+            int(row["Partition"]): [int(x) for x in row.get("Members") or []]
+            for row in cluster.get("/registry/partitions/offline").get("Partitions", [])
+        }
+
+    def wait(seconds: float) -> None:
+        # Counts, on the node's own timer, while the test waits
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            probe.run("wait 5")
+
+    reply = probe.run(f"!lbprobe ship LBD Alpha {lb.IRON}=2000 {FAR}")
+    check("the probe built LBD's ship far from Alpha", "SHIP " in reply, reply)
+    far = int(re.search(r"SHIP (\d+)", reply)[1]) if "SHIP " in reply else 0
+    names = [s.strip() for s in probe.run("!oct market stations").split(",")]
+
+    def expected() -> dict[str, tuple[int, int]]:
+        """The ships at the market's prices now: they drift while the test runs"""
+        price = lb.prices(
+            lambda station: probe.ask(f'!oct market show "{station}" all'), names
+        )
+        return {
+            "LBC": lb.expected(price, iron=1500, ships=2),
+            "LBD": lb.expected(price, iron=2000),
+        }
+
+    def near(rows: dict[str, dict], want, tags=("LBC", "LBD")) -> bool:
+        return all(
+            rows.get(t, {}).get("pcu") == want[t][1]
+            and abs(rows.get(t, {}).get("grids", 0) - want[t][0]) <= want[t][0] // 20
+            for t in tags
+        )
+
+    deadline = time.monotonic() + 6 * INTERVAL
+    rows = board("online")
+    while not rows.get("LBD", {}).get("grids") and time.monotonic() < deadline:
+        probe.run("wait 3")
+        rows = board("online")
+    want = expected()
+    check(
+        "online: both factions' grids counted, within 5% of the prices now",
+        near(rows, want),
+        f"{rows} vs {want}",
+    )
+    online = rows
+    # From here on the grids count as last counted: as on this board
+    want = {t: (r["grids"], r["pcu"]) for t, r in online.items()}
+
+    def same(rows: dict[str, dict], tags=("LBC", "LBD")) -> bool:
+        return all(
+            (rows.get(t, {}).get("grids"), rows.get(t, {}).get("pcu")) == want[t]
+            for t in tags
+        )
+
+    # Every partition goes offline: nobody is near any of them
+    cluster.handover_config(
+        {
+            "offline.enabled": "true",
+            "offline.minOnlineSeconds": "0",
+            "offline.graceSeconds": "0",
+        }
+    )
+    grids = [far, *lbc_ships]
+    deadline = time.monotonic() + 420
+    members: set[int] = set()
+    while time.monotonic() < deadline:
+        members = {m for ms in offline().values() for m in ms}
+        if all(g in members for g in grids):
+            break
+        probe.run("wait 5")
+    check(
+        "the ships' partitions went offline",
+        all(g in members for g in grids),
+        f"{grids} in {sorted(members)[:40]}",
+    )
+    on_node = probe.run("!lbprobe grids LBD") + " | " + probe.run("!lbprobe grids LBC")
+    check("node-1 has none of the ships", "GRID " not in on_node, on_node)
+    # Past the World Authority's grace for grids a node stopped reporting
+    wait(GONE + 15)
+    rows = board("offline")
+    check(
+        "offline: LBC's ships still counted",
+        same(rows, ["LBC"]),
+        f"{rows.get('LBC')} vs {want['LBC']}",
+    )
+    check(
+        "offline: LBD's ship still counted",
+        same(rows, ["LBD"]),
+        f"{rows.get('LBD')} vs {want['LBD']}",
+    )
+    check(
+        "offline: the same ranks and totals as online",
+        {t: (r["rank"], r["total"]) for t, r in rows.items()}
+        == {t: (r["rank"], r["total"]) for t, r in online.items()},
+        f"{rows} vs {online}",
+    )
+    ranked = re.findall(
+        r"ranking (\d+) grids, (\d+) in offline partitions", log("wa-1")
+    )
+    check(
+        "the WA ranks the offline grids",
+        ranked and int(ranked[-1][1]) >= len(grids),
+        ranked[-3:],
+    )
+
+    # A graceful stop and warm start: the World Authority loads the grids from its world
+    check("graceful stop", cluster.stop(grace=240))
+    PLAN.write_text("")
+    OUT.write_text("")
+    probe.step = 0
+    cluster.start(processes)
+    cluster.wait_ready(nodes=processes)
+    deadline = time.monotonic() + 180
+    rows = board("warm-start")
+    while not same(rows) and time.monotonic() < deadline:
+        probe.run("wait 5")
+        rows = board("warm-start")
+    check("after a warm start: both factions' grids counted", same(rows), f"{rows}")
+    # The game writes its log in a while
+    loaded = re.compile(r"Leaderboard: (\d+) grids loaded from the world")
+    deadline = time.monotonic() + 60
+    while not loaded.search(log("wa-1")) and time.monotonic() < deadline:
+        probe.run("wait 5")
+    found = loaded.search(log("wa-1"))
+    check(
+        "the WA loaded the grids from its world",
+        found and int(found[1]) >= len(grids),
+        found and found[0],
+    )
+    wait(GONE + 15)
+    rows = board("warm-start-later")
+    check("and still, counts later", same(rows), f"{rows}")
+    check("cash unchanged", rows.get("LBD", {}).get("cash") == cash, rows.get("LBD"))
+
+    # LBD's partition wakes on node-1 and stays: the ship counts once, as node-1 counts it at
+    # the market's prices now
+    cluster.handover_config({"offline.enabled": "false"})
+
+    def woken() -> bool:
+        for partition, ms in offline().items():
+            if far in ms:
+                print(
+                    cluster.post(
+                        f"/registry/partitions/offline/load?partition={partition}&reason=test"
+                    ),
+                    flush=True,
+                )
+        return f"GRID {far} " in probe.run("!lbprobe grids LBD")
+
+    deadline = time.monotonic() + 240
+    while not woken() and time.monotonic() < deadline:
+        probe.run("wait 5")
+    check(
+        "LBD's partition woke on node-1",
+        f"GRID {far} " in probe.run("!lbprobe grids LBD"),
+    )
+    wait(GONE + 15)
+    rows = board("woken")
+    now = expected()
+    check(
+        "woken: LBD's ship counted once, within 5% of the prices now",
+        near(rows, now, ["LBD"]),
+        f"{rows.get('LBD')} vs {now['LBD']}",
+    )
+
+    # Deleted on its node: gone from the board once the node has reported without it
+    reply = probe.run(f"!lbprobe delete {far}")
+    check("LBD's ship deleted", f"DELETED {far}" in reply, reply)
+    wait(GONE + 15)
+    rows = board("deleted")
+    check(
+        "deleted: LBD has no grids",
+        rows.get("LBD", {}).get("grids") == 0 and rows.get("LBD", {}).get("pcu") == 0,
+        rows.get("LBD"),
+    )
+    check("deleted: LBC unchanged", same(rows, ["LBC"]), rows.get("LBC"))
 
 
 run.regular_nodes = 1
