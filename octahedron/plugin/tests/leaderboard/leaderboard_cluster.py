@@ -183,7 +183,14 @@ def run(bench) -> None:
         return rows
 
     processes = [NODE, "wa-1"]
-    bench.start_cluster(processes)
+    cluster = bench.cluster
+    cluster.kill()
+    cluster.prepare(wipe=True)
+    # The world's station mod, which the servers can't download
+    for process in processes:
+        rig.link_mods(bench.run_root / f"{process}-data" / "Mods", rig.STATION_MODS)
+    cluster.start(processes)
+    cluster.wait_ready(nodes=processes)
     check(
         "the WA ranks the leaderboard",
         "Ranking the leaderboard on the World Authority" in log("wa-1"),

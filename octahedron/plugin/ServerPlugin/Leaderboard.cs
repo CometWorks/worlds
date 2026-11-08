@@ -152,7 +152,7 @@ internal static class Leaderboard
         }
         // Every part gets the ranked factions back; the board shows the last answer
         int parts = Math.Max(1, (grids.Count + GridsPerReport - 1) / GridsPerReport);
-        int waiting = parts;
+        int unanswered = parts;
         List<LeaderboardRow> ranked = null;
         string failed = null;
         for (int part = 0; part < parts; part++)
@@ -165,7 +165,7 @@ internal static class Leaderboard
                         failed = error;
                     else
                         ranked = LeaderboardMath.DecodeRows(text);
-                    if (--waiting > 0)
+                    if (--unanswered > 0)
                         return;
                     if (ranked == null)
                         Fail(
