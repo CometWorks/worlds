@@ -232,7 +232,8 @@ def main() -> int:
         sa.at_table(a, STATION)
         with_config(a, **tr.CONFIG, **tt.MONEY)
         log(tr.remove(a))
-        log(probe(a, f"balance {1_000_000 - tt.money(a)}"))
+        # Under 1,000,000 SC: the game's MillionaireClub achievement disconnects an offline client
+        log(probe(a, f"balance {600_000 - tt.money(a)}"))
         # The components for the ships, whatever the default stock has
         for part in tt.TANKED_PARTS:
             sa.admin(a, f"!oct market set {STATION} Component/{part} 1000")
