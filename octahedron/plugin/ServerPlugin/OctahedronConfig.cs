@@ -1302,6 +1302,29 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "b6de8061483bbd9a";
 
+    // MES reputation triggers (SE-1294): see MesCluster/MesReputation.cs
+    [BoolOption(
+        "MES damage triggers that change the attacker's reputation ignore collisions and fire at most once per MesReputationCooldownMs, and charge only the attacker, not every OCT member.",
+        Parent = "mes"
+    )]
+    public bool MesReputationFix
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [IntOption(
+        0,
+        3600000,
+        "Shortest time in milliseconds between two reputation changes of one MES ship's damage trigger",
+        Parent = "mes"
+    )]
+    public int MesReputationCooldownMs
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1000;
+
     [BoolOption(
         "The station markets: the Store blocks of OCT's (MoneyAuthorityFactionTag) stations show its real stock and prices, "
             + "and the game generates no store items for them. Kept on the World Authority of a cluster.",

@@ -42,7 +42,7 @@ namespace MesClusterProbe;
 /// Calls SpawnRequest.CalculateSpawn by reflection (forceSpawn: no MES timeouts; adminSpawn: no MES
 /// area caps, so only MES Cluster's own limits apply).
 /// </summary>
-public class Probe : IPlugin
+public partial class Probe : IPlugin
 {
     private string planPath;
     private string[] plan;
@@ -72,6 +72,7 @@ public class Probe : IPlugin
     {
         if (planPath == null || MySession.Static is not { Ready: true })
             return;
+        RepTick();
         if (step >= plan.Length)
         {
             long length = new FileInfo(planPath).Length;
@@ -133,6 +134,10 @@ public class Probe : IPlugin
                     break;
                 case "done":
                     output.WriteLine("done");
+                    break;
+                default:
+                    if (!RepStep(words))
+                        output.WriteLine("error unknown step " + words[0]);
                     break;
             }
         }
