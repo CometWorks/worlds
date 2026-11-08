@@ -26,6 +26,7 @@ namespace ServerPlugin;
 [Section("contracts", caption: "Contracts")]
 [Section("leaderboard", caption: "Leaderboard")]
 [Section("faction", caption: "OCT Faction")]
+[Section("patches", caption: "Station Patches")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -1795,6 +1796,17 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 0.45;
+
+    [StructOption(
+        "Station patches every process applies to the station and shipyard grids it loads, in this order, "
+            + "each once per grid by the grid's ledger (SE-1234). Empty by default.",
+        Parent = "patches"
+    )]
+    public List<StationPatchEntry> StationPatches
+    {
+        get;
+        set => SetField(ref field, value);
+    } = new();
 }
 
 public struct RefillContainer
@@ -1826,4 +1838,25 @@ public struct RefillItem
 
     [StructMember("Amount each container holds at least after a refill.")]
     public int MinimumAmount { get; set; }
+}
+
+public struct StationPatchEntry
+{
+    [
+        StructMember(
+            "Patch id: letters, digits, '.', '_' and '-'. The grid's ledger keeps it once applied."
+        ),
+        StructCaption
+    ]
+    public string Id { get; set; }
+
+    [StructMember("Name of the station or shipyard grid, for example Alpha Station Shipyard.")]
+    public string Grid { get; set; }
+
+    [StructMember(
+        "Ops by grid cell, separated by ';': set:X,Y,Z:Expected:enabled=0|1, name=Text or data=Text; "
+            + "del:X,Y,Z:Expected; add:X,Y,Z:Type/Subtype:Forward:Up[:Name]; swap:X,Y,Z:Expected:Type/Subtype. "
+            + "Expected is the block's Type/Subtype or Subtype."
+    )]
+    public string Ops { get; set; }
 }

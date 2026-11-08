@@ -90,6 +90,80 @@ of the station that held it lets go; docking again resets the fuse. A ship's
 grids on rotors, pistons or its own connectors count as one ship. On a cluster
 each node charges at the stations it simulates.
 
+### Station patches
+
+A kept world's stations change in place through station patches (SE-1234,
+policy note SE-1238). A patch names a station or shipyard grid and a few ops by
+grid cell:
+
+| Op | Does |
+| --- | --- |
+| `set:X,Y,Z:Expected:enabled=0` (or `1`) | turns the block off or on |
+| `set:X,Y,Z:Expected:name=Text` | renames it |
+| `set:X,Y,Z:Expected:data=Text` | sets its Custom Data |
+| `del:X,Y,Z:Expected` | removes the block |
+| `add:X,Y,Z:Type/Subtype:Forward:Up[:Name]` | adds a block with its min at the cell, owned and shared like the grid's main owner's blocks, in the color of a block next to it |
+| `swap:X,Y,Z:Expected:Type/Subtype` | replaces the block in place, keeping its orientation, name, owner, sharing, color and skin |
+
+Ops are separated by `;`. `Expected` is the block the cell must hold, as
+`Type/Subtype` or `Subtype`; any cell of a larger block names it. Directions are
+`Forward`, `Backward`, `Left`, `Right`, `Up` and `Down`. A name or Custom Data
+can't contain `;`, and the name of an added block can't contain `:`. A patch id has letters, digits,
+`.`, `_` and `-`.
+
+The plugin checks every op before it applies any, each seeing the grid as the ops
+before it leave it, and refuses the whole patch with the first problem:
+
+- a cell that doesn't hold the expected block, or a setting the block doesn't have;
+- an added block on a taken cell, of an unknown definition or another grid size,
+  or with no mount neighbor once the patch is done (it would split off at the
+  next removal);
+- a patch that removes a block and would leave the grid in pieces: at any
+  removal the game splits off every group of blocks not joined to the largest by
+  mount points, so islands that were there before must go or be joined back by
+  the same patch;
+- removing a connector a ship is docked to;
+- changing a shipyard's cargo containers, connectors, rotors or welders while it
+  has an order, running or queued.
+
+Then it applies the ops on the game thread through the game's raze and build
+success paths the shipyard uses (the station's safe zone refuses the game's own
+block removal), and adds the id to the grid's ledger, a storage key saved with
+the grid. A patch the ledger has is skipped, so it applies once, wherever the
+grid goes in handovers, restarts and cluster stops. Each applied patch logs a line
+`Station patch APPLIED <id> on <grid>` with the block-list diff, and the admin gets
+the same diff as the reply.
+
+- `!oct patch apply <id> "<grid>" "<ops>"` (admin) applies a patch now, on the
+  process that simulates the grid; on a cluster that is the node holding the
+  station.
+- `!oct patch check <id> "<grid>" "<ops>"` runs the checks only.
+- A chat command has 200 characters at most: split a longer patch into several,
+  or stage it.
+- `!oct patch status "<grid>"` answers the block count, a hash of the block list,
+  the ledger and the islands.
+
+`StationPatches` in the config is the staged list, shipped with
+`octahedron.cfg`. Every process applies its patches, in the list's order, to the
+grids it simulates whose ledger lacks them, within 5 seconds of loading them. On a
+cluster that is whichever node loads the station's partition, also one that wakes
+up later. A refused staged patch is logged, holds back the later patches of its
+grid, and is tried again every minute. In `octahedron.cfg`:
+
+```xml
+<StationPatches>
+  <StationPatchEntry>
+    <Id>2026-11-lobby-light</Id>
+    <Grid>Alpha Station</Grid>
+    <Ops>swap:3,2,-1:LargeBlockHalfTrofferLight:InteriorLight/LargeBlockLight_1corner</Ops>
+  </StationPatchEntry>
+</StationPatches>
+```
+
+Patches don't change grid ids, partitions or names the plugin keys on: don't
+rename a station's hologram tables, buttons, panels or arm rotors with them.
+Moving or replacing whole grids still needs a wipe (see SE-1238).
+
 ### Shared NPC blocks
 
 Whoever a block is shared with can also change it: the game's ownership check
@@ -1749,6 +1823,16 @@ runs the same with the cluster's NPC census on a local test cluster;
 the timer's first space cargo ship, each spawn type spawned by command in space, on
 EarthLike, high above it and on the Moon, the client seeing the spawned grids, and
 the mods' shares of 2,000 spawn attempts per type and place.
+`tests/patches/PatchTests` checks station patches without the game
+(`dotnet run -c Release --project tests/patches/PatchTests`): the patch format,
+the checks of a whole patch before any op applies (a bad last op refuses the
+whole patch), the mount neighbor of added blocks and the island check, swaps that
+keep a grid whole, and vetoes. `tests/station_patch_cluster.py` runs them on a
+local test cluster with an admin client (`tests/edit-probe` reports the grids
+from whichever node holds them): patches applied with `!oct patch apply` on Alpha
+Station and its shipyard, the refusals, a docked ship and a paid build, then a
+node restart and a cluster stop and start; and a staged patch in `StationPatches`
+for Beta Station, applied once by the node that loads it.
 `tests/market/MarketTests` checks the market's bookkeeping without the game
 (`dotnet run -c Release --project tests/market/MarketTests`): OCT's prices with the
 tax and rounding, stock, the hourly restock and profiles, specialty and drift, the

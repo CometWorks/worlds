@@ -146,6 +146,35 @@ public sealed class Commands : CommandModule
     }
 
     [Command(
+        "patch apply",
+        "Applies a station patch now, on the process that simulates the grid",
+        "!oct patch apply <id> \"<station or shipyard grid>\" \"<ops>\": checks every op first and applies all or none. "
+            + "Ops: set:X,Y,Z:Expected:enabled=0|1|name=Text|data=Text, del:X,Y,Z:Expected, "
+            + "add:X,Y,Z:Type/Subtype:Forward:Up[:Name], swap:X,Y,Z:Expected:Type/Subtype, separated by ';'. "
+            + "The grid's ledger keeps the id, so a patch applies once."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string PatchApply(string id, string grid, string ops) =>
+        StationPatches.Apply(id, grid, ops, true);
+
+    [Command(
+        "patch check",
+        "Checks a station patch without applying it",
+        "!oct patch check <id> \"<grid>\" \"<ops>\""
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string PatchCheck(string id, string grid, string ops) =>
+        StationPatches.Apply(id, grid, ops, false);
+
+    [Command(
+        "patch status",
+        "A station or shipyard grid's block count, block list hash, patch ledger and islands",
+        "!oct patch status \"<grid>\""
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string PatchStatus(string grid) => StationPatches.Status(grid);
+
+    [Command(
         "shipyard tow",
         "Breaks down a grid for you at a station's shipyard, as a tow over your limits does, for tests",
         "!oct shipyard tow <station> <grid id>"
