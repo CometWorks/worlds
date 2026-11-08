@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<PluginData
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="GitHubPlugin"
+>
+  <!-- Test-only server plugin of the SE-1227 station update rig. Never published to a hub. -->
+  <Id>9A41C0D3-7E25-4B18-A6F2-1227E0D1A9B4</Id>
+  <RepoId>CometWorks/worlds</RepoId>
+  <FriendlyName>Edit Probe</FriendlyName>
+  <Author>CometWorks</Author>
+  <Tooltip>Reports station grids from whichever process holds them, for the station patch tests (SE-1227, SE-1234)</Tooltip>
+  <Commit>TODO Git commit hash</Commit>
+</PluginData>

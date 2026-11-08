@@ -3142,7 +3142,7 @@ internal static partial class ShipyardOrders
     }
 
     // RazeBlocks would ask the safe zone, which forbids grinding
-    private static void Raze(MyCubeGrid grid, List<Vector3I> cells)
+    internal static void Raze(MyCubeGrid grid, List<Vector3I> cells)
     {
         var present = cells.Where(c => grid.CubeExists(c)).ToList();
         grid.RazeGeneratedBlocks(present);
@@ -4044,7 +4044,7 @@ internal static partial class ShipyardOrders
 
     // The OctahedronFilaments mod's welder (SE-1067), and the OmniArc welder it copies, which
     // worlds built before it have
-    private static readonly HashSet<string> WelderSubtypes = new HashSet<string>
+    internal static readonly HashSet<string> WelderSubtypes = new HashSet<string>
     {
         "OctahedronFilamentWelder",
         "OmniArcBeam",

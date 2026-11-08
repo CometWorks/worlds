@@ -33,7 +33,7 @@ public class Plugin : IPlugin
     public OctahedronConfig PluginConfig => Config;
 
     // OCTAHEDRON_CONFIG lets every node of a cluster read the same file, the checkout's
-    private static string ConfigPath =>
+    internal static string ConfigPath =>
         Environment.GetEnvironmentVariable("OCTAHEDRON_CONFIG")
         ?? Path.Combine(MyFileSystem.UserDataPath, $"{Name}.cfg");
 
@@ -78,6 +78,7 @@ public class Plugin : IPlugin
             StationConnectors.Update();
             StationCharging.Update();
             StationRelease.Update();
+            StationPatches.Update();
             worldEdge.Update();
             NoGravityDrives.Update();
             ClangDrives.Update();
