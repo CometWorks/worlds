@@ -423,9 +423,16 @@ def offline_partitions(bench, probe, check, log, lbc_ships, cash) -> None:
         probe.run("wait 5")
         rows = board("warm-start")
     check("after a warm start: both factions' grids counted", same(rows), f"{rows}")
+    # The game writes its log in a while
+    loaded = re.compile(r"Leaderboard: (\d+) grids loaded from the world")
+    deadline = time.monotonic() + 60
+    while not loaded.search(log("wa-1")) and time.monotonic() < deadline:
+        probe.run("wait 5")
+    found = loaded.search(log("wa-1"))
     check(
         "the WA loaded the grids from its world",
-        re.search(r"Leaderboard: \d+ grids loaded from the world", log("wa-1")),
+        found and int(found[1]) >= len(grids),
+        found and found[0],
     )
     wait(GONE + 15)
     rows = board("warm-start-later")
