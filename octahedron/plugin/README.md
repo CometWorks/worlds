@@ -1538,7 +1538,8 @@ chain into huge partitions that can't be split, balanced or taken offline separa
   and a hash of the instructions of the MES code it relies on
   (`MesAcceptedMethodHashes`). Every start logs both. On a mismatch it logs a
   Critical line and MES runs unpatched. After reviewing an MES update, add the new
-  version and hash to the config.
+  version and hash to the defaults and to `config/octahedron.cfg`: a keep-world
+  deploy changes only the options that file names.
 - The cluster's NPC sweep reads the gap bands from `CometWorks.ModMes.InGap.v1`, which
   the plugin publishes, and removes unvisited NPC grids there sooner.
 
