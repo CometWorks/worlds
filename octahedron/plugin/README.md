@@ -1890,7 +1890,8 @@ them): patches applied with `!oct patch apply` on Alpha Station and its shipyard
 the refusals, a docked ship and a paid build, then a node restart and a cluster stop
 and start; Alpha Station replaced by an edited copy of its blueprint (a light's
 radius, an LCD's text and mod storage, a Rotary Airlock door, a container with
-items, a name, a grid setting), with the market unchanged; and staged patches in
+items, a name, a grid setting), both copies prepared by `station_patch.py`, with
+the market unchanged; and staged patches in
 `StationPatches` for Beta Station, ops and a blueprint, applied once by the node
 that loads it.
 `tests/market/MarketTests` checks the market's bookkeeping without the game

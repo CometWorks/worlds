@@ -7,8 +7,8 @@ using System.Xml.Linq;
 namespace ServerPlugin;
 
 /// <summary>
-/// A station patch made from two blueprints of a grid (SE-1234): the one the live grid was built
-/// from and the new one. Comparing the two blueprints, not the live grid, leaves out what the game
+/// A station patch made from two blueprints of a grid (SE-1234), both prepared for it by
+/// station_patch.py: the one the live grid was built from and the new one. Comparing the two blueprints, not the live grid, leaves out what the game
 /// changed since (charge, inventories, timers, the plugin's panels), so only the designer's
 /// changes become ops. Game-free: tests/patches/PatchTests runs it.
 ///

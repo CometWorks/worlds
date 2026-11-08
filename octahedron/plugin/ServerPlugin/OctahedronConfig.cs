@@ -1861,11 +1861,11 @@ public struct StationPatchEntry
     public string Ops { get; set; }
 
     [StructMember(
-        "Instead of Ops: the blueprint file the grid was built from, next to this config file unless the path is absolute. "
-            + "The patch turns the grid into To by the blueprints' diff."
+        "Instead of Ops: the blueprint the grid was built from, prepared for it by station_patch.py, "
+            + "next to this config file unless the path is absolute. The patch turns the grid into To by the blueprints' diff."
     )]
     public string From { get; set; }
 
-    [StructMember("The new blueprint file of the grid, with From.")]
+    [StructMember("The new blueprint of the grid, prepared like From.")]
     public string To { get; set; }
 }
