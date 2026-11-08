@@ -6,11 +6,118 @@ using System.Text;
 
 namespace ServerPlugin;
 
-/// <summary>A faction's or an OCT player's grids on one server: their value in SC and their PCU.</summary>
+/// <summary>A faction's or an OCT player's grids: their value in SC and their PCU.</summary>
 public struct FactionGrids
 {
     public long Value;
     public long Pcu;
+}
+
+/// <summary>A grid as a node counted it: its biggest owner, its value in milli-SC and its PCU.</summary>
+public struct LeaderboardGrid
+{
+    public long Id;
+    public long Owner;
+    public long Milli;
+    public long Pcu;
+}
+
+/// <summary>
+/// On the World Authority: every grid's latest count, whichever node made it. A grid that moved to
+/// another node counts once, and a grid in an offline partition counts as its node last counted it
+/// before the partition went offline, until it wakes (SE-1270). A grid gone from its node's reports
+/// for <see cref="GoneAfter"/>, and in no offline partition, is forgotten.
+/// </summary>
+public sealed class LeaderboardBook
+{
+    private sealed class Entry
+    {
+        public LeaderboardGrid Grid;
+        public string Node;
+        public DateTime Seen;
+    }
+
+    private readonly Dictionary<long, Entry> grids = new();
+    private readonly Dictionary<string, DateTime> reports = new();
+
+    /// <summary>How long a node reports without a grid before it is gone: a handover or a wake isn't its end.</summary>
+    public TimeSpan GoneAfter;
+
+    /// <summary>A grid whose node stopped reporting counts this long.</summary>
+    public TimeSpan SilentAfter;
+
+    /// <summary>The grids in offline partitions; null while unknown, and then no grid is forgotten.</summary>
+    public IReadOnlyDictionary<long, DateTime> Offline;
+
+    public int Count => grids.Count;
+
+    public void Report(string node, IEnumerable<LeaderboardGrid> counted, DateTime now)
+    {
+        reports[node] = now;
+        foreach (var grid in counted)
+            grids[grid.Id] = new Entry
+            {
+                Grid = grid,
+                Node = node,
+                Seen = now,
+            };
+    }
+
+    /// <summary>The grids to rank now, and how many of them are in offline partitions.</summary>
+    public List<LeaderboardGrid> Current(DateTime now, out int offline)
+    {
+        var current = new List<LeaderboardGrid>();
+        offline = 0;
+        foreach (var (id, entry) in grids.ToList())
+        {
+            if (Offline?.ContainsKey(id) == true)
+            {
+                // Once its partition wakes, maybe on another node, that node gets GoneAfter from
+                // now to report it
+                entry.Seen = now;
+                offline++;
+                current.Add(entry.Grid);
+            }
+            else if (
+                now - entry.Seen < SilentAfter
+                && !(
+                    reports.TryGetValue(entry.Node, out var last)
+                    && last > entry.Seen
+                    && last - entry.Seen >= GoneAfter
+                )
+            )
+                current.Add(entry.Grid);
+            else if (Offline != null)
+                grids.Remove(id);
+        }
+        return current;
+    }
+
+    /// <summary>id, owner, milli-SC, PCU, node: a record per line, tab-separated</summary>
+    public string Serialize() =>
+        string.Concat(
+            grids.Values.Select(e =>
+                LeaderboardMath.EncodeGrid(e.Grid).TrimEnd('\n')
+                + "\t"
+                + LeaderboardMath.Clean(e.Node)
+                + "\n"
+            )
+        );
+
+    /// <summary>A saved book; every grid counts as seen now. Throws FormatException or IndexOutOfRangeException.</summary>
+    public void Load(string text, DateTime now)
+    {
+        foreach (var f in LeaderboardMath.Records(text))
+        {
+            var grid = LeaderboardMath.DecodeGrid(f);
+            grids[grid.Id] = new Entry
+            {
+                Grid = grid,
+                Node = f[4],
+                Seen = now,
+            };
+        }
+    }
 }
 
 /// <summary>A faction, or a player of OCT's without a tag, on the leaderboard.</summary>
@@ -52,23 +159,33 @@ public static class LeaderboardMath
         return mids.Count == 0 ? 0 : (long)Math.Round(mids.Average());
     }
 
-    /// <summary>The grids of every faction and OCT player, summed over the servers' reports.</summary>
+    /// <summary>milli-SC as a grid's value: whole milli-SC, at most long.MaxValue.</summary>
+    public static long Milli(decimal milli) => milli >= long.MaxValue ? long.MaxValue : (long)milli;
+
+    /// <summary>
+    /// The grids by faction or OCT player, as <paramref name="key"/> gives it for their owner; null
+    /// leaves the grid out. A value is rounded down to SC once per key.
+    /// </summary>
     public static Dictionary<long, FactionGrids> Sum(
-        IEnumerable<IReadOnlyDictionary<long, FactionGrids>> reports
+        IEnumerable<LeaderboardGrid> grids,
+        Func<long, long?> key
     )
     {
-        var sum = new Dictionary<long, FactionGrids>();
-        foreach (var report in reports)
-        foreach (var (faction, grids) in report)
+        var milli = new Dictionary<long, decimal>();
+        var pcu = new Dictionary<long, long>();
+        foreach (var grid in grids)
         {
-            sum.TryGetValue(faction, out var had);
-            sum[faction] = new FactionGrids
-            {
-                Value = checked(had.Value + grids.Value),
-                Pcu = checked(had.Pcu + grids.Pcu),
-            };
+            if (key(grid.Owner) is not { } k)
+                continue;
+            milli.TryGetValue(k, out var value);
+            pcu.TryGetValue(k, out var blocks);
+            milli[k] = value + grid.Milli;
+            pcu[k] = checked(blocks + grid.Pcu);
         }
-        return sum;
+        return milli.ToDictionary(
+            m => m.Key,
+            m => new FactionGrids { Value = Sc(m.Value), Pcu = pcu[m.Key] }
+        );
     }
 
     /// <summary>Richest first; the same total by PCU, then by tag.</summary>
@@ -130,14 +247,14 @@ public static class LeaderboardMath
 
     // --- wire formats: a record per line, tab-separated ---
 
-    private static string Clean(string text) =>
+    internal static string Clean(string text) =>
         (text ?? "").Replace('\t', ' ').Replace('\n', ' ').Replace('\r', ' ');
 
     private static long L(string text) => long.Parse(text, CultureInfo.InvariantCulture);
 
     private static string S(long value) => value.ToString(CultureInfo.InvariantCulture);
 
-    private static IEnumerable<string[]> Records(string text) =>
+    internal static IEnumerable<string[]> Records(string text) =>
         (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split('\t'));
 
     /// <summary>item, price</summary>
@@ -147,13 +264,24 @@ public static class LeaderboardMath
     public static Dictionary<string, long> DecodePrices(string text) =>
         Records(text).ToDictionary(f => f[0], f => L(f[1]));
 
-    /// <summary>faction or OCT player id, value, PCU</summary>
-    public static string EncodeGrids(IReadOnlyDictionary<long, FactionGrids> grids) =>
-        string.Concat(grids.Select(g => $"{S(g.Key)}\t{S(g.Value.Value)}\t{S(g.Value.Pcu)}\n"));
+    /// <summary>grid id, owner, milli-SC, PCU</summary>
+    public static string EncodeGrid(LeaderboardGrid g) =>
+        $"{S(g.Id)}\t{S(g.Owner)}\t{S(g.Milli)}\t{S(g.Pcu)}\n";
 
-    public static Dictionary<long, FactionGrids> DecodeGrids(string text) =>
-        Records(text)
-            .ToDictionary(f => L(f[0]), f => new FactionGrids { Value = L(f[1]), Pcu = L(f[2]) });
+    internal static LeaderboardGrid DecodeGrid(string[] f) =>
+        new()
+        {
+            Id = L(f[0]),
+            Owner = L(f[1]),
+            Milli = L(f[2]),
+            Pcu = L(f[3]),
+        };
+
+    public static string EncodeGrids(IEnumerable<LeaderboardGrid> grids) =>
+        string.Concat(grids.Select(EncodeGrid));
+
+    public static List<LeaderboardGrid> DecodeGrids(string text) =>
+        Records(text).Select(DecodeGrid).ToList();
 
     /// <summary>tag, name, cash, grids, PCU</summary>
     public static string EncodeRows(IEnumerable<LeaderboardRow> rows) =>

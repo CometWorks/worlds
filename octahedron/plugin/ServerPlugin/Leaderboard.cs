@@ -11,6 +11,7 @@ using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.World;
+using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.GUI.TextPanel;
 using IMyTextSurface = Sandbox.ModAPI.Ingame.IMyTextSurface;
@@ -31,14 +32,19 @@ namespace ServerPlugin;
 /// Every <see cref="OctahedronConfig.LeaderboardIntervalSeconds"/> the server counts its grids,
 /// a few per tick, and writes the board on the panels. On a cluster each node counts the grids it
 /// simulates: it gets the prices from the World Authority, which keeps the market and the bank
-/// accounts, sends it the totals per faction and gets the ranked factions back, summed over the
-/// latest totals of every node.
+/// accounts, sends it every grid's value and PCU and gets the ranked factions back. The World
+/// Authority keeps each grid's latest count in its world (<see cref="LeaderboardBook"/>), so the grids
+/// in offline partitions count as they were last counted before they went offline (SE-1270).
 /// </summary>
 internal static class Leaderboard
 {
     private const string PricesTopic = "leaderboard/prices";
     private const string ReportTopic = "leaderboard/report";
     private const string LocalSource = "local";
+    private const string VariableName = "Octahedron-Leaderboard-Grids";
+
+    // A message holds 64 KiB, a grid's line about 60 bytes
+    private const int GridsPerReport = 800;
     private static readonly TimeSpan Budget = TimeSpan.FromMilliseconds(2);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(30);
 
@@ -55,11 +61,8 @@ internal static class Leaderboard
     private static MySession session;
     private static readonly List<Action<IReadOnlyList<LeaderboardRow>, string>> waiting = new();
 
-    // On the authority: the latest totals of every server, by its name, per faction or OCT player
-    private static readonly Dictionary<
-        string,
-        (DateTime At, Dictionary<long, FactionGrids> Grids)
-    > reports = new();
+    // On the authority, or a plain server: every grid's latest count, loaded from the world on first use
+    private static LeaderboardBook book;
 
     private static IDisposable pricesRegistration;
     private static IDisposable reportRegistration;
@@ -72,7 +75,7 @@ internal static class Leaderboard
         if (session != MySession.Static)
         {
             session = MySession.Static;
-            reports.Clear();
+            book = null;
             count = null;
             busy = false;
             nextCount = DateTime.MinValue;
@@ -147,19 +150,31 @@ internal static class Leaderboard
             Show(Board(LocalSource, grids), panels);
             return;
         }
-        Stations.Ask(
-            ReportTopic,
-            LeaderboardMath.EncodeGrids(grids),
-            (text, error) =>
-            {
-                if (text == null)
+        // Every part gets the ranked factions back; the board shows the last answer
+        int parts = Math.Max(1, (grids.Count + GridsPerReport - 1) / GridsPerReport);
+        int waiting = parts;
+        List<LeaderboardRow> ranked = null;
+        string failed = null;
+        for (int part = 0; part < parts; part++)
+            Stations.Ask(
+                ReportTopic,
+                LeaderboardMath.EncodeGrids(grids.Skip(part * GridsPerReport).Take(GridsPerReport)),
+                (text, error) =>
                 {
-                    Fail("Leaderboard: the World Authority did not rank the factions: " + error);
-                    return;
+                    if (text == null)
+                        failed = error;
+                    else
+                        ranked = LeaderboardMath.DecodeRows(text);
+                    if (--waiting > 0)
+                        return;
+                    if (ranked == null)
+                        Fail(
+                            "Leaderboard: the World Authority did not rank the factions: " + failed
+                        );
+                    else
+                        Show(ranked, panels);
                 }
-                Show(LeaderboardMath.DecodeRows(text), panels);
-            }
-        );
+            );
     }
 
     private static void Fail(string why)
@@ -251,15 +266,66 @@ internal static class Leaderboard
         return prices;
     }
 
-    /// <summary>Keeps the server's totals and ranks the factions by them and every other server's latest.</summary>
-    private static List<LeaderboardRow> Board(string source, Dictionary<long, FactionGrids> grids)
+    // On a cluster, kept in the World Authority's world: the grids in offline partitions are in no report
+    private static LeaderboardBook Book
+    {
+        get
+        {
+            if (book != null)
+                return book;
+            book = new LeaderboardBook();
+            if (
+                PluginCluster.IsClusterProcess
+                && MyAPIGateway.Utilities.GetVariable<string>(VariableName, out var saved)
+            )
+            {
+                try
+                {
+                    book.Load(saved, DateTime.UtcNow);
+                    Plugin.Log.Info($"Leaderboard: {book.Count} grids loaded from the world");
+                }
+                catch (Exception e) when (e is FormatException or IndexOutOfRangeException)
+                {
+                    Plugin.Log.Error("Leaderboard: unreadable grids, starting over", e);
+                    book = new LeaderboardBook();
+                }
+            }
+            return book;
+        }
+    }
+
+    // The faction a grid counts for, by its biggest owner, or the player for OCT's players; null: none
+    private static long? Key(long owner)
+    {
+        var faction = MySession.Static.Factions.GetPlayerFaction(owner);
+        if (faction == null)
+            return null;
+        return Config.LeaderboardOctPlayers && OctFaction.Member(owner) ? owner : faction.FactionId;
+    }
+
+    /// <summary>Keeps the server's grids and ranks the factions by them and every other server's latest.</summary>
+    private static List<LeaderboardRow> Board(string source, List<LeaderboardGrid> grids)
     {
         var now = DateTime.UtcNow;
-        reports[source] = (now, grids);
-        var oldest = now - TimeSpan.FromSeconds(3 * Config.LeaderboardIntervalSeconds);
-        foreach (var gone in reports.Where(r => r.Value.At < oldest).Select(r => r.Key).ToList())
-            reports.Remove(gone);
-        var sum = LeaderboardMath.Sum(reports.Values.Select(r => r.Grids));
+        var interval = TimeSpan.FromSeconds(Config.LeaderboardIntervalSeconds);
+        var state = Book;
+        bool cluster = PluginCluster.IsClusterProcess;
+        // A plain server's count is the whole world
+        state.GoneAfter = cluster ? 2 * interval : TimeSpan.Zero;
+        state.SilentAfter = 3 * interval;
+        state.Offline = cluster ? ContractOffline.Grids(now) : new Dictionary<long, DateTime>();
+        state.Report(source, grids, now);
+        var current = state.Current(now, out int offline);
+        var sum = LeaderboardMath.Sum(current, Key);
+        if (cluster)
+        {
+            MyAPIGateway.Utilities.SetVariable(VariableName, state.Serialize());
+            Plugin.Log.Info(
+                $"Leaderboard: {grids.Count} grids from {source}, ranking {current.Count} grids, "
+                    + $"{offline} in offline partitions"
+                    + (state.Offline == null ? " (not known yet)" : "")
+            );
+        }
 
         long octId = Market.OctId;
         var rows = new List<LeaderboardRow>();
@@ -332,12 +398,11 @@ internal static class Leaderboard
     /// <summary>One count of this server's grids, a few per tick.</summary>
     private sealed class Count
     {
-        // By faction, or by player for OCT's players
-        public readonly Dictionary<long, FactionGrids> Grids = new();
+        // The owned grids; the World Authority sums them by faction
+        public readonly List<LeaderboardGrid> Grids = new();
         public readonly List<MyTextPanel> Panels = new();
         private readonly Dictionary<MyDefinitionId, long> prices = new();
         private readonly Dictionary<MyCubeBlockDefinition, decimal> built = new();
-        private readonly Dictionary<long, decimal> milli = new();
         private readonly List<MyCubeGrid> todo;
         private readonly Stopwatch work = new();
         private int next;
@@ -367,15 +432,7 @@ internal static class Leaderboard
                 Add(todo[next++]);
             work.Stop();
             steps++;
-            if (next < todo.Count)
-                return false;
-            foreach (var (faction, value) in milli)
-            {
-                var g = Grids[faction];
-                g.Value = LeaderboardMath.Sc(value);
-                Grids[faction] = g;
-            }
-            return true;
+            return next >= todo.Count;
         }
 
         private void Add(MyCubeGrid grid)
@@ -406,19 +463,15 @@ internal static class Leaderboard
 
             if (grid.BigOwners.Count == 0)
                 return;
-            long owner = grid.BigOwners[0];
-            var faction = MySession.Static.Factions.GetPlayerFaction(owner);
-            if (faction == null)
-                return;
-            long key =
-                Config.LeaderboardOctPlayers && OctFaction.Member(owner)
-                    ? owner
-                    : faction.FactionId;
-            Grids.TryGetValue(key, out var g);
-            g.Pcu += grid.BlocksPCU;
-            Grids[key] = g;
-            milli.TryGetValue(key, out var had);
-            milli[key] = had + value;
+            Grids.Add(
+                new LeaderboardGrid
+                {
+                    Id = grid.EntityId,
+                    Owner = grid.BigOwners[0],
+                    Milli = LeaderboardMath.Milli(value),
+                    Pcu = grid.BlocksPCU,
+                }
+            );
         }
 
         // The block's mounted components, milli-SC

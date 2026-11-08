@@ -234,6 +234,20 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "delete",
+        "Deletes the grid if this node has it: DELETED id, or NOGRID id",
+        "!lbprobe delete <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Delete(long id)
+    {
+        if (!MyEntities.TryGetEntityById(id, out MyCubeGrid grid) || grid.MarkedForClose)
+            return $"NOGRID {id}";
+        grid.Close();
+        return $"DELETED {id}";
+    }
+
+    [Command(
         "panel",
         "The text of the station's first leaderboard panel: PANEL count content font AT x y z FORWARD x y z | text",
         "!lbprobe panel <station>"

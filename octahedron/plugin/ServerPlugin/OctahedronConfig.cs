@@ -1769,14 +1769,14 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         10,
-        description: "Seconds between two counts of the leaderboard. A count values every grid of the world, a few per tick.",
+        description: "Seconds between two counts and rankings of the leaderboard. A count values every grid of the world, a few per tick. On a cluster, grids in offline partitions count as they were last counted.",
         Parent = "leaderboard"
     )]
     public int LeaderboardIntervalSeconds
     {
         get;
         set => SetField(ref field, value);
-    } = 300;
+    } = 600;
 
     [IntOption(1, 50, "Factions the leaderboard shows.", Parent = "leaderboard")]
     public int LeaderboardRows
