@@ -58,6 +58,10 @@ internal static class Taxi
         public DateTime Until;
     }
 
+    // Who got into each cab first, by cab: they pick where it goes and pay, the others ride along
+    // free. Not known on a node that took the cab over: then whoever pays first.
+    private static readonly Dictionary<long, long> firstIn = new();
+
     // Open calls by caller
     private static readonly Dictionary<long, Call> calls = new();
 
@@ -234,6 +238,8 @@ internal static class Taxi
         Tell(driver, $"Passenger in: {name}");
         Tell(driver, $"Fare paid by {name}. Destination: {station}");
         Tell(passenger, $"You paid {Sc(paid)}. {Name(driver)} takes you to {station}.");
+        firstIn[cab.EntityId] = passenger;
+        RideAlong(cab, passenger, station);
     }
 
     // Up to 'amount' SC from the payer to the driver, as much as the payer has; what was paid
@@ -274,7 +280,13 @@ internal static class Taxi
             return Question(destinations);
         var record = Record(seat);
         if (record.Passenger == passenger && record.Station != Unpaid)
-            return $"You paid for {record.Station} already.";
+            return $"This cab takes you to {record.Station}.";
+        if (
+            firstIn.TryGetValue(cab.EntityId, out var first)
+            && first != passenger
+            && SeatOf(first).Cab == cab
+        )
+            return $"{Name(first)} got in first and picks where this cab goes. You ride along for free.";
         if (!Stations.Find(ref station, out var error))
             return error;
         if (station == here)
@@ -301,8 +313,22 @@ internal static class Taxi
                 + $" from {here ?? "space"} to {station}"
         );
         Tell(driver, $"Fare paid by {name}. Destination: {station}");
+        RideAlong(cab, passenger, station);
         return $"You paid {Sc(fare)}. {Name(driver)} takes you to {station}. "
             + "The fare is not refunded if you get out before the cab arrives.";
+    }
+
+    // The cab's other passengers go where the one who paid goes, for free
+    private static void RideAlong(MyCubeGrid cab, long payer, string station)
+    {
+        foreach (var other in PassengerSeats(cab))
+        {
+            var id = other.Pilot?.GetPlayerIdentityId() ?? 0;
+            if (id == 0 || id == payer)
+                continue;
+            Write(other, id, station);
+            Tell(id, $"{Name(payer)} paid: this cab takes you to {station} for free.");
+        }
     }
 
     private static void GotIn(MyCubeGrid cab, MyCockpit seat, long passenger, long driver)
@@ -319,10 +345,37 @@ internal static class Taxi
                 Tell(passenger, "This cab has no driver right now.");
             return;
         }
-        Write(seat, passenger, Unpaid);
         var here = StationAt(cab.PositionComp.GetPosition());
-        Tell(passenger, Question(Destinations(here)));
         Tell(driver, $"Passenger in: {Name(passenger)}");
+        // Seated while another passenger has paid (a called cab's caller) or is picking
+        var going = PassengerSeats(cab)
+            .Where(s => s != seat && s.Pilot != null)
+            .Select(s => Record(s))
+            .FirstOrDefault(r => r.Station != null && r.Station != Unpaid)
+            .Station;
+        if (going != null)
+        {
+            Write(seat, passenger, going);
+            Tell(passenger, $"This cab goes to {going}. You ride along for free.");
+        }
+        else if (
+            firstIn.TryGetValue(cab.EntityId, out var first)
+            && first != passenger
+            && SeatOf(first).Cab == cab
+        )
+        {
+            Write(seat, passenger, Unpaid);
+            Tell(
+                passenger,
+                $"{Name(first)} got in first and picks where this cab goes. You ride along for free."
+            );
+        }
+        else
+        {
+            firstIn[cab.EntityId] = passenger;
+            Write(seat, passenger, Unpaid);
+            Tell(passenger, Question(Destinations(here)));
+        }
         Plugin.Log.Info(
             $"Taxi: {Name(passenger)} ({passenger}) got into '{cab.DisplayName}' at {here ?? "space"}"
         );
@@ -336,6 +389,20 @@ internal static class Taxi
         var driver = Driver(cab);
         if (driver != 0)
             Tell(driver, $"Passenger out: {Name(passenger)}");
+        if (firstIn.TryGetValue(cab.EntityId, out var first) && first == passenger)
+        {
+            firstIn.Remove(cab.EntityId);
+            // the next one seated picks, unless the cab is on its way already
+            var next = PassengerSeats(cab)
+                .Where(s => s.Pilot != null && Record(s).Station == Unpaid)
+                .Select(s => s.Pilot.GetPlayerIdentityId())
+                .FirstOrDefault(id => id != passenger);
+            if (next != 0 && record.Station == Unpaid)
+            {
+                firstIn[cab.EntityId] = next;
+                Tell(next, Question(Destinations(StationAt(cab.PositionComp.GetPosition()))));
+            }
+        }
         Plugin.Log.Info(
             $"Taxi: {Name(passenger)} ({passenger}) got out of '{cab.DisplayName}'"
                 + (

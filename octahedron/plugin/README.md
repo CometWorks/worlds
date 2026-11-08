@@ -1329,6 +1329,9 @@ the Hangar fee does, and pays it to the driver, who hears where to go. The fare 
 refunded when the passenger gets out before the cab arrives. The driver also hears
 when a passenger gets in and out, by name, from `Taxi`:
 `Passenger in: NAME`, `Fare paid by NAME. Destination: STATION`, `Passenger out: NAME`.
+The first one to sit down picks the destination and pays; whoever else sits down while
+the cab waits rides along to the same station for free (when the first one gets out
+before paying, the next one seated picks).
 
 What a seat's passenger was asked and paid is kept in the seat's custom data, so a
 cluster node that takes over the cab's partition neither asks again nor misses the
