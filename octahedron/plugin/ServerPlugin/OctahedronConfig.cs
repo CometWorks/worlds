@@ -1290,7 +1290,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = "2.75.02";
+    } = "2.75.02,2.75.03";
 
     [StringOption(
         description: "Accepted instruction hashes of the MES methods the plugin depends on, comma separated (each startup logs the current one)",
