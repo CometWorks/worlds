@@ -290,10 +290,10 @@ def run(bench) -> None:
         "leaderboard-lines",
         "\n".join(l for l in (wa + node).splitlines() if "eaderboard" in l)[-20000:],
     )
-    offline_partitions(bench, probe, check, log, price, ships, (both, both_pcu), cash)
+    offline_partitions(bench, probe, check, log, ships, cash)
 
 
-def offline_partitions(bench, probe, check, log, price, lbc_ships, lbc, cash) -> None:
+def offline_partitions(bench, probe, check, log, lbc_ships, cash) -> None:
     """SE-1270: the grids of offline partitions stay on the board"""
     cluster = bench.cluster
     processes = [NODE, "wa-1"]
@@ -319,22 +319,45 @@ def offline_partitions(bench, probe, check, log, price, lbc_ships, lbc, cash) ->
     reply = probe.run(f"!lbprobe ship LBD Alpha {lb.IRON}=2000 {FAR}")
     check("the probe built LBD's ship far from Alpha", "SHIP " in reply, reply)
     far = int(re.search(r"SHIP (\d+)", reply)[1]) if "SHIP " in reply else 0
-    value, pcu = lb.expected(price, iron=2000)
-    want = {"LBC": lbc, "LBD": (value, pcu)}
+    names = [s.strip() for s in probe.run("!oct market stations").split(",")]
+
+    def expected() -> dict[str, tuple[int, int]]:
+        """The ships at the market's prices now: they drift while the test runs"""
+        price = lb.prices(
+            lambda station: probe.ask(f'!oct market show "{station}" all'), names
+        )
+        return {
+            "LBC": lb.expected(price, iron=1500, ships=2),
+            "LBD": lb.expected(price, iron=2000),
+        }
+
+    def near(rows: dict[str, dict], want, tags=("LBC", "LBD")) -> bool:
+        return all(
+            rows.get(t, {}).get("pcu") == want[t][1]
+            and abs(rows.get(t, {}).get("grids", 0) - want[t][0]) <= want[t][0] // 20
+            for t in tags
+        )
+
+    deadline = time.monotonic() + 6 * INTERVAL
+    rows = board("online")
+    while not rows.get("LBD", {}).get("grids") and time.monotonic() < deadline:
+        probe.run("wait 3")
+        rows = board("online")
+    want = expected()
+    check(
+        "online: both factions' grids counted, within 5% of the prices now",
+        near(rows, want),
+        f"{rows} vs {want}",
+    )
+    online = rows
+    # From here on the grids count as last counted: as on this board
+    want = {t: (r["grids"], r["pcu"]) for t, r in online.items()}
 
     def same(rows: dict[str, dict], tags=("LBC", "LBD")) -> bool:
         return all(
             (rows.get(t, {}).get("grids"), rows.get(t, {}).get("pcu")) == want[t]
             for t in tags
         )
-
-    deadline = time.monotonic() + 6 * INTERVAL
-    rows = board("online")
-    while not same(rows) and time.monotonic() < deadline:
-        probe.run("wait 3")
-        rows = board("online")
-    check("online: both factions' grids counted", same(rows), f"{rows} vs {want}")
-    online = rows
 
     # Every partition goes offline: nobody is near any of them
     cluster.handover_config(
@@ -365,7 +388,7 @@ def offline_partitions(bench, probe, check, log, price, lbc_ships, lbc, cash) ->
     check(
         "offline: LBC's ships still counted",
         same(rows, ["LBC"]),
-        f"{rows.get('LBC')} vs {lbc}",
+        f"{rows.get('LBC')} vs {want['LBC']}",
     )
     check(
         "offline: LBD's ship still counted",
@@ -433,18 +456,11 @@ def offline_partitions(bench, probe, check, log, price, lbc_ships, lbc, cash) ->
     )
     wait(GONE + 15)
     rows = board("woken")
-    names = [s.strip() for s in probe.run("!oct market stations").split(",")]
-    now, _ = lb.expected(
-        lb.prices(
-            lambda station: probe.ask(f'!oct market show "{station}" all'), names
-        ),
-        iron=2000,
-    )
-    lbd = rows.get("LBD", {})
+    now = expected()
     check(
-        "woken: LBD's ship counted once",
-        lbd.get("grids") == now and lbd.get("pcu") == pcu,
-        f"{lbd} vs {now}, {pcu}",
+        "woken: LBD's ship counted once, within 5% of the prices now",
+        near(rows, now, ["LBD"]),
+        f"{rows.get('LBD')} vs {now['LBD']}",
     )
 
     # Deleted on its node: gone from the board once the node has reported without it
