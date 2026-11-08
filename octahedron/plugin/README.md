@@ -742,16 +742,19 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   the Store's terms. On top comes the labor fee, `ShipyardLaborFeePer100Pcu` (0) SC
   per 100 PCU of the blueprint, rounded up, paid to OCT on every build. At 0 there
   is no fee, and the quote and the messages don't mention one. The materials also
-  include the hydrogen to fill the ship's H2 tanks to `ShipyardHydrogenFillPercent`
-  (50 %): from the H2 tanks of the player's ships docked at the shipyard or the
-  station's connectors first, each keeping half its capacity, then ice
-  (`ShipyardHydrogenLitersPerIce`, 20 L per kg) in those ships' cargo containers and
-  the shipyard's, then ice from the Store, which the plugin moves without conveyors.
-  `MarketMinStock` keeps 100 t of ice at a Store, 2,000,000 L. When the station has
-  too little ice, the order goes ahead and the tanks get less. Nothing is paid or
-  moved when the order goes into the queue.
-- A free ship's H2 tanks are filled to the same percent, so a ship with only
-  hydrogen thrusters can fly out. When it is done the player's docked ships give what
+  include the gas to fill the ship's H2 tanks to `ShipyardHydrogenFillPercent`
+  (50 %) and its O2 tanks to `ShipyardOxygenFillPercent` (50 %): from the tanks of
+  the player's ships docked at the shipyard or the station's connectors first, each
+  keeping half its capacity, then ice (`ShipyardHydrogenLitersPerIce`, 20 L of H2
+  per kg, and `ShipyardOxygenLitersPerIce`, 10 L of O2 per kg, as a gas generator
+  makes them) in those ships' cargo containers and the shipyard's, then ice from the
+  Store, which the plugin moves without conveyors. `MarketMinStock` keeps 100 t of
+  ice at a Store, 2,000,000 L of H2. When the station has too little ice, the order
+  goes ahead and the tanks get less, the H2 tanks first. Nothing is paid or moved
+  when the order goes into the queue. An order queued before the O2 fill (SE-1288)
+  bought ice for the H2 tanks only, and its O2 tanks stay empty.
+- A free ship's H2 and O2 tanks are filled to the same percents, so a ship with
+  only hydrogen thrusters can fly out. When it is done the player's docked ships give what
   they can in the same way, and OCT gives the rest for free, as it does the
   components, whatever the Store has.
 - The queue of each shipyard holds at most `ShipyardQueueMax` (6) orders, the one
@@ -902,8 +905,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   limits check it for them.
 - The order ends when every block is complete, or when the time is up. The
   welders go off, the projector and battery are removed with the projection,
-  the hydrogen goes into the ship's H2 tanks (on a paid build the ice of what doesn't
-  fit is sold at the Store, with a warning when none does), and the ship,
+  the hydrogen and oxygen go into the ship's H2 and O2 tanks (on a paid build the ice
+  of what doesn't fit is sold at the Store, with a warning when none does), and the ship,
   finished or not, becomes the player's dynamic ship. The player gets a chat
   message either way. After a free build what is left of the components is removed
   and the shipyard is free at once; a paid build goes on to the last part of its
@@ -1040,8 +1043,8 @@ the plugin saves the ship's blocks and subgrids, removes them from the arm and
 pastes them anew as one dynamic ship, with no grid split. A split (the option
 off) leaves the clients a copy of the ship they can sit in but not fly; SE-746
 tracks why. With a connector the arm's connector locks onto the ship's;
-docked within `ShipyardArmDockSeconds` (1), the ship's H2 tanks get the build's
-hydrogen and its batteries are charged. Without a dock the plugin fills the
+docked within `ShipyardArmDockSeconds` (1), the ship's H2 and O2 tanks get the
+build's gas and its batteries are charged. Without a dock the plugin fills the
 tanks itself. Then the plugin hands the ship over and takes the arm down at
 once, never the rotor head itself; the shipyard starts its next build after
 that. An idle shipyard takes down anything an NPC built that is left on its
@@ -1807,7 +1810,7 @@ for the slot's player and faction, and a build and a repair slot going on after 
 `tests/shipyard_off_cluster.py` does that with the player on another node and the station's
 partition free to go offline, and `tests/shipyard_stop_cluster.py` with a cluster stop and start
 in the middle of a build, with nobody connected. `tests/test_shipyard_hydrogen.py` checks where a
-new ship's hydrogen comes from, on free and paid builds, and
+new ship's hydrogen and oxygen come from, on free and paid builds, and
 `tests/shipyard_hydrogen_cluster.py` does that on a cluster. `tests/test_bottle_swap.py` leaves a half full and an empty bottle in Alpha's
 Free Tools box for full ones and checks the next refill takes them out and tops the box up, also with a rule that
 lists no hydrogen bottles; `tests/bottle_swap_cluster.py` does that on a cluster. `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
