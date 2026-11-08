@@ -104,7 +104,7 @@ def prepare(blueprint: str, minutes: int, plugins=()) -> None:
         path = rig.WORLD / name
         path.write_text(
             path.read_text(encoding="utf-8").replace(
-                "<Mods />", f"<Mods>{pl.MOD_ITEMS}</Mods>", 1
+                "<Mods>", f"<Mods>{pl.MOD_ITEMS}", 1
             ),
             encoding="utf-8",
         )

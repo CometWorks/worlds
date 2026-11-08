@@ -29,11 +29,7 @@ from pathlib import Path
 os.environ.setdefault("OCT_TASK", "SE1-0123")
 import rig  # noqa: E402
 
-WORKSHOP = Path(
-    os.environ.get(
-        "OCT_WORKSHOP", rig.HOME / ".steam/steam/steamapps/workshop/content/244850"
-    )
-)
+WORKSHOP = rig.WORKSHOP
 MODS = {3040438530: "ToolCore", 3412657089: "OmniCorp The OmniArc Project: Adv Tools"}
 # A world built with --filament-mod has the Moon Shipyard's filament tools (SE-1067)
 FILAMENTS = re.search(
@@ -42,12 +38,7 @@ FILAMENTS = re.search(
 )
 if FILAMENTS:
     MODS[int(FILAMENTS[1])] = "OctahedronFilaments"
-LOCAL_WORLD_MODS = (
-    "local-world-mods",
-    Path(__file__).resolve().parent / "local-world-mods",
-    "LocalWorldMods.xml",
-    "local-world-mods",
-)
+LOCAL_WORLD_MODS = rig.LOCAL_WORLD_MODS
 MGP = (
     "multigrid-projector",
     Path(
@@ -162,11 +153,7 @@ IDENTITY = (
 
 
 def mod_items() -> str:
-    return "".join(
-        f'<ModItem FriendlyName="{name}"><Name>{id_}.sbm</Name><PublishedFileId>{id_}'
-        "</PublishedFileId><PublishedServiceName>Steam</PublishedServiceName></ModItem>"
-        for id_, name in MODS.items()
-    )
+    return rig.mod_items(MODS)
 
 
 MOD_ITEMS = mod_items()
@@ -181,7 +168,7 @@ def prepare(check: bool, mgp: bool, group: int) -> None:
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
         path = rig.WORLD / name
         text = path.read_text(encoding="utf-8")
-        text = text.replace("<Mods />", f"<Mods>{MOD_ITEMS}</Mods>", 1)
+        text = text.replace("<Mods>", f"<Mods>{MOD_ITEMS}", 1)
         text, count = re.subn(
             r"<BlockTypeLimits>.*?</BlockTypeLimits>", TYPE_LIMITS, text, flags=re.S
         )

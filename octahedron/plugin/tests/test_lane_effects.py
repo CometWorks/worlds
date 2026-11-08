@@ -125,9 +125,7 @@ def with_trade_lanes() -> None:
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
         path = rig.WORLD / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(
-            text.replace("<Mods />", f"<Mods>{item}</Mods>", 1), encoding="utf-8"
-        )
+        path.write_text(text.replace("<Mods>", f"<Mods>{item}", 1), encoding="utf-8")
     folders = [rig.SERVER_DATA / "Mods", rig.APPDATA / "Mods"]
     with Second():
         folders.append(rig.APPDATA / "Mods")

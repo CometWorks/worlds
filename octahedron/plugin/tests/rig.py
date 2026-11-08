@@ -8,8 +8,9 @@ starts under run-test.sh, which waits for free RAM and holds the shared test
 lock. Nothing is read from or written to the machine's own Magnetar, Pulsar or
 game folders apart from copying their launchers and configs.
 
-The world copy leaves out the mods (a client without Steam can't download them)
-and the asteroids (faster loads); the stations, planets and lanes stay.
+The world copy keeps only the mods the stations need, served from local Workshop
+copies (a client without Steam can't download them), and leaves out the asteroids
+(faster loads); the stations, planets and lanes stay.
 
     uv run --no-project --with httpx python tests/rig.py start      # server, then the client
     uv run --no-project --with httpx python tests/rig.py chat '!oct edge'
@@ -59,6 +60,22 @@ BIN64 = Path(
     os.environ.get(
         "OCT_BIN64", HOME / ".steam/steam/steamapps/common/SpaceEngineers/Bin64"
     )
+)
+
+WORKSHOP = Path(
+    os.environ.get(
+        "OCT_WORKSHOP", HOME / ".steam/steam/steamapps/workshop/content/244850"
+    )
+)
+# The mods with blocks on the stations. The world keeps them, or every station loads without
+# their blocks and the ones mounted only on those float (SE-1239)
+STATION_MODS = {1359954841: "Rotary Airlock"}
+# Serves the world's mods from the server's Mods folder (the server can't download them)
+LOCAL_WORLD_MODS = (
+    "local-world-mods",
+    Path(__file__).resolve().parent / "local-world-mods",
+    "LocalWorldMods.xml",
+    "local-world-mods",
 )
 
 sys.path.insert(0, str(REMOTE_REPO / "skills" / "se-remote"))
@@ -174,14 +191,79 @@ def grid(
     )
 
 
+def mod_items(mods: dict[int, str]) -> str:
+    return "".join(
+        f'<ModItem FriendlyName="{name}"><Name>{id_}.sbm</Name><PublishedFileId>{id_}'
+        "</PublishedFileId><PublishedServiceName>Steam</PublishedServiceName></ModItem>"
+        for id_, name in mods.items()
+    )
+
+
+def link_mods(folder: Path, mods) -> None:
+    """Links the Workshop copies of the mods into a Mods folder, keeping a mod copied there"""
+    folder.mkdir(parents=True, exist_ok=True)
+    for id_ in mods:
+        link = folder / f"{id_}.sbm"
+        if link.is_symlink():
+            link.unlink()
+        if not link.exists():
+            link.symlink_to(WORKSHOP / str(id_))
+
+
+def _subtypes(folder: Path) -> set[str]:
+    """The block subtypes the .sbc files under a folder define"""
+    found = set()
+    for path in folder.rglob("*.sbc"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "<CubeBlocks>" in text:
+            found.update(re.findall(r"<SubtypeId>([^<]*)</SubtypeId>", text))
+    return found
+
+
+def check_station_blocks(sector: str) -> dict[str, int]:
+    """Fails unless every block of every station grid in the sector text has a definition in
+    the game or in STATION_MODS: a block without one is dropped at load. Returns the block
+    count of each station."""
+    defined = _subtypes(DS64.parent / "Content" / "Data")
+    for id_, name in STATION_MODS.items():
+        mod = _subtypes(WORKSHOP / str(id_) / "Data")
+        assert mod, f"no blocks in the Workshop copy of {name} ({WORKSHOP / str(id_)})"
+        defined |= mod
+    counts, missing = {}, {}
+    sector = re.sub(r"<ProjectedGrids>.*?</ProjectedGrids>", "", sector, flags=re.S)
+    for grid in re.findall(
+        r'<MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_CubeGrid">.*?'
+        r"</MyObjectBuilder_EntityBase>",
+        sector,
+        flags=re.S,
+    ):
+        name = re.search(r"<DisplayName>(\w+ Station)</DisplayName>", grid)
+        if not name:
+            continue
+        blocks = re.findall(
+            r"<MyObjectBuilder_CubeBlock\b[^>]*>\s*<SubtypeName>([^<]*)</SubtypeName>|"
+            r"<MyObjectBuilder_CubeBlock\b",
+            grid,
+        )
+        counts[name[1]] = len(blocks)
+        for subtype in {s for s in blocks if s and s not in defined}:
+            missing.setdefault(subtype, []).append(name[1])
+    assert counts, "no station grids in the world"
+    assert (
+        not missing
+    ), f"station blocks without a definition, a mod is missing: {missing}"
+    return counts
+
+
 def prepare_world(
     extra_grids=(),
     settings: dict | None = None,
     table_blueprint: str | list[str] | None = None,
 ) -> None:
-    """A fresh copy of the server world without mods and asteroids, with extra grids
-    (entity XML) added. table_blueprint (a grid builder XML, or a list of them taken in
-    turn) is loaded into every station hologram table, as if a player had, and the tables
+    """A fresh copy of the server world without asteroids and with only the mods the stations
+    need (STATION_MODS, linked for the server and the client), with extra grids (entity XML)
+    added. A test adds its own mods after the <Mods> tag. table_blueprint (a grid builder
+    XML, or a list of them taken in turn) is loaded into every station hologram table, as if a player had, and the tables
     are switched on. The trash collector is off unless settings turn it on: it takes a test's
     small grids, like a probe's ship that isn't powered through its connector yet."""
     settings = {"TrashRemovalEnabled": "false", **(settings or {})}
@@ -219,12 +301,20 @@ def prepare_world(
     text = text.replace(
         "</SectorObjects>", "".join(extra_grids) + "</SectorObjects>", 1
     )
+    check_station_blocks(text)
     sector.write_text(text, encoding="utf-8")
 
+    for folder in (SERVER_DATA / "Mods", APPDATA / "Mods"):
+        link_mods(folder, STATION_MODS)
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
         path = WORLD / name
         text = path.read_text(encoding="utf-8")
-        text, count = re.subn(r"<Mods>.*?</Mods>", "<Mods />", text, flags=re.S)
+        text, count = re.subn(
+            r"<Mods>.*?</Mods>|<Mods />",
+            f"<Mods>{mod_items(STATION_MODS)}</Mods>",
+            text,
+            flags=re.S,
+        )
         assert count == 1, name
         for key, value in settings.items():
             text, count = re.subn(
@@ -379,6 +469,8 @@ def prepare_server(
     """The server's Magnetar config: the plugin compiled from this working copy as a dev
     folder, or, given a bundle made by package.sh, installed as a local plugin the way a
     cluster loads it. extra_dev_folders: more plugins as (name, folder, manifest, id)"""
+    if LOCAL_WORLD_MODS not in extra_dev_folders:
+        extra_dev_folders = [LOCAL_WORLD_MODS, *extra_dev_folders]
     if not (SERVER_CONFIG / "Sources").exists():
         SERVER_CONFIG.mkdir(parents=True, exist_ok=True)
         shutil.copytree(MAGNETAR / "Magnetar" / "Sources", SERVER_CONFIG / "Sources")

@@ -97,11 +97,7 @@ def set_config(**values) -> None:
 
 
 def link_mods(folder: Path) -> None:
-    folder.mkdir(parents=True, exist_ok=True)
-    for id_ in pl.MODS:
-        link = folder / f"{id_}.sbm"
-        if not link.exists():
-            link.symlink_to(pl.WORKSHOP / str(id_))
+    rig.link_mods(folder, {**rig.STATION_MODS, **pl.MODS})
 
 
 def prepare() -> Path:
