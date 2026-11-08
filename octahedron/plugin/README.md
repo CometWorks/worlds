@@ -1416,7 +1416,7 @@ owners' factions as they are now. A grid in an offline partition, as the gateway
 `/registry/partitions/offline` lists them, counts as it was last counted before it
 went offline, until it wakes and its node counts it again; this survives a cluster
 stop. A grid its node has reported without for two intervals and two minutes (the
-gateway's table is read every minute), and in no offline partition, is gone; a silent node's grids count for three intervals. The World
+gateway's table is read every minute), and in no offline partition, is gone; so are the grids of a node silent for that and one interval more. The World
 Authority adds the bank accounts and the market's held money, and logs each ranking:
 `Leaderboard: N grids from node, ranking G grids, O in offline partitions`. A
 partition that went offline before the World Authority kept grids counts once it

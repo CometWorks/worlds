@@ -43,7 +43,7 @@ public sealed class LeaderboardBook
     /// <summary>How long a node reports without a grid before it is gone: a handover or a wake isn't its end.</summary>
     public TimeSpan GoneAfter;
 
-    /// <summary>A grid whose node stopped reporting counts this long.</summary>
+    /// <summary>A node silent this long holds none of the grids it reported.</summary>
     public TimeSpan SilentAfter;
 
     /// <summary>The grids in offline partitions; null while unknown, and then no grid is forgotten.</summary>
@@ -79,12 +79,9 @@ public sealed class LeaderboardBook
                 current.Add(entry.Grid);
             }
             else if (
-                now - entry.Seen < SilentAfter
-                && !(
-                    reports.TryGetValue(entry.Node, out var last)
-                    && last > entry.Seen
-                    && last - entry.Seen >= GoneAfter
-                )
+                reports.TryGetValue(entry.Node, out var last)
+                && now - last < SilentAfter
+                && !(last > entry.Seen && last - entry.Seen >= GoneAfter)
             )
                 current.Add(entry.Grid);
             else if (Offline != null)
@@ -116,6 +113,8 @@ public sealed class LeaderboardBook
                 Node = f[4],
                 Seen = now,
             };
+            // Its node gets SilentAfter to report again
+            reports[f[4]] = now;
         }
     }
 }

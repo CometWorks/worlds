@@ -131,9 +131,21 @@ book.Report("node-2", [G(1, 10, 1_500, 1), G(2, 20, 2_500, 2)], woke + 2 * inter
 Check(!Ids(book, woke + 2 * interval).Contains(3), "gone after GoneAfter of reports without it");
 Check(book.Count == 2, "and forgotten");
 
+// A grid missing from its node's reports counts for GoneAfter, however often the node reports
+var missing = NewBook();
+missing.SilentAfter = interval;
+missing.Report("node-1", [G(6, 60, 1, 1)], t0);
+for (var at = t0 + interval / 2; at < t0 + 2 * interval; at += interval / 2)
+    missing.Report("node-1", [], at);
+Check(
+    Ids(missing, t0 + 2 * interval - interval / 2).Contains(6),
+    "a grid missing for less than GoneAfter counts, even past SilentAfter"
+);
+
 // A node that stopped reporting: its grids count until SilentAfter
 var silent = NewBook();
 silent.Report("node-9", [G(7, 70, 1, 1)], t0);
+silent.Report("node-8", [], t0 + 3 * interval);
 Check(Ids(silent, t0 + 2 * interval).Contains(7), "a silent node's grid counts for a while");
 Check(!Ids(silent, t0 + 3 * interval).Contains(7), "not after SilentAfter");
 

@@ -313,7 +313,7 @@ internal static class Leaderboard
         // A plain server's count is the whole world. On a cluster a grid that went offline is
         // missing from its node's reports before the gateway's table, read every minute, lists it.
         state.GoneAfter = cluster ? 2 * interval + 2 * ContractOffline.Interval : TimeSpan.Zero;
-        state.SilentAfter = 3 * interval;
+        state.SilentAfter = state.GoneAfter + interval;
         state.Offline = cluster ? ContractOffline.Grids(now) : new Dictionary<long, DateTime>();
         state.Report(source, grids, now);
         var current = state.Current(now, out int offline);
