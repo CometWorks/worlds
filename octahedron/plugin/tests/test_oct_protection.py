@@ -228,20 +228,8 @@ def _try(call):
         return False
 
 
-def logged(line: str, before: int, timeout: float = 10) -> bool:
-    """Whether the server log has the line more than before times, within the timeout: the
-    log is written a moment later"""
-    deadline = time.monotonic() + timeout
-    while rig.server_game_log().count(line) <= before:
-        if time.monotonic() > deadline:
-            return False
-        time.sleep(1)
-    return True
-
-
 def check_deposit(remote, protect: bool) -> None:
     oct_before, mine_before = balances(remote)
-    refusals = rig.server_game_log().count(REFUSED)
     deposit(remote, DEPOSIT)
     expected = mine_before - (0 if protect else DEPOSIT)
     deadline = time.monotonic() + 20
@@ -250,12 +238,10 @@ def check_deposit(remote, protect: bool) -> None:
         if mine_after == expected or time.monotonic() > deadline:
             break
         time.sleep(2)
-    refused = logged(REFUSED, refusals, 10 if protect else 3)
     check(
-        mine_after == expected and refused == protect,
+        mine_after == expected,
         f"deposit of {DEPOSIT} SC with OctNoDeposits {protect}: the player's balance "
-        f"{mine_before} -> {mine_after} (OCT {oct_before} -> {oct_after}), expected {expected}, "
-        f"refusal logged {refused}",
+        f"{mine_before} -> {mine_after} (OCT {oct_before} -> {oct_after}), expected {expected}",
     )
 
 
@@ -319,21 +305,37 @@ def check_grinding(remote, protect: bool, bots: bool, names: list[str]) -> None:
             f"the {name} hull on the client",
         )
         held = protect and protected
-        refusals = rig.server_game_log().count(f"{name} Hull belongs to")
         before, after = grind(
             remote, i, entity_id, HOLD_SECONDS if held else GROUND_SECONDS
         )
-        refused = held and logged(f"{name} Hull belongs to", refusals)
         check(
-            (after == before and refused) if held else after < before,
+            after == before if held else after < before,
             f"{name} hull with OctGridsNoGrinding {protect}, bots protected {bots}: "
-            f"integrity {before} -> {after}"
-            + (
-                f", refusal logged {refused}, expected held"
-                if held
-                else ", expected ground"
-            ),
+            f"integrity {before} -> {after}, expected {'held' if held else 'ground'}",
         )
+
+
+def check_refusals() -> None:
+    """The server's refusals, from its log once it has quit: the game buffers the log, so a
+    line may reach the file long after the refusal. One deposit refused, the one with the
+    options on. OCT's hull refused, and the trader bot's only after it: only with the bots'
+    range, never with the Octahedron config, which grinds it before OCT's."""
+    lines = rig.server_game_log().splitlines()
+
+    def at(text: str) -> list[int]:
+        return [i for i, line in enumerate(lines) if text in line]
+
+    deposits, octs, traders = (
+        at(REFUSED),
+        at("OCT Hull belongs to"),
+        at("Trader bot Hull belongs to"),
+    )
+    check(len(deposits) == 1, f"deposit refusals logged: {len(deposits)}, expected 1")
+    check(
+        octs and traders and traders[0] > octs[0],
+        f"grind refusals logged: OCT's hull at lines {octs}, the trader bot's at {traders}, "
+        "expected both, the trader bot's after OCT's",
+    )
 
 
 def run() -> None:
@@ -362,6 +364,7 @@ def run() -> None:
     finally:
         rig.stop_client()
         rig.stop_server()
+    check_refusals()
 
 
 if __name__ == "__main__":
