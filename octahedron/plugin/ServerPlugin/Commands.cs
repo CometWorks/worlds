@@ -14,13 +14,16 @@ public sealed class Commands : CommandModule
 {
     [Command(
         "taxi",
-        "Pays a cab's fare and names where it takes you",
+        "Pays a cab's fare and names where it takes you, or calls a cab to you",
         "!oct taxi <station>: sit in a cab's passenger seat first. The fare goes to the driver now and is not "
-            + "refunded when you get out before the cab arrives."
+            + "refunded when you get out before the cab arrives. !oct taxi call: a cab comes to where you are, "
+            + "in space; sitting down in it pays the ride to the nearest station."
     )]
     [Permission(MyPromoteLevel.None)]
     public string Taxi(params string[] station) =>
-        ServerPlugin.Taxi.Pay(Context.Caller.IdentityId, string.Join(" ", station));
+        station is [var word] && word.Equals("call", StringComparison.OrdinalIgnoreCase)
+            ? ServerPlugin.Taxi.CallCab(Context.Caller.IdentityId)
+            : ServerPlugin.Taxi.Pay(Context.Caller.IdentityId, string.Join(" ", station));
 
     [Command("reload", "Rereads the plugin's config file")]
     [Permission(MyPromoteLevel.Admin)]

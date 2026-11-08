@@ -1952,6 +1952,41 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 1000;
 
+    [LongOption(
+        0,
+        description: "SC a player who called a cab with '!oct taxi call' pays when sitting down in it, for the ride "
+            + "to the nearest station; one who has less pays all they have.",
+        Parent = "taxi"
+    )]
+    public long TaxiCallFare
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10000;
+
+    [LongOption(
+        0,
+        description: "SC a caller pays the driver when dying before the called cab picks them up: the call is cancelled.",
+        Parent = "taxi"
+    )]
+    public long TaxiCancelFee
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
+
+    [IntOption(
+        60,
+        86400,
+        "Seconds a call waits for the caller to sit down in the cab before it is dropped, free.",
+        Parent = "taxi"
+    )]
+    public int TaxiCallTimeout
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1800;
+
     [StructOption(
         "Station patches every process applies to the station and shipyard grids it loads, in this order, "
             + "each once per grid by the grid's ledger (SE-1234). Empty by default.",

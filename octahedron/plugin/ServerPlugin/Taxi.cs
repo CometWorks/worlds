@@ -4,6 +4,9 @@ using System.Globalization;
 using System.Linq;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Blocks;
+using Sandbox.Game.Entities.Character;
+using Sandbox.Game.GameSystems;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.World;
 using VRage.Game;
@@ -21,8 +24,16 @@ namespace ServerPlugin;
 // <station>" ("-" before paying): it moves with the grid when a cluster node hands the cab's
 // partition to another node, so that node neither asks again nor misses the passenger leaving.
 // Faking it gains nothing: the driver flies only when told that a fare was paid. The passenger
-// seats of a bot's cab (ShipyardBotSteamIds) are opened to everyone; a player driving a cab sets
-// its seats' share mode as they like.
+// seats and O2/H2 generator of a bot's cab (ShipyardBotSteamIds) are opened to everyone, so a
+// passenger can take or fill a bottle there; a player driving a cab sets its share modes as they like.
+//
+// "!oct taxi call" calls the nearest free cab (one with a driver and nobody else in it, standing at
+// a station) to where the caller is, in space only. The driver hears "Call from NAME at X Y Z" and
+// flies there. When the caller sits down in that cab they pay TaxiCallFare to the driver, or all
+// they have when that is less, for the ride to the nearest station, and the driver hears the usual
+// "Fare paid by". A caller who dies before pays TaxiCancelFee and the call ends ("Call cancelled:
+// NAME"), as it does free after TaxiCallTimeout or when the cab or its driver is gone. Calls live
+// in this process: on a cluster a call reaches the cabs of the caller's node only.
 internal static class Taxi
 {
     private const string Author = "Taxi";
@@ -38,6 +49,18 @@ internal static class Taxi
     // The passengers this node saw seated at its last tick: identity -> (cab, seat)
     private static readonly Dictionary<long, (long Cab, long Seat)> seated = new();
 
+    private sealed class Call
+    {
+        public long Cab;
+        public long Driver;
+        public long Body; // the caller's character then: another one now means they died and respawned
+        public Vector3D At;
+        public DateTime Until;
+    }
+
+    // Open calls by caller
+    private static readonly Dictionary<long, Call> calls = new();
+
     private static OctahedronConfig Config => Plugin.Config;
 
     public static void Update()
@@ -49,6 +72,7 @@ internal static class Taxi
         if (!Config.TaxiEnabled || string.IsNullOrEmpty(Config.TaxiGridName))
         {
             seated.Clear();
+            calls.Clear();
             return;
         }
         if (now >= nextScan)
@@ -63,6 +87,13 @@ internal static class Taxi
             if (!MyEntities.TryGetEntityById(id, out MyCubeGrid cab) || !Plugin.Simulated(cab))
                 continue;
             var driver = Driver(cab);
+            foreach (var generator in cab.GetFatBlocks().OfType<MyGasGenerator>())
+                if (ShipyardOrders.IsBot(generator.OwnerId))
+                    ShipyardTurn.SetOwner(
+                        generator,
+                        generator.OwnerId,
+                        MyOwnershipShareModeEnum.All
+                    );
             foreach (var seat in PassengerSeats(cab))
             {
                 // A bot's cab is built with the bot's faction share: open its passenger seats to all
@@ -93,7 +124,138 @@ internal static class Taxi
         seated.Clear();
         foreach (var (passenger, at) in seen)
             seated[passenger] = at;
+        UpdateCalls(now);
     }
+
+    // !oct taxi call, the reply goes to the caller
+    public static string CallCab(long caller)
+    {
+        if (!Config.TaxiEnabled)
+            return "There are no cabs.";
+        var character = Body(caller);
+        if (character == null)
+            return "Call a cab when you are out in space.";
+        if (SeatOf(caller).Seat != null)
+            return "You sit in a cab already.";
+        if (calls.TryGetValue(caller, out var open))
+            return $"{Name(open.Driver)} is on the way already. Stay where you called from.";
+        var at = character.PositionComp.GetPosition();
+        if (MyGravityProviderSystem.CalculateNaturalGravityInPoint(at).LengthSquared() > 0)
+            return "Cabs don't fly into gravity yet: call one from space.";
+
+        MyCubeGrid best = null;
+        long bestDriver = 0;
+        var nearest = double.MaxValue;
+        foreach (var id in cabs)
+        {
+            if (
+                !MyEntities.TryGetEntityById(id, out MyCubeGrid cab)
+                || !Plugin.Simulated(cab)
+                || calls.Values.Any(c => c.Cab == id)
+                || PassengerSeats(cab).Any(s => s.Pilot != null)
+                || (cab.Physics?.LinearVelocity.Length() ?? 0) > 1
+                || StationAt(cab.PositionComp.GetPosition()) == null
+            )
+                continue;
+            var driver = Driver(cab);
+            var d = Vector3D.Distance(cab.PositionComp.GetPosition(), at);
+            if (driver != 0 && d < nearest)
+                (best, bestDriver, nearest) = (cab, driver, d);
+        }
+        if (best == null)
+            return "No cab is free right now. Try again later.";
+
+        calls[caller] = new Call
+        {
+            Cab = best.EntityId,
+            Driver = bestDriver,
+            Body = character.EntityId,
+            At = at,
+            Until = DateTime.UtcNow + TimeSpan.FromSeconds(Config.TaxiCallTimeout),
+        };
+        var from = StationAt(best.PositionComp.GetPosition());
+        Plugin.Log.Info(
+            $"Taxi: {Name(caller)} ({caller}) called '{best.DisplayName}' of {Name(bestDriver)} from {from}, "
+                + $"{nearest / 1000:F1} km"
+        );
+        Tell(bestDriver, $"Call from {Name(caller)} at {at.X:F0} {at.Y:F0} {at.Z:F0}");
+        return $"{Name(bestDriver)} is on the way from {from}, {nearest / 1000:F1} km. Stay here and sit down in "
+            + $"the cab when it stops by you: the ride to the nearest station, {NearestStation(at)}, costs "
+            + $"{Sc(Config.TaxiCallFare)} then, or all you have when that is less. If you die before, the "
+            + $"call is cancelled and you pay {Sc(Config.TaxiCancelFee)}.";
+    }
+
+    private static void UpdateCalls(DateTime now)
+    {
+        foreach (var (caller, call) in calls.ToList())
+        {
+            if (now > call.Until)
+                EndCall(caller, call, "nobody sat down in the cab in time", 0);
+            else if (
+                !MyEntities.TryGetEntityById(call.Cab, out MyCubeGrid cab)
+                || Driver(cab) != call.Driver
+            )
+                EndCall(caller, call, "the cab or its driver is gone", 0);
+            else if (
+                MySession.Static.Players.TryGetIdentity(caller) is { } identity
+                && (
+                    identity.IsDead
+                    || identity.Character?.IsDead == true
+                    || (identity.Character != null && identity.Character.EntityId != call.Body)
+                )
+            )
+                EndCall(caller, call, "you died before it came", Config.TaxiCancelFee);
+        }
+    }
+
+    private static void EndCall(long caller, Call call, string why, long fee)
+    {
+        calls.Remove(caller);
+        var paid = Charge(caller, fee, call.Driver);
+        Plugin.Log.Info($"Taxi: call of {Name(caller)} ({caller}) cancelled, {why}, fee {paid} SC");
+        Tell(call.Driver, $"Call cancelled: {Name(caller)}");
+        Tell(
+            caller,
+            $"Your cab call is cancelled: {why}." + (paid > 0 ? $" You paid {Sc(paid)}." : "")
+        );
+    }
+
+    // The caller sat down in the called cab: the ride to the nearest station, paid as far as they can
+    private static void PickUp(MyCubeGrid cab, MyCockpit seat, long passenger, long driver)
+    {
+        calls.Remove(passenger);
+        var station = NearestStation(cab.PositionComp.GetPosition());
+        var paid = Charge(passenger, Config.TaxiCallFare, driver);
+        Write(seat, passenger, station);
+        var name = Name(passenger);
+        Plugin.Log.Info(
+            $"Taxi: {name} ({passenger}) picked up by {Name(driver)} ({driver}), paid {paid} SC, to {station}"
+        );
+        Tell(driver, $"Passenger in: {name}");
+        Tell(driver, $"Fare paid by {name}. Destination: {station}");
+        Tell(passenger, $"You paid {Sc(paid)}. {Name(driver)} takes you to {station}.");
+    }
+
+    // Up to 'amount' SC from the payer to the driver, as much as the payer has; what was paid
+    private static long Charge(long payer, long amount, long driver)
+    {
+        var balance = MyBankingSystem.Static.TryGetAccountInfo(payer, out var account)
+            ? account.Balance
+            : 0;
+        amount = Math.Min(amount, Math.Max(balance, 0));
+        if (amount <= 0 || !MyBankingSystem.ChangeBalance(payer, -amount))
+            return 0;
+        if (!MyBankingSystem.ChangeBalance(driver, amount))
+            Plugin.Log.Error(
+                $"Taxi: {amount} SC taken from {payer} but not paid to the driver {driver}"
+            );
+        return amount;
+    }
+
+    private static MyCharacter Body(long identity) =>
+        MySession.Static.Players.TryGetIdentity(identity)?.Character is { IsDead: false } body
+            ? body
+            : null;
 
     // !oct taxi <station>, the reply goes to the passenger
     public static string Pay(long passenger, string station)
@@ -145,6 +307,11 @@ internal static class Taxi
 
     private static void GotIn(MyCubeGrid cab, MyCockpit seat, long passenger, long driver)
     {
+        if (driver != 0 && calls.TryGetValue(passenger, out var call) && call.Cab == cab.EntityId)
+        {
+            PickUp(cab, seat, passenger, driver);
+            return;
+        }
         if (driver == 0)
         {
             // asked once a driver sits down, at a later tick
@@ -237,11 +404,13 @@ internal static class Taxi
         seat.CustomData = $"{passenger} {station}";
 
     // The station within AtStation of the point, else null
-    private static string StationAt(Vector3D position)
+    private static string StationAt(Vector3D position) => NearestStation(position, AtStation);
+
+    private static string NearestStation(Vector3D position, double within = double.MaxValue)
     {
         var names = Stations.StationNames().ToHashSet();
         string best = null;
-        var nearest = AtStation;
+        var nearest = within;
         foreach (var faction in MySession.Static.Factions)
         foreach (var station in faction.Value.Stations)
         {

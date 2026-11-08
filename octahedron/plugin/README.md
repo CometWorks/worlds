@@ -1332,8 +1332,20 @@ when a passenger gets in and out, by name, from `Taxi`:
 
 What a seat's passenger was asked and paid is kept in the seat's custom data, so a
 cluster node that takes over the cab's partition neither asks again nor misses the
-passenger leaving. The passenger seats of a bot's cab (`ShipyardBotSteamIds`) are
-opened to everyone; the shipyard builds a ship with its owner's faction share.
+passenger leaving. The passenger seats and the O2/H2 generator of a bot's cab
+(`ShipyardBotSteamIds`) are opened to everyone, so a passenger can take or fill a
+bottle there; the shipyard builds a ship with its owner's faction share.
+
+`!oct taxi call` calls a cab to where the caller is, out in space only (cabs don't fly
+into gravity yet): the nearest one with a driver, nobody else in it and standing at a
+station. The driver hears `Call from NAME at X Y Z` and comes, through the lanes as far
+as they lead and straight on from there. When the caller sits down in that cab, they pay
+`TaxiCallFare` (10,000) SC to the driver, or all they have when that is less, for the
+ride to the nearest station, and the driver hears the usual `Fare paid by`. A caller who
+dies before pays `TaxiCancelFee` (100) SC and the call ends: the driver hears
+`Call cancelled: NAME`. A call also ends, free, after `TaxiCallTimeout` (1800) seconds or
+when the cab or its driver is gone. Open calls live in the process, so on a cluster a
+call reaches only the cabs of the caller's node.
 
 ### Contracts
 
