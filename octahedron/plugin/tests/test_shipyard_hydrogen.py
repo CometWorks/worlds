@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import time
 
 os.environ.setdefault("OCT_TASK", "SE-922")
 import rig  # noqa: E402
@@ -162,6 +163,7 @@ def paid_in_order(a) -> None:
     funds = tt.money(a)
     log(probe(a, f"balance {-funds}"))
     reply = tt.start(a)
+    refused = time.monotonic()
     check("What is missing costs" in reply, f"no money, the press is refused: {reply}")
     gas = tt.liters(a, ship)
     check(gas == 550_000, f"refused: the tank has its hydrogen back: {gas}")
@@ -173,6 +175,8 @@ def paid_in_order(a) -> None:
     check(left == 5000, f"refused: the shipyard has its ice back: {left}")
     log(probe(a, f"balance {funds}"))
 
+    # A second press within CancelConfirmSeconds (10) of a refused one gives the turn up
+    time.sleep(max(0.0, 11 - (time.monotonic() - refused)))
     tt.start(a)
     tt.wait_for(lambda: tt.liters(a, ship) == FILLED, 15, 1)
     gas = tt.liters(a, ship)
