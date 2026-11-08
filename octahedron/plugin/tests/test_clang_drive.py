@@ -58,12 +58,7 @@ PROBE = (
     "ClangProbe.xml",
     "clang-probe",
 )
-LOCAL_WORLD_MODS = (
-    "local-world-mods",
-    rig.PLUGIN / "tests" / "local-world-mods",
-    "LocalWorldMods.xml",
-    "local-world-mods",
-)
+LOCAL_WORLD_MODS = rig.LOCAL_WORLD_MODS
 BASE = 777000966000000
 SPACE = (100_000, -300_000, 0)
 
@@ -581,9 +576,7 @@ def with_relative_top_speed() -> bool:
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
         path = rig.WORLD / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(
-            text.replace("<Mods />", f"<Mods>{item}</Mods>", 1), encoding="utf-8"
-        )
+        path.write_text(text.replace("<Mods>", f"<Mods>{item}", 1), encoding="utf-8")
     storage = rig.WORLD / "Storage" / f"{RTS}.sbm_RelativeTopSpeed"
     storage.mkdir(parents=True, exist_ok=True)
     (storage / "RelativeTopSpeed.cfg").write_text(

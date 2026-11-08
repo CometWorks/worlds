@@ -384,7 +384,7 @@ def prepare(enabled, zones_last, yard, beams, inside, outside) -> None:
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
         path = rig.WORLD / name
         text = path.read_text(encoding="utf-8")
-        text = text.replace("<Mods />", f"<Mods>{pl.MOD_ITEMS}</Mods>", 1)
+        text = text.replace("<Mods>", f"<Mods>{pl.MOD_ITEMS}", 1)
         if name == "Sandbox.sbc":
             text = text.replace("</Identities>", pl.IDENTITY + "</Identities>", 1)
         path.write_text(text, encoding="utf-8")

@@ -43,9 +43,7 @@ def prepare() -> None:
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
         path = rig.WORLD / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(
-            text.replace("<Mods />", f"<Mods>{items}</Mods>", 1), encoding="utf-8"
-        )
+        path.write_text(text.replace("<Mods>", f"<Mods>{items}", 1), encoding="utf-8")
     for folder in (rig.SERVER_DATA / "Mods", rig.APPDATA / "Mods"):
         folder.mkdir(parents=True, exist_ok=True)
         for id_ in MODS:
