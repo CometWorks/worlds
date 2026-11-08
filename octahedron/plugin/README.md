@@ -316,10 +316,12 @@ else pays into OCT's account but the stations' stores, the fees and what the mon
 the `[B]` members are the trader bots, players, and what they pay is what they buy.
 
 With `OctGridsNoGrinding` on, nobody but the owner grinds a grid of OCT's NPC or of a player
-whose Steam ID `OctProtectedSteamIds` names (`first-last` ranges, comma separated; the
-trader bots' on the Octahedron). A grid counts when its owner owns the most blocks on it or on
+whose Steam ID `OctProtectedSteamIds` names (`first-last` ranges, comma separated). The
+Octahedron leaves that list empty, so players can grind the trader bots' ships
+([SE-1282](https://tasks.cometworks.se/tasks/2198)); before, it held the bots' range
+`76561202000000001-76561202000009999`. A grid counts when its owner owns the most blocks on it or on
 a grid it is mechanically joined to. The stations' safe zones forbid grinding anyway; this
-covers OCT's grids and the bots' ships everywhere else, so players can't take them apart for
+covers OCT's grids everywhere else, so players can't take them apart for
 components to sell. Every grinder takes a block apart through `MySlimBlock.DecreaseMountLevel`
 on the server, a hand grinder, a ship grinder and ToolCore's tools, so the plugin refuses it
 there and the player hears why. Grids of the encounters' NPCs and of other players stay open.

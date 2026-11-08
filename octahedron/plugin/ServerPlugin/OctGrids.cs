@@ -9,11 +9,12 @@ using Sandbox.Game.World;
 
 namespace ServerPlugin;
 
-// Players don't grind OCT's grids or the trader bots' ships for components to sell (SE-1160). The
-// stations' safe zones forbid grinding, but nothing stopped it anywhere else. A grid is OCT's when
-// an NPC of OCT's faction owns most of it, as a station's NPC does, and a bot's when its owner's
-// Steam ID is in OctProtectedSteamIds; a subgrid counts with the grids it is mechanically joined
-// to. Every grinder takes the block apart through DecreaseMountLevel on the server: a hand
+// Players don't grind OCT's grids for components to sell (SE-1160). The stations' safe zones
+// forbid grinding, but nothing stopped it anywhere else. A grid is OCT's when an NPC of OCT's
+// faction owns most of it, as a station's NPC does, and a protected player's when its owner's
+// Steam ID is in OctProtectedSteamIds. That list held the trader bots until players were let to
+// grind their ships (SE-1282); faction reputation holds them back now (SE-1283). A subgrid counts
+// with the grids it is mechanically joined to. Every grinder takes the block apart through DecreaseMountLevel on the server: a hand
 // grinder, a ship grinder and ToolCore's tools. Only the owner gets through.
 internal static class OctGrids
 {

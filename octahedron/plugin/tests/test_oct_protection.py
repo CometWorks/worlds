@@ -3,9 +3,11 @@ one of OctLeaders:
 
 - OctNoDeposits: the Deposit button of the faction screen takes no money from the player into
   OCT's account.
-- OctGridsNoGrinding: a hand grinder does nothing to a hull of OCT's NPC or of a trader bot (a
-  player whose Steam ID is in OctProtectedSteamIds), and still grinds a hull of another player
-  and of an NPC of another faction.
+- OctGridsNoGrinding: a hand grinder does nothing to a hull of OCT's NPC, and still grinds a hull
+  of a trader bot, of another player and of an NPC of another faction. The Octahedron config
+  leaves OctProtectedSteamIds empty, so the trader bots' ships are open (SE-1282).
+- With the bots' Steam ID range in OctProtectedSteamIds, as before SE-1282, the trader bot's hull
+  is held again.
 
 Then the options go off with !oct reload, the control: the same deposit goes through and the
 grinder takes OCT's and the bot's hulls apart, as before SE-1160. One server run, about 4
@@ -38,6 +40,8 @@ HOLD_SECONDS = 15
 GROUND_SECONDS = 60
 PRESS_SECONDS = 8
 BOT_STEAM_ID = 76561202000000077
+# The trader bots' Steam IDs, which OctProtectedSteamIds held before SE-1282
+BOT_RANGE = "76561202000000001-76561202000009999"
 PLAYER_STEAM_ID = 76561198000000077
 BOT = 144115188075990001
 PLAYER = 144115188075990002
@@ -51,14 +55,15 @@ def oct_npc() -> int:
     return int(re.search(r"<PlayerId>(\d+)</PlayerId>", faction)[1])
 
 
-def hulls() -> dict[str, tuple[int, int, bool]]:
-    """Name -> (entity id, owner, protected). The open ones first: one ground proves the
-    grinder reaches the server before a protected one is held."""
+def hulls(bots: bool = False) -> dict[str, tuple[int, int, bool]]:
+    """Name -> (entity id, owner, protected), the bots protected by OctProtectedSteamIds or
+    not. The open ones first: one ground proves the grinder reaches the server before a
+    protected one is held."""
     return {
         "Player": (777001160000003, PLAYER, False),
         "Pirate": (777001160000004, SPACE_PIRATES, False),
+        "Trader bot": (777001160000002, BOT, bots),
         "OCT": (777001160000001, oct_npc(), True),
-        "Trader bot": (777001160000002, BOT, True),
     }
 
 
@@ -119,7 +124,9 @@ def prepare() -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def config(protect: bool) -> str:
+def config(protect: bool, bots: bool = False) -> str:
+    """The Octahedron config with the options on or off, and the bots' range in
+    OctProtectedSteamIds or the config's own value"""
     text = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
     for option in ("OctNoDeposits", "OctGridsNoGrinding"):
         text, count = re.subn(
@@ -128,14 +135,17 @@ def config(protect: bool) -> str:
             text,
         )
         assert count == 1, option
-    # The bots' range of the Octahedron config, which has the test's bot
-    first, last = re.search(
-        r"<OctProtectedSteamIds>(\d+)-(\d+)</OctProtectedSteamIds>", text
-    ).groups()
-    assert int(first) <= BOT_STEAM_ID <= int(last) and not (
-        int(first) <= PLAYER_STEAM_ID <= int(last)
+    first, last = map(int, BOT_RANGE.split("-"))
+    assert first <= BOT_STEAM_ID <= last and not first <= PLAYER_STEAM_ID <= last
+    pattern = r"<OctProtectedSteamIds>([^<]*)</OctProtectedSteamIds>"
+    shipped = re.search(pattern, text)[1]
+    if not bots:
+        # The trader bots' ships are open on the Octahedron (SE-1282)
+        check(shipped == "", f"OctProtectedSteamIds of the config: {shipped!r}")
+        return text
+    return re.sub(
+        pattern, f"<OctProtectedSteamIds>{BOT_RANGE}</OctProtectedSteamIds>", text
     )
-    return text
 
 
 # --- deposit --------------------------------------------------------------------
@@ -218,20 +228,8 @@ def _try(call):
         return False
 
 
-def logged(line: str, before: int, timeout: float = 10) -> bool:
-    """Whether the server log has the line more than before times, within the timeout: the
-    log is written a moment later"""
-    deadline = time.monotonic() + timeout
-    while rig.server_game_log().count(line) <= before:
-        if time.monotonic() > deadline:
-            return False
-        time.sleep(1)
-    return True
-
-
 def check_deposit(remote, protect: bool) -> None:
     oct_before, mine_before = balances(remote)
-    refusals = rig.server_game_log().count(REFUSED)
     deposit(remote, DEPOSIT)
     expected = mine_before - (0 if protect else DEPOSIT)
     deadline = time.monotonic() + 20
@@ -240,12 +238,10 @@ def check_deposit(remote, protect: bool) -> None:
         if mine_after == expected or time.monotonic() > deadline:
             break
         time.sleep(2)
-    refused = logged(REFUSED, refusals, 10 if protect else 3)
     check(
-        mine_after == expected and refused == protect,
+        mine_after == expected,
         f"deposit of {DEPOSIT} SC with OctNoDeposits {protect}: the player's balance "
-        f"{mine_before} -> {mine_after} (OCT {oct_before} -> {oct_after}), expected {expected}, "
-        f"refusal logged {refused}",
+        f"{mine_before} -> {mine_after} (OCT {oct_before} -> {oct_after}), expected {expected}",
     )
 
 
@@ -291,16 +287,16 @@ def grind(remote, index: int, entity_id: int, seconds: float) -> tuple[float, fl
     return before, after
 
 
-def check_grinding(remote, protect: bool) -> None:
-    """With the options on every hull; off, the protected ones, the others were ground already"""
+def check_grinding(remote, protect: bool, bots: bool, names: list[str]) -> None:
+    """Grinds the named hulls: held when the options are on and the hull is protected"""
     remote.character_equip("AngleGrinderItem")
     # On foot in space the server's character doesn't follow a teleport: its grinder reaches
     # nothing near the client's
     if not remote.get_character().get("jetpack"):
         remote.key("X")
     rig.wait_until(lambda: remote.get_character().get("jetpack"), 10, "the jetpack on")
-    for i, (name, (entity_id, _, protected)) in enumerate(hulls().items()):
-        if not protect and not protected:
+    for i, (name, (entity_id, _, protected)) in enumerate(hulls(bots).items()):
+        if name not in names:
             continue
         rig.wait_until(
             lambda: any(g["entityId"] == entity_id for g in remote.list_grids())
@@ -312,16 +308,34 @@ def check_grinding(remote, protect: bool) -> None:
         before, after = grind(
             remote, i, entity_id, HOLD_SECONDS if held else GROUND_SECONDS
         )
-        refused = held and logged(f"{name} Hull belongs to", 0)
         check(
-            (after == before and refused) if held else after < before,
-            f"{name} hull with OctGridsNoGrinding {protect}: integrity {before} -> {after}"
-            + (
-                f", refusal logged {refused}, expected held"
-                if held
-                else ", expected ground"
-            ),
+            after == before if held else after < before,
+            f"{name} hull with OctGridsNoGrinding {protect}, bots protected {bots}: "
+            f"integrity {before} -> {after}, expected {'held' if held else 'ground'}",
         )
+
+
+def check_refusals() -> None:
+    """The server's refusals, from its log once it has quit: the game buffers the log, so a
+    line may reach the file long after the refusal. One deposit refused, the one with the
+    options on. OCT's hull refused, and the trader bot's only after it: only with the bots'
+    range, never with the Octahedron config, which grinds it before OCT's."""
+    lines = rig.server_game_log().splitlines()
+
+    def at(text: str) -> list[int]:
+        return [i for i, line in enumerate(lines) if text in line]
+
+    deposits, octs, traders = (
+        at(REFUSED),
+        at("OCT Hull belongs to"),
+        at("Trader bot Hull belongs to"),
+    )
+    check(len(deposits) == 1, f"deposit refusals logged: {len(deposits)}, expected 1")
+    check(
+        octs and traders and traders[0] > octs[0],
+        f"grind refusals logged: OCT's hull at lines {octs}, the trader bot's at {traders}, "
+        "expected both, the trader bot's after OCT's",
+    )
 
 
 def run() -> None:
@@ -335,15 +349,22 @@ def run() -> None:
     try:
         tag = remote.get_faction()["tag"]
         check(tag == "OCT", f"the player is in {tag}")
-        for protect in (True, False):
-            if not protect:
-                rig.write_plugin_config(config(False))
-                log(" ".join(rig.chat(remote, "!oct reload", 15)))
-            check_deposit(remote, protect)
-            check_grinding(remote, protect)
+        # The Octahedron config: OCT's hull held, the others ground
+        check_deposit(remote, True)
+        check_grinding(remote, True, False, list(hulls()))
+        # The bots' range protects the trader bot's hull again
+        rig.write_plugin_config(config(True, bots=True))
+        log(" ".join(rig.chat(remote, "!oct reload", 15)))
+        check_grinding(remote, True, True, ["Trader bot"])
+        # The options off: OCT's and the bot's hulls ground, as before SE-1160
+        rig.write_plugin_config(config(False, bots=True))
+        log(" ".join(rig.chat(remote, "!oct reload", 15)))
+        check_deposit(remote, False)
+        check_grinding(remote, False, True, ["Trader bot", "OCT"])
     finally:
         rig.stop_client()
         rig.stop_server()
+    check_refusals()
 
 
 if __name__ == "__main__":
