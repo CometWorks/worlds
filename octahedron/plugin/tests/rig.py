@@ -34,6 +34,7 @@ PLUGIN = Path(__file__).resolve().parent.parent
 # OCT_WORLD_SOURCE: a world folder built by build_world.py instead of the repo's
 WORLD_SOURCE = Path(os.environ.get("OCT_WORLD_SOURCE", PLUGIN.parent / "server"))
 CONFIG_SOURCE = PLUGIN.parent / "config" / "octahedron.cfg"
+CONFIG_STORAGE = PLUGIN.parent / "config" / "storage"
 WORKSPACE = Path(os.environ.get("OCT_WORKSPACE", HOME / "ws/se"))
 PARALLEL = WORKSPACE / "testing" / "parallel-test-work"
 REMOTE_REPO = Path(os.environ.get("OCT_REMOTE_REPO", WORKSPACE / "se1/plugins/remote"))
@@ -271,6 +272,9 @@ def prepare_world(
     shutil.copytree(
         WORLD_SOURCE, WORLD, ignore=shutil.ignore_patterns("Octahedron-Asteroid-*.vx2")
     )
+    # The mod configs and the station patch blueprints octahedron.cfg names, as the deploy
+    # stages them: the committed world may be older than the config
+    shutil.copytree(CONFIG_STORAGE, WORLD / "Storage", dirs_exist_ok=True)
     sector = WORLD / "SANDBOX_0_0_0_.sbs"
     text = sector.read_text(encoding="utf-8")
     text, count = re.subn(
