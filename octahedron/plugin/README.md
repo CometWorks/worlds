@@ -1317,6 +1317,24 @@ inventory. A player who can't pay is told the price and the
 ship stays stored. The plugin hooks Hangar by reflection, so it still runs without
 Hangar, or with an older one, where retrieval is free.
 
+### Taxi
+
+Cabs carry players between the stations for a fare (SE-1279). A cab is a ship whose
+name starts with `TaxiGridName` (Taxi) with someone in a seat that controls it: the
+driver, a sebot taxi driver (cluster-regression `sebot/tools/trader/taxi.py`) or a
+player. Whoever sits down in one of the cab's other seats is told privately where it
+goes: every station but the one it is at, and the fare. `!oct taxi <station>` (a name
+or its start) then takes `TaxiFare` (1000) SC from the passenger through the bank, as
+the Hangar fee does, and pays it to the driver, who hears where to go. The fare is not
+refunded when the passenger gets out before the cab arrives. The driver also hears
+when a passenger gets in and out, by name, from `Taxi`:
+`Passenger in: NAME`, `Fare paid by NAME. Destination: STATION`, `Passenger out: NAME`.
+
+What a seat's passenger was asked and paid is kept in the seat's custom data, so a
+cluster node that takes over the cab's partition neither asks again nor misses the
+passenger leaving. The passenger seats of a bot's cab (`ShipyardBotSteamIds`) are
+opened to everyone; the shipyard builds a ship with its owner's faction share.
+
 ### Contracts
 
 With `ContractsEnabled` on, OCT (`MoneyAuthorityFactionTag`) posts the stations'

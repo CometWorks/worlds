@@ -12,6 +12,16 @@ namespace ServerPlugin;
 [CommandRoot("oct", "Octahedron", "Octahedron world commands")]
 public sealed class Commands : CommandModule
 {
+    [Command(
+        "taxi",
+        "Pays a cab's fare and names where it takes you",
+        "!oct taxi <station>: sit in a cab's passenger seat first. The fare goes to the driver now and is not "
+            + "refunded when you get out before the cab arrives."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public string Taxi(params string[] station) =>
+        ServerPlugin.Taxi.Pay(Context.Caller.IdentityId, string.Join(" ", station));
+
     [Command("reload", "Rereads the plugin's config file")]
     [Permission(MyPromoteLevel.Admin)]
     public string Reload()
