@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 using ServerPlugin;
 
 // Checks station patches without the game (ServerPlugin/StationPatchPlan.cs): the format, the checks
@@ -235,6 +236,374 @@ var one = Row();
 var none = PatchPlan.Groups(one.Blocks(), one.Neighbours);
 Check(none.Count == 1, "a row is one group");
 
+// --- blueprint diffs ---
+
+const string Xsi = "http://www.w3.org/2001/XMLSchema-instance";
+
+// A block of a blueprint: type "InteriorLight/LargeBlockLight_1corner", min, extra fields as XML
+string B(
+    string type,
+    (int X, int Y, int Z) min,
+    string fields = "",
+    string forward = "Forward",
+    long id = 1
+)
+{
+    var t = type.Split('/');
+    return $"<MyObjectBuilder_CubeBlock xsi:type=\"MyObjectBuilder_{t[0]}\"><SubtypeName>{t[1]}</SubtypeName>"
+        + $"<EntityId>{id}</EntityId><Min x=\"{min.X}\" y=\"{min.Y}\" z=\"{min.Z}\" />"
+        + $"<BlockOrientation Forward=\"{forward}\" Up=\"Up\" />{fields}</MyObjectBuilder_CubeBlock>";
+}
+
+string Storage(string type, params (string Key, string Value)[] items) =>
+    $"<ComponentData><TypeId>{type}</TypeId><Component xsi:type=\"MyObjectBuilder_ModStorageComponent\"><Storage><dictionary>"
+    + string.Concat(items.Select(i => $"<item><Key>{i.Key}</Key><Value>{i.Value}</Value></item>"))
+    + "</dictionary></Storage></Component></ComponentData>";
+
+string Components(params string[] data) =>
+    $"<ComponentContainer><Components>{string.Concat(data)}</Components></ComponentContainer>";
+
+string Inventory(int amount) =>
+    $"<ComponentData><TypeId>MyInventoryBase</TypeId><Component xsi:type=\"MyObjectBuilder_Inventory\"><Items><Amount>{amount}</Amount></Items></Component></ComponentData>";
+
+string Lcd(string text) =>
+    $"<ComponentData><TypeId>MyMultiTextPanelComponent</TypeId><Component xsi:type=\"MyObjectBuilder_MultiTextPanelComponent\"><Text>{text}</Text></Component></ComponentData>";
+
+XElement Grid(
+    string blocks,
+    string settings =
+        "<DisplayName>octahedron station</DisplayName><IsStatic>true</IsStatic><DestructibleBlocks>true</DestructibleBlocks>"
+) =>
+    XElement.Parse(
+        $"<CubeGrid xmlns:xsi=\"{Xsi}\">{settings}<CubeBlocks>{blocks}</CubeBlocks></CubeGrid>"
+    );
+
+List<PatchOp> Diff(
+    string from,
+    string to,
+    out string error,
+    string fromSettings = null,
+    string toSettings = null
+) =>
+    BlueprintDiff.Diff(
+        fromSettings == null ? Grid(from) : Grid(from, fromSettings),
+        toSettings == null ? Grid(to) : Grid(to, toSettings),
+        out error
+    );
+
+const string Armor = "CubeBlock/LargeBlockArmorBlock";
+const string Key1 = "75bbb4f5-4fb9-4230-aaaa-bb79c9811618";
+const string Key2 = "11111111-2222-3333-4444-555555555555";
+var lamp = B(
+    "InteriorLight/LargeBlockLight_1corner",
+    (1, 0, 0),
+    "<CustomName>Lamp</CustomName><Enabled>true</Enabled><Radius>2</Radius>"
+);
+var bpRow =
+    B(Armor, (0, 0, 0))
+    + lamp
+    + B("CargoContainer/LargeBlockSmallContainer", (2, 0, 0), Components(Inventory(5)));
+
+var ops = Diff(bpRow, bpRow, out var diffError);
+Check(ops?.Count == 0 && diffError == null, "the same blueprint makes no ops");
+
+// What the game changes as it runs is no design change
+var live =
+    B(Armor, (0, 0, 0), id: 99)
+    + B(
+        "InteriorLight/LargeBlockLight_1corner",
+        (1, 0, 0),
+        "<CustomName>Lamp</CustomName><Enabled>true</Enabled><Radius>2</Radius><IntegrityPercent>0.5</IntegrityPercent>",
+        id: 98
+    )
+    + B("CargoContainer/LargeBlockSmallContainer", (2, 0, 0), Components(Inventory(900)));
+ops = Diff(bpRow, live, out _);
+Check(
+    ops?.Count == 0,
+    "entity ids, integrity and inventories are no design change: " + string.Join(";", ops ?? [])
+);
+
+ops = Diff(bpRow, B(Armor, (0, 0, 0)) + lamp, out _);
+Check(
+    ops
+        is [
+            {
+                Kind: PatchOpKind.Del,
+                Expected: "CargoContainer/LargeBlockSmallContainer",
+                ExpectedOrientation: "Forward/Up"
+            } d1,
+        ]
+        && d1.At == new Cell(2, 0, 0),
+    "a block only in the old blueprint is removed"
+);
+ops = Diff(bpRow, bpRow + B(Armor, (3, 0, 0)), out _);
+Check(
+    ops is [{ Kind: PatchOpKind.Add, Block: Armor, Target: 3, Forward: "Forward", Up: "Up" }],
+    "a new block is added, by its index"
+);
+ops = Diff(
+    bpRow,
+    B(Armor, (0, 0, 0), forward: "Left")
+        + lamp
+        + B("CargoContainer/LargeBlockSmallContainer", (2, 0, 0), Components(Inventory(5))),
+    out _
+);
+Check(
+    ops is [{ Kind: PatchOpKind.Del }, { Kind: PatchOpKind.Add, Forward: "Left" }],
+    "a turned block is removed and added again"
+);
+ops = Diff(
+    bpRow,
+    B("CubeBlock/LargeHeavyBlockArmorBlock", (0, 0, 0))
+        + lamp
+        + B("CargoContainer/LargeBlockSmallContainer", (2, 0, 0), Components(Inventory(5))),
+    out _
+);
+Check(
+    ops
+        is [
+            { Kind: PatchOpKind.Del, Expected: Armor },
+            { Kind: PatchOpKind.Add, Block: "CubeBlock/LargeHeavyBlockArmorBlock" },
+        ],
+    "another block type: removed, then added"
+);
+
+PatchOp One(string newLamp)
+{
+    var o = Diff(
+        bpRow,
+        B(Armor, (0, 0, 0))
+            + newLamp
+            + B("CargoContainer/LargeBlockSmallContainer", (2, 0, 0), Components(Inventory(5))),
+        out _
+    );
+    return o?.Count == 1 ? o[0] : null;
+}
+
+Check(
+    One(
+        B(
+            "InteriorLight/LargeBlockLight_1corner",
+            (1, 0, 0),
+            "<CustomName>Hall</CustomName><Enabled>true</Enabled><Radius>2</Radius>"
+        )
+    )
+        is { Kind: PatchOpKind.Set, Key: "name", Value: "Hall", ExpectedOrientation: "Forward/Up" },
+    "a new name is set in place"
+);
+Check(
+    One(
+        B(
+            "InteriorLight/LargeBlockLight_1corner",
+            (1, 0, 0),
+            "<CustomName>Lamp</CustomName><Enabled>false</Enabled><Radius>2</Radius>"
+        )
+    )
+        is { Kind: PatchOpKind.Set, Key: "enabled", Value: "0" },
+    "off is set in place"
+);
+Check(
+    One(
+        B(
+            "InteriorLight/LargeBlockLight_1corner",
+            (1, 0, 0),
+            "<CustomName>Lamp</CustomName><Enabled>true</Enabled><Radius>2</Radius><CustomData>a=1</CustomData>"
+        )
+    )
+        is { Kind: PatchOpKind.Set, Key: "data", Value: "a=1" },
+    "Custom Data is set in place"
+);
+Check(
+    One(
+        B(
+            "InteriorLight/LargeBlockLight_1corner",
+            (1, 0, 0),
+            "<CustomName>Lamp</CustomName><Enabled>true</Enabled><Radius>5</Radius>"
+        )
+    )
+        is {
+            Kind: PatchOpKind.Rebuild,
+            Target: 1,
+            Expected: "InteriorLight/LargeBlockLight_1corner"
+        },
+    "a terminal property: the block is built again from the new blueprint"
+);
+Check(
+    One(
+        B(
+            "InteriorLight/LargeBlockLight_1corner",
+            (1, 0, 0),
+            "<Enabled>true</Enabled><Radius>2</Radius>"
+        )
+    )
+        is { Kind: PatchOpKind.Rebuild },
+    "a name taken away: built again"
+);
+var panel = B("TextPanel/LargeLCDPanel", (1, 0, 0), Components(Lcd("Welcome")));
+var panels = B(Armor, (0, 0, 0)) + panel;
+ops = Diff(
+    panels,
+    B(Armor, (0, 0, 0))
+        + B("TextPanel/LargeLCDPanel", (1, 0, 0), Components(Lcd("Welcome to Alpha"))),
+    out _
+);
+Check(ops is [{ Kind: PatchOpKind.Rebuild }], "an LCD's text: built again");
+ops = Diff(
+    panels,
+    B(Armor, (0, 0, 0))
+        + B("TextPanel/LargeLCDPanel", (1, 0, 0), Components(Inventory(1), Lcd("Welcome"))),
+    out _
+);
+Check(ops?.Count == 0, "the order and run-time components don't count");
+
+// A mod's settings in its mod storage: only the keys the new blueprint changes
+var tool = B(
+    "ConveyorSorter/OmniArcWelder",
+    (1, 0, 0),
+    Components(Storage("MyModStorageComponentBase", (Key1, "AAA"), (Key2, "keep")))
+);
+var tools = B(Armor, (0, 0, 0)) + tool;
+ops = Diff(
+    tools,
+    B(Armor, (0, 0, 0))
+        + B(
+            "ConveyorSorter/OmniArcWelder",
+            (1, 0, 0),
+            Components(Storage("MyModStorageComponent", (Key1, "BBB"), (Key2, "keep")))
+        ),
+    out _
+);
+Check(
+    ops is [{ Kind: PatchOpKind.Rebuild, Storage: { Count: 1 } st }] && st[Key1] == "BBB",
+    "a changed mod storage key: built again with that key only"
+);
+ops = Diff(
+    tools,
+    B(Armor, (0, 0, 0))
+        + B(
+            "ConveyorSorter/OmniArcWelder",
+            (1, 0, 0),
+            Components(Storage("MyModStorageComponentBase", (Key2, "keep")))
+        ),
+    out _
+);
+Check(
+    ops is [{ Kind: PatchOpKind.Rebuild, Storage: { Count: 1 } gone }] && gone[Key1] == null,
+    "a mod storage key taken away"
+);
+
+// The grid's own settings and storage
+var settings = "<DisplayName>octahedron station</DisplayName><IsStatic>true</IsStatic>";
+ops = Diff(
+    bpRow,
+    bpRow,
+    out _,
+    settings + "<DestructibleBlocks>true</DestructibleBlocks>",
+    settings + "<DestructibleBlocks>false</DestructibleBlocks>"
+);
+Check(
+    ops is [{ Kind: PatchOpKind.Grid, Key: "DestructibleBlocks", Value: "false" }],
+    "a grid setting is set in place"
+);
+ops = Diff(
+    bpRow,
+    bpRow,
+    out _,
+    settings,
+    settings + Components(Storage("MyModStorageComponent", (Key1, "x")))
+);
+Check(
+    ops is [{ Kind: PatchOpKind.Grid, Value: "x" } gs] && gs.Key == "storage:" + Key1,
+    "a grid mod storage key is set in place"
+);
+ops = Diff(
+    bpRow,
+    bpRow,
+    out diffError,
+    settings,
+    "<DisplayName>Other</DisplayName><IsStatic>true</IsStatic>"
+);
+Check(
+    ops == null && diffError.Contains("DisplayName"),
+    "a grid's name never changes by a blueprint"
+);
+
+// Removals come first, so a new block can take their cells
+ops = Diff(bpRow, B(Armor, (0, 0, 0)) + B(Armor, (5, 0, 0)) + lamp, out _);
+Check(ops is [{ Kind: PatchOpKind.Del }, { Kind: PatchOpKind.Add }], "removals before adds");
+
+var bigger = XDocument.Parse(
+    $"<Definitions xmlns:xsi=\"{Xsi}\"><CubeGrids><CubeGrid><CubeBlocks>{B(Armor, (0, 0, 0))}</CubeBlocks></CubeGrid><CubeGrid><CubeBlocks>{bpRow}</CubeBlocks></CubeGrid></CubeGrids></Definitions>"
+);
+Check(
+    BlueprintDiff.Blocks(BlueprintDiff.MainGrid(bigger)).Count == 3,
+    "the main grid is the blueprint's largest"
+);
+
+// The station's own blueprint against a copy written another way: no ops
+var stationFile = System.IO.Path.Combine(
+    AppContext.BaseDirectory,
+    "../../../../../../../blueprints/octahedron-station.sbc"
+);
+if (System.IO.File.Exists(stationFile))
+{
+    var text = System.IO.File.ReadAllText(stationFile);
+    var original = BlueprintDiff.MainGrid(XDocument.Parse(text));
+    var rewritten = BlueprintDiff.MainGrid(
+        XDocument.Parse(
+            XDocument
+                .Parse(text)
+                .ToString(SaveOptions.DisableFormatting)
+                .Replace("<SubtypeName />", "<SubtypeName></SubtypeName>")
+        )
+    );
+    ops = BlueprintDiff.Diff(original, rewritten, out diffError);
+    Check(
+        BlueprintDiff.Blocks(original).Count == 1984 && ops?.Count == 0,
+        $"the station blueprint written another way: {ops?.Count} ops {diffError}"
+    );
+}
+else
+    Check(false, "the station blueprint is at " + stationFile);
+
+// The diff's ops checked against a live grid: the cell must hold the old block, turned as it was
+var fake = Row();
+var rebuild = new StationPatch
+{
+    Id = "bp",
+    Grid = "Alpha Station",
+    Ops =
+    [
+        new PatchOp
+        {
+            Kind = PatchOpKind.Rebuild,
+            At = new Cell(2, 0, 0),
+            Expected = Armor,
+            ExpectedOrientation = "Forward/Up",
+            Block = Armor,
+            Target = 0,
+            Text = "rebuild",
+        },
+    ],
+};
+Check(
+    PatchPlan.Check(rebuild, fake, out var planError)?.Count == 1,
+    "a rebuild on the live grid: " + planError
+);
+rebuild.Ops[0].ExpectedOrientation = "Left/Up";
+Check(
+    PatchPlan.Check(rebuild, fake, out planError) == null && planError.Contains("turned"),
+    "a block turned otherwise is refused: " + planError
+);
+rebuild.Ops[0] = new PatchOp
+{
+    Kind = PatchOpKind.Grid,
+    Key = "Editable",
+    Value = "false",
+    Text = "grid",
+};
+Check(PatchPlan.Check(rebuild, fake, out _)?.Count == 1, "a grid setting needs no block");
+
 Console.WriteLine($"{checks - failures}/{checks} checks passed");
 return failures == 0 ? 0 : 1;
 
@@ -261,6 +630,7 @@ sealed class FakeGrid : IPatchGrid
             Min = at,
             Cells = [at],
             Type = type,
+            Orientation = "Forward/Up",
             Terminal = functional || type.StartsWith("TextPanel"),
             Functional = functional,
         };

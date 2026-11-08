@@ -1859,4 +1859,13 @@ public struct StationPatchEntry
             + "Expected is the block's Type/Subtype or Subtype."
     )]
     public string Ops { get; set; }
+
+    [StructMember(
+        "Instead of Ops: the blueprint file the grid was built from, next to this config file unless the path is absolute. "
+            + "The patch turns the grid into To by the blueprints' diff."
+    )]
+    public string From { get; set; }
+
+    [StructMember("The new blueprint file of the grid, with From.")]
+    public string To { get; set; }
 }

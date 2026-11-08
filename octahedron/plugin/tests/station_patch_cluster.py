@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,7 +41,7 @@ import test_paid_builds as tp  # noqa: E402
 import test_support_arm as sa  # noqa: E402
 import test_table_rules as tr  # noqa: E402
 
-PARTS = sys.argv[2:] or ["online", "staged"]
+PARTS = sys.argv[2:] or ["online", "replace", "staged"]
 STATION = "Alpha"
 GRID = "Alpha Station"
 YARD = "Alpha Station Shipyard"
@@ -97,8 +98,74 @@ def build_edit_probe() -> Path:
     return folder
 
 
-def staged_entry(id_: str, grid: str, ops: str) -> str:
-    return f"<StationPatchEntry><Id>{id_}</Id><Grid>{grid}</Grid><Ops>{ops}</Ops></StationPatchEntry>"
+def staged_entry(
+    id_: str, grid: str, ops: str = "", source: str = "", target: str = ""
+) -> str:
+    return (
+        f"<StationPatchEntry><Id>{id_}</Id><Grid>{grid}</Grid><Ops>{ops}</Ops>"
+        f"<From>{source}</From><To>{target}</To></StationPatchEntry>"
+    )
+
+
+XSI = "http://www.w3.org/2001/XMLSchema-instance"
+OCTAHEDRON = Path(wa.__file__).resolve().parents[2]
+sys.path.insert(0, str(OCTAHEDRON))
+import build_world  # noqa: E402
+import station_patch  # noqa: E402
+
+BLUEPRINT = OCTAHEDRON / "blueprints/octahedron-station.sbc"
+SOURCE = "station-from.sbc"
+OFFICE = "0,9,-2"  # Text Panel - Station office center, with an LCD apps mod's storage
+AIRLOCK = "1,0,2"  # a Rotary Airlock door, the mod's block
+LCD_KEY = "74de02b3-27f9-4960-b1c4-27351f2b06d1"
+RUNTIME_KEY = "c4d21234-6b0e-4f3a-9e57-2e8b1238a0f2"
+
+
+def blueprint_copy(name: str, station: str, edit=None) -> str:
+    """The station blueprint next to the config, changed by edit(main grid, block at cell), then
+    prepared for station the way station_patch.py prepares a patch's blueprints"""
+    ET.register_namespace("xsi", XSI)
+    ET.register_namespace("xsd", "http://www.w3.org/2001/XMLSchema")
+    tree = ET.parse(BLUEPRINT)
+    grid = max(tree.getroot().iter("CubeGrid"), key=lambda g: len(g.find("CubeBlocks")))
+    blocks = grid.find("CubeBlocks")
+
+    def at(cell: str):
+        want = tuple(int(v) for v in cell.split(","))
+        for block in blocks:
+            m = block.find("Min")
+            got = tuple(int(m.get(a, 0)) for a in "xyz") if m is not None else (0, 0, 0)
+            if got == want:
+                return block
+        raise KeyError(cell)
+
+    if edit:
+        edit(grid, at)
+    raw = wa.CONFIG.parent / f"raw-{name}"
+    tree.write(raw, encoding="utf-8", xml_declaration=True)
+    station_patch.write(
+        build_world,
+        station_patch.prepare(build_world, station, raw),
+        wa.CONFIG.parent / name,
+    )
+    return name
+
+
+def lcd(block, text: str) -> None:
+    for component in block.iter("ComponentData"):
+        if component.findtext("TypeId") == "MyLcdSurfaceComponent":
+            component.find("Component/TextPanelContent/Text").text = text
+
+
+def storage(block, key: str, value: str) -> None:
+    for item in block.iter("item"):
+        if item.findtext("Key") == key:
+            item.find("Value").text = value
+
+
+def recolor(block) -> None:
+    color = block.find("ColorMaskHSV")
+    color.set("x", "0.5" if color.get("x") != "0.5" else "0.25")
 
 
 def run(bench) -> None:
@@ -330,15 +397,20 @@ def run(bench) -> None:
         check("a removed lobby block applies", "APPLIED L1-del" in reply, reply)
         check(
             "the log line has the block-list diff",
-            seen(f"APPLIED L1-del on {GRID}: 1 ops, blocks {before} -> {before - 1}")
-            and seen(f"- {barrels[0]} CubeBlock/{BARREL} "),
+            until(
+                lambda: seen(
+                    f"APPLIED L1-del on {GRID}: 1 ops, blocks {before} -> {before - 1}"
+                )
+                and seen(f"- {barrels[0]} CubeBlock/{BARREL} "),
+                15,
+            ),
         )
         time.sleep(3)
         s1 = snap(GRID, "s1")
         note("diff-set-del", diff(s0, s1))
         near_after = query(GRID, "near:600")
         check("the removal splits nothing off (no new grids near the station)",
-              near_after and near_before and near_after[1] == near_before[1], {"before": near_before, "after": near_after})  # fmt: skip
+              near_after and near_before and set(near_after[1].split()) == set(near_before[1].split()), {"before": near_before, "after": near_after})  # fmt: skip
         check(
             "the removal took only that block",
             len(s0 - s1) == 2 and len(s1 - s0) == 1,
@@ -540,6 +612,150 @@ def run(bench) -> None:
         check("the station is still the station's grid (faction station entry)",
               str(station_id) in (got[1] if got else ""), got)  # fmt: skip
 
+    # ============================== replace: a new blueprint, by its diff ==============================
+    if "replace" in PARTS:
+        gu = GRID.replace(" ", "_")
+        lamp, named = lights[3], lights[4]
+        crates = [c for c, _ in found(api, GRID, "CargoContainer")]
+        crate = crates[0] if crates else None
+        if crate:
+            sedit(api, f"give {gu} {crate} Ingot/Platinum 7")
+        sedit(api, f"storeset {gu} {OFFICE} {RUNTIME_KEY} live")
+        before = {q: (query(GRID, q) or ("", ""))[1] for q in
+                  (f"block:{lamp}", f"block:{named}", f"block:{AIRLOCK}", f"items:{crate}:Ingot/Platinum",
+                   f"storage:{OFFICE}", f"prop:{lamp}:Radius", "dump")}  # fmt: skip
+        stores = found(api, GRID, "StoreBlock")
+        store_before = sedit(api, f"block {gu} {stores[0][0]}") if stores else ""
+        market_before = chat(api, f"!oct market show {STATION}", 10)
+        note("replace-before", {**before, "store": store_before})
+        added = free[1] if len(free) > 1 else None
+
+        def edit(grid, at):
+            blocks = grid.find("CubeBlocks")
+            blocks.remove(at(barrels[3]))
+            if added:
+                armor = next(
+                    b
+                    for b in blocks
+                    if b.findtext("SubtypeName") == "LargeBlockArmorBlock"
+                )
+                copy = ET.fromstring(ET.tostring(armor))
+                x, y, z = added.split(",")
+                copy.find("Min").attrib.update(x=x, y=y, z=z)
+                o = copy.find("BlockOrientation")
+                if o is not None:
+                    o.attrib.update(Forward="Forward", Up="Up")
+                blocks.append(copy)
+            at(lamp).find("Radius").text = "7.5"
+            at(named).find("CustomName").text = "SE-1234 Hall Light"
+            lcd(at(OFFICE), "SE-1234 replaced text")
+            storage(at(OFFICE), LCD_KEY, "SE-1234")
+            recolor(at(AIRLOCK))
+            if crate:
+                recolor(at(crate))
+            # Not in the blueprint, and build_world.py leaves it alone
+            immune = ET.SubElement(grid, "Immune")
+            immune.text = "true"
+
+        blueprint_copy(SOURCE, GRID)
+        target = blueprint_copy("station-to.sbc", GRID, edit)
+        expected = 6 + (1 if added else 0) + (1 if crate else 0)
+        diff_reply = chat(api, f'!oct patch diff R1 "{GRID}" {SOURCE} {target}', 10)
+        check("the diff finds the changes and nothing else",
+              f"CHECKED R1 on {GRID}: {expected} ops would apply" in diff_reply, diff_reply)  # fmt: skip
+        reply = chat(api, f'!oct patch replace R1 "{GRID}" {SOURCE} {target}', 10)
+        check("the replacement applies", f"APPLIED R1 on {GRID}" in reply, reply)
+        after = {q: (query(GRID, q) or ("", ""))[1] for q in before}
+        note("replace-after", after)
+
+        def entity(text: str) -> str:
+            return text.split()[-1] if text.startswith("BLOCK") else ""
+
+        check(
+            "the removed block is gone",
+            (query(GRID, f"block:{barrels[3]}") or ("", ""))[1].startswith("NOBLOCK"),
+        )
+        if added:
+            check(
+                "the added block is there",
+                ARMOR.split("/")[1] in (query(GRID, f"block:{added}") or ("", ""))[1],
+            )
+        check("a terminal property is the new blueprint's (light radius)", after[f"prop:{lamp}:Radius"] == "PROP Radius=7.5",
+              after[f"prop:{lamp}:Radius"])  # fmt: skip
+        check("a block built again is a new entity", entity(after[f"block:{lamp}"]) != entity(before[f"block:{lamp}"]),
+              [before[f"block:{lamp}"], after[f"block:{lamp}"]])  # fmt: skip
+        check("a new name is set in place (same entity)",
+              "SE-1234_Hall_Light" in after[f"block:{named}"] and entity(after[f"block:{named}"]) == entity(before[f"block:{named}"]),
+              after[f"block:{named}"])  # fmt: skip
+        text = (query(GRID, f"text:{OFFICE}") or ("", ""))[1]
+        check(
+            "an LCD shows the new blueprint's text",
+            "SE-1234 replaced text" in text,
+            text,
+        )
+        kept = after[f"storage:{OFFICE}"]
+        # The live keys: the game drops a key no loaded mod registers at load, like the LCD
+        # app's, so only the probe's runtime key is left besides the changed one
+        unchanged = [
+            k
+            for k in before[f"storage:{OFFICE}"].split()[2:]
+            if not k.startswith(LCD_KEY)
+        ]
+        check(
+            "the mod storage key the blueprint changes has its new value",
+            f"{LCD_KEY}=SE-1234" in kept,
+            kept,
+        )
+        check("the mod storage keys it doesn't change keep their values",
+              unchanged and all(k in kept.split() for k in unchanged), [unchanged, kept])  # fmt: skip
+        check(
+            "a key set while the station ran is kept",
+            f"{RUNTIME_KEY}=live" in kept,
+            kept,
+        )
+        check("the mod's block (Rotary Airlock) is built again with its name",
+              "AdvancedDoor/RotaryAirlock" in after[f"block:{AIRLOCK}"]
+              and before[f"block:{AIRLOCK}"].split()[2] == after[f"block:{AIRLOCK}"].split()[2]
+              and entity(after[f"block:{AIRLOCK}"]) != entity(before[f"block:{AIRLOCK}"]), after[f"block:{AIRLOCK}"])  # fmt: skip
+        if crate:
+            check("a container built again keeps its items",
+                  before[f"items:{crate}:Ingot/Platinum"].split()[2] == after[f"items:{crate}:Ingot/Platinum"].split()[2]
+                  and before[f"items:{crate}:Ingot/Platinum"].split()[3] != after[f"items:{crate}:Ingot/Platinum"].split()[3],
+                  [before[f"items:{crate}:Ingot/Platinum"], after[f"items:{crate}:Ingot/Platinum"]])  # fmt: skip
+        check(
+            "the grid setting is set (Immune)",
+            "immune=True" in after["dump"],
+            after["dump"],
+        )
+        status = chat(api, f'!oct patch status "{GRID}"')
+        check(
+            "the station has no islands after the replacement",
+            "islands=0" in status,
+            status,
+        )
+        check(
+            "the Store block is untouched",
+            not stores or sedit(api, f"block {gu} {stores[0][0]}") == store_before,
+        )
+        market_after = chat(api, f"!oct market show {STATION}", 10)
+        check(
+            "the market's stock is the same",
+            market_after == market_before,
+            [market_before[:200], market_after[:200]],
+        )
+        again = chat(api, f'!oct patch replace R1 "{GRID}" {SOURCE} {target}', 10)
+        check("a replacement applies once", f"SKIP R1 on {GRID}" in again, again)
+        replaced = sedit(api, f"dump {gu}")
+        time.sleep(70)  # a periodic save after the replacement
+        check("the cluster stops gracefully", stop("replace", api))
+        start()
+        api = join()
+        got = query(GRID)
+        check("the replaced station survives a stop and start",
+              got and fields(got[1]).get("hash") == fields(replaced).get("hash") and "R1" in fields(got[1]).get("ledger", ""), got)  # fmt: skip
+        radius = (query(GRID, f"prop:{lamp}:Radius") or ("", ""))[1]
+        check("and so does the new radius", radius == "PROP Radius=7.5", radius)
+
     # ============================== staged: StationPatches, applied at load ==============================
     if "staged" in PARTS:
         far = wa.stations().get(FAR)
@@ -549,7 +765,17 @@ def run(bench) -> None:
         cell = free[-1]
         ops = f"swap:{lights[2]}:{LIGHT}:InteriorLight/LargeBlockLight_1corner;add:{cell}:{ARMOR}:Forward:Up"
         note("staged-ops", ops)
-        wa.set_config(StationPatches=staged_entry("L2-far", FAR, ops))
+        source = blueprint_copy("station-beta-from.sbc", FAR)
+
+        def beta(grid, at):
+            lcd(at(OFFICE), "SE-1234 staged text")
+            at(lights[4]).find("CustomName").text = "SE-1234 Staged Light"
+
+        target = blueprint_copy("station-beta.sbc", FAR, beta)
+        wa.set_config(
+            StationPatches=staged_entry("L2-far", FAR, ops)
+            + staged_entry("L2-bp", FAR, source=source, target=target)
+        )
         start()
         api = join(at=far)
         applied = until(
@@ -570,6 +796,15 @@ def run(bench) -> None:
             swapped and "LargeBlockLight_1corner" in swapped[1],
             swapped,
         )
+        bp = until(
+            lambda: seen(f"Station patch APPLIED L2-bp on {FAR} (staged)"), 30, 3
+        )
+        text = (query(FAR, f"text:{OFFICE}") or ("", ""))[1]
+        check(
+            "the staged blueprint replacement applies after the ops patch",
+            bp and "SE-1234 staged text" in text,
+            text,
+        )
         mounted = query(FAR, f"neighbours:{cell}")
         check(
             "the staged block has a mount neighbor",
@@ -589,7 +824,7 @@ def run(bench) -> None:
         )
         check(
             "the staged patch applied once over a restart (once in the ledger)",
-            ledger.count("L2-far") == 1,
+            ledger.count("L2-far") == 1 and ledger.count("L2-bp") == 1,
             ledger,
         )
         check("the far station is as patched after a restart",

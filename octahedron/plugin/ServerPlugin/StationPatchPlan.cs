@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 namespace ServerPlugin;
 
 // The game-free half of station patches (StationPatches.cs): the patch format, and the checks of a
-// whole patch before any of it is applied. tests/patches/PatchTests runs it without the game.
+// whole patch before any of it is applied. BlueprintDiff.cs makes patches from two blueprints. tests/patches/PatchTests runs it without the game.
 // Cells are ArmPlanner's (Builds/ArmPlanner.cs).
 
 public enum PatchOpKind
@@ -16,6 +16,12 @@ public enum PatchOpKind
     Del,
     Add,
     Swap,
+
+    // From a blueprint diff: the block at the cell built again from the new blueprint's block
+    Rebuild,
+
+    // From a blueprint diff: a setting of the grid itself, or a key of its mod storage
+    Grid,
 }
 
 public sealed class PatchOp
@@ -38,6 +44,17 @@ public sealed class PatchOp
     public string Up;
     public string Name;
 
+    // From a blueprint diff: the old block's orientation "Forward/Up", which the cell's block
+    // must have, with its min at the cell
+    public string ExpectedOrientation;
+
+    // From a blueprint diff: the new block, by its index in the new blueprint's grid
+    public int Target = -1;
+
+    // Rebuild: the mod storage keys the new blueprint changes (null: removed); the others keep
+    // the live block's values
+    public Dictionary<string, string> Storage;
+
     public string Text;
 
     public override string ToString() => Text;
@@ -48,6 +65,9 @@ public sealed class StationPatch
     public string Id;
     public string Grid;
     public List<PatchOp> Ops;
+
+    // A patch from a blueprint diff: the new blueprint's blocks, for the game side
+    public object Blueprint;
 }
 
 public static class PatchFormat
@@ -75,17 +95,9 @@ public static class PatchFormat
     /// </summary>
     public static StationPatch Parse(string id, string grid, string ops, out string error)
     {
-        error = null;
-        if (string.IsNullOrEmpty(id) || !IdPattern.IsMatch(id))
-        {
-            error = $"bad patch id '{id}': letters, digits, '.', '_' and '-' only";
+        error = Check(id, grid);
+        if (error != null)
             return null;
-        }
-        if (string.IsNullOrWhiteSpace(grid))
-        {
-            error = "no grid name";
-            return null;
-        }
         var list = new List<PatchOp>();
         foreach (
             var text in (ops ?? "").Split(
@@ -114,6 +126,13 @@ public static class PatchFormat
             Ops = list,
         };
     }
+
+    /// <summary>Why a patch id or grid name won't do, or null.</summary>
+    public static string Check(string id, string grid) =>
+        string.IsNullOrEmpty(id) || !IdPattern.IsMatch(id)
+            ? $"bad patch id '{id}': letters, digits, '.', '_' and '-' only"
+        : string.IsNullOrWhiteSpace(grid) ? "no grid name"
+        : null;
 
     private static bool TryCell(string text, out Cell cell)
     {
@@ -211,6 +230,9 @@ public sealed class PatchBlock
 
     // Type/Subtype, "CubeBlock/LargeBlockArmorBlock"
     public string Type;
+
+    // "Forward/Up"
+    public string Orientation;
     public bool Terminal;
     public bool Functional;
 
@@ -276,6 +298,11 @@ public static class PatchPlan
 
         string Step(PatchOp op)
         {
+            if (op.Kind == PatchOpKind.Grid)
+            {
+                steps.Add(new PatchStep { Op = op });
+                return null;
+            }
             PatchBlock old = null;
             if (op.Kind != PatchOpKind.Add)
             {
@@ -286,6 +313,11 @@ public static class PatchPlan
                     return $"{old} is a block this patch adds";
                 if (!old.Is(op.Expected))
                     return $"the cell holds {old.Type}, not {op.Expected}";
+                if (
+                    op.ExpectedOrientation != null
+                    && (old.Min != op.At || old.Orientation != op.ExpectedOrientation)
+                )
+                    return $"{old} turned {old.Orientation}, not {op.Expected}@{op.At} turned {op.ExpectedOrientation}";
                 if (
                     op.Kind == PatchOpKind.Set
                     && (op.Key == "enabled" ? !old.Functional : !old.Terminal)

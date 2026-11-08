@@ -167,6 +167,25 @@ public sealed class Commands : CommandModule
         StationPatches.Apply(id, grid, ops, false);
 
     [Command(
+        "patch replace",
+        "Turns a station or shipyard grid built from one blueprint into another, in place",
+        "!oct patch replace <id> \"<grid>\" <from.sbc> <to.sbc>: the blueprints are found next to the config file. "
+            + "Only the blocks and grid settings that differ between them change, checked first, all or none."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string PatchReplace(string id, string grid, string from, string to) =>
+        StationPatches.Replace(id, grid, from, to, true);
+
+    [Command(
+        "patch diff",
+        "Checks a blueprint replacement without applying it and lists its ops",
+        "!oct patch diff <id> \"<grid>\" <from.sbc> <to.sbc>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string PatchDiff(string id, string grid, string from, string to) =>
+        StationPatches.Replace(id, grid, from, to, false);
+
+    [Command(
         "patch status",
         "A station or shipyard grid's block count, block list hash, patch ledger and islands",
         "!oct patch status \"<grid>\""

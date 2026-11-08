@@ -1,16 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.World;
 using VRage.Game;
+using VRage.Game.ObjectBuilders.ComponentSystem;
 using VRage.ObjectBuilders;
+using VRage.Serialization;
 using VRage.Utils;
 using VRageMath;
 
@@ -46,6 +51,90 @@ internal static class StationPatches
             return $"REFUSED {id}: {error}";
         var grid = Find(patch.Grid, out error);
         return grid == null ? $"NOGRID {patch.Grid}: {error}" : Run(grid, patch, apply);
+    }
+
+    /// <summary>Replaces a grid built from one blueprint with another, in place, by their diff.</summary>
+    public static string Replace(string id, string gridName, string from, string to, bool apply)
+    {
+        var patch = FromBlueprints(id, gridName, from, to, out var error);
+        if (patch == null)
+            return $"REFUSED {id}: {error}";
+        var grid = Find(patch.Grid, out error);
+        if (grid == null)
+            return $"NOGRID {patch.Grid}: {error}";
+        var result = Run(grid, patch, apply);
+        if (apply || !result.StartsWith("CHECKED"))
+            return result;
+        var ops = patch.Ops.Select(o => o.Text).ToList();
+        return string.Join(
+            "\n",
+            ops.Take(30).Prepend(result).Append(ops.Count > 30 ? $"... {ops.Count - 30} more" : "")
+        );
+    }
+
+    // Blueprint files are found next to the config file unless their path is absolute
+    private static StationPatch FromBlueprints(
+        string id,
+        string grid,
+        string from,
+        string to,
+        out string error
+    )
+    {
+        error = PatchFormat.Check(id, grid);
+        if (error != null)
+            return null;
+        try
+        {
+            var folder = Path.GetDirectoryName(Path.GetFullPath(Plugin.ConfigPath));
+            // Read here, not by the game's path: its serializer only takes files under Mods
+            var oldXml = File.ReadAllBytes(Path.Combine(folder, from));
+            var newXml = File.ReadAllBytes(Path.Combine(folder, to));
+            var old = XDocument.Load(new MemoryStream(oldXml));
+            var now = XDocument.Load(new MemoryStream(newXml));
+            var oldGrid = BlueprintDiff.MainGrid(old);
+            var newGrid = BlueprintDiff.MainGrid(now);
+            if (oldGrid == null || newGrid == null)
+            {
+                error = "a blueprint has no grid";
+                return null;
+            }
+            var ops = BlueprintDiff.Diff(oldGrid, newGrid, out error);
+            if (ops == null)
+                return null;
+            if (ops.Count == 0)
+            {
+                error = "the blueprints don't differ";
+                return null;
+            }
+            // The game's builders of the new blueprint's blocks, in the file's order
+            if (
+                !MyObjectBuilderSerializer.DeserializeXML(
+                    newXml,
+                    out MyObjectBuilder_Definitions definitions,
+                    out _
+                )
+            )
+            {
+                error = $"the game can't read {to}";
+                return null;
+            }
+            var index = now.Descendants("CubeGrid").ToList().IndexOf(newGrid);
+            var blocks = definitions.ShipBlueprints[0].CubeGrids[index].CubeBlocks;
+            return new StationPatch
+            {
+                Id = id,
+                Grid = grid.Trim(),
+                Ops = ops,
+                Blueprint = blocks,
+            };
+        }
+        catch (Exception e)
+        {
+            // Whatever is wrong with the files only leaves this patch out
+            error = $"{e.GetType().Name}: {e.Message}";
+            return null;
+        }
     }
 
     public static string Status(string gridName)
@@ -121,7 +210,10 @@ internal static class StationPatches
         refused.Clear();
         foreach (var entry in config.StationPatches ?? [])
         {
-            var patch = PatchFormat.Parse(entry.Id, entry.Grid, entry.Ops, out var error);
+            string error;
+            var patch = string.IsNullOrEmpty(entry.From)
+                ? PatchFormat.Parse(entry.Id, entry.Grid, entry.Ops, out error)
+                : FromBlueprints(entry.Id, entry.Grid, entry.From, entry.To ?? "", out error);
             if (patch == null)
                 Plugin.Log.Error($"Station patch '{entry.Id}' in the config is left out: {error}");
             else
@@ -163,7 +255,7 @@ internal static class StationPatches
         var where = $"{patch.Id} on {grid.DisplayName}";
         if (Ledger(grid).Contains(patch.Id))
             return $"SKIP {where}: the grid's ledger has it";
-        var steps = PatchPlan.Check(patch, new GridModel(grid), out var error);
+        var steps = PatchPlan.Check(patch, new GridModel(grid, patch.Blueprint), out var error);
         if (steps == null)
             return $"REFUSED {where}: {error}";
         if (!apply)
@@ -204,6 +296,11 @@ internal static class StationPatches
     {
         var old = step.Old?.Game as MySlimBlock;
         var op = step.Op;
+        if (op.Kind == PatchOpKind.Grid)
+        {
+            SetGrid(grid, op.Key, op.Value);
+            return null;
+        }
         if (op.Kind == PatchOpKind.Set)
         {
             var block = (MyTerminalBlock)old.FatBlock;
@@ -244,6 +341,36 @@ internal static class StationPatches
         return placed?.BlockDefinition.Id == made.Definition.Id
             ? null
             : $"placing {step.New} failed";
+    }
+
+    private static void SetGrid(MyCubeGrid grid, string key, string value)
+    {
+        if (key.StartsWith("storage:"))
+        {
+            var storageKey = Guid.Parse(key["storage:".Length..]);
+            grid.Storage ??= new MyModStorageComponent();
+            if (value == null)
+                grid.Storage.RemoveValue(storageKey);
+            else
+                grid.Storage[storageKey] = value;
+            return;
+        }
+        var on = bool.Parse(value);
+        switch (key)
+        {
+            case "DestructibleBlocks":
+                grid.DestructibleBlocks = on;
+                break;
+            case "Editable":
+                grid.Editable = on;
+                break;
+            case "Immune":
+                grid.Immune = on;
+                break;
+            case "IsRespawnGrid":
+                grid.IsRespawnGrid = on;
+                break;
+        }
     }
 
     public static List<string> Ledger(MyCubeGrid grid) =>
@@ -287,7 +414,7 @@ internal static class StationPatches
     }
 
     /// <summary>A grid as the patch checks see it.</summary>
-    private sealed class GridModel(MyCubeGrid grid) : IPatchGrid
+    private sealed class GridModel(MyCubeGrid grid, object blueprint = null) : IPatchGrid
     {
         private readonly Dictionary<MySlimBlock, PatchBlock> known = new();
 
@@ -302,6 +429,7 @@ internal static class StationPatches
                 Min = C(slim.Min),
                 Cells = Cells(slim.Min, slim.Max),
                 Type = TypeName(slim.BlockDefinition.Id),
+                Orientation = $"{slim.Orientation.Forward}/{slim.Orientation.Up}",
                 Terminal = slim.FatBlock is MyTerminalBlock,
                 Functional = slim.FatBlock is MyFunctionalBlock,
                 Game = slim,
@@ -326,6 +454,8 @@ internal static class StationPatches
         public PatchBlock NewBlock(PatchOp op, PatchBlock replaced, out string error)
         {
             error = null;
+            if (op.Target >= 0)
+                return FromBlueprint(op, replaced?.Game as MySlimBlock, out error);
             if (
                 !MyDefinitionId.TryParse("MyObjectBuilder_" + op.Block, out var id)
                 || !MyDefinitionManager.Static.TryGetCubeBlockDefinition(id, out var definition)
@@ -381,6 +511,109 @@ internal static class StationPatches
             };
         }
 
+        // A block of the new blueprint. One built again in place of a block of its type keeps
+        // the live block's owner, inventories and other run-time components, Store offers, and
+        // the mod storage keys the new blueprint doesn't change.
+        private PatchBlock FromBlueprint(PatchOp op, MySlimBlock old, out string error)
+        {
+            error = null;
+            var target = ((List<MyObjectBuilder_CubeBlock>)blueprint)[op.Target];
+            if (
+                !MyDefinitionManager.Static.TryGetCubeBlockDefinition(
+                    target.GetId(),
+                    out var definition
+                )
+            )
+            {
+                error = $"no block definition {op.Block}";
+                return null;
+            }
+            if (definition.CubeSize != grid.GridSizeEnum)
+            {
+                error = $"{op.Block} is a {definition.CubeSize} grid block";
+                return null;
+            }
+            var builder = (MyObjectBuilder_CubeBlock)target.Clone();
+            var owner =
+                old != null && old.OwnerId != 0 ? old.OwnerId : grid.BigOwners.FirstOrDefault();
+            builder.Owner = builder.BuiltBy = owner;
+            builder.IntegrityPercent = builder.BuildPercent = 1f;
+            if (old != null && old.BlockDefinition.Id == definition.Id)
+                Carry(old.GetObjectBuilder(true), old.FatBlock?.Storage, builder, op.Storage);
+            var orientation = new MyBlockOrientation(
+                builder.BlockOrientation.Forward,
+                builder.BlockOrientation.Up
+            );
+            Vector3I min = builder.Min;
+            var turn = new MatrixI(orientation);
+            var max = min + Vector3I.Abs(Vector3I.TransformNormal(definition.Size - 1, ref turn));
+            return new PatchBlock
+            {
+                Min = C(min),
+                Cells = Cells(min, max),
+                Type = TypeName(definition.Id),
+                Orientation = $"{orientation.Forward}/{orientation.Up}",
+                Game = new NewBlock
+                {
+                    Definition = definition,
+                    Orientation = orientation,
+                    Builder = builder,
+                    Max = max,
+                    Position = MySlimBlock.ComputePositionInGrid(turn, definition, min),
+                },
+            };
+        }
+
+        private static void Carry(
+            MyObjectBuilder_CubeBlock live,
+            IDictionary<Guid, string> liveStorage,
+            MyObjectBuilder_CubeBlock builder,
+            Dictionary<string, string> changes
+        )
+        {
+            var components = builder.ComponentContainer?.Components ?? [];
+            var storageType =
+                components
+                    .Concat(live.ComponentContainer?.Components ?? [])
+                    .FirstOrDefault(c => c.Component is MyObjectBuilder_ModStorageComponent)
+                    ?.TypeId
+                ?? "MyModStorageComponentBase";
+            components.RemoveAll(c =>
+                BlueprintDiff.LiveComponents.Contains(c.TypeId)
+                || c.Component is MyObjectBuilder_ModStorageComponent
+            );
+            foreach (var c in live.ComponentContainer?.Components ?? [])
+                if (BlueprintDiff.LiveComponents.Contains(c.TypeId))
+                    components.Add(c);
+            // From the component, not the builder: the game saves only the keys a mod registers,
+            // and a key it hasn't saved yet stays until it would have dropped it anyway
+            var storage = new SerializableDictionary<Guid, string>();
+            foreach (var (key, value) in liveStorage ?? new Dictionary<Guid, string>())
+                storage.Dictionary[key] = value;
+            foreach (var (key, value) in changes ?? [])
+                if (value == null)
+                    storage.Dictionary.Remove(Guid.Parse(key));
+                else
+                    storage.Dictionary[Guid.Parse(key)] = value;
+            if (storage.Dictionary.Count > 0)
+                components.Add(
+                    new MyObjectBuilder_ComponentContainer.ComponentData
+                    {
+                        TypeId = storageType,
+                        Component = new MyObjectBuilder_ModStorageComponent { Storage = storage },
+                    }
+                );
+            builder.ComponentContainer =
+                components.Count > 0
+                    ? new MyObjectBuilder_ComponentContainer { Components = components }
+                    : null;
+            if (
+                live is MyObjectBuilder_StoreBlock store
+                && builder is MyObjectBuilder_StoreBlock next
+            )
+                next.PlayerItems = store.PlayerItems;
+        }
+
         // An added block takes the color of a block next to it
         private MySlimBlock Beside(Vector3I cell) =>
             Base6Directions
@@ -429,11 +662,18 @@ internal static class StationPatches
         public string Veto(PatchOp op, PatchBlock block)
         {
             var slim = block.Game as MySlimBlock;
-            if (
-                op.Kind is PatchOpKind.Del or PatchOpKind.Swap
-                && slim?.FatBlock is MyShipConnector { Other: not null }
-            )
+            var removal = op.Kind is PatchOpKind.Del or PatchOpKind.Swap or PatchOpKind.Rebuild;
+            if (removal && slim?.FatBlock is MyShipConnector { Other: not null })
                 return "a ship is docked to the connector";
+            if (removal && slim?.FatBlock is MyMechanicalConnectionBlockBase { TopGrid: not null })
+                return "a subgrid hangs on it";
+            if (
+                removal
+                && slim?.FatBlock is MyProjectorBase table
+                && ShipyardOrders.IsTable(table)
+                && ShipyardOrders.Holder(table) != 0
+            )
+                return "a player's blueprint is loaded into the table";
             if (
                 ShipyardZoneWelding.IsShipyard(grid)
                 && ShipyardOrders.Busy(grid.EntityId)

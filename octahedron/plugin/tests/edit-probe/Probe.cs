@@ -9,8 +9,14 @@ using System.Text;
 using PluginSdk.Commands;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.EntityComponents;
 using Sandbox.Game.World;
+using Sandbox.ModAPI;
+using Sandbox.ModAPI.Interfaces;
+using VRage.Game;
+using VRage.Game.Entity;
 using VRage.Game.ModAPI;
+using VRage.ObjectBuilders;
 using VRage.Plugins;
 using VRage.Utils;
 using VRageMath;
@@ -26,11 +32,14 @@ namespace EditProbe;
 //   !sedit free <grid name>             FREE x,y,z (up to 8): empty cells outside the hull, next to a block
 //   !sedit find <grid name> <subtype or type>   FOUND x,y,z Type/Subtype ..., up to 5
 //   !sedit vdel <grid name> x,y,z       the game's RazeBlock, with its safe zone check
+//   !sedit storeset <grid name> x,y,z <guid> <value>   sets a mod storage key of a block
+//   !sedit give <grid name> x,y,z <Type/Subtype> <amount>   puts items into a block
 //
 // Lines "?tag<TAB>grid name<TAB>query" in the file EDITPROBE_PENDING are answered by whichever
 // process holds the grid, once per tag and grid, as "node<TAB>?tag<TAB>answer" in EDITPROBE_OUT.
 // Queries: dump, block:x,y,z, snap:name (the block list to EDITPROBE_OUT.name), islands,
-// neighbours:x,y,z, near:meters.
+// neighbours:x,y,z, near:meters, prop:x,y,z:PropertyId (a float or bool terminal property),
+// text:x,y,z (an LCD's text), storage:x,y,z (the block's mod storage), items:x,y,z:Type/Subtype.
 public class Probe : IPlugin
 {
     private int ticks;
@@ -102,6 +111,37 @@ public sealed class EditCommands : CommandModule
         return hits.Any() ? string.Join("\n", hits) : "NOTFOUND";
     }
 
+    [Command(
+        "storeset",
+        "Sets a mod storage key of a block",
+        "!sedit storeset <grid> x,y,z <guid> <value>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string StoreSet(string grid, string at, string key, string value)
+    {
+        var block = Edits.Grid(grid)?.GetCubeBlock(Edits.Cell(at))?.FatBlock;
+        if (block == null)
+            return $"NOBLOCK {at}";
+        block.Storage ??= new MyModStorageComponent();
+        block.Storage[Guid.Parse(key)] = value;
+        return $"STORESET {at}";
+    }
+
+    [Command("give", "Puts items into a block", "!sedit give <grid> x,y,z <Type/Subtype> <amount>")]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Give(string grid, string at, string item, int amount)
+    {
+        var block = Edits.Grid(grid)?.GetCubeBlock(Edits.Cell(at))?.FatBlock;
+        if (block?.GetInventory() is not { } inventory)
+            return $"NOINVENTORY {at}";
+        var id = MyDefinitionId.Parse("MyObjectBuilder_" + item);
+        inventory.AddItems(
+            amount,
+            (MyObjectBuilder_PhysicalObject)MyObjectBuilderSerializer.CreateNewObject(id)
+        );
+        return $"GIVEN {at} {Edits.Items(block)}";
+    }
+
     [Command("vdel", "The game's RazeBlock of one block", "!sedit vdel <grid> x,y,z")]
     [Permission(MyPromoteLevel.Admin)]
     public string VanillaDelete(string grid, string at)
@@ -154,7 +194,7 @@ internal static class Edits
         )[..12];
         var ledger =
             grid.Storage != null && grid.Storage.TryGetValue(Key, out var text) ? text : "";
-        return $"DUMP {grid.EntityId} blocks={grid.BlocksCount} hash={hash} ledger={ledger} static={grid.IsStatic}";
+        return $"DUMP {grid.EntityId} blocks={grid.BlocksCount} hash={hash} ledger={ledger} static={grid.IsStatic} destructible={grid.DestructibleBlocks} immune={grid.Immune}";
     }
 
     private static List<string> Lines(MyCubeGrid grid) =>
@@ -233,6 +273,52 @@ internal static class Edits
             }
             case "islands":
                 return Islands(grid);
+            case "prop":
+            {
+                if (grid.GetCubeBlock(Cell(a[1]))?.FatBlock is not IMyTerminalBlock block)
+                    return $"NOBLOCK {a[1]}";
+                var property = block.GetProperty(a[2]);
+                return property?.TypeName switch
+                {
+                    "Single" =>
+                        $"PROP {a[2]}={property.AsFloat().GetValue(block).ToString(CultureInfo.InvariantCulture)}",
+                    "Boolean" => $"PROP {a[2]}={property.AsBool().GetValue(block)}",
+                    _ => $"NOPROP {a[2]}",
+                };
+            }
+            case "text":
+                return
+                    grid.GetCubeBlock(Cell(a[1]))?.FatBlock
+                        is Sandbox.ModAPI.Ingame.IMyTextSurface surface
+                    ? "TEXT " + surface.GetText().Replace('\n', '|')
+                    : $"NOTEXT {a[1]}";
+            case "storage":
+            {
+                var block = grid.GetCubeBlock(Cell(a[1]))?.FatBlock;
+                if (block == null)
+                    return $"NOBLOCK {a[1]}";
+                var items =
+                    block.Storage?.Select(kv =>
+                        $"{kv.Key}={kv.Value.Replace(' ', '_').Replace('\n', '_')}"
+                    )
+                    ?? [];
+                return $"STORAGE {a[1]} {string.Join(" ", items.OrderBy(t => t, StringComparer.Ordinal))}";
+            }
+            case "items":
+            {
+                var block = grid.GetCubeBlock(Cell(a[1]))?.FatBlock;
+                if (block == null)
+                    return $"NOBLOCK {a[1]}";
+                var amount = Enumerable
+                    .Range(0, block.InventoryCount)
+                    .Sum(i =>
+                        (double)
+                            block
+                                .GetInventory(i)
+                                .GetItemAmount(MyDefinitionId.Parse("MyObjectBuilder_" + a[2]))
+                    );
+                return $"ITEMS {a[1]} {amount.ToString(CultureInfo.InvariantCulture)} entity={block.EntityId}";
+            }
             case "near":
             {
                 var sphere = new BoundingSphereD(
@@ -295,6 +381,12 @@ internal static class Edits
             );
         return $"ISLANDS {groups.Count - 1} largest={groups.Max(g => g.Count)} hasislands={game} {string.Join(" ", small)}";
     }
+
+    public static string Items(MyEntity block) =>
+        Enumerable
+            .Range(0, block.InventoryCount)
+            .Sum(i => (double)block.GetInventory(i).CurrentMass)
+            .ToString("0.###", CultureInfo.InvariantCulture);
 
     private static readonly HashSet<string> answered = [];
 

@@ -10,5 +10,6 @@
   <ItemGroup>
     <Compile Include="../../../ServerPlugin/Builds/ArmPlanner.cs" />
     <Compile Include="../../../ServerPlugin/StationPatchPlan.cs" />
+    <Compile Include="../../../ServerPlugin/BlueprintDiff.cs" />
   </ItemGroup>
 </Project>

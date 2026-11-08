@@ -143,6 +143,55 @@ the same diff as the reply.
 - `!oct patch status "<grid>"` answers the block count, a hash of the block list,
   the ledger and the islands.
 
+A grid can also be replaced by a new blueprint, in place. The plugin compares the
+blueprint the grid was built from with the new one, by block min cell, and turns
+the differences into ops. It compares the two blueprints rather than the live grid,
+so what the game changed since (charge, inventories, timers, the plugin's panels)
+is left alone:
+
+- a block only in the old blueprint is removed, one only in the new one added, one
+  of another type or orientation removed and added;
+- a block whose saved settings differ is built again from the new blueprint where it
+  is: terminal properties, LCD texts and other components, color and skin, and the
+  mod storage keys of a mod's blocks or settings. The rebuilt block keeps the live
+  block's owner, inventories, timers and Store offers, and the mod storage keys the
+  new blueprint doesn't change;
+- a block whose name, Custom Data or on/off alone changed is set in place, keeping
+  its entity;
+- the grid's `DestructibleBlocks`, `Editable`, `Immune` and `IsRespawnGrid`, and its
+  own mod storage keys, are set in place. A blueprint that changes the grid's name,
+  size or static flag is refused.
+
+Each op is checked against the live grid like any patch: the cell must hold the old
+blueprint's block, turned the same way, with its min there. On top of that a block
+can't be removed or rebuilt while a subgrid hangs on it, or while a player's blueprint
+is in a hologram table. Grid and block entity ids stay, except for the rebuilt blocks,
+so faction station entries, partitions, the market (kept by station name on the World
+Authority) and the shipyard's queue don't change. Only the blueprint's largest grid is
+compared; subgrids are left as they are.
+
+- `!oct patch diff <id> "<grid>" <from.sbc> <to.sbc>` checks a replacement and lists
+  its ops; `!oct patch replace` with the same arguments applies it. The blueprint
+  files are found next to the config file unless their path is absolute.
+- A staged entry with `From` and `To` instead of `Ops` replaces the grid the same way
+  when a process loads it.
+
+The plugin builds added and changed blocks from `To` as they are in the file, so
+both blueprints must be prepared the way `build_world.py` puts that grid into a
+world: the station's color, the names, share modes and "Anyone can use" it sets,
+emptied programs and inventories. Raw blueprints would bring blocks in unprepared.
+`station_patch.py` makes the pair. `From` is the blueprint and `build_world.py` of
+the commit the live world was built from, `To` those of the working tree, so a
+change to the preparation becomes part of the patch too:
+
+```sh
+python station_patch.py 2026-12-station-v2 "Beta Station" --since 04f52f6 --out config
+```
+
+It writes `2026-12-station-v2-from.sbc` and `-to.sbc` and prints the staged entry.
+Each station needs its own pair: the preparation depends on the station's name. A
+grid named `<station> Shipyard` is that station's shipyard.
+
 `StationPatches` in the config is the staged list, shipped with
 `octahedron.cfg`. Every process applies its patches, in the list's order, to the
 grids it simulates whose ledger lacks them, within 5 seconds of loading them. On a
@@ -157,12 +206,18 @@ grid, and is tried again every minute. In `octahedron.cfg`:
     <Grid>Alpha Station</Grid>
     <Ops>swap:3,2,-1:LargeBlockHalfTrofferLight:InteriorLight/LargeBlockLight_1corner</Ops>
   </StationPatchEntry>
+  <StationPatchEntry>
+    <Id>2026-12-station-v2</Id>
+    <Grid>Beta Station</Grid>
+    <From>2026-12-station-v2-from.sbc</From>
+    <To>2026-12-station-v2-to.sbc</To>
+  </StationPatchEntry>
 </StationPatches>
 ```
 
 Patches don't change grid ids, partitions or names the plugin keys on: don't
 rename a station's hologram tables, buttons, panels or arm rotors with them.
-Moving or replacing whole grids still needs a wipe (see SE-1238).
+Moving grids, and new or removed stations, still need a wipe (see SE-1238).
 
 ### Shared NPC blocks
 
@@ -1827,12 +1882,17 @@ the mods' shares of 2,000 spawn attempts per type and place.
 (`dotnet run -c Release --project tests/patches/PatchTests`): the patch format,
 the checks of a whole patch before any op applies (a bad last op refuses the
 whole patch), the mount neighbor of added blocks and the island check, swaps that
-keep a grid whole, and vetoes. `tests/station_patch_cluster.py` runs them on a
-local test cluster with an admin client (`tests/edit-probe` reports the grids
-from whichever node holds them): patches applied with `!oct patch apply` on Alpha
-Station and its shipyard, the refusals, a docked ship and a paid build, then a
-node restart and a cluster stop and start; and a staged patch in `StationPatches`
-for Beta Station, applied once by the node that loads it.
+keep a grid whole, and vetoes; and the blueprint diff: which change becomes which
+op, mod storage keys, grid settings, and no ops for the station blueprint written
+another way. `tests/station_patch_cluster.py` runs them on a local test cluster with
+an admin client (`tests/edit-probe` reports the grids from whichever node holds
+them): patches applied with `!oct patch apply` on Alpha Station and its shipyard,
+the refusals, a docked ship and a paid build, then a node restart and a cluster stop
+and start; Alpha Station replaced by an edited copy of its blueprint (a light's
+radius, an LCD's text and mod storage, a Rotary Airlock door, a container with
+items, a name, a grid setting), with the market unchanged; and staged patches in
+`StationPatches` for Beta Station, ops and a blueprint, applied once by the node
+that loads it.
 `tests/market/MarketTests` checks the market's bookkeeping without the game
 (`dotnet run -c Release --project tests/market/MarketTests`): OCT's prices with the
 tax and rounding, stock, the hourly restock and profiles, specialty and drift, the
