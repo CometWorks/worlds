@@ -56,6 +56,9 @@ PROBE_ID = "6D2F4A18-9B53-4E07-8C61-2E5B1F1573AA"
 INTERVAL = 10
 # LBD's ship, meters to the right of Alpha: far past the partition split distance
 FAR = 40_000
+# How long the World Authority counts a grid its node reports without: two intervals and two
+# reads of the gateway's offline table
+GONE = 2 * INTERVAL + 120
 
 
 def build() -> None:
@@ -356,8 +359,8 @@ def offline_partitions(bench, probe, check, log, price, lbc_ships, lbc, cash) ->
     )
     on_node = probe.run("!lbprobe grids LBD") + " | " + probe.run("!lbprobe grids LBC")
     check("node-1 has none of the ships", "GRID " not in on_node, on_node)
-    # Past the World Authority's grace for grids a node stopped reporting (2 intervals)
-    wait(3 * INTERVAL + 5)
+    # Past the World Authority's grace for grids a node stopped reporting
+    wait(GONE + 15)
     rows = board("offline")
     check(
         "offline: LBC's ships still counted",
@@ -401,12 +404,15 @@ def offline_partitions(bench, probe, check, log, price, lbc_ships, lbc, cash) ->
         "the WA loaded the grids from its world",
         re.search(r"Leaderboard: \d+ grids loaded from the world", log("wa-1")),
     )
-    wait(3 * INTERVAL + 5)
+    wait(GONE + 15)
     rows = board("warm-start-later")
     check("and still, counts later", same(rows), f"{rows}")
     check("cash unchanged", rows.get("LBD", {}).get("cash") == cash, rows.get("LBD"))
 
-    # LBD's partition wakes on node-1: the ship counts once, as node-1 counts it
+    # LBD's partition wakes on node-1 and stays: the ship counts once, as node-1 counts it at
+    # the market's prices now
+    cluster.handover_config({"offline.enabled": "false"})
+
     def woken() -> bool:
         for partition, ms in offline().items():
             if far in ms:
@@ -425,14 +431,26 @@ def offline_partitions(bench, probe, check, log, price, lbc_ships, lbc, cash) ->
         "LBD's partition woke on node-1",
         f"GRID {far} " in probe.run("!lbprobe grids LBD"),
     )
-    wait(3 * INTERVAL + 5)
+    wait(GONE + 15)
     rows = board("woken")
-    check("woken: LBD's ship counted once", same(rows, ["LBD"]), f"{rows.get('LBD')}")
+    names = [s.strip() for s in probe.run("!oct market stations").split(",")]
+    now, _ = lb.expected(
+        lb.prices(
+            lambda station: probe.ask(f'!oct market show "{station}" all'), names
+        ),
+        iron=2000,
+    )
+    lbd = rows.get("LBD", {})
+    check(
+        "woken: LBD's ship counted once",
+        lbd.get("grids") == now and lbd.get("pcu") == pcu,
+        f"{lbd} vs {now}, {pcu}",
+    )
 
     # Deleted on its node: gone from the board once the node has reported without it
     reply = probe.run(f"!lbprobe delete {far}")
     check("LBD's ship deleted", f"DELETED {far}" in reply, reply)
-    wait(3 * INTERVAL + 5)
+    wait(GONE + 15)
     rows = board("deleted")
     check(
         "deleted: LBD has no grids",

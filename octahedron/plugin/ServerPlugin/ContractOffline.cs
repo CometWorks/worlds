@@ -19,7 +19,7 @@ namespace ServerPlugin;
 // A cluster only runs on .NET 10.
 internal static class ContractOffline
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
+    public static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
     private static DateTime nextPoll;
     private static volatile Task polling;
     private static volatile Dictionary<long, DateTime> grids;
