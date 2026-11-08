@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using HarmonyLib;
 using PluginSdk.Clustering;
 using Sandbox.Definitions;
+using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Entities.Cube;
@@ -170,8 +172,15 @@ internal static class Reputation
         return group.OrderByDescending(g => g.BlocksCount).First().BigOwners;
     }
 
-    /// <summary>Integrity the block lost to the member; incident: their ram, null for anything else</summary>
-    private static void Lost(MySlimBlock block, float integrity, long identity, string incident)
+    /// <summary>Integrity the block lost to the member; incident: their ram, null for anything else.
+    /// owners: the grid's before the damage, when it may have lost its owned blocks since</summary>
+    private static void Lost(
+        MySlimBlock block,
+        float integrity,
+        long identity,
+        string incident,
+        List<long> owners = null
+    )
     {
         if (
             integrity <= 0
@@ -188,7 +197,7 @@ internal static class Reputation
             Add(identity, ReputationKind.Share, -value, null);
             return;
         }
-        var owners = Owners(grid);
+        owners ??= Owners(grid);
         if (owners.Count == 0 || owners.Contains(identity))
             return;
         var owner = owners.FirstOrDefault(o => OctFaction.Faction.IsMember(o));
@@ -261,7 +270,7 @@ internal static class Reputation
             long attackerId
         )
         {
-            if (attackerId == 0 || !Counts(__instance))
+            if (attackerId == 0 || exploding || !Counts(__instance))
                 return;
             var lost = __state - Math.Max(0, __instance.Integrity - __instance.AccumulatedDamage);
             if (
@@ -283,6 +292,101 @@ internal static class Reputation
                 return;
             }
             Lost(__instance, lost, Attacker(attacker), null);
+        }
+    }
+
+    // Explosions: a warhead, a rocket, an ammo box or a reactor going off. The explosion removes the
+    // blocks it destroys without DoDamageInternal and damages the rest through it: all of it is
+    // charged here, with the owners each grid had before, and nothing in Damaged.
+    [ThreadStatic]
+    private static bool exploding;
+
+    [HarmonyPatch]
+    private static class Exploded
+    {
+        // MyExplosion is internal
+        private static MethodBase TargetMethod() =>
+            AccessTools.Method(
+                "Sandbox.Game.MyExplosion:ApplyVolumetricDamageToGrid",
+                [typeof(MyGridExplosion), typeof(long), typeof(long)]
+            );
+
+        private static void Prefix(
+            MyGridExplosion damageInfo,
+            long attackerEntity,
+            out List<(MySlimBlock Block, float Integrity, List<long> Owners)> __state
+        )
+        {
+            __state = null;
+            if (
+                attackerEntity == 0
+                || !On
+                || !Sync.IsServer
+                || OctFaction.Faction == null
+                || damageInfo?.DamagedBlocks is not { Count: > 0 } blocks
+            )
+                return;
+            var owners = new Dictionary<MyCubeGrid, List<long>>();
+            __state = [];
+            foreach (var block in blocks.Keys)
+            {
+                if (block.CubeGrid == null)
+                    continue;
+                if (!owners.TryGetValue(block.CubeGrid, out var gridOwners))
+                    owners[block.CubeGrid] = gridOwners = [.. Owners(block.CubeGrid)];
+                __state.Add((block, block.Integrity - block.AccumulatedDamage, gridOwners));
+            }
+            exploding = true;
+        }
+
+        private static void Postfix(
+            long attackerEntity,
+            List<(MySlimBlock Block, float Integrity, List<long> Owners)> __state
+        )
+        {
+            if (
+                __state == null
+                || !MyEntities.TryGetEntityById(
+                    attackerEntity,
+                    out MyEntity attacker,
+                    allowClosed: true
+                )
+            )
+                return;
+            var identity = Attacker(attacker);
+            foreach (var (block, before, owners) in __state)
+            {
+                var gone =
+                    block.IsDestroyed || block.CubeGrid.GetCubeBlock(block.Position) != block;
+                var after = gone ? 0 : Math.Max(0, block.Integrity - block.AccumulatedDamage);
+                Lost(block, before - after, identity, null, owners);
+            }
+        }
+
+        private static void Finalizer() => exploding = false;
+    }
+
+    // A missile's explosion belongs to its owner's character, none when they are offline or dead:
+    // then it is the launcher's, which the game would also name for a weapon block's damage
+    [ThreadStatic]
+    private static MyEntity launcher;
+
+    [HarmonyPatch(typeof(MyMissile), "ExecuteExplosion")]
+    private static class MissileExploding
+    {
+        private static void Prefix(long ___m_launcherId) =>
+            launcher = On ? MyEntities.GetEntityById(___m_launcherId, allowClosed: true) : null;
+
+        private static void Finalizer() => launcher = null;
+    }
+
+    [HarmonyPatch(typeof(MyExplosions), nameof(MyExplosions.AddExplosion))]
+    private static class Explosion
+    {
+        private static void Prefix(ref MyExplosionInfo explosionInfo)
+        {
+            if (launcher != null && explosionInfo.OwnerEntity == null)
+                explosionInfo.OwnerEntity = launcher;
         }
     }
 

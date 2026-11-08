@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
+using Sandbox.Game.Weapons;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using VRage.Game;
@@ -15,6 +17,8 @@ namespace RepProbe;
 //   /rep claim <grid id>                makes the local player the owner of the grid's unowned blocks
 //   /rep share <grid id> <None|Faction>  the share box of every block of the grid the player owns
 //   /rep deposit <amount>               the faction screen's Deposit
+//   /rep shoot <grid id> <on|off>       the Shoot switch of every weapon of the grid the player owns
+//   /rep countdown <grid id>            Safety off, then Start countdown, on every warhead the player owns
 // Each answers with a REP chat line.
 // ReSharper disable once UnusedType.Global
 public class Plugin : IPlugin
@@ -65,6 +69,32 @@ public class Plugin : IPlugin
         if (!MyEntities.TryGetEntityById(long.Parse(args[2]), out MyCubeGrid grid))
             return "no grid " + args[2];
         var blocks = grid.GetFatBlocks().Where(b => b.IDModule != null).ToList();
+        if (args[1] == "shoot")
+        {
+            var guns = grid.GetFatBlocks()
+                .OfType<MyUserControllableGun>()
+                .Where(g => g.OwnerId == me)
+                .ToList();
+            foreach (var gun in guns)
+                gun.SetShooting(args[3] == "on");
+            return $"shoot {args[3]} for {guns.Count} weapons";
+        }
+        if (args[1] == "countdown")
+        {
+            var warheads = grid.GetFatBlocks()
+                .OfType<MyWarhead>()
+                .Where(w => w.OwnerId == me)
+                .ToList();
+            foreach (var warhead in warheads)
+            {
+                warhead.IsArmed = true;
+                Sandbox.ModAPI.Ingame.TerminalBlockExtentions.ApplyAction(
+                    warhead,
+                    "StartCountdown"
+                );
+            }
+            return $"countdown sent for {warheads.Count} warheads";
+        }
         if (args[1] == "claim")
         {
             var requests = blocks
