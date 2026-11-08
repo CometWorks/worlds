@@ -170,7 +170,7 @@ internal static partial class ShipyardOrders
         var lacking = new Dictionary<string, long>();
         foreach (var (item, raw) in order.Items.Select(i => (i.Key, i.Value)))
         {
-            var have = item != Hydrogen && stock.TryGetValue(item, out var s) ? s : 0;
+            var have = item != Ice && stock.TryGetValue(item, out var s) ? s : 0;
             if (raw > have)
                 lacking[item] = raw - have;
         }
@@ -236,7 +236,7 @@ internal static partial class ShipyardOrders
                                 $"Fly '{obstacle.DisplayName}' out of {shipyard.DisplayName}'s build space first{ClearWithin(shipyard, obstacle)}.";
                         var lacking = Lacking(shipyard, next);
                         var volume = lacking
-                            .Where(l => l.Key != Hydrogen)
+                            .Where(l => l.Key != Ice)
                             .Sum(l =>
                                 MyDefinitionManager
                                     .Static.GetPhysicalItemDefinition(ItemId(l.Key))
@@ -253,16 +253,18 @@ internal static partial class ShipyardOrders
                             return;
                         }
 
-                        next.Items.TryGetValue(Hydrogen, out var ice);
+                        next.Items.TryGetValue(Ice, out var ice);
+                        var (h2, o2) = Split(ice, blueprint);
                         var ships = DockedShips(table, next.Player);
-                        var drained = Drain(
-                            ships,
-                            ice / (double)Amounts.Unit * Config.ShipyardHydrogenLitersPerIce
-                        );
-                        var liters = drained.Sum(d => d.Liters);
+                        var drainedH2 = Drain(ships, H2, h2);
+                        var drainedO2 = Drain(ships, O2, o2);
+                        var drained = drainedH2.Concat(drainedO2).ToList();
+                        var fromTanks =
+                            IceFor(drainedH2.Sum(d => d.Liters), H2, up: false)
+                            + IceFor(drainedO2.Sum(d => d.Liters), O2, up: false);
                         var iceTaken = TakeIce(
                             Cargo(ships).Concat(TurnInventories(shipyard)),
-                            ice - IceFor(liters, up: false)
+                            ice - fromTanks
                         );
                         var request = new BuildRequest
                         {
@@ -272,9 +274,8 @@ internal static partial class ShipyardOrders
                             Player = next.Player,
                             Needed = lacking,
                         };
-                        if (liters > 0 || iceTaken.Count > 0)
-                            request.Provided[Hydrogen] =
-                                IceFor(liters, up: false) + iceTaken.Sum(t => t.Raw);
+                        if (drained.Count > 0 || iceTaken.Count > 0)
+                            request.Provided[Ice] = fromTanks + iceTaken.Sum(t => t.Raw);
                         Builds.Execute(
                             Guid.NewGuid(),
                             request,
@@ -284,13 +285,11 @@ internal static partial class ShipyardOrders
                                 if (!ok || started == null)
                                 {
                                     foreach (var (tank, l) in drained)
-                                        AddHydrogen(tank, l);
+                                        AddGas(tank, l);
                                     foreach (var (inventory, raw) in iceTaken)
                                         inventory.AddItems(
                                             new MyFixedPoint { RawValue = raw },
-                                            MyObjectBuilderSerializer.CreateNewObject(
-                                                ItemId(Hydrogen)
-                                            )
+                                            MyObjectBuilderSerializer.CreateNewObject(ItemId(Ice))
                                         );
                                     Refuse(message);
                                     return;
@@ -335,7 +334,7 @@ internal static partial class ShipyardOrders
     // The bought components of a started paid build, to load
     private static Dictionary<MyDefinitionId, int> Bought(BuildOrder order) =>
         order
-            .Items.Where(i => i.Key != Hydrogen)
+            .Items.Where(i => i.Key != Ice)
             .ToDictionary(i => ItemId(i.Key), i => (int)(i.Value / Amounts.Unit));
 
     private static void After(

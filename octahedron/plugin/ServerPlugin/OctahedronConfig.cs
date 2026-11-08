@@ -816,6 +816,30 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 20;
 
+    [IntOption(
+        0,
+        100,
+        "A new ship's O2 tanks are filled to this percent: a paid build's materials include the oxygen.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardOxygenFillPercent
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 50;
+
+    [DoubleOption(
+        0.001,
+        description: "Liters of oxygen per kg of ice, as a gas generator makes it. Oxygen a paid build buys "
+            + "at the station is bought as ice, and oxygen taken from a ship at the station counts as ice.",
+        Parent = "shipyard"
+    )]
+    public double ShipyardOxygenLitersPerIce
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
     [StringOption(
         description: "Names of the shipyard's rotors, comma-separated, whose rotor heads carry the support arm "
             + "of a build. A shipyard without them builds the ship from a projector on the ship itself.",

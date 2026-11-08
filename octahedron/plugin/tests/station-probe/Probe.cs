@@ -226,6 +226,16 @@ public sealed class ProbeCommands : CommandModule
             }
             grid.CubeBlocks.Add(tank);
         }
+        // O2=<fill ratio>: a large grid's small oxygen tank, filled that far
+        var o2 = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("O2="));
+        if (o2 != null)
+        {
+            var tank = Block<MyObjectBuilder_OxygenTank>("", new Vector3I(-1, 0, 1), ownerId);
+            tank.FilledRatio = float.Parse(o2.Substring(3), CultureInfo.InvariantCulture);
+            grid.CubeBlocks.Add(tank);
+        }
         // BAT=<MWh>: a battery holding that much, the ship's only power. BATS=<n>: n of them in a row.
         var bat = items
             .Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -252,6 +262,7 @@ public sealed class ProbeCommands : CommandModule
         {
             if (
                 pair.StartsWith("H2=")
+                || pair.StartsWith("O2=")
                 || pair.StartsWith("BAT=")
                 || pair.StartsWith("BATS=")
                 || pair.StartsWith("AT=")
@@ -1415,11 +1426,11 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "gas",
-        "The hydrogen in the H2 tanks of a grid and its subgrids: GAS grid-id liters tanks",
-        "!sprobe gas <grid id|grid name>"
+        "The gas in the H2 tanks, or the O2 tanks with Oxygen, of a grid and its subgrids: GAS grid-id liters tanks",
+        "!sprobe gas <grid id|grid name> [Hydrogen|Oxygen]"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string Gas(string grid)
+    public string Gas(string grid, string gas = "Hydrogen")
     {
         var found = MyEntities
             .GetEntities()
@@ -1431,7 +1442,9 @@ public sealed class ProbeCommands : CommandModule
         var grids = group == null ? [found] : group.Nodes.Select(n => n.NodeData).ToList();
         var tanks = grids
             .SelectMany(g => g.GetFatBlocks<MyGasTank>())
-            .Where(t => t.BlockDefinition.Id.SubtypeName.Contains("Hydrogen"))
+            .Where(t =>
+                t.BlockDefinition is MyGasTankDefinition d && d.StoredGasId.SubtypeName == gas
+            )
             .ToList();
         var liters = tanks.Sum(t => t.FilledRatio * t.Capacity);
         return string.Format(
