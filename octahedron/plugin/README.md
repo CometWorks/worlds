@@ -1786,6 +1786,9 @@ mods and asteroids left out, and this working copy as a dev folder (or a
 come from a test slot of the workspace (`se/testing/parallel-test-work`). See its
 docstring.
 
+The cabs (SE-1279) are tested from the other side, by sebot taxi drivers and a passenger bot on a bench
+server: cluster-regression `sebot/tools/trader/taxitest.py`.
+
 `tests/test_client.py` checks the rules with them: grids flying out of the
 world (`tests/edge_grids.py`) and the character on its jetpack, the starter
 ship from a blueprint loaded into the hologram tables, and its limits with a
