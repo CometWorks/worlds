@@ -1573,6 +1573,62 @@ public sealed class ProbeCommands : CommandModule
             );
     }
 
+    [Command(
+        "datapads",
+        "The data pads in the station's Free Tools boxes, after taking them all out (take) or adding a player's own pad to the first box (add): PADS title[@x,y,z of its GPS]|...;next box...",
+        "!sprobe datapads <station> [take|add]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string DataPads(string station, string action = "")
+    {
+        var boxes = FreeTools(station).ToList();
+        foreach (var box in boxes)
+        {
+            var inventory = box.GetInventory();
+            if (action == "take")
+            {
+                var items = inventory.GetItems();
+                for (var i = items.Count - 1; i >= 0; i--)
+                    if (items[i].Content is MyObjectBuilder_Datapad)
+                        inventory.RemoveItemsAt(i);
+            }
+            if (action == "add" && box == boxes[0])
+                inventory.AddItems(
+                    1,
+                    new MyObjectBuilder_Datapad
+                    {
+                        SubtypeName = "Datapad",
+                        Name = "Player note",
+                        Data = "Meet me at the bar",
+                    }
+                );
+        }
+        static string Pad(MyObjectBuilder_Datapad pad, int amount)
+        {
+            var gps = System.Text.RegularExpressions.Regex.Match(
+                pad.Data ?? "",
+                @"GPS:[^:]*:([-\d.]+):([-\d.]+):([-\d.]+):"
+            );
+            var text = gps.Success
+                ? $"{pad.Name}@{gps.Groups[1]},{gps.Groups[2]},{gps.Groups[3]}"
+                : pad.Name;
+            return string.Join("|", Enumerable.Repeat(text, amount));
+        }
+        return "PADS "
+            + string.Join(
+                ";",
+                boxes.Select(b =>
+                    string.Join(
+                        "|",
+                        b.GetInventory()
+                            .GetItems()
+                            .Where(i => i.Content is MyObjectBuilder_Datapad)
+                            .Select(i => Pad((MyObjectBuilder_Datapad)i.Content, (int)i.Amount))
+                    )
+                )
+            );
+    }
+
     private static IEnumerable<MyCargoContainer> FreeTools(string station) =>
         StationGrids(station)
             .SelectMany(g => g.GetFatBlocks<MyCargoContainer>())
