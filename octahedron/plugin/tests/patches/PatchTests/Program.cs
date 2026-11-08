@@ -566,6 +566,40 @@ if (System.IO.File.Exists(stationFile))
 else
     Check(false, "the station blueprint is at " + stationFile);
 
+// The staged blueprint pairs of config/octahedron.cfg, trimmed by station_patch.py to the blocks
+// they change (SE-1235): each pair is in config/storage/Octahedron and diffs to ops that change
+// blocks in place, at cells both blueprints have
+var configFolder = System.IO.Path.Combine(AppContext.BaseDirectory, "../../../../../../../config");
+var stagedPairs = XDocument
+    .Load(System.IO.Path.Combine(configFolder, "octahedron.cfg"))
+    .Descendants("StationPatchEntry")
+    .Where(e => !string.IsNullOrEmpty((string)e.Element("From")))
+    .ToList();
+foreach (var entry in stagedPairs)
+{
+    string File(string tag) =>
+        System.IO.Path.Combine(configFolder, "storage/Octahedron", (string)entry.Element(tag));
+    var id = (string)entry.Element("Id");
+    if (!System.IO.File.Exists(File("From")) || !System.IO.File.Exists(File("To")))
+    {
+        Check(false, $"staged pair {id}: both files in config/storage/Octahedron");
+        continue;
+    }
+    var from = BlueprintDiff.MainGrid(XDocument.Load(File("From")));
+    var to = BlueprintDiff.MainGrid(XDocument.Load(File("To")));
+    ops = BlueprintDiff.Diff(from, to, out diffError);
+    var cells = BlueprintDiff.Blocks(from).Select(b => b.Min).ToHashSet();
+    Check(
+        ops is { Count: > 0 }
+            && ops.All(o =>
+                o.Kind is PatchOpKind.Rebuild or PatchOpKind.Set && cells.Contains(o.At)
+            )
+            && cells.SetEquals(BlueprintDiff.Blocks(to).Select(b => b.Min)),
+        $"staged pair {id}: {ops?.Count} ops in place {diffError}"
+    );
+}
+Check(stagedPairs.Count > 0, "octahedron.cfg stages blueprint pairs");
+
 // The diff's ops checked against a live grid: the cell must hold the old block, turned as it was
 var fake = Row();
 var rebuild = new StationPatch

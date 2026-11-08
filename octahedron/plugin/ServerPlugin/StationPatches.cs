@@ -28,13 +28,18 @@ namespace ServerPlugin;
 /// build success paths the shipyard uses: the station's safe zone refuses the game's own RazeBlock.
 /// Each applied patch id goes into the grid's ledger, a storage key saved with the grid, so a patch
 /// applies once wherever the grid goes. An admin applies one now with !oct patch apply; the patches
-/// in StationPatches of the config are applied by whichever process loads their grid.
+/// in StationPatches of the config are applied by whichever process loads their grid, which then
+/// logs the grid's status and its station's Store, market and shipyard queue answers for the
+/// deploy's report (SE-1235).
 /// </summary>
 internal static class StationPatches
 {
     public static readonly Guid LedgerKey = new("C4D21234-6B0E-4F3A-9E57-2E8B1238A0F1");
     private const int StagedCheckSeconds = 5;
     private const int RetrySeconds = 60;
+
+    // A station's market or queue may not answer right at load: asked again this many times
+    private const int AnswerTries = 6;
 
     private static bool claimed;
     private static DateTime nextCheck;
@@ -43,6 +48,11 @@ internal static class StationPatches
 
     // A staged patch refused on a grid: when to try again, and the reason last logged
     private static readonly Dictionary<(string, long), (DateTime Next, string Why)> refused = new();
+
+    // Grids of staged patches whose status this process logged, and how often their station's
+    // answers were asked for: logged again after a patch applies
+    private static readonly HashSet<long> reported = [];
+    private static readonly Dictionary<long, int> asked = new();
 
     public static string Apply(string id, string gridName, string ops, bool apply)
     {
@@ -72,7 +82,18 @@ internal static class StationPatches
         );
     }
 
-    // Blueprint files are found next to the config file unless their path is absolute
+    // A blueprint file next to the config file, else in the world's Storage/Octahedron, where a world
+    // gets the worlds repo's config/storage (SE-1235); an absolute path as it is
+    private static string BlueprintPath(string name)
+    {
+        var next = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(Plugin.ConfigPath)), name);
+        var world = MySession.Static?.CurrentPath;
+        if (File.Exists(next) || world == null)
+            return next;
+        var stored = Path.Combine(world, "Storage", Plugin.Name, name);
+        return File.Exists(stored) ? stored : next;
+    }
+
     private static StationPatch FromBlueprints(
         string id,
         string grid,
@@ -86,10 +107,9 @@ internal static class StationPatches
             return null;
         try
         {
-            var folder = Path.GetDirectoryName(Path.GetFullPath(Plugin.ConfigPath));
             // Read here, not by the game's path: its serializer only takes files under Mods
-            var oldXml = File.ReadAllBytes(Path.Combine(folder, from));
-            var newXml = File.ReadAllBytes(Path.Combine(folder, to));
+            var oldXml = File.ReadAllBytes(BlueprintPath(from));
+            var newXml = File.ReadAllBytes(BlueprintPath(to));
             var old = XDocument.Load(new MemoryStream(oldXml));
             var now = XDocument.Load(new MemoryStream(newXml));
             var oldGrid = BlueprintDiff.MainGrid(old);
@@ -140,8 +160,11 @@ internal static class StationPatches
     public static string Status(string gridName)
     {
         var grid = Find(gridName, out var error);
-        if (grid == null)
-            return $"NOGRID {gridName}: {error}";
+        return grid == null ? $"NOGRID {gridName}: {error}" : Status(grid);
+    }
+
+    private static string Status(MyCubeGrid grid)
+    {
         var model = new GridModel(grid);
         var groups = PatchPlan.Groups(model.Blocks(), model.Neighbours);
         var islands = groups.Count > 1 ? " " + PatchPlan.Describe(groups) : "";
@@ -173,6 +196,7 @@ internal static class StationPatches
         foreach (var grid in grids)
         {
             var ledger = Ledger(grid);
+            var applied = false;
             foreach (var patch in staged.Where(p => p.Grid == grid.DisplayName))
             {
                 if (ledger.Contains(patch.Id))
@@ -193,6 +217,7 @@ internal static class StationPatches
                 if (result.StartsWith("APPLIED"))
                 {
                     refused.Remove(key);
+                    applied = true;
                     continue;
                 }
                 if (last.Why != result)
@@ -200,7 +225,57 @@ internal static class StationPatches
                 refused[key] = (now.AddSeconds(RetrySeconds), result);
                 break;
             }
+            if (applied || reported.Add(grid.EntityId))
+            {
+                Plugin.Log.Info($"Station patch {Status(grid)}");
+                asked[grid.EntityId] = 0;
+            }
+            if (asked.TryGetValue(grid.EntityId, out var tries) && tries < AnswerTries)
+            {
+                asked[grid.EntityId] = tries + 1;
+                Answers(grid, tries + 1 == AnswerTries);
+            }
         }
+    }
+
+    /// <summary>
+    /// Logs what the station of a patched grid answers: its Store's offers, its market and its
+    /// shipyard queue, as players get them. One that doesn't answer yet is asked again 5 s later,
+    /// and logged as it is at the last try.
+    /// </summary>
+    private static void Answers(MyCubeGrid grid, bool last)
+    {
+        var id = grid.EntityId;
+        var station = Stations.StationOf(grid) ?? grid.DisplayName.Replace(" Shipyard", "");
+        var oct = MySession.Static.Factions.TryGetFactionByTag(
+            Plugin.Config.MoneyAuthorityFactionTag
+        );
+        var store = oct?.Stations.OfType<MyFactionStation>().FirstOrDefault(s => s.Name == station);
+        Market.Read(
+            station,
+            (market, marketError) =>
+                Builds.Read(
+                    new BuildRequest { Verb = BuildVerb.Queue, Station = station },
+                    (queue, queueError) =>
+                    {
+                        if ((market == null || queue == null) && !last)
+                            return;
+                        asked[id] = AnswerTries;
+                        var rows =
+                            market == null ? $"none ({marketError})"
+                            : market.Length == 0 ? "closed"
+                            : $"{StoreRow.DecodeAll(market).Count()} items";
+                        var queued =
+                            queue == null
+                                ? $"none ({queueError})"
+                                : $"{queue.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length} orders and ships";
+                        Plugin.Log.Info(
+                            $"Station patch ANSWERS {grid.DisplayName}: store {(store == null ? "none" : $"{store.StoreItems.Count} offers")}, "
+                                + $"market {rows}, queue {queued}"
+                        );
+                    }
+                )
+        );
     }
 
     private static void Parse(OctahedronConfig config)
