@@ -1563,8 +1563,13 @@ of them 5 per damage event (SE-1294). With `MesReputationFix` on (the default):
 - A reputation change that MES would apply to every member of the attacker's faction
   stays with the attacker when that faction is OCT. Members of other factions are
   still charged together, as MES does.
+- With `MesReputationOctExempt` on (the default), damage an OCT member does to an MES
+  ship changes nobody's reputation, whatever the damage type: MES spawns the ships OCT
+  players are meant to hunt. Players outside OCT keep MES's rules with the two
+  changes above.
 
-How: Harmony prefixes on MES's `TriggerSystem.ProcessDamageTriggerWatchers` and
+How: Harmony prefixes on MES's `TriggerSystem.ProcessDamageTriggerWatchers`,
+`FactionHelper.ChangeDamageOwnerReputation` and
 `FactionHelper.ChangePlayerReputationWithFactions`. If MES no longer has the members
 they use, the plugin logs a Critical line and MES runs unpatched. Turning the option
 off at runtime leaves triggers that were already fixed as they are until the next start.
@@ -1984,10 +1989,11 @@ runs a standalone server with MES, a few encounter mods and a probe plugin that 
 MES spawn requests, and `ds/check.py gate|guard` judges it; `cluster/mes_cluster.py`
 runs the same with the cluster's NPC census on a local test cluster;
 `check_placements.py LOG...` checks the gate's decisions in any server logs.
-`ds/plan-reputation.txt` with `ds/reputation.cfg` checks the MES reputation fix
-(`ds/check_reputation.py fix`): a player rams a THIE Atlas and two players hit it
-with bullets; with `ds/reputation-off.cfg`, `check_reputation.py off` shows the old
-behavior the test catches.
+`ds/plan-reputation.txt` checks the MES reputation rules: an OCT player and a player
+of another faction each ram a THIE Atlas and hit it with bullets. `ds/check_reputation.py`
+judges it: `fix` with `ds/reputation.cfg` (the defaults), `attacker` with
+`ds/reputation-attacker.cfg` (`MesReputationOctExempt` off), and `off` with
+`ds/reputation-off.cfg`, the old behavior the test catches.
 `tests/test_encounters.py` checks the encounters with a client that has no mods:
 the timer's first space cargo ship, each spawn type spawned by command in space, on
 EarthLike, high above it and on the Moon, the client seeing the spawned grids, and

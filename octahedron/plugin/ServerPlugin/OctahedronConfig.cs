@@ -1326,6 +1326,16 @@ public class OctahedronConfig : PluginConfig
     } = 1000;
 
     [BoolOption(
+        "Damage an OCT member does to an MES ship changes nobody's reputation: MES spawns the ships OCT players hunt.",
+        Parent = "mes"
+    )]
+    public bool MesReputationOctExempt
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [BoolOption(
         "The station markets: the Store blocks of OCT's (MoneyAuthorityFactionTag) stations show its real stock and prices, "
             + "and the game generates no store items for them. Kept on the World Authority of a cluster.",
         Parent = "market"
