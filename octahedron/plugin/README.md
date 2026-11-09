@@ -1352,8 +1352,8 @@ passenger leaving. The passenger seats and the O2/H2 generator of a bot's cab
 bottle there; the shipyard builds a ship with its owner's faction share.
 
 `!oct taxi call` calls a cab to where the caller is, out in space only (cabs don't fly
-into gravity yet): the nearest one with a driver, nobody else in it and standing at a
-station. The driver hears `Call from NAME at X Y Z` and comes, through the lanes as far
+into gravity yet): the nearest one with a driver, nobody else in it and no other call,
+waiting at a station or on its way home empty. The driver hears `Call from NAME at X Y Z` and comes, through the lanes as far
 as they lead and straight on from there. When the caller sits down in that cab, they pay
 `TaxiCallFare` (10,000) SC to the driver, or all they have when that is less, for the
 ride to the nearest station, and the driver hears the usual `Fare paid by`. A caller who

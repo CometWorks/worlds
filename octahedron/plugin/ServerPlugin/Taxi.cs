@@ -157,8 +157,6 @@ internal static class Taxi
                 || !Plugin.Simulated(cab)
                 || calls.Values.Any(c => c.Cab == id)
                 || PassengerSeats(cab).Any(s => s.Pilot != null)
-                || (cab.Physics?.LinearVelocity.Length() ?? 0) > 1
-                || StationAt(cab.PositionComp.GetPosition()) == null
             )
                 continue;
             var driver = Driver(cab);
@@ -177,7 +175,10 @@ internal static class Taxi
             At = at,
             Until = DateTime.UtcNow + TimeSpan.FromSeconds(Config.TaxiCallTimeout),
         };
-        var from = StationAt(best.PositionComp.GetPosition());
+        // a cab waiting at a station, or an empty one on its way home
+        var from =
+            StationAt(best.PositionComp.GetPosition())
+            ?? $"near {NearestStation(best.PositionComp.GetPosition())}";
         Plugin.Log.Info(
             $"Taxi: {Name(caller)} ({caller}) called '{best.DisplayName}' of {Name(bestDriver)} from {from}, "
                 + $"{nearest / 1000:F1} km"
