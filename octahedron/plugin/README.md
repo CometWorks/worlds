@@ -1368,8 +1368,11 @@ so on a cluster a call reaches only the cabs of the caller's node.
 
 A paid ride that doesn't get there is refunded in full, from the driver to the one who
 paid: when the passenger dies on the way, the driver leaves the controls or dies, or the
-cab is gone. A passenger who gets out early and alive gets no refund. The paid rides
-live in the process like the calls.
+cab is gone. A passenger who gets out early and alive gets no refund. A driver who can't
+reach a caller says `!oct taxi giveup`: the call ends at once, without a fee. On a
+cluster a cab's paid rides go with it to the node it flies into (the grid handover), a
+call stays open on the caller's node while its cab is on another one, and a give-up and
+the messages to a driver reach every node.
 
 ### Contracts
 
