@@ -240,6 +240,11 @@ def main() -> int:
     check(server()[SEATED][3], f"far: the character still sits in {SEATED}")
     far_awake = awake()
     log(f"far: awake {far_awake}")
+    # The game log reaches the file seconds late
+    try:
+        rig.wait_until(lambda: len(stops_logged()) >= 4, 60, "the stops in the log")
+    except TimeoutError as error:
+        log(str(error))
     logged = stops_logged()
     log("\n".join(logged))
     named = {n for n in GRIDS if any(f"{n} (" in l for l in logged)}

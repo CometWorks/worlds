@@ -104,7 +104,8 @@ internal static class DriftStop
             return;
         // One step a scan, as if each second
         var step = (float)config.DriftStopDeceleration * ScanFrames / 60;
-        if (speed <= step)
+        // The last step ends at zero: a remainder under Still would never count as drifting again
+        if (speed <= step + Still)
         {
             Stop(group, "slowed to a stop, a player within sync distance");
             return;

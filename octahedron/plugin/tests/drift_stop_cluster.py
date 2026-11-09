@@ -132,11 +132,13 @@ def run(bench) -> None:
             "cleanup.unownedMinutes": "0",
         }
     )
-    wait_until(
-        lambda: all(s != "missing" for s in state().values()),
-        300,
-        "the grids on node-1",
-    )
+
+    def placed() -> bool:
+        now = state()
+        print(f"placed: {json.dumps(now)}", flush=True)
+        return all(s != "missing" for s in now.values())
+
+    wait_until(placed, 300, "the grids on node-1", interval=10)
 
     # 1. Off
     samples = []
