@@ -184,10 +184,13 @@ internal static class Taxi
                 + $"{nearest / 1000:F1} km"
         );
         Tell(bestDriver, $"Call from {Name(caller)} at {at.X:F0} {at.Y:F0} {at.Z:F0}");
+        var price = StationAt(at) is { } near
+            ? $"you are at {near}, so it is a regular fare: pick where to go then, for {Sc(Config.TaxiFare)}"
+            : $"the ride to the nearest station, {NearestStation(at)}, costs {Sc(Config.TaxiCallFare)} then, "
+                + "or all you have when that is less";
         return $"{Name(bestDriver)} is on the way from {from}, {nearest / 1000:F1} km. Stay here and sit down in "
-            + $"the cab when it stops by you: the ride to the nearest station, {NearestStation(at)}, costs "
-            + $"{Sc(Config.TaxiCallFare)} then, or all you have when that is less. If you die before, the "
-            + $"call is cancelled and you pay {Sc(Config.TaxiCancelFee)}.";
+            + $"the cab when it stops by you: {price}. If you die before, the call is cancelled and you pay "
+            + $"{Sc(Config.TaxiCancelFee)}.";
     }
 
     private static void UpdateCalls(DateTime now)
@@ -336,8 +339,13 @@ internal static class Taxi
     {
         if (driver != 0 && calls.TryGetValue(passenger, out var call) && call.Cab == cab.EntityId)
         {
-            PickUp(cab, seat, passenger, driver);
-            return;
+            if (StationAt(call.At) == null)
+            {
+                PickUp(cab, seat, passenger, driver);
+                return;
+            }
+            // called from near a station: a regular fare from there, the passenger picks where to
+            calls.Remove(passenger);
         }
         if (driver == 0)
         {

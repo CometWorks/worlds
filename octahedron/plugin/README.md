@@ -1356,7 +1356,9 @@ into gravity yet): the nearest one with a driver, nobody else in it and no other
 waiting at a station or on its way home empty. The driver hears `Call from NAME at X Y Z` and comes, through the lanes as far
 as they lead and straight on from there. When the caller sits down in that cab, they pay
 `TaxiCallFare` (10,000) SC to the driver, or all they have when that is less, for the
-ride to the nearest station, and the driver hears the usual `Fare paid by`. A caller who
+ride to the nearest station, and the driver hears the usual `Fare paid by`. A call from
+within 3 km of a station is a regular fare instead: the caller is asked where to go and
+pays `TaxiFare`, as if they had sat down in the cab at that station. A caller who
 dies before pays `TaxiCancelFee` (100) SC and the call ends: the driver hears
 `Call cancelled: NAME`. A call also ends, free, after `TaxiCallTimeout` (1800) seconds or
 when the cab or its driver is gone. Open calls live in the process, so on a cluster a
