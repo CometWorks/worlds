@@ -6,14 +6,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PluginSdk.Clustering;
+using Sandbox.Engine.Multiplayer;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.GameSystems;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
+using Sandbox.Game.Gui;
 using Sandbox.Game.World;
 using VRage.Game;
+using VRage.GameServices;
 using VRageMath;
 
 namespace ServerPlugin;
@@ -116,6 +119,11 @@ internal static class Taxi
                 }
             );
             handover = Plugin.Cluster.RegisterGridHandover(new CabHandover());
+        }
+        if (!chatHooked && MyMultiplayer.Static != null)
+        {
+            MyMultiplayer.Static.ChatMessageReceived += OnChat;
+            chatHooked = true;
         }
         while (gaveUp.TryDequeue(out var quitter))
             EndCallsOf(quitter);
@@ -260,8 +268,36 @@ internal static class Taxi
         }
     }
 
+    private static bool chatHooked;
+
+    // A passenger's private message to their cab's driver names where to go: "moon" pays as !oct taxi Moon Station does
+    private static void OnChat(
+        ulong steamId,
+        string text,
+        ChatChannel channel,
+        long target,
+        ChatMessageCustomData? data
+    )
+    {
+        if (
+            channel != ChatChannel.Private
+            || string.IsNullOrWhiteSpace(text)
+            || text.StartsWith("!")
+            || !Config.TaxiEnabled
+        )
+            return;
+        var passenger = MySession.Static.Players.TryGetIdentityId(steamId);
+        var (cab, seat) = SeatOf(passenger);
+        if (seat == null || Driver(cab) != target)
+            return;
+        Tell(passenger, Pay(passenger, text.Trim()));
+    }
+
     public static void Dispose()
     {
+        if (chatHooked && MyMultiplayer.Static != null)
+            MyMultiplayer.Static.ChatMessageReceived -= OnChat;
+        chatHooked = false;
         giveUpHandler?.Dispose();
         handover?.Dispose();
         giveUpHandler = handover = null;
@@ -610,7 +646,7 @@ internal static class Taxi
     }
 
     private static string Question(List<string> destinations) =>
-        $"Where to? {string.Join(", ", destinations)}. Type !oct taxi <station> to go. The fare, "
+        $"Where to? {string.Join(", ", destinations)}. Tell the driver privately, or type !oct taxi <station>. The fare, "
         + $"{Sc(Config.TaxiFare)}, goes to the driver then and is not refunded if you get out early.";
 
     // The cabs among the grids this node has, by name

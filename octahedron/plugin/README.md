@@ -1336,7 +1336,7 @@ name starts with `TaxiGridName` (Taxi) with someone in a seat that controls it: 
 driver, a sebot taxi driver (cluster-regression `sebot/tools/trader/taxi.py`) or a
 player. Whoever sits down in one of the cab's other seats is told privately where it
 goes: every station but the one it is at, and the fare. `!oct taxi <station>` (a name
-or its start) then takes `TaxiFare` (1000) SC from the passenger through the bank, as
+or its start, any case), or the same name in a private message to the driver, takes `TaxiFare` (1000) SC from the passenger through the bank, as
 the Hangar fee does, and pays it to the driver, who hears where to go. The fare is not
 refunded when the passenger gets out before the cab arrives. The driver also hears
 when a passenger gets in and out, by name, from `Taxi`:
