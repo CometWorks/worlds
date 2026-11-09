@@ -3,6 +3,8 @@
     python3 tests/mes/ds/check.py MODE [ROOT]     (from plugin/)
 
 MODE guard: the plugin found MES, logged its hash and refused to patch (Critical), MES spawned anyway.
+MODE gate-new-version: gate, and the plugin warned that this MES version isn't listed but patched it
+            for its accepted hash (run with new-version.cfg).
 MODE gate:  the plugin patched MES; every placed spawn start is in a cell core (recomputed here,
             independently of the plugin's C#); every NPC grid lies in a core or within EDGE m of one;
             the probe's view of the published InGap slot agrees with this script; density refusals
@@ -117,7 +119,12 @@ def main() -> int:
         check(
             any(r[4] == "True" for r in requests), "MES still spawned (runs unpatched)"
         )
-    elif mode == "gate":
+    elif mode in ("gate", "gate-new-version"):
+        if mode == "gate-new-version":
+            check(
+                "is not in MesAcceptedVersions" in log,
+                "Warning: unlisted MES version, accepted hash",
+            )
         check("MES spawn placements gated" in log, "patch installed")
         check("UNPATCHED" not in log and "UNGATED" not in log, "no Critical fallback")
         placed = [

@@ -1546,11 +1546,15 @@ chain into huge partitions that can't be split, balanced or taken offline separa
   `MesPlacementAttempts` (16) more, with all of its own obstruction checks, and the
   first that fits is used; if none does, MES skips the spawn. Static encounters are
   left alone, and so are the spawning types in `MesExemptSpawnTypes` (creatures).
-- Guard. Before patching, the plugin checks the MES version (`MesAcceptedVersions`)
-  and a hash of the instructions of the MES code it relies on
-  (`MesAcceptedMethodHashes`). Every start logs both. On a mismatch it logs a
-  Critical line and MES runs unpatched. After reviewing an MES update, add the new
-  version and hash to the config.
+- Guard. Before patching, the plugin hashes what the gate relies on: the instructions
+  and signatures of `GetSpawnPlacement` and `CalculateSpawn`, the `PathDetails` fields
+  and the `SpawningType` names. The hash must be in `MesAcceptedMethodHashes`;
+  otherwise it logs a Critical line and MES runs unpatched. The MES version is checked
+  against `MesAcceptedVersions` only for the log: a new version with an accepted hash
+  is patched, with a Warning. Every start logs both. When the hash changes, review
+  the MES change, then add the new hash (and version) to the defaults and to
+  `config/octahedron.cfg`: a keep-world deploy changes only the options that file
+  names.
 - The cluster's NPC sweep reads the gap bands from `CometWorks.ModMes.InGap.v1`, which
   the plugin publishes, and removes unvisited NPC grids there sooner.
 
@@ -1998,7 +2002,9 @@ outside the safe zones refused, the same station free, another station 100 SC fo
 `CellPatternTests` checks the cell pattern against a brute-force definition
 (`dotnet run -c Release --project tests/mes/CellPatternTests`); `ds/run.py PLAN [cfg]`
 runs a standalone server with MES, a few encounter mods and a probe plugin that fires
-MES spawn requests, and `ds/check.py gate|guard` judges it; `cluster/mes_cluster.py`
+MES spawn requests, and `ds/check.py gate|guard` judges it (with `ds/new-version.cfg`,
+`check.py gate-new-version`: an unlisted MES version with an accepted hash is patched);
+`cluster/mes_cluster.py`
 runs the same with the cluster's NPC census on a local test cluster;
 `check_placements.py LOG...` checks the gate's decisions in any server logs.
 `ds/plan-reputation.txt` checks the MES reputation rules: an OCT player and a player

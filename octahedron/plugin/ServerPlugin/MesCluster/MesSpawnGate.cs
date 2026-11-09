@@ -24,9 +24,11 @@ namespace ServerPlugin;
 /// marks the placement invalid and MES skips that spawn.
 ///
 /// MES is a Workshop mod compiled at session load, so nothing here references it: the types are looked up
-/// by name in the compiled mod assemblies. Before patching, the MES version and a hash of the
-/// instructions of the methods the patch relies on must match the accepted values in the config. On a
-/// mismatch, or if anything fails later, the plugin logs a Critical line and MES runs unpatched.
+/// by name in the compiled mod assemblies. Before patching, a hash of what the patch relies on (the
+/// instructions and signatures of the two methods, the PathDetails fields and the SpawningType names) must
+/// be one of the accepted hashes in the config. A new MES version with the same hash is patched, with a
+/// Warning. On a hash mismatch, or if anything fails later, the plugin logs a Critical line and MES runs
+/// unpatched.
 /// </summary>
 internal static class MesSpawnGate
 {
@@ -127,21 +129,28 @@ internal static class MesSpawnGate
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
         );
 
-        string hash = InstructionHash(getSpawnPlacement, calculateSpawn, details);
+        string hash = InstructionHash(
+            getSpawnPlacement,
+            calculateSpawn,
+            details,
+            getSpawnPlacement.GetParameters()[0].ParameterType
+        );
         Log.Info($"MES {version} found, instruction hash {hash}");
 
-        if (
-            !Split(config.MesAcceptedVersions).Contains(version ?? "")
-            || !Split(config.MesAcceptedMethodHashes).Contains(hash)
-        )
+        if (!Split(config.MesAcceptedMethodHashes).Contains(hash))
         {
             Log.Critical(
                 $"MES {version} with instruction hash {hash} was not checked against this plugin "
-                    + $"(accepted versions: {config.MesAcceptedVersions}; hashes: {config.MesAcceptedMethodHashes}). "
-                    + "MES runs UNPATCHED: NPC spawns are not gated. Review the MES change, then add the version and hash to the config"
+                    + $"(accepted hashes: {config.MesAcceptedMethodHashes}). "
+                    + "MES runs UNPATCHED: NPC spawns are not gated. Review the MES change, then add the hash to the config"
             );
             return;
         }
+        if (!Split(config.MesAcceptedVersions).Contains(version ?? ""))
+            Log.Warning(
+                $"MES {version} is not in MesAcceptedVersions ({config.MesAcceptedVersions}), but the code the gate "
+                    + "relies on is unchanged (accepted instruction hash): patching it"
+            );
 
         if (!Configure(config))
             return;
@@ -369,7 +378,12 @@ internal static class MesSpawnGate
     /// names, plus the PathDetails field list: stable across unrelated MES changes and compilations, but
     /// any change to the code this patch relies on gives a new hash.
     /// </summary>
-    private static string InstructionHash(MethodInfo patched, MethodInfo caller, Type details)
+    private static string InstructionHash(
+        MethodInfo patched,
+        MethodInfo caller,
+        Type details,
+        Type spawningType
+    )
     {
         var text = new StringBuilder();
         foreach (var method in new[] { patched, caller })
@@ -383,6 +397,13 @@ internal static class MesSpawnGate
         }
         foreach (var field in details.GetFields().OrderBy(f => f.Name, StringComparer.Ordinal))
             text.Append(field.FieldType.Name).Append(' ').AppendLine(field.Name);
+        // The gate compares spawning types by name (MesExemptSpawnTypes, CargoShip)
+        if (spawningType.IsEnum)
+            foreach (var name in Enum.GetNames(spawningType))
+                text.Append(name)
+                    .Append('=')
+                    .Append(Convert.ToInt64(Enum.Parse(spawningType, name)))
+                    .AppendLine();
 
         using var sha = SHA256.Create();
         var digest = sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()));
