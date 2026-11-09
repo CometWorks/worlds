@@ -628,6 +628,24 @@ the ship back on; the player can, with Y.
 
 On a cluster each node checks the ships it simulates.
 
+### Drift stop
+
+Havok puts a body to sleep only at rest, so a wreck or debris with no power keeps drifting, awake, until
+something stops it. It costs game thread time, and on a cluster its partition can't go offline. With
+`DriftStopEnabled` on (off by default), the server stops such a ship and its subgrids when they have no power,
+nobody sits in them, no gravity, natural or artificial, acts on them, and nothing joins them to a station:
+
+- With no player within the world's sync distance, a group up to `DriftStopMaxSpeed` (20 m/s) stops at once,
+  one group a frame. It falls asleep, and its partition can go offline.
+- With a player within sync distance, only a group up to `DriftStopMaxSpeedNearPlayer` (1 m/s) is slowed, and
+  only after it drifted for `DriftStopSeconds` (60). It slows down by `DriftStopDeceleration` (0.1 m/s²), one
+  group a frame in turn, until it stops.
+- A group a player is closer to than `DriftStopPlayerMeters` (100 m) is never touched: they may be working
+  on it or pushing it.
+
+Each stop is logged with the grid's name, id, block count and speed. On a cluster each node does this for the
+grids it simulates, with its own online players.
+
 ### PCU per ship or station
 ### PCU per ship or station
 

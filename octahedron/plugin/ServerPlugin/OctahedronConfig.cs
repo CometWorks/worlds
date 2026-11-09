@@ -14,6 +14,7 @@ namespace ServerPlugin;
 [Section("weapons", caption: "Weapons")]
 [Section("drives", caption: "Gravity Drives")]
 [Section("clang", caption: "Clang Drives")]
+[Section("drift", caption: "Drift Stop")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
@@ -590,6 +591,75 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 20;
+
+    [BoolOption(
+        "Stop ships and wrecks drifting in space with no power and nobody seated, so they fall asleep and their partitions can go offline. "
+            + "Grids in gravity, faster ones, those joined to a station and those a player is right next to are left alone. "
+            + "With no player within sync distance they stop at once, one a frame; with one there they slow down to a stop.",
+        Parent = "drift"
+    )]
+    public bool DriftStopEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [DoubleOption(
+        0,
+        description: "With no player within sync distance, grids faster than this drift on (m/s).",
+        Parent = "drift"
+    )]
+    public double DriftStopMaxSpeed
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 20;
+
+    [DoubleOption(
+        0,
+        description: "With a player within sync distance, grids faster than this drift on (m/s).",
+        Parent = "drift"
+    )]
+    public double DriftStopMaxSpeedNearPlayer
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1;
+
+    [DoubleOption(
+        0.001,
+        description: "With a player within sync distance, how fast a grid slows down (m/s²).",
+        Parent = "drift"
+    )]
+    public double DriftStopDeceleration
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 0.1;
+
+    [IntOption(
+        0,
+        3600,
+        "With a player within sync distance, seconds a grid drifts before it starts to slow down.",
+        Parent = "drift"
+    )]
+    public int DriftStopSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60;
+
+    [IntOption(
+        0,
+        100000,
+        "Grids a player, a character or anything one controls, is closer to than this are never slowed down (m).",
+        Parent = "drift"
+    )]
+    public int DriftStopPlayerMeters
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
 
     [IntOption(
         0,
