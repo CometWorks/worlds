@@ -101,6 +101,11 @@ internal sealed class RefillContainers
             var ids = ParseItems(item.Item);
             if (ids.Count == 0)
                 continue;
+            if (DataPads.IsDataPad(ids[0]))
+            {
+                DataPads.TopUp(inventory, item.MinimumAmount);
+                continue;
+            }
             MyFixedPoint missing = item.MinimumAmount;
             foreach (var id in ids)
                 missing -= inventory.GetItemAmount(id);

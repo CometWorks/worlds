@@ -434,6 +434,13 @@ two blocks.
   out the bottles that aren't full, so a player can swap a used bottle for a
   full one there. "Station Loot" is the blueprint's tools, bottles and ammo
   container.
+- Each Free Tools box also keeps one lore data pad, picked at random from
+  `DataPads` in `config/octahedron.cfg` and replaced 10 minutes after a player
+  takes it (SE-1308). Each pad holds one scrap: where one of the rare ores is
+  found or isn't (gold and silver only on EarthLike, uranium only on the Moon,
+  platinum only in the asteroid ring), the GPS of one of the ring's 4 ice
+  asteroids, or that there are four of them. The plugin takes the GPS from the
+  loaded world's `Octahedron-Ice-N` voxel maps.
 - Binoculars work in a safe zone that forbids shooting, though the game counts them as a
   rifle. Clients have no plugin, so the plugin's `BinocularsInZones` tells them the zone
   doesn't hold a character holding binoculars. The server's own check doesn't change.

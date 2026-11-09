@@ -333,6 +333,19 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = new();
 
+    [StructOption(
+        "Lore data pads a refill rule's Datapad/Datapad item puts into its blocks, one at random each, "
+            + "none twice in a block, and only these count toward its minimum (SE-1308). "
+            + "{GPS:StorageName:Label} in a text becomes a GPS line of that voxel map's center; "
+            + "a pad whose voxel map isn't loaded isn't given out. Empty by default.",
+        Parent = "refill"
+    )]
+    public List<DataPadEntry> DataPads
+    {
+        get;
+        set => SetField(ref field, value);
+    } = new();
+
     // On by default: a Quasar cluster starts from these defaults until octahedron.cfg is staged over them
     [BoolOption(
         "Keep the world a sphere: brake grids and characters flying out of it, shorten jumps at the braking radius, move back what is beyond the radius. Needs no WorldSizeKm, which should stay 0.",
@@ -1962,6 +1975,20 @@ public struct RefillItem
 
     [StructMember("Amount each container holds at least after a refill.")]
     public int MinimumAmount { get; set; }
+}
+
+public struct DataPadEntry
+{
+    [
+        StructMember("Title the pad shows in the inventory, unique: it tells the pads apart."),
+        StructCaption
+    ]
+    public string Title { get; set; }
+
+    [StructMember(
+        "Text of the pad. {GPS:StorageName:Label} becomes a GPS line of that voxel map's center."
+    )]
+    public string Text { get; set; }
 }
 
 public struct StationPatchEntry
