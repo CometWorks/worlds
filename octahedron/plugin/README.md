@@ -1340,7 +1340,8 @@ name starts with `TaxiGridName` (Taxi) with someone in a seat that controls it: 
 driver, a sebot taxi driver (cluster-regression `sebot/tools/trader/taxi.py`) or a
 player. Whoever sits down in one of the cab's other seats is told privately where it
 goes: every station but the one it is at, and the fare. `!oct taxi <station>` (a name
-or its start) then takes `TaxiFare` (1000) SC from the passenger through the bank, as
+or its start, any case), or the station whispered to the driver (`/w "[B] Taxi Moon Station"`,
+then `alpha`), takes `TaxiFare` (1000) SC from the passenger through the bank, as
 the Hangar fee does, and pays it to the driver, who hears where to go. The fare is not
 refunded when the passenger gets out before the cab arrives. The driver also hears
 when a passenger gets in and out, by name, from `Taxi`:
@@ -1355,16 +1356,36 @@ passenger leaving. The passenger seats and the O2/H2 generator of a bot's cab
 (`ShipyardBotSteamIds`) are opened to everyone, so a passenger can take or fill a
 bottle there; the shipyard builds a ship with its owner's faction share.
 
+Whispered to a driver, `call` calls that driver's cab to where the sender is, as
+`!oct taxi call` does with the nearest free cab. A whispered station name counts only from
+someone sitting in that driver's cab. The driver's words don't care about case,
+punctuation or the word "station", and forgive a typo in a short word and two in a longer
+one (`TaxiWords.cs`, tested offline by `tests/taxi-words`: `dotnet test`); two equally
+close answers, or anything else, get a reply saying what the driver understands.
+Whispers to other players and global chat are left alone.
+
 `!oct taxi call` calls a cab to where the caller is, out in space only (cabs don't fly
-into gravity yet): the nearest one with a driver, nobody else in it and standing at a
-station. The driver hears `Call from NAME at X Y Z` and comes, through the lanes as far
-as they lead and straight on from there. When the caller sits down in that cab, they pay
-`TaxiCallFare` (10,000) SC to the driver, or all they have when that is less, for the
-ride to the nearest station, and the driver hears the usual `Fare paid by`. A caller who
-dies before pays `TaxiCancelFee` (100) SC and the call ends: the driver hears
-`Call cancelled: NAME`. A call also ends, free, after `TaxiCallTimeout` (1800) seconds or
-when the cab or its driver is gone. Open calls live in the process, so on a cluster a
-call reaches only the cabs of the caller's node.
+into gravity yet): the nearest one with a driver, nobody else in it and no other call,
+waiting at a station or on its way home empty. The driver hears `Call from NAME at X Y
+Z` and comes, through the lanes as far as they lead and straight on from there. When the
+caller sits down in that cab, they pay the call fare to the driver, `TaxiCallFarePerKm`
+(100) SC for each whole km from where they called to the nearest station but at least
+`TaxiCallFare` (1,000), or all they have when that is less, for the ride to the nearest
+station, and the driver hears the usual `Fare paid by`. A call from within 3 km of a
+station is a regular fare instead: the caller is asked where to go and pays `TaxiFare`,
+as if they had sat down in the cab at that station. A caller who dies before pays
+`TaxiCancelFee` (100) SC and the call ends: the driver hears `Call cancelled: NAME`. A
+cab that doesn't come costs nothing: the call ends without a fee after `TaxiCallTimeout`
+(1800) seconds, or when the cab or its driver is gone. Open calls live in the process,
+so on a cluster a call reaches only the cabs of the caller's node.
+
+A paid ride that doesn't get there is refunded in full, from the driver to the one who
+paid: when the passenger dies on the way, the driver leaves the controls or dies, or the
+cab is gone. A passenger who gets out early and alive gets no refund. A driver who can't
+reach a caller says `!oct taxi giveup`: the call ends at once, without a fee. On a
+cluster a cab's paid rides go with it to the node it flies into (the grid handover), a
+call stays open on the caller's node while its cab is on another one, and a give-up and
+the messages to a driver reach every node.
 
 ### Contracts
 

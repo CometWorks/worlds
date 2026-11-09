@@ -169,6 +169,7 @@ public class Plugin : IPlugin
         MesCluster.Dispose();
         ShipyardArm.Dispose();
         Reputation.Dispose();
+        Taxi.Dispose();
         // Harmony patches stay: unpatching all may break other plugins
     }
 }

@@ -1978,15 +1978,27 @@ public class OctahedronConfig : PluginConfig
 
     [LongOption(
         0,
-        description: "SC a player who called a cab with '!oct taxi call' pays when sitting down in it, for the ride "
-            + "to the nearest station; one who has less pays all they have.",
+        description: "The least SC a player who called a cab with '!oct taxi call' from out in space pays when sitting "
+            + "down in it, for the ride to the nearest station: the fare is the larger of this and TaxiCallFarePerKm "
+            + "for each whole km from the caller to that station. One who has less pays all they have.",
         Parent = "taxi"
     )]
     public long TaxiCallFare
     {
         get;
         set => SetField(ref field, value);
-    } = 10000;
+    } = 1000;
+
+    [LongOption(
+        0,
+        description: "SC per whole km from a caller out in space to the nearest station in the call fare (TaxiCallFare).",
+        Parent = "taxi"
+    )]
+    public long TaxiCallFarePerKm
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
 
     [LongOption(
         0,
