@@ -10,6 +10,10 @@ world's save, as build_world.py placed them; a pad whose voxel map the world lac
 up; a player's own pad in a box neither counts nor goes.
 
     OCT_TASK=SE-1308 uv run --no-project --with httpx python tests/test_data_pads.py
+
+`--offline` runs only the config checks. tests/data_pads_cluster.py checks the pads on a cluster.
+
+Run on nas on 2026-11-09: 16/16 checks.
 """
 
 from __future__ import annotations

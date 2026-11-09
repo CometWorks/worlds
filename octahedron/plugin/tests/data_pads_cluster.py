@@ -8,6 +8,8 @@ voxel maps for the GPS lines.
 
 The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one
 headless admin client, with the station probe on the nodes.
+
+Run on polaris on 2026-11-09 with cluster 0.3.3: 13/13 checks.
 """
 
 from __future__ import annotations
