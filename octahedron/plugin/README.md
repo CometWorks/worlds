@@ -1336,7 +1336,8 @@ name starts with `TaxiGridName` (Taxi) with someone in a seat that controls it: 
 driver, a sebot taxi driver (cluster-regression `sebot/tools/trader/taxi.py`) or a
 player. Whoever sits down in one of the cab's other seats is told privately where it
 goes: every station but the one it is at, and the fare. `!oct taxi <station>` (a name
-or its start, any case), or the same name in a private message to the driver, takes `TaxiFare` (1000) SC from the passenger through the bank, as
+or its start, any case), or the station whispered to the driver (`/w "[B] Taxi Moon Station"`,
+then `alpha`), takes `TaxiFare` (1000) SC from the passenger through the bank, as
 the Hangar fee does, and pays it to the driver, who hears where to go. The fare is not
 refunded when the passenger gets out before the cab arrives. The driver also hears
 when a passenger gets in and out, by name, from `Taxi`:
@@ -1350,6 +1351,14 @@ cluster node that takes over the cab's partition neither asks again nor misses t
 passenger leaving. The passenger seats and the O2/H2 generator of a bot's cab
 (`ShipyardBotSteamIds`) are opened to everyone, so a passenger can take or fill a
 bottle there; the shipyard builds a ship with its owner's faction share.
+
+Whispered to a driver, `call` calls that driver's cab to where the sender is, as
+`!oct taxi call` does with the nearest free cab. A whispered station name counts only from
+someone sitting in that driver's cab. The driver's words don't care about case,
+punctuation or the word "station", and forgive a typo in a short word and two in a longer
+one (`TaxiWords.cs`, tested offline by `tests/taxi-words`: `dotnet test`); two equally
+close answers, or anything else, get a reply saying what the driver understands.
+Whispers to other players and global chat are left alone.
 
 `!oct taxi call` calls a cab to where the caller is, out in space only (cabs don't fly
 into gravity yet): the nearest one with a driver, nobody else in it and no other call,

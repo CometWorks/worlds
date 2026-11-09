@@ -181,7 +181,7 @@ internal static class Taxi
     }
 
     // !oct taxi call, the reply goes to the caller
-    public static string CallCab(long caller)
+    public static string CallCab(long caller, long only = 0)
     {
         if (!Config.TaxiEnabled)
             return "There are no cabs.";
@@ -209,12 +209,16 @@ internal static class Taxi
             )
                 continue;
             var driver = Driver(cab);
+            if (only != 0 && driver != only)
+                continue;
             var d = Vector3D.Distance(cab.PositionComp.GetPosition(), at);
             if (driver != 0 && d < nearest)
                 (best, bestDriver, nearest) = (cab, driver, d);
         }
         if (best == null)
-            return "No cab is free right now. Try again later.";
+            return only != 0
+                ? "My cab is busy right now. !oct taxi call sends the nearest free cab."
+                : "No cab is free right now. Try again later.";
 
         calls[caller] = new Call
         {
@@ -270,7 +274,9 @@ internal static class Taxi
 
     private static bool chatHooked;
 
-    // A passenger's private message to their cab's driver names where to go: "moon" pays as !oct taxi Moon Station does
+    // A private message to a cab's driver: "call" calls that cab to the sender, and a station's name ("moon") from
+    // someone sitting in it pays as !oct taxi Moon Station does. Close typos count (TaxiWords); anything else gets
+    // a reply that says what the driver understands. Other private messages and global chat are left alone.
     private static void OnChat(
         ulong steamId,
         string text,
@@ -286,12 +292,40 @@ internal static class Taxi
             || !Config.TaxiEnabled
         )
             return;
-        var passenger = MySession.Static.Players.TryGetIdentityId(steamId);
-        var (cab, seat) = SeatOf(passenger);
-        if (seat == null || Driver(cab) != target)
+        if (!IsDriver(target))
             return;
-        Tell(passenger, Pay(passenger, text.Trim()));
+        var sender = MySession.Static.Players.TryGetIdentityId(steamId);
+        var (cab, seat) = SeatOf(sender);
+        var inMine = seat != null && Driver(cab) == target;
+        var (kind, station, close) = TaxiWords.Match(text, Stations.StationNames());
+        Tell(
+            sender,
+            kind switch
+            {
+                TaxiWords.Kind.Call => CallCab(sender, only: target),
+                TaxiWords.Kind.Station when inMine => Pay(sender, station),
+                TaxiWords.Kind.Station => $"Sit in my cab first, then tell me where to: {station}?",
+                TaxiWords.Kind.Ambiguous =>
+                    $"Did you mean {string.Join(" or ", close)}? {Understood(inMine)}",
+                _ => Understood(inMine),
+            }
+        );
     }
+
+    private static string Understood(bool inMine) =>
+        inMine
+            ? $"Tell me where to: {string.Join(", ", Stations.StationNames().Select(Short))}."
+            : $"Send me \"call\" and I come to you; once you sit in my cab, tell me where to: "
+                + $"{string.Join(", ", Stations.StationNames().Select(Short))}.";
+
+    private static string Short(string station) =>
+        station.EndsWith(" Station", StringComparison.OrdinalIgnoreCase) ? station[..^8] : station;
+
+    private static bool IsDriver(long identity) =>
+        identity != 0
+        && cabs.Any(id =>
+            MyEntities.TryGetEntityById(id, out MyCubeGrid cab) && Driver(cab) == identity
+        );
 
     public static void Dispose()
     {
@@ -503,7 +537,7 @@ internal static class Taxi
         var here = StationAt(cab.PositionComp.GetPosition());
         var destinations = Destinations(here);
         if (string.IsNullOrWhiteSpace(station))
-            return Question(destinations);
+            return Question(destinations, cab);
         var record = Record(seat);
         if (record.Passenger == passenger && record.Station != Unpaid)
             return $"This cab takes you to {record.Station}.";
@@ -516,7 +550,7 @@ internal static class Taxi
         if (!Stations.Find(ref station, out var error))
             return error;
         if (station == here)
-            return $"You are at {here}. {Question(destinations)}";
+            return $"You are at {here}. {Question(destinations, cab)}";
 
         var fare = Config.TaxiFare;
         // Refused when the balance is short; on a cluster the World Authority decides
@@ -606,7 +640,7 @@ internal static class Taxi
         {
             firstIn[cab.EntityId] = passenger;
             Write(seat, passenger, Unpaid);
-            Tell(passenger, Question(Destinations(here)));
+            Tell(passenger, Question(Destinations(here), cab));
         }
         Plugin.Log.Info(
             $"Taxi: {Name(passenger)} ({passenger}) got into '{cab.DisplayName}' at {here ?? "space"}"
@@ -632,7 +666,7 @@ internal static class Taxi
             if (next != 0 && record.Station == Unpaid)
             {
                 firstIn[cab.EntityId] = next;
-                Tell(next, Question(Destinations(StationAt(cab.PositionComp.GetPosition()))));
+                Tell(next, Question(Destinations(StationAt(cab.PositionComp.GetPosition())), cab));
             }
         }
         Plugin.Log.Info(
@@ -645,8 +679,9 @@ internal static class Taxi
         );
     }
 
-    private static string Question(List<string> destinations) =>
-        $"Where to? {string.Join(", ", destinations)}. Tell the driver privately, or type !oct taxi <station>. The fare, "
+    private static string Question(List<string> destinations, MyCubeGrid cab) =>
+        $"Where to? {string.Join(", ", destinations)}. Whisper the driver the station (/w \"{Name(Driver(cab))}\", "
+        + $"then e.g. {Short(destinations.FirstOrDefault() ?? "Moon")}), or type !oct taxi <station>. The fare, "
         + $"{Sc(Config.TaxiFare)}, goes to the driver then and is not refunded if you get out early.";
 
     // The cabs among the grids this node has, by name
