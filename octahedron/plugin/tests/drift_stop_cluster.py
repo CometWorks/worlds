@@ -85,7 +85,6 @@ def run(bench) -> None:
         """name -> the node's entity row (physicsActive, velocity), for the test grids it holds"""
         found = {}
         cursor = 0
-        # Paged: a page holds a few partitions' entities
         while cursor is not None:
             dump = cluster.node(
                 "node-1",
@@ -94,21 +93,10 @@ def run(bench) -> None:
             )
             for partition in dump.get("partitions", []):
                 for entity in partition.get("entities", []):
-                    if not grids.shown:
-                        print(
-                            "diag row",
-                            entity.get("entityId"),
-                            entity.get("displayName"),
-                            entity.get("velocity"),
-                            flush=True,
-                        )
                     if entity.get("displayName") in GRIDS:
                         found[entity["displayName"]] = entity
             cursor = dump.get("nextCursor")
-        grids.shown = True
         return found
-
-    grids.shown = False
 
     def state() -> dict[str, str]:
         """name -> offline, awake or asleep"""
@@ -143,10 +131,11 @@ def run(bench) -> None:
         link_mods(bench.run_root / f"{process}-data" / "Mods")
     cluster.start(list(PROCESSES))
     cluster.wait_ready(nodes=list(PROCESSES))
+    # The world's partitions start offline but for the stations': nobody came by yet. Live, a drifting wreck
+    # is online because somebody did, so the test loads them all, with nothing going offline meanwhile.
     cluster.handover_config(
         {
-            "offline.minOnlineSeconds": "0",
-            "offline.graceSeconds": "0",
+            "offline.enabled": "false",
             # Unowned grids nobody visits would be removed after 5 minutes
             "cleanup.unownedMinutes": "0",
         }
@@ -155,9 +144,23 @@ def run(bench) -> None:
     def placed() -> bool:
         now = state()
         print(f"placed: {json.dumps(now)}", flush=True)
-        return all(s != "missing" for s in now.values())
+        if all(s not in ("missing", "offline") for s in now.values()):
+            return True
+        # A load asked for right after the start can be lost: ask again each poll
+        for row in cluster.get("/registry/partitions/offline").get("Partitions", []):
+            cluster.post(
+                f"/registry/partitions/offline/load?partition={row['Partition']}&reason=test"
+            )
+        return False
 
     wait_until(placed, 300, "the grids on node-1", interval=10)
+    cluster.handover_config(
+        {
+            "offline.enabled": "true",
+            "offline.minOnlineSeconds": "0",
+            "offline.graceSeconds": "0",
+        }
+    )
 
     # 1. Off
     samples = []
