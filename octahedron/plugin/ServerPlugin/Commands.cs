@@ -123,7 +123,7 @@ public sealed class Commands : CommandModule
         "shipyard done",
         "Ends your turn at a shipyard now: what is left in its containers is sold to the station for you",
         "!oct shipyard done: your turn would otherwise end by itself at its deadline, or once the containers are empty. "
-            + "A build must have ended first."
+            + "A running repair slot ends with it; a build must have ended first."
     )]
     [Permission(MyPromoteLevel.None)]
     public string ShipyardDone() => ShipyardOrders.Done(Context.Caller.IdentityId);

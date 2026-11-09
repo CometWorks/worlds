@@ -2,7 +2,8 @@
 without a blueprint books the slot; the shipyard's containers, welders and connectors are the
 player's and shared with nobody, since the players are in OCT (OctFaction), its reactors stay OCT's; a ship docked to a connector
 gives the welders the components to weld a ship in the shipyard from its repair projector; the
-slot ends after the real 5 minutes without building or welding, or at the player's next press,
+slot ends after the real 5 minutes without building or welding, or at the player's next press or
+!oct shipyard done,
 and everything is back as before. Also: a slot waits for a running build, which its owner's press
 cancels, which hands the ship over as when its time runs out; a restart in the middle of a slot; and a build after a slot.
 On a world built by build_world.py. The presses are !oct order: see test_table_rules.py.
@@ -295,6 +296,19 @@ def second_press(a) -> None:
     probe(a, "undock")
 
 
+def done_ends_it(a) -> None:
+    """!oct shipyard done ends a running slot and the turn, as the second press does (SE-1322: the bot pilots)"""
+    check("Repair slot" in press(a), "a slot to end by chat")
+    check(wait_for(lambda: slot_runs(a) is not None, 20), "it runs")
+    reply = " ".join(rig.chat(a, "!oct shipyard done", 4))
+    check(
+        "Your repair slot and your turn end now" in reply,
+        f"the chat command ends it: {reply}",
+    )
+    check(wait_for(lambda: slot_runs(a) is None, 15), "the shipyard runs no slot")
+    check(octs(yard(a)), "the blocks are OCT's again")
+
+
 def waits_for_a_build(a, b) -> None:
     """A slot behind a running build; the build's owner cancels it and the slot starts"""
     load(a, so.BIG)
@@ -402,6 +416,7 @@ def main() -> int:
         link = folder / f"{id_}.sbm"
         link.unlink(missing_ok=True)
         link.symlink_to(pl.WORKSHOP / str(id_))
+    rig.link_mods(folder, rig.STATION_MODS)  # the world keeps them since SE-1239
     try:
         rig.start_server()
         a = rig.start_client()
@@ -420,6 +435,7 @@ def main() -> int:
         settled(a, "table", "then press")
         book_and_idle_out(a, b)
         second_press(a)
+        done_ends_it(a)
         waits_for_a_build(a, b)
         with Second():
             rig.stop_client()

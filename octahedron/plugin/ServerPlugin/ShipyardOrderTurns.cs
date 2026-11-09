@@ -541,7 +541,29 @@ internal static partial class ShipyardOrders
                     if (order != null)
                     {
                         found = true;
-                        if (order.Started)
+                        if (
+                            order.Started
+                            && order.Repair
+                            && repairs.TryGetValue(shipyard.EntityId, out var slot)
+                            && slot.Id == order.Id
+                        )
+                        {
+                            // From the shipyard, where the table's button is out of reach (SE-1322): the slot
+                            // ends as at a press, and the turn with it
+                            Answer("Your repair slot and your turn end now.");
+                            EndRepair(
+                                shipyard,
+                                slot,
+                                "you ended it",
+                                () =>
+                                    EndTurn(
+                                        shipyard,
+                                        order,
+                                        $"You ended your turn at {shipyard.DisplayName}."
+                                    )
+                            );
+                        }
+                        else if (order.Started)
                             Answer($"'{order.Ship}' is being built, your turn can't end now.");
                         else
                         {
