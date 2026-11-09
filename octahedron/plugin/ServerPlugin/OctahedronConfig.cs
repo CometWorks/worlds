@@ -27,6 +27,7 @@ namespace ServerPlugin;
 [Section("leaderboard", caption: "Leaderboard")]
 [Section("faction", caption: "OCT Faction")]
 [Section("patches", caption: "Station Patches")]
+[Section("taxi", caption: "Taxi")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -1943,6 +1944,71 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 0.45;
+
+    [BoolOption(
+        "Cabs take passengers between stations for a fare (SE-1279). A cab is a grid named TaxiGridName* with "
+            + "someone in a seat that controls it: a passenger in one of its other seats is asked where to, and pays "
+            + "the fare to the driver with !oct taxi <station>.",
+        Parent = "taxi"
+    )]
+    public bool TaxiEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [StringOption(description: "Start of a cab's grid name (case-insensitive).", Parent = "taxi")]
+    public string TaxiGridName
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Taxi";
+
+    [LongOption(
+        0,
+        description: "SC a passenger pays the driver when picking the destination. Not refunded when the passenger leaves early.",
+        Parent = "taxi"
+    )]
+    public long TaxiFare
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1000;
+
+    [LongOption(
+        0,
+        description: "SC a player who called a cab with '!oct taxi call' pays when sitting down in it, for the ride "
+            + "to the nearest station; one who has less pays all they have.",
+        Parent = "taxi"
+    )]
+    public long TaxiCallFare
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10000;
+
+    [LongOption(
+        0,
+        description: "SC a caller pays the driver when dying before the called cab picks them up: the call is cancelled.",
+        Parent = "taxi"
+    )]
+    public long TaxiCancelFee
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
+
+    [IntOption(
+        60,
+        86400,
+        "Seconds a call waits for the caller to sit down in the cab before it is dropped, free.",
+        Parent = "taxi"
+    )]
+    public int TaxiCallTimeout
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1800;
 
     [StructOption(
         "Station patches every process applies to the station and shipyard grids it loads, in this order, "

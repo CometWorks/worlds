@@ -96,6 +96,7 @@ public class Plugin : IPlugin
             Contracts.Update();
             OfflineCharacters.Update();
             Reputation.Update();
+            Taxi.Update();
         }
         catch (Exception e)
         {

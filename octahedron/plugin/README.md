@@ -1329,6 +1329,39 @@ inventory. A player who can't pay is told the price and the
 ship stays stored. The plugin hooks Hangar by reflection, so it still runs without
 Hangar, or with an older one, where retrieval is free.
 
+### Taxi
+
+Cabs carry players between the stations for a fare (SE-1279). A cab is a ship whose
+name starts with `TaxiGridName` (Taxi) with someone in a seat that controls it: the
+driver, a sebot taxi driver (cluster-regression `sebot/tools/trader/taxi.py`) or a
+player. Whoever sits down in one of the cab's other seats is told privately where it
+goes: every station but the one it is at, and the fare. `!oct taxi <station>` (a name
+or its start) then takes `TaxiFare` (1000) SC from the passenger through the bank, as
+the Hangar fee does, and pays it to the driver, who hears where to go. The fare is not
+refunded when the passenger gets out before the cab arrives. The driver also hears
+when a passenger gets in and out, by name, from `Taxi`:
+`Passenger in: NAME`, `Fare paid by NAME. Destination: STATION`, `Passenger out: NAME`.
+The first one to sit down picks the destination and pays; whoever else sits down while
+the cab waits rides along to the same station for free (when the first one gets out
+before paying, the next one seated picks).
+
+What a seat's passenger was asked and paid is kept in the seat's custom data, so a
+cluster node that takes over the cab's partition neither asks again nor misses the
+passenger leaving. The passenger seats and the O2/H2 generator of a bot's cab
+(`ShipyardBotSteamIds`) are opened to everyone, so a passenger can take or fill a
+bottle there; the shipyard builds a ship with its owner's faction share.
+
+`!oct taxi call` calls a cab to where the caller is, out in space only (cabs don't fly
+into gravity yet): the nearest one with a driver, nobody else in it and standing at a
+station. The driver hears `Call from NAME at X Y Z` and comes, through the lanes as far
+as they lead and straight on from there. When the caller sits down in that cab, they pay
+`TaxiCallFare` (10,000) SC to the driver, or all they have when that is less, for the
+ride to the nearest station, and the driver hears the usual `Fare paid by`. A caller who
+dies before pays `TaxiCancelFee` (100) SC and the call ends: the driver hears
+`Call cancelled: NAME`. A call also ends, free, after `TaxiCallTimeout` (1800) seconds or
+when the cab or its driver is gone. Open calls live in the process, so on a cluster a
+call reaches only the cabs of the caller's node.
+
 ### Contracts
 
 With `ContractsEnabled` on, OCT (`MoneyAuthorityFactionTag`) posts the stations'
@@ -1788,6 +1821,9 @@ mods and asteroids left out, and this working copy as a dev folder (or a
 `package.sh` bundle as a local plugin), plus a headless client with the Remote plugin that joins it. Ports, ids and folders
 come from a test slot of the workspace (`se/testing/parallel-test-work`). See its
 docstring.
+
+The cabs (SE-1279) are tested from the other side, by sebot taxi drivers and a passenger bot on a bench
+server: cluster-regression `sebot/tools/trader/taxitest.py`.
 
 `tests/test_client.py` checks the rules with them: grids flying out of the
 world (`tests/edge_grids.py`) and the character on its jetpack, the starter
