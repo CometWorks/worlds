@@ -11,9 +11,9 @@
   <FriendlyName>Reputation Probe</FriendlyName>
   <Author>Viktor</Author>
 
-  <Tooltip>Test only: the share box, ownership and deposit requests through chat commands</Tooltip>
-  <Description>Test only. /rep claim, share and deposit send the requests a block's
-        terminal and the faction screen send, from the client.
+  <Tooltip>Test only: the share box, ownership, deposit, Shoot and warhead countdown requests through chat commands</Tooltip>
+  <Description>Test only. /rep claim, share, deposit, shoot and countdown send the requests a
+        block's terminal and the faction screen send, from the client.
     </Description>
 
   <Runtimes>CoreCLR</Runtimes>

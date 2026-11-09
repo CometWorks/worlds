@@ -10,14 +10,23 @@ ownership claim and the faction screen's Deposit:
 - The first ram of another member's hull is forgiven, the second, with another ship, costs, and
   the player hears they are below zero.
 - The server log's changes add up to what !oct rep showed.
+- The player claims a gatling gun and shoots it at another member's hull, then claims a warhead
+  next to another's, starts its countdown and leaves: each costs the player, and nobody else
+  (SE-1293).
 - Below -10,000 the countdown (20 s in the test) warns at its start and at 15, 10 and 5 s left,
   then removes the player from OCT, telling them why.
 - A second server run, without the client, has ToolCore and OmniArc: an OmniArc Destro owned by a
   third member grinds another member's hull with no player at it, which costs the tool's owner.
+- In the same run weapons of three more members, all offline, fire at hulls of another member: a
+  gatling gun and a rocket launcher shooting from the start, and a warhead counting down next to
+  its target (SE-1293). Each costs its owner what the saved world says the hull lost, and nobody
+  else pays.
 
-Two server runs, about 9 minutes, half of it the server and client starting.
+Two server runs, about 10 minutes, half of it the server and client starting.
 
-    uv run --no-project --with httpx python tests/test_reputation.py
+    uv run --no-project --with httpx python tests/test_reputation.py [client|toolcore] [weapons]
+
+client or toolcore: only that run; weapons: of the client run, only the player's weapons.
 
 Prints one line per check and a pass/fail summary; exit code 0 = all passed.
 """
@@ -29,6 +38,7 @@ import os
 import re
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 os.environ.setdefault("OCT_TASK", "SE-1283")
 import rig  # noqa: E402
@@ -60,7 +70,15 @@ HULLS = {
     "Trader": (777001283000004, BOT),
     "Ram": (777001283000006, PLAYER),
     "Ram 2": (777001283000007, PLAYER),
+    "Shot": (777001283000008, PLAYER),
+    "Bombed": (777001283000009, PLAYER),
 }
+# SE-1293: an unowned gatling gun 30 m in front of the Shot hull's TARGET block and an unowned
+# warhead touching the Bombed hull's; the player claims them, then shoots and starts the countdown.
+# The server takes a terminal request only from a character within 15 m of the grid
+CLIENT_GUN = 777001283000040
+CLIENT_WARHEAD = 777001283000041
+CLIENT_COUNTDOWN_MS = 8000
 SHIPS = {"Ram": 777001283000012, "Ram 2": 777001283000013}
 SHIP_BACK = 15
 # The ship's nose: two armor blocks ahead of its cockpit
@@ -81,6 +99,29 @@ TOOL_REPO = bytearray(base64.b64decode("CAAQABgIIAAoDzAAOg8NAAAAACUAAAAAPQAAAABA
 TOOL_REPO[1] = TOOL_REPO[-1] = 1
 TOOL_REPO[5] = 16
 TOOL_REPO[9] = 2
+# SE-1293: weapons of offline members fire at hulls of PLAYER's from the start: name: (owner,
+# Steam ID, target hull id, weapon grid id)
+WEAPONS = {
+    "Gatling": (
+        144115188075990004,
+        76561198000000079,
+        777001283000030,
+        777001283000031,
+    ),
+    "Rocket": (144115188075990005, 76561198000000080, 777001283000032, 777001283000033),
+    "Warhead": (
+        144115188075990006,
+        76561198000000081,
+        777001283000034,
+        777001283000035,
+    ),
+}
+WEAPONS_AT = (RIG_AT[0], RIG_AT[1] - 400, RIG_AT[2])
+WEAPON_BACK = {"Gatling": 30, "Rocket": 40}
+WARHEAD_COUNTDOWN_MS = 30_000
+WEAPON_SECONDS = 180
+# What a block is worth at the market's reference prices (the store's): SE-1283 measured them
+VALUES = {"LargeBlockArmorBlock": 3057, "LargeBlockBatteryBlock": 19708}
 TOOL_COMPONENTS = (
     "<ComponentContainer><Components>"
     "<ComponentData><TypeId>MyModStorageComponent</TypeId>"
@@ -131,6 +172,32 @@ def ship(name: str) -> str:
     return rig.grid(f"{name} Ship", SHIPS[name], blocks, (x + 5, y, z + SHIP_BACK))
 
 
+def client_weapons() -> list[str]:
+    x, y, z = hull_at("Shot")
+    gun = [
+        rig.block("MyObjectBuilder_SmallGatlingGun", "", (0, 0, 0),
+                  "<Enabled>true</Enabled>" + ammo("NATO_25x184mm", 2)),
+        rig.block("MyObjectBuilder_BatteryBlock", "SmallBlockBatteryBlock", (-1, 1, 0),
+                  "<Enabled>true</Enabled><CurrentStoredPower>3</CurrentStoredPower>"),
+    ]  # fmt: skip
+    bx, by, bz = hull_at("Bombed")
+    warhead = [
+        rig.block(
+            "MyObjectBuilder_Warhead",
+            "LargeWarhead",
+            (0, 0, 0),
+            f"<CountdownMs>{CLIENT_COUNTDOWN_MS}</CountdownMs>",
+        )
+    ]
+    return [
+        g.replace("<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>")
+        for g in (
+            rig.grid("Client Gun", CLIENT_GUN, gun, (x + 5, y, z + 30), size="Small"),
+            rig.grid("Client Warhead", CLIENT_WARHEAD, warhead, (bx + 5, by, bz + 2.5)),
+        )
+    ]
+
+
 def owned(owner: int) -> str:
     return (
         f"<Owner>{owner}</Owner><BuiltBy>{owner}</BuiltBy><ShareMode>None</ShareMode>"
@@ -166,6 +233,73 @@ def tool_grids() -> list[str]:
     ]
 
 
+def ammo(magazine: str, count: int) -> str:
+    """A weapon's inventory with count magazines"""
+    return (
+        "<ComponentContainer><Components><ComponentData><TypeId>MyInventoryBase</TypeId>"
+        '<Component xsi:type="MyObjectBuilder_Inventory"><CanPutItems>true</CanPutItems><Items>'
+        f"<MyObjectBuilder_InventoryItem><Amount>{count}</Amount>"
+        f'<PhysicalContent xsi:type="MyObjectBuilder_AmmoMagazine"><SubtypeName>{magazine}'
+        "</SubtypeName></PhysicalContent><ItemId>0</ItemId></MyObjectBuilder_InventoryItem>"
+        "</Items><nextItemId>1</nextItemId><InventoryFlags>CanReceive CanSend</InventoryFlags>"
+        "<RemoveEntityOnEmpty>false</RemoveEntityOnEmpty></Component></ComponentData>"
+        "</Components></ComponentContainer>"
+    )
+
+
+def weapon_hull_at(name: str) -> tuple[float, float, float]:
+    x, y, z = WEAPONS_AT
+    return (x + list(WEAPONS).index(name) * 100, y, z)
+
+
+def weapon_grids() -> list[str]:
+    """Per weapon a static hull of PLAYER's like hull()'s, and the weapon facing its TARGET block
+    (-Z): a small grid gatling gun and a rocket launcher shooting, a warhead touching it
+    """
+    grids = []
+    for name, (owner, _, hull_id, weapon_id) in WEAPONS.items():
+        x, y, z = weapon_hull_at(name)
+        target = [
+            rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", BATTERY, owned(PLAYER)),
+            rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (1, 0, 0)),
+            rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", TARGET),
+        ]  # fmt: skip
+        grids.append(rig.grid(f"{name} Target", hull_id, target, (x, y, z)))
+        battery = (
+            owned(owner)
+            + "<Enabled>true</Enabled><CurrentStoredPower>3</CurrentStoredPower>"
+        )
+        shoot = (
+            owned(owner)
+            + "<Enabled>true</Enabled><IsShootingFromTerminal>true</IsShootingFromTerminal>"
+        )
+        size = "Large"
+        if name == "Gatling":
+            size = "Small"
+            blocks = [
+                rig.block("MyObjectBuilder_SmallGatlingGun", "", (0, 0, 0), shoot + ammo("NATO_25x184mm", 2)),
+                rig.block("MyObjectBuilder_BatteryBlock", "SmallBlockBatteryBlock", (-1, 1, 0), battery),
+            ]  # fmt: skip
+        elif name == "Rocket":
+            blocks = [
+                rig.block("MyObjectBuilder_SmallMissileLauncher", "LargeMissileLauncher", (0, 0, 0),
+                          shoot + ammo("Missile200mm", 2)),
+                rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", (0, 0, 2), battery),
+            ]  # fmt: skip
+        else:
+            blocks = [
+                rig.block("MyObjectBuilder_Warhead", "LargeWarhead", (0, 0, 0),
+                          owned(owner) + f"<CountdownMs>{WARHEAD_COUNTDOWN_MS}</CountdownMs>"
+                          "<IsArmed>true</IsArmed><IsCountingDown>true</IsCountingDown>"),
+            ]  # fmt: skip
+        at = (x + TARGET[0] * 2.5, y, z + WEAPON_BACK.get(name, 2.5))
+        grids.append(rig.grid(f"{name} Weapon", weapon_id, blocks, at, size=size))
+    return [
+        g.replace("<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>")
+        for g in grids
+    ]
+
+
 def player(identity: int, steam_id: int, name: str) -> tuple[str, str]:
     """An offline player: its identity and its player data"""
     return (
@@ -182,9 +316,13 @@ def prepare(toolcore: bool = False) -> None:
     """The hulls and ships, or with toolcore, the ToolCore rig and its mods"""
     rig.prepare_world(
         extra_grids=(
-            tool_grids()
+            [*tool_grids(), *weapon_grids()]
             if toolcore
-            else [*(hull(n) for n in HULLS), *(ship(n) for n in SHIPS)]
+            else [
+                *(hull(n) for n in HULLS),
+                *(ship(n) for n in SHIPS),
+                *client_weapons(),
+            ]
         )
     )
     if toolcore:
@@ -207,6 +345,7 @@ def prepare(toolcore: bool = False) -> None:
         player(BOT, BOT_STEAM_ID, "[B] Test Trader"),
         player(PLAYER, PLAYER_STEAM_ID, "Test Player"),
         player(TOOLER, TOOLER_STEAM_ID, "Tool Owner"),
+        *(player(o, s, f"{n} Owner") for n, (o, s, _, _) in WEAPONS.items()),
     ]
     text = text.replace(
         "</Identities>", "".join(p[0] for p in people) + "</Identities>", 1
@@ -217,12 +356,12 @@ def prepare(toolcore: bool = False) -> None:
         text,
     )
     assert count == 1, "AllPlayersData"
-    # Both are OCT members
+    # All are OCT members
     oct_id = re.search(r"<FactionId>(\d+)</FactionId>\s*<Tag>OCT</Tag>", text)[1]
     members = "".join(
         f"<MyObjectBuilder_FactionMember><PlayerId>{i}</PlayerId><IsLeader>false</IsLeader>"
         "<IsFounder>false</IsFounder></MyObjectBuilder_FactionMember>"
-        for i in (BOT, PLAYER, TOOLER)
+        for i in (BOT, PLAYER, TOOLER, *(w[0] for w in WEAPONS.values()))
     )
     text, count = re.subn(
         r"(<Tag>OCT</Tag>.*?<Members>)",
@@ -238,7 +377,7 @@ def prepare(toolcore: bool = False) -> None:
         lambda m: m[1]
         + "".join(
             f'<item><Key xsi:type="xsd:long">{i}</Key><Value xsi:type="xsd:long">{oct_id}</Value></item>'
-            for i in (BOT, PLAYER, TOOLER)
+            for i in (BOT, PLAYER, TOOLER, *(w[0] for w in WEAPONS.values()))
         ),
         text[start:],
         count=1,
@@ -256,6 +395,8 @@ def config() -> str:
         "ReputationWarnSeconds": WARN,
         "ReputationRamGapSeconds": str(RAM_GAP),
         "ReputationRamGraceSeconds": "3600",
+        # The trader bots: the world's config leaves them out since SE-1282
+        "OctProtectedSteamIds": f"{BOT_STEAM_ID}-{BOT_STEAM_ID}",
     }
     for option, value in options.items():
         text, count = re.subn(
@@ -266,10 +407,6 @@ def config() -> str:
                 "</OctahedronConfig>",
                 f"  <{option}>{value}</{option}>\n</OctahedronConfig>",
             )
-    first, last = re.search(
-        r"<OctProtectedSteamIds>(\d+)-(\d+)</OctProtectedSteamIds>", text
-    ).groups()
-    assert int(first) <= BOT_STEAM_ID <= int(last)
     return text
 
 
@@ -505,9 +642,91 @@ def _seated(remote, ship_id: int) -> bool:
         return False
 
 
+def damage_by_identity() -> dict[str, float]:
+    found: dict[str, float] = {}
+    for m in re.finditer(
+        r"Reputation of [^(]*\((\d+)\): Damage (-?[\d.]+),", rig.server_game_log()
+    ):
+        found[m[1]] = found.get(m[1], 0) + float(m[2])
+    return found
+
+
+def charged(
+    remote, rep: float, before: dict[str, float], timeout: float
+) -> tuple[float, dict]:
+    """The reputation once it fell from rep and then held for 10 s, and the log's new damage by
+    identity"""
+    deadline = time.monotonic() + timeout
+    now = settled(remote, rep, timeout)
+    while time.monotonic() < deadline:
+        time.sleep(10)
+        if (later := reputation(remote)) == now:
+            break
+        now = later
+    # The log is written seconds late
+    log_deadline = time.monotonic() + 60
+    while True:
+        after = damage_by_identity()
+        paid = {
+            i: a - before.get(i, 0) for i, a in after.items() if a != before.get(i, 0)
+        }
+        if abs(sum(paid.values()) - (now - rep)) < 2 or time.monotonic() > log_deadline:
+            return now, paid
+        time.sleep(2)
+
+
+def beside(remote, at) -> None:
+    """Teleports 5 m above a grid, in reach of its terminal, out of the gun's line of fire"""
+    remote.character_teleport(at[0], at[1] + 5, at[2])
+    time.sleep(2)
+
+
+def check_client_weapons(remote) -> None:
+    """The player shoots a gatling gun they claimed at another member's hull, then starts the
+    countdown of a warhead they claimed next to another's and leaves. Each costs the player, and
+    only them"""
+    # Room below zero: the countdown must not start
+    log(" ".join(rig.chat(remote, "!oct rep add 100000", 10)))
+    rep = settled(remote, reputation(remote))
+    shot = HULLS["Shot"][0]
+    gun_at = (hull_at("Shot")[0] + 5, 0, hull_at("Shot")[2] + 30)
+    near(remote, shot, hull_at("Shot"))
+    before_hp = integrity(remote, shot)
+    claim(remote, CLIENT_GUN, gun_at)
+    beside(remote, gun_at)
+    before = damage_by_identity()
+    probe(remote, f"/rep shoot {CLIENT_GUN} on")
+    try:
+        now, paid = charged(remote, rep, before, 40)
+    finally:
+        probe(remote, f"/rep shoot {CLIENT_GUN} off")
+    after_hp = integrity(remote, shot)
+    check(
+        now < rep and len(paid) == 1 and abs(sum(paid.values()) - (now - rep)) < 2,
+        f"shooting the claimed gatling gun at another member's hull ({before_hp:.0f} -> "
+        f"{after_hp:.0f} integrity) costs the player alone: {rep:.0f} -> {now:.0f}, log {paid}",
+    )
+    rep = now
+    x, y, z = hull_at("Bombed")
+    warhead_at = (x + 5, y, z + 2.5)
+    claim(remote, CLIENT_WARHEAD, warhead_at)
+    beside(remote, warhead_at)
+    before = damage_by_identity()
+    probe(remote, f"/rep countdown {CLIENT_WARHEAD}")
+    remote.character_teleport(x, y + 150, z)
+    now, paid = charged(remote, rep, before, CLIENT_COUNTDOWN_MS / 1000 + 30)
+    check(
+        now < rep and len(paid) == 1 and abs(sum(paid.values()) - (now - rep)) < 2,
+        f"the claimed warhead's countdown next to another member's hull costs the player alone: "
+        f"{rep:.0f} -> {now:.0f}, log {paid}",
+    )
+
+
 def check_removal(remote) -> None:
     before = remote.get_chat_messages()
-    log(" ".join(rig.chat(remote, "!oct rep add -40000", 10)))
+    # From where the reputation is to 20,000 below the line
+    change = -(reputation(remote) + 20_000)
+    log(" ".join(rig.chat(remote, f"!oct rep add {change:.0f}", 10)))
     told: list[str] = []
     rig.wait_until(
         lambda: told.extend(
@@ -553,14 +772,69 @@ def check_toolcore() -> None:
         time.sleep(3)
     time.sleep(10)
     found = changes(str(TOOLER))
-    others = [c for c in changes() if c not in found]
     lost = sum(a for _, a, _ in found)
     check(
         found and all(kind == "Damage" and a < 0 for kind, a, _ in found),
         f"ToolCore grinding another member's hull costs the tool's owner: {len(found)} changes, "
         f"{lost:.0f} in all",
     )
-    check(not others, f"and no one else: {others[:5]}")
+
+
+def weapons_done() -> dict[str, float]:
+    """Each weapon owner's damage once nothing changed for 15 s, or after WEAPON_SECONDS"""
+    deadline = time.monotonic() + WEAPON_SECONDS
+    last, quiet = None, time.monotonic()
+    while time.monotonic() < deadline:
+        now = len(changes())
+        if now != last:
+            last, quiet = now, time.monotonic()
+        elif time.monotonic() - quiet > 15 and all(
+            changes(str(o)) for o, *_ in WEAPONS.values()
+        ):
+            break
+        time.sleep(3)
+    return {
+        name: sum(a for _, a, _ in changes(str(owner)))
+        for name, (owner, *_) in WEAPONS.items()
+    }
+
+
+def hull_loss(hull_id: int) -> float:
+    """What the saved hull lost, in SC: each block's value times the integrity it lost"""
+    sector = ET.parse(rig.WORLD / "SANDBOX_0_0_0_.sbs").getroot()
+    # The save leaves out a Min of 0, 0, 0 and its coordinates of 0
+    saved = {
+        tuple(
+            int(c.get(k, 0)) if (c := b.find("Min")) is not None else 0 for k in "xyz"
+        ): float(b.findtext("IntegrityPercent") or 1)
+        for o in sector.find("SectorObjects")
+        if o.findtext("EntityId") == str(hull_id)
+        for b in o.find("CubeBlocks")
+    }
+    cells = {BATTERY: "LargeBlockBatteryBlock", (1, 0, 0): "LargeBlockArmorBlock",
+             TARGET: "LargeBlockArmorBlock"}  # fmt: skip
+    return sum(VALUES[s] * (1 - saved.get(cell, 0.0)) for cell, s in cells.items())
+
+
+def check_weapons(paid: dict[str, float]) -> None:
+    """After the server's save: each weapon's owner paid what its target hull lost"""
+    for name, (owner, _, hull_id, _) in WEAPONS.items():
+        lost = hull_loss(hull_id)
+        kinds = {k for k, _, _ in changes(str(owner))}
+        check(
+            lost > 0
+            and kinds == {"Damage"}
+            and 0.85 * lost <= -paid[name] <= 1.05 * lost,
+            f"{name}: its offline owner pays for the other member's hull: paid {-paid[name]:.0f} SC, "
+            f"the saved hull lost {lost:.0f} SC",
+        )
+    payers = {str(TOOLER), *(str(o) for o, *_ in WEAPONS.values())}
+    others = [
+        m[0]
+        for m in re.finditer(r"Reputation of [^(]*\((\d+)\): .*", rig.server_game_log())
+        if m[1] not in payers
+    ]
+    check(not others, f"and no one else pays: {others[:5]}")
 
 
 def run_toolcore() -> None:
@@ -571,8 +845,10 @@ def run_toolcore() -> None:
     rig.start_server()
     try:
         check_toolcore()
+        paid = weapons_done()
     finally:
         rig.stop_server()
+    check_weapons(paid)
 
 
 def run() -> None:
@@ -587,12 +863,16 @@ def run() -> None:
     try:
         tag = remote.get_faction()["tag"]
         check(tag == "OCT", f"the player is in {tag}")
+        if "weapons" in sys.argv[1:]:
+            check_client_weapons(remote)
+            return
         check(reputation(remote) == 10_000, "the player starts at 10,000")
         check_grinding(remote)
         check_share(remote)
         check_deposit(remote)
         check_ram(remote)
         check_log(reputation(remote) - 10_000)
+        check_client_weapons(remote)
         check_removal(remote)
     finally:
         rig.stop_client()
