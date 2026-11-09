@@ -1,15 +1,16 @@
 """Drift stop on the test server with the headless client (SE-1326). Grids drift in empty space with no
-thrust: a wreck at 0.15 m/s and one at 0.6 m/s with no power, debris at 8 m/s, a wreck at 25 m/s, a ship with a
-charged battery, a ship with no power the client sits in, and a wreck in a planet's gravity. The probe
-(tests/drift-probe) reports each one's speed and whether its body is awake. Sync distance is 3 km.
+thrust, 300 m apart: wrecks with no power at 0.15 and 0.6 m/s, debris at 8 m/s, a wreck at 0.3 m/s the client
+floats 50 m from, a wreck at 25 m/s, a ship with a charged battery, a ship with no power a server-made character
+sits in (as a trader bot does), and a wreck in a planet's gravity. The probe (tests/drift-probe) seats the
+character and reports each grid's speed and whether its body is awake. Sync distance is 3 km.
 
 1. Off, the default config: for 20 s every grid keeps its speed and stays awake. This is main's behavior.
-2. On, the client seated within sync distance (slow down after 3 s): the two slow wrecks slow down over
-   seconds, not at once, then stop and fall asleep. The debris (over 1 m/s), the fast wreck, the powered ship,
-   the seated one and the one in gravity keep moving.
-3. The client leaves its seat and floats next to the ship (closer than 100 m): it keeps drifting.
-4. The client goes 50 km away, out of sync distance: the debris and the ship stop at once and fall asleep.
-   The fast wreck (over 20 m/s) and the powered ship keep moving. The log never names the one in gravity.
+2. On, the client within sync distance (slow down after 3 s, never within 100 m): the two slow wrecks slow
+   down over seconds, not at once, then stop and fall asleep. The debris (over 1 m/s), the wreck next to the
+   client, the fast wreck, the powered ship and the seated one keep moving.
+3. The client goes 50 km away, out of sync distance: the debris and the wreck it left stop at once and fall
+   asleep. The fast wreck (over 20 m/s), the powered ship and the seated one keep moving. The log names only
+   the four stopped grids, never the one in gravity.
 
     OCT_TASK=SE-1326 uv run --no-project --with httpx python tests/test_drift_stop.py
 """
@@ -40,6 +41,7 @@ DEBRIS = "DS Debris"
 FAST = "DS Fast"
 POWERED = "DS Powered"
 SEATED = "DS Seated"
+TOUCHED = "DS Touched"
 GRAVITY = "DS Gravity"
 # Under the cluster's offline gate (0.05 m/s)
 STOPPED = 0.05
@@ -89,13 +91,13 @@ GRIDS = {
         velocity=(8, 0, 0),
         size="Small",
     ),
-    FAST: rig.grid(FAST, BASE + 3, armor(4), at(3), velocity=(25, 0, 0)),
+    TOUCHED: rig.grid(TOUCHED, BASE + 8, armor(4), at(3), velocity=(0.3, 0, 0)),
+    FAST: rig.grid(FAST, BASE + 3, armor(4), at(4), velocity=(25, 0, 0)),
     POWERED: rig.grid(
-        POWERED, BASE + 4, [cockpit(), *armor(4), battery()], at(4), velocity=(1, 0, 0)
+        POWERED, BASE + 4, [cockpit(), *armor(4), battery()], at(5), velocity=(1, 0, 0)
     ),
-    # Slow enough for the client to get into its cockpit
     SEATED: rig.grid(
-        SEATED, BASE + 5, [cockpit(), *armor(4)], at(5), velocity=(0.15, 0, 0)
+        SEATED, BASE + 5, [cockpit(), *armor(4)], at(6), velocity=(0.5, 0, 0)
     ),
     GRAVITY: rig.grid(GRAVITY, BASE + 6, armor(4), gd.FALLER[2], velocity=(0, 0, -1)),
 }
@@ -109,21 +111,21 @@ def config_text(**values) -> str:
     return text
 
 
-def server() -> dict[str, tuple[float, float, bool]]:
-    """name -> (speed, spin, awake) as the server has them now"""
+def server() -> dict[str, tuple[float, float, bool, bool]]:
+    """name -> (speed, spin, awake, pilot) as the server has them now"""
     try:
         text = (rig.SERVER_DATA / "drift-probe.txt").read_text(encoding="utf-8")
     except FileNotFoundError:
         return {}
     found = {}
     for line in text.splitlines():
-        name, speed, spin, awake, *_ = line.split(";")
-        found[name] = (float(speed), float(spin), awake == "1")
+        name, speed, spin, awake, pilot, *_ = line.split(";")
+        found[name] = (float(speed), float(spin), awake == "1", pilot == "1")
     return found
 
 
 def awake() -> list[str]:
-    return sorted(n for n, (_, _, a) in server().items() if a)
+    return sorted(n for n, (_, _, a, _) in server().items() if a)
 
 
 def stops_logged() -> list[str]:
@@ -183,14 +185,10 @@ def main() -> int:
     rig.ensure_character(remote)
     rig.wait_until(lambda: len(server()) == len(GRIDS), 60, "the probe's first lines")
 
-    # The client sits in the seated ship before the rule is on
-    position = at(5)
-    remote.character_teleport(position[0], position[1] + 30, position[2])
-    gd.wait_on_client(remote, BASE + 5)
-    gd.sit(remote, BASE + 5)
-    check(
-        remote.get_character().get("state") == "sitting", f"the client sits in {SEATED}"
-    )
+    check(server()[SEATED][3], f"a character sits in {SEATED}")
+    # 50 m from the touched wreck, its drift taken into account, and within sync distance of the rest
+    touched = at(3)
+    remote.character_teleport(touched[0] + 10, touched[1] + 50, touched[2])
 
     # 1. Off
     time.sleep(20)
@@ -202,11 +200,9 @@ def main() -> int:
         "off: every grid keeps drifting, no stop logged",
     )
 
-    # 2. On, the client within sync distance of all but the one in gravity
+    # 2. On
     rig.write_plugin_config(
-        config_text(
-            DriftStopEnabled="true", DriftStopSeconds=SECONDS, DriftStopPlayerMeters=0
-        )
+        config_text(DriftStopEnabled="true", DriftStopSeconds=SECONDS)
     )
     log(f"reload: {rig.chat(remote, '!oct reload', 3)}")
     timeline = []
@@ -217,29 +213,18 @@ def main() -> int:
         any(0.1 < v < 0.5 for _, v in slow),
         f"near: {SLOW} slows down over seconds, not at once",
     )
-    moving([DEBRIS, FAST, POWERED, SEATED], "near")
+    moving([DEBRIS, TOUCHED, FAST, POWERED, SEATED], "near")
     near_awake = awake()
     log(f"near: awake {near_awake}")
 
-    # 3. The client next to the ship
-    rig.write_plugin_config(
-        config_text(
-            DriftStopEnabled="true", DriftStopSeconds=SECONDS, DriftStopPlayerMeters=100
-        )
-    )
-    log(f"reload: {rig.chat(remote, '!oct reload', 3)}")
-    gd.leave(remote)
-    time.sleep(4 * SECONDS)
-    moving([SEATED], "next to it")
-
-    # 4. The client out of sync distance
-    remote.character_teleport(position[0], position[1] + 50_000, position[2])
+    # 3. The client out of sync distance
+    remote.character_teleport(touched[0], touched[1] + 50_000, touched[2])
     began = time.monotonic()
     try:
         rig.wait_until(
-            lambda: all(server()[n][0] < STOPPED for n in (DEBRIS, SEATED)),
+            lambda: all(server()[n][0] < STOPPED for n in (DEBRIS, TOUCHED)),
             15,
-            "debris and ship stopped",
+            "debris and touched wreck stopped",
             0.2,
         )
     except TimeoutError as error:
@@ -247,17 +232,19 @@ def main() -> int:
     stopped_in = time.monotonic() - began
     check(
         stopped_in < 5,
-        f"far: the debris and the ship stop at once ({stopped_in:.1f} s)",
+        f"far: the debris and the wreck the client left stop at once ({stopped_in:.1f} s)",
     )
-    until_asleep([DEBRIS, SEATED], "far")
-    moving([FAST, POWERED], "far")
+    until_asleep([DEBRIS, TOUCHED], "far")
+    time.sleep(2 * SECONDS)
+    moving([FAST, POWERED, SEATED], "far")
+    check(server()[SEATED][3], f"far: the character still sits in {SEATED}")
     far_awake = awake()
     log(f"far: awake {far_awake}")
     logged = stops_logged()
     log("\n".join(logged))
     named = {n for n in GRIDS if any(f"{n} (" in l for l in logged)}
     check(
-        named == {WRECK, SLOW, DEBRIS, SEATED} and len(logged) == 4,
+        named == {WRECK, SLOW, DEBRIS, TOUCHED} and len(logged) == 4,
         f"the log names the four stopped grids once each ({sorted(named)})",
     )
 

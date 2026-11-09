@@ -1,6 +1,6 @@
 """Drift stop on a local test cluster (SE-1326): drifting wrecks keep their partitions online, stopped ones go
 offline. A World Authority and one regular node, no client. Far from the stations, each in a partition of its
-own: a wreck with no power drifting at 0.5 m/s, debris at 8 m/s and a wreck at 25 m/s, faster than
+own, 20 km apart: a wreck with no power drifting at 0.5 m/s, debris at 8 m/s and a wreck at 25 m/s, faster than
 DriftStopMaxSpeed (20). No player is within sync distance.
 
 1. Off, offline grace 0: for 120 s all three stay awake and their partitions online. This is main's behavior.
@@ -23,7 +23,6 @@ from pathlib import Path
 
 import wa_economy_cluster as wa  # noqa: E402  (takes the bench's folder from argv)
 from wa_economy_cluster import bench_module, link_mods, rig, wait_until  # noqa: E402
-import contracts_cluster as cc  # noqa: E402  (far_point)
 import test_drift_stop as ds  # noqa: E402
 
 wa.ROOT = Path.home() / f"cluster-runs/drift-stop-{os.environ['OCT_TASK']}"
@@ -52,13 +51,12 @@ OFF_SECONDS = 120
 
 def add_grids() -> None:
     sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
-    where = wa.stations()
     grids = [
         rig.grid(
             name,
             entity_id,
             blocks,
-            cc.far_point(where, index),
+            (ds.SPACE[0], ds.SPACE[1], ds.SPACE[2] + 20_000 * index),
             velocity=(speed, 0, 0),
             size=size,
         )
@@ -127,7 +125,12 @@ def run(bench) -> None:
     cluster.start(list(PROCESSES))
     cluster.wait_ready(nodes=list(PROCESSES))
     cluster.handover_config(
-        {"offline.minOnlineSeconds": "0", "offline.graceSeconds": "0"}
+        {
+            "offline.minOnlineSeconds": "0",
+            "offline.graceSeconds": "0",
+            # Unowned grids nobody visits would be removed after 5 minutes
+            "cleanup.unownedMinutes": "0",
+        }
     )
     wait_until(
         lambda: all(s != "missing" for s in state().values()),
