@@ -14,6 +14,7 @@ namespace ServerPlugin;
 [Section("weapons", caption: "Weapons")]
 [Section("drives", caption: "Gravity Drives")]
 [Section("clang", caption: "Clang Drives")]
+[Section("drift", caption: "Drift Stop")]
 [Section("pcu", caption: "PCU Limits")]
 [Section("shipyard", caption: "Shipyard Orders")]
 [Section("money", caption: "Money")]
@@ -590,6 +591,48 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 20;
+
+    [BoolOption(
+        "Stop a ship or wreck drifting in space with no power, nobody seated and no player near, so it can fall asleep and its partition go offline. "
+            + "Grids in gravity, faster ones and those joined to a station are left alone.",
+        Parent = "drift"
+    )]
+    public bool DriftStopEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
+    [DoubleOption(0, description: "Grids faster than this drift on (m/s).", Parent = "drift")]
+    public double DriftStopMaxSpeed
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 10;
+
+    [IntOption(
+        1,
+        3600,
+        "Seconds a grid has to drift, checked once a second, before it is stopped.",
+        Parent = "drift"
+    )]
+    public int DriftStopSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60;
+
+    [IntOption(
+        0,
+        100000,
+        "No player, a character or anything one controls, may be closer to any of its grids than this (m).",
+        Parent = "drift"
+    )]
+    public int DriftStopPlayerMeters
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 1000;
 
     [IntOption(
         0,

@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>drift-probe</Id>
+    <GroupId>drift-probe</GroupId>
+    <RepoId>local/drift-probe</RepoId>
+
+    <FriendlyName>Drift Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: writes the speed and sleep state of the test's grids</Tooltip>
+    <Description>Test only. Writes the speed, spin and sleep state the server has for the test's grids
+        to drift-probe.txt in the game's user data folder.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>
