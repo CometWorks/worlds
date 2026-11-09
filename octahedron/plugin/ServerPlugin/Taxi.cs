@@ -1,7 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using PluginSdk.Clustering;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
@@ -62,6 +66,14 @@ internal static class Taxi
 
     private static readonly Dictionary<long, Trip> trips = new();
 
+    // Cluster: cabs that moved to another node (their calls stay open here), the drivers who gave up
+    // a call on any node, and the registrations
+    private static readonly HashSet<long> away = new();
+    private static readonly ConcurrentQueue<long> gaveUp = new();
+    private static IDisposable giveUpHandler,
+        handover;
+    private const string GiveUpTopic = "taxi.give-up";
+
     private sealed class Call
     {
         public long Cab;
@@ -93,6 +105,20 @@ internal static class Taxi
             trips.Clear();
             return;
         }
+        if (Plugin.Cluster != null && PluginCluster.Current != null && giveUpHandler == null)
+        {
+            giveUpHandler = Plugin.Cluster.RegisterHandler(
+                GiveUpTopic,
+                message =>
+                {
+                    gaveUp.Enqueue(long.Parse(Encoding.UTF8.GetString(message.Payload)));
+                    return Task.FromResult<byte[]>([]);
+                }
+            );
+            handover = Plugin.Cluster.RegisterGridHandover(new CabHandover());
+        }
+        while (gaveUp.TryDequeue(out var quitter))
+            EndCallsOf(quitter);
         if (now >= nextScan)
         {
             nextScan = now + Rescan;
@@ -214,11 +240,14 @@ internal static class Taxi
         {
             if (now > call.Until)
                 EndCall(caller, call, "nobody sat down in the cab in time", 0);
-            else if (
-                !MyEntities.TryGetEntityById(call.Cab, out MyCubeGrid cab)
-                || Driver(cab) != call.Driver
-            )
-                EndCall(caller, call, "the cab or its driver is gone", 0);
+            else if (!MyEntities.TryGetEntityById(call.Cab, out MyCubeGrid cab))
+            {
+                // on its way through another node: the call stays; one destroyed there ends free in time
+                if (!away.Contains(call.Cab))
+                    EndCall(caller, call, "the cab is gone", 0);
+            }
+            else if (Plugin.Simulated(cab) && Driver(cab) != call.Driver)
+                EndCall(caller, call, "the cab's driver is gone", 0);
             else if (
                 MySession.Static.Players.TryGetIdentity(caller) is { } identity
                 && (
@@ -228,6 +257,85 @@ internal static class Taxi
                 )
             )
                 EndCall(caller, call, "you died before it came", Config.TaxiCancelFee);
+        }
+    }
+
+    public static void Dispose()
+    {
+        giveUpHandler?.Dispose();
+        handover?.Dispose();
+        giveUpHandler = handover = null;
+    }
+
+    /// <summary>!oct taxi giveup, by a driver who can't come: their calls end free, on every node.</summary>
+    public static string GiveUp(long driver)
+    {
+        var ended = EndCallsOf(driver);
+        if (Plugin.Cluster != null)
+            _ = Plugin.Cluster.BroadcastAsync(
+                GiveUpTopic,
+                Encoding.UTF8.GetBytes(driver.ToString(CultureInfo.InvariantCulture)),
+                Guid.NewGuid(),
+                TimeSpan.FromSeconds(30),
+                includeWorldAuthority: false
+            );
+        return ended > 0 ? $"{ended} call(s) ended, free." : "No call of yours here.";
+    }
+
+    private static int EndCallsOf(long driver)
+    {
+        var mine = calls.Where(c => c.Value.Driver == driver).ToList();
+        foreach (var (caller, call) in mine)
+            EndCall(caller, call, "the cab can't come", 0);
+        return mine.Count;
+    }
+
+    // Cluster: a cab's paid rides go with it to the node it moves to
+    private sealed class CabHandover : IPluginGridHandover
+    {
+        public byte[] Leaving(long gridId)
+        {
+            if (!cabs.Contains(gridId))
+                return null;
+            var lines = trips
+                .Where(t => t.Value.Cab == gridId)
+                .Select(t => $"{t.Key} {t.Value.Driver} {t.Value.Paid} {t.Value.Dest}");
+            return Encoding.UTF8.GetBytes(string.Join("\n", lines));
+        }
+
+        public void Left(long gridId)
+        {
+            away.Add(gridId);
+            foreach (
+                var passenger in trips.Where(t => t.Value.Cab == gridId).Select(t => t.Key).ToList()
+            )
+                trips.Remove(passenger);
+        }
+
+        public void Stayed(long gridId) { }
+
+        public void Arrived(long gridId, byte[] state)
+        {
+            away.Remove(gridId);
+            if (state == null)
+                return;
+            foreach (var line in Encoding.UTF8.GetString(state).Split('\n'))
+            {
+                var parts = line.Split(new[] { ' ' }, 4);
+                if (
+                    parts.Length == 4
+                    && long.TryParse(parts[0], out var passenger)
+                    && long.TryParse(parts[1], out var driver)
+                    && long.TryParse(parts[2], out var paid)
+                )
+                    trips[passenger] = new Trip
+                    {
+                        Cab = gridId,
+                        Driver = driver,
+                        Paid = paid,
+                        Dest = parts[3],
+                    };
+            }
         }
     }
 
@@ -592,8 +700,9 @@ internal static class Taxi
     private static List<string> Destinations(string here) =>
         Stations.StationNames().Where(n => n != here).OrderBy(n => n).ToList();
 
+    // On the node the player is on: a driver may be elsewhere in the cluster
     private static void Tell(long identity, string text) =>
-        MyVisualScriptLogicProvider.SendChatMessage(text, Author, identity);
+        ShipyardAway.Tell(identity, text, Author);
 
     private static string Name(long identity) =>
         MySession.Static.Players.TryGetIdentity(identity)?.DisplayName ?? identity.ToString();
