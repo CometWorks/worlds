@@ -15,6 +15,13 @@ ownership claim and the faction screen's Deposit:
   (SE-1293).
 - Below -10,000 the countdown (20 s in the test) warns at its start and at 15, 10 and 5 s left,
   then removes the player from OCT, telling them why.
+- With the world's config/octahedron.cfg as it is, but for the timers (SE-1285): reputation on,
+  deposits into OCT allowed, OCT's grids protected from grinding and the trader bots' ships not.
+  The trader bot has no reputation of its own. Grinding a hull of OCT's NPC does nothing and costs
+  nothing. !claim, the alias of Essentials' !ess claim the deploy sets (here the console probe),
+  refuses the trader bot's hull, whose battery is private, and takes another member's hull whose
+  battery is shared with OCT: the claim costs nobody reputation and the hull is then the player's
+  own, free to grind.
 - A second server run, without the client, has ToolCore and OmniArc: an OmniArc Destro owned by a
   third member grinds another member's hull with no player at it, which costs the tool's owner.
 - In the same run weapons of three more members, all offline, fire at hulls of another member: a
@@ -39,6 +46,7 @@ import re
 import sys
 import time
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 os.environ.setdefault("OCT_TASK", "SE-1283")
 import rig  # noqa: E402
@@ -48,6 +56,27 @@ from station_tests import check  # noqa: E402
 from test_client import log  # noqa: E402
 
 PROBE = ("rep-probe", rig.PLUGIN / "tests" / "rep-probe", "RepProbe.xml", "rep-probe")
+# The server's: Essentials from its working copy, at the commit the hub pins, and the console
+# probe, which sets the !claim alias the way Quasar's agent does on the cluster's nodes
+ESSENTIALS = (
+    "essentials",
+    Path(
+        os.environ.get(
+            "OCT_ESSENTIALS_REPO", Path.home() / "ws/se/se1/plugins/essentials"
+        )
+    ),
+    "Essentials.xml",
+    # A dev folder's id is its manifest's
+    "DF09925B-6D53-41F2-899C-CA6214B5DD6F",
+)
+CONSOLE_PROBE = (
+    "console-probe",
+    rig.PLUGIN / "tests" / "console-probe",
+    "ConsoleProbe.xml",
+    "3B8E1F52-6C47-4D0A-9E21-5A7C0D1553AA",
+)
+# As deploy.py's COMMAND_ALIASES
+ALIASES = {"CONSOLEPROBE_ALIASES": "!claim=!ess claim"}
 RIG_AT = (250_000.0, 0.0, 0.0)
 PRESS_SECONDS = 8
 BOT_STEAM_ID = 76561202000000077
@@ -72,6 +101,10 @@ HULLS = {
     "Ram 2": (777001283000007, PLAYER),
     "Shot": (777001283000008, PLAYER),
     "Bombed": (777001283000009, PLAYER),
+    # SE-1285: its battery shared with OCT, so !claim takes it
+    "Shared": (777001283000010, PLAYER),
+    # OCT's NPC's, which nobody grinds; the owner is read from the world
+    "OCT": (777001283000011, None),
 }
 # SE-1293: an unowned gatling gun 30 m in front of the Shot hull's TARGET block and an unowned
 # warhead touching the Bombed hull's; the player claims them, then shoots and starts the countdown.
@@ -137,9 +170,18 @@ def hull_at(name: str) -> tuple[float, float, float]:
     return (RIG_AT[0] + list(HULLS).index(name) * 60, RIG_AT[1], RIG_AT[2])
 
 
+def oct_npc() -> int:
+    """OCT's founder, the NPC that owns the stations"""
+    text = (rig.world_source() / "Sandbox.sbc").read_text(encoding="utf-8")
+    faction = re.search(r"<Tag>OCT</Tag>.*?</Members>", text, re.S)[0]
+    return int(re.search(r"<PlayerId>(\d+)</PlayerId>", faction)[1])
+
+
 def hull(name: str) -> str:
     entity_id, owner = HULLS[name]
-    own = f"<Owner>{owner}</Owner><BuiltBy>{owner}</BuiltBy><ShareMode>None</ShareMode>"
+    owner = owner if owner is not None else oct_npc()
+    share = "Faction" if name == "Shared" else "None"
+    own = f"<Owner>{owner}</Owner><BuiltBy>{owner}</BuiltBy><ShareMode>{share}</ShareMode>"
     blocks = [
         rig.block("MyObjectBuilder_BatteryBlock", "LargeBlockBatteryBlock", BATTERY, own),
         rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (1, 0, 0)),
@@ -339,7 +381,12 @@ def prepare(toolcore: bool = False) -> None:
             link = mods / f"{id_}.sbm"
             link.unlink(missing_ok=True)
             link.symlink_to(rig.WORKSHOP / str(id_))
-    path = rig.WORLD / "Sandbox.sbc"
+    add_members(rig.WORLD)
+
+
+def add_members(world: Path) -> None:
+    """The trader bot and the other players, offline members of OCT, into the world's Sandbox.sbc"""
+    path = world / "Sandbox.sbc"
     text = path.read_text(encoding="utf-8")
     people = [
         player(BOT, BOT_STEAM_ID, "[B] Test Trader"),
@@ -385,18 +432,45 @@ def prepare(toolcore: bool = False) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+# The world's config sets these as the cluster runs them (SE-1285); the test takes them as they are
+SHIPPED = {
+    "ReputationEnabled": "true",
+    "OctNoDeposits": "false",
+    "OctGridsNoGrinding": "true",
+    "OctProtectedSteamIds": "",
+    "ReputationStart": "10000",
+    "ReputationKickBelow": "-10000",
+}
+
+
+def check_shipped_config() -> None:
+    text = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
+
+    def value(option: str) -> str | None:
+        match = re.search(rf"<{option}>([^<]*)</{option}>", text)
+        return match and match[1]
+
+    found = {option: value(option) for option in SHIPPED}
+    check(found == SHIPPED, f"config/octahedron.cfg as the cluster runs it: {found}")
+    bots = [
+        [int(i) for i in r.split("-")] if "-" in r else [int(r)] * 2
+        for r in (value("ShipyardBotSteamIds") or "").split(",")
+        if r.strip()
+    ]
+    check(
+        any(first <= BOT_STEAM_ID <= last for first, last in bots),
+        f"the test's trader bot {BOT_STEAM_ID} is in ShipyardBotSteamIds {bots}",
+    )
+
+
 def config() -> str:
+    """The world's config, with timers short enough for a test"""
     text = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
     options = {
-        "OctNoDeposits": "false",
-        "OctGridsNoGrinding": "false",
-        "ReputationEnabled": "true",
         "ReputationKickAfterSeconds": str(KICK_SECONDS),
         "ReputationWarnSeconds": WARN,
         "ReputationRamGapSeconds": str(RAM_GAP),
         "ReputationRamGraceSeconds": "3600",
-        # The trader bots: the world's config leaves them out since SE-1282
-        "OctProtectedSteamIds": f"{BOT_STEAM_ID}-{BOT_STEAM_ID}",
     }
     for option, value in options.items():
         text, count = re.subn(
@@ -526,11 +600,15 @@ def grind(remote, name: str, seconds: float = 60) -> tuple[float, float]:
     return before, integrity(remote, entity_id)
 
 
-def check_grinding(remote) -> None:
+def equip_grinder(remote) -> None:
     remote.character_equip("AngleGrinderItem")
     if not remote.get_character().get("jetpack"):
         remote.key("X")
     rig.wait_until(lambda: remote.get_character().get("jetpack"), 10, "the jetpack on")
+
+
+def check_grinding(remote) -> None:
+    equip_grinder(remote)
     rates: list[float] = []
     claim(remote, HULLS["Own"][0], hull_at("Own"))
     for name, costs in (
@@ -561,6 +639,72 @@ def check_grinding(remote) -> None:
         len(rates) == 2 and abs(rates[0] - rates[1]) < 0.05 * max(rates),
         f"both hulls' armor blocks are worth the same: {rates}",
     )
+
+
+def look_at(remote, name: str) -> None:
+    """The player by the hull, looking at its target block, as for !claim"""
+    x, y, z = hull_at(name)
+    near(remote, HULLS[name][0], (x, y, z - 5))
+    aim(remote, (x + TARGET[0] * 2.5, y, z))
+
+
+def integration(remote, rep, logged):
+    """SE-1285: the trader bot, OCT's grids and !claim with the world's config, as (check, passed,
+    detail). rep: the player's reputation; logged: the logged reputation changes of an identity
+    (the World Authority's on a cluster)"""
+
+    def steady(before: float, seconds: float = 6) -> float:
+        """The reputation once it moved from before, or before after the seconds"""
+        deadline = time.monotonic() + seconds
+        while (now := rep(remote)) == before and time.monotonic() < deadline:
+            time.sleep(1)
+        return now
+
+    reply = " ".join(rig.chat(remote, "!oct rep add -1 [B] Test Trader", 10))
+    yield "the trader bot has no reputation", "has no reputation" in reply, reply
+    equip_grinder(remote)
+    start = rep(remote)
+    before, after = grind(remote, "OCT", 20)
+    now = steady(start, 3)
+    yield (
+        "grinding OCT's hull does nothing and costs nothing",
+        after == before and now == start,
+        f"{before:.0f} -> {after:.0f} integrity, {start:.0f} -> {now:.0f}",
+    )
+    look_at(remote, "Trader")
+    reply = " ".join(rig.chat(remote, "!claim", 10))
+    yield (
+        "!claim refuses the trader bot's hull, its battery private",
+        "Not enough shared ownership" in reply,
+        reply,
+    )
+    look_at(remote, "Shared")
+    reply = " ".join(rig.chat(remote, "!claim", 10))
+    now = steady(start)
+    yield (
+        "!claim takes another member's hull shared with OCT, at no reputation",
+        "Claimed 1 grid" in reply and now == start,
+        f"{reply}, {start:.0f} -> {now:.0f}",
+    )
+    before, after = grind(remote, "Shared")
+    now = steady(start)
+    yield (
+        "grinding the claimed hull costs nothing",
+        after < before and now == start,
+        f"{before:.0f} -> {after:.0f} integrity, {start:.0f} -> {now:.0f}",
+    )
+    yield (
+        "the claim leaves the former owner's reputation alone",
+        not logged(PLAYER),
+        logged(PLAYER),
+    )
+
+
+def check_integration(remote) -> None:
+    for name, passed, detail in integration(
+        remote, reputation, lambda identity: changes(str(identity))
+    ):
+        check(passed, f"{name}: {detail}")
 
 
 def check_share(remote) -> None:
@@ -856,8 +1000,8 @@ def run() -> None:
     rig.stop_server()
     prepare()
     rig.write_plugin_config(config())
-    rig.prepare_server()
-    rig.start_server()
+    rig.prepare_server(extra_dev_folders=[ESSENTIALS, CONSOLE_PROBE])
+    rig.start_server(env=ALIASES)
     rig.prepare_client(extra_dev_folders=[PROBE])
     remote = rig.start_client(extra_dev_folders=[PROBE])
     try:
@@ -868,6 +1012,7 @@ def run() -> None:
             return
         check(reputation(remote) == 10_000, "the player starts at 10,000")
         check_grinding(remote)
+        check_integration(remote)
         check_share(remote)
         check_deposit(remote)
         check_ram(remote)
@@ -880,6 +1025,7 @@ def run() -> None:
 
 
 if __name__ == "__main__":
+    check_shipped_config()
     if "toolcore" not in sys.argv[1:]:
         run()
     if "client" not in sys.argv[1:]:

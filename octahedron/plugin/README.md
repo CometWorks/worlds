@@ -349,7 +349,7 @@ With `ReputationEnabled` on, every OCT member has a reputation, counted in SC
 - **Free:** grids the member owns most of, grids of no one and of other factions, and the first
   ram in `ReputationRamGraceSeconds` (an hour). A ram is the collision damage one member's ship,
   the faster of the two, does to other members' grids until `ReputationRamGapSeconds` (10) pass
-  without one; its pilot pays. The trader bots (`OctProtectedSteamIds`) have no reputation.
+  without one; its pilot pays. The trader bots (`ShipyardBotSteamIds`) have no reputation.
 
 Below zero the member is told. Below `ReputationKickBelow` (-10,000) a countdown of
 `ReputationKickAfterSeconds` (an hour) starts, with a warning at its start and at
@@ -363,7 +363,11 @@ countdowns run there. The nodes, which see the damage, deposits and shares, send
 every second as a global command, which the World Authority runs once even when a node sends
 it again after a timeout. So the reputation follows the player to any node and through restarts.
 
-`OctNoDeposits` refuses a member's deposit, so with it on, paying in can't raise the reputation.
+`OctNoDeposits` refuses a member's deposit, so with it on, paying in can't raise the reputation;
+`config/octahedron.cfg` has it off since reputation is on there
+([SE-1285](https://tasks.cometworks.se/tasks/2201)). A grid taken over with Essentials' `!ess claim`
+changes no reputation: the claim doesn't go through the share box, and the grid is then the
+claimer's own.
 ToolCore's tools, like the OmniArc Destro, grind with no player at them (`identityId` 0), so the
 tool block's owner pays, the way a weapon block's owner pays for its damage. ToolCore names the
 tool block to the game's damage system just before it grinds, and the plugin takes it from there.
