@@ -1,11 +1,11 @@
 """Drift stop on a local test cluster (SE-1326): drifting wrecks keep their partitions online, stopped ones go
 offline. A World Authority and one regular node, no client. Far from the stations, each in a partition of its
-own: a wreck with no power drifting at 0.5 m/s, debris at 8 m/s and a wreck at 15 m/s, faster than
-DriftStopMaxSpeed (10).
+own: a wreck with no power drifting at 0.5 m/s, debris at 8 m/s and a wreck at 25 m/s, faster than
+DriftStopMaxSpeed (20). No player is within sync distance.
 
 1. Off, offline grace 0: for 120 s all three stay awake and their partitions online. This is main's behavior.
-2. `!oct reload` on the node with DriftStopEnabled (3 s): the wreck and the debris stop, fall asleep and their
-   partitions go offline. The fast wreck stays awake and online.
+2. `!oct reload` on the node with DriftStopEnabled: the wreck and the debris stop at once, fall asleep and
+   their partitions go offline. The fast wreck stays awake and online.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/drift_stop_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 
@@ -44,7 +44,7 @@ GRIDS = {
         "Small",
         8,
     ),
-    "DS Fast": (BASE + 3, ds.armor(4), "Large", 15),
+    "DS Fast": (BASE + 3, ds.armor(4), "Large", 25),
 }
 STOPPED = ("DS Wreck", "DS Debris")
 OFF_SECONDS = 120
