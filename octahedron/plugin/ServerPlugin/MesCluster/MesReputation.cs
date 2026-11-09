@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,6 +22,10 @@ namespace ServerPlugin;
 /// A reputation change MES would spread over the attacker's faction stays with the attacker when that
 /// faction is OCT: OCT is every player's default faction, not a team. Other factions keep MES's rule.
 ///
+/// With MesReputationOctExempt on, damage an OCT member does to an MES ship changes no reputation at all,
+/// whatever the damage type: MES spawns the ships OCT players are meant to hunt. Players outside OCT
+/// keep MES's rules with the collision exclusion and cooldown above.
+///
 /// MES is compiled at session load, so its types are looked up by name. If one is missing, MES runs
 /// unpatched and a Critical line says so.
 /// </summary>
@@ -33,6 +38,7 @@ internal static class MesReputation
     private const string ActionProfileType =
         "ModularEncountersSystems.Behavior.Subsystems.Trigger.ActionProfile";
     private const string FactionHelperType = "ModularEncountersSystems.Helpers.FactionHelper";
+    private const string DamageHelperType = "ModularEncountersSystems.Helpers.DamageHelper";
 
     private static readonly string[] Ignored = ["Deformation", "Environment"];
 
@@ -55,6 +61,7 @@ internal static class MesReputation
         cooldownTime,
         changeAttackerReputation;
     private static PropertyInfo actionReference;
+    private static Func<long, long> attackOwner;
 
     // Trigger profile -> Yes when one of its actions changes the attacker's reputation
     private static readonly ConditionalWeakTable<object, object> Checked = new();
@@ -62,13 +69,18 @@ internal static class MesReputation
         No = new();
 
     private static bool Active => Plugin.Config is { Enabled: true, MesReputationFix: true };
+    private static bool OctExempt =>
+        Plugin.Config is { Enabled: true, MesReputationOctExempt: true };
 
     public static void Install(Harmony harmony, Assembly mes)
     {
         var system = mes.GetType(TriggerSystemType);
         var trigger = mes.GetType(TriggerProfileType);
         var watchers = system?.GetMethod("ProcessDamageTriggerWatchers");
-        var spread = mes.GetType(FactionHelperType)
+        var helper = mes.GetType(FactionHelperType);
+        var charge = helper?.GetMethod("ChangeDamageOwnerReputation");
+        var owner = mes.GetType(DamageHelperType)?.GetMethod("GetAttackOwnerId", [typeof(long)]);
+        var spread = helper
             ?.GetMethods(BindingFlags.Public | BindingFlags.Static)
             .FirstOrDefault(m =>
                 m.Name == "ChangePlayerReputationWithFactions"
@@ -89,6 +101,8 @@ internal static class MesReputation
         if (
             watchers == null
             || spread == null
+            || charge?.GetParameters().Any(p => p.Name == "attackingEntity") != true
+            || owner?.ReturnType != typeof(long)
             || damageTriggers == null
             || excludedDamageTypes?.FieldType != typeof(List<string>)
             || actions == null
@@ -105,6 +119,11 @@ internal static class MesReputation
             return;
         }
 
+        attackOwner = (Func<long, long>)Delegate.CreateDelegate(typeof(Func<long, long>), owner);
+        harmony.Patch(
+            charge,
+            prefix: new HarmonyMethod(typeof(MesReputation), nameof(SkipOctAttacker))
+        );
         harmony.Patch(
             watchers,
             prefix: new HarmonyMethod(typeof(MesReputation), nameof(FixTriggers))
@@ -114,9 +133,14 @@ internal static class MesReputation
             prefix: new HarmonyMethod(typeof(MesReputation), nameof(AttackerOnly))
         );
         Plugin.Log.Info(
-            "MES reputation patched: attacker reputation triggers ignore collisions and have a cooldown, OCT members are charged one by one"
+            "MES reputation patched: attacker reputation triggers ignore collisions and have a cooldown, OCT members are charged one by one, "
+                + "or not at all with MesReputationOctExempt"
         );
     }
+
+    // MES's ChangeAttackerReputation action: false skips it when the attacker is in OCT
+    private static bool SkipOctAttacker(long attackingEntity) =>
+        !OctExempt || OctFaction.Faction?.IsMember(attackOwner(attackingEntity)) != true;
 
     // Before MES matches a damage event against the damage triggers of a ship
     // ReSharper disable once InconsistentNaming

@@ -1,22 +1,28 @@
 # SE-1294: THIE's reputation trigger on an Atlas cargo ship. A and B are in OCT, C and D in TST.
-# A rams the Atlas with one grid, then A and C each hit it from grids further away with 30 bullets 100 ms apart.
+# A rams the Atlas and then hits it from another grid with 30 bullets 100 ms apart; then C does the same
+# from the other side.
 rep-setup
 wait 3
 rep-join
 rep-spawn SpaceCargoShip THIE-202-AS-Atlas 100000 0 0
 wait 30
 rep-target Atlas
-rep-grid ram A 40
+rep-grid ramA A 40
 rep-grid gunA A 1000
 rep-grid gunC C 1500
 wait 3
 rep start
-rep-ram ram 8 25
+rep-ram ramA 8 25
 wait 12
-rep rammed
+rep rammed-A
 rep-hit gunA Bullet 30 100
 wait 5
 rep shot-A
+rep-grid ramC C -40
+wait 2
+rep-ram ramC 8 25
+wait 12
+rep rammed-C
 rep-hit gunC Bullet 30 100
 wait 5
 rep shot-C

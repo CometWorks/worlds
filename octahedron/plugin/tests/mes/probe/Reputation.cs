@@ -21,7 +21,7 @@ namespace MesClusterProbe;
 //   rep-spawn TYPE GROUP X Y Z        forced MES spawn of GROUP near (X, Y, Z): rep-spawned GROUP True|False
 //   rep-target NAME                   the NPC grid whose name contains NAME is the target; counts the damage it takes
 //   rep-grid G P DIST                 grid G: a 27-block heavy armor cube with a cargo container owned by player P, DIST m
-//                                     from the target's surface
+//                                     from the target's surface (negative: on the other side)
 //   rep-ram G SECONDS SPEED           grid G flies into the target at SPEED m/s for SECONDS
 //   rep-hit G TYPE COUNT MS           COUNT damage events of TYPE on the target from grid G, one every MS ms
 //   rep LABEL                         rep LABEL A=n B=n C=n D=n (reputation with THIE) damage=Type:count,...
@@ -211,7 +211,9 @@ public partial class Probe
         var side = Vector3D.Normalize(
             Vector3D.CalculatePerpendicularVector(target.WorldMatrix.Forward)
         );
-        var position = box.Center + side * (box.HalfExtents.Length() + distance);
+        var position =
+            box.Center
+            + Math.Sign(distance) * side * (box.HalfExtents.Length() + Math.Abs(distance));
         var grid = new MyObjectBuilder_CubeGrid
         {
             GridSizeEnum = MyCubeSize.Large,
