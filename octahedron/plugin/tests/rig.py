@@ -19,6 +19,7 @@ copies (a client without Steam can't download them), and leaves out the asteroid
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -31,8 +32,7 @@ from pathlib import Path
 
 HOME = Path.home()
 PLUGIN = Path(__file__).resolve().parent.parent
-# OCT_WORLD_SOURCE: a world folder built by build_world.py instead of the repo's
-WORLD_SOURCE = Path(os.environ.get("OCT_WORLD_SOURCE", PLUGIN.parent / "server"))
+BUILD_WORLD = PLUGIN.parent / "build_world.py"
 CONFIG_SOURCE = PLUGIN.parent / "config" / "octahedron.cfg"
 CONFIG_STORAGE = PLUGIN.parent / "config" / "storage"
 WORKSPACE = Path(os.environ.get("OCT_WORKSPACE", HOME / "ws/se"))
@@ -117,6 +117,47 @@ SERVER_PID = SERVER_ROOT / "server.pid"
 SERVER_LOG = SERVER_ROOT / "server.log"
 SERVER_PORT = SLOT["DS_SERVER_PORT_BASE"]
 WORLD = SERVER_DATA / "Saves" / "Octahedron"
+# The world the tests copy: OCT_WORLD_SOURCE, or one build_world.py makes from this working
+# copy. The committed server/ is the deployed world and lags behind the generator (SE-1305).
+BUILT_WORLD = TEST_ROOT / f"{TASK}-world"
+_world_source: Path | None = None
+
+
+def world_source() -> Path:
+    """OCT_WORLD_SOURCE, or a world built by build_world.py --seed 42 into the task's
+    folder. It is built again when the generator, its config or blueprints change."""
+    global _world_source
+    if _world_source:
+        return _world_source
+    if "OCT_WORLD_SOURCE" in os.environ:
+        _world_source = Path(os.environ["OCT_WORLD_SOURCE"])
+        return _world_source
+    inputs = [BUILD_WORLD]
+    for folder in ("config", "blueprints"):
+        inputs += sorted(f for f in (PLUGIN.parent / folder).rglob("*") if f.is_file())
+    digest = hashlib.sha256()
+    for f in inputs:
+        digest.update(str(f.relative_to(PLUGIN.parent)).encode() + b"\0")
+        digest.update(f.read_bytes())
+    stamp = BUILT_WORLD.with_name(BUILT_WORLD.name + ".inputs")
+    if not stamp.is_file() or stamp.read_text() != digest.hexdigest():
+        print(f"Building the world into {BUILT_WORLD}", flush=True)
+        subprocess.run(
+            [sys.executable, str(BUILD_WORLD), str(BUILT_WORLD), "--seed", "42"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        stamp.write_text(digest.hexdigest())
+    _world_source = BUILT_WORLD
+    return _world_source
+
+
+def __getattr__(name: str):
+    # rig.WORLD_SOURCE in the tests, built on first use
+    if name == "WORLD_SOURCE":
+        return world_source()
+    raise AttributeError(name)
+
 
 PULSAR = TEST_ROOT / f"{TASK}-c0"
 LAUNCHER = PULSAR / "Interim.bin"
@@ -270,7 +311,9 @@ def prepare_world(
     settings = {"TrashRemovalEnabled": "false", **(settings or {})}
     shutil.rmtree(WORLD, ignore_errors=True)
     shutil.copytree(
-        WORLD_SOURCE, WORLD, ignore=shutil.ignore_patterns("Octahedron-Asteroid-*.vx2")
+        world_source(),
+        WORLD,
+        ignore=shutil.ignore_patterns("Octahedron-Asteroid-*.vx2"),
     )
     # The mod configs and the station patch blueprints octahedron.cfg names, as the deploy
     # stages them: the committed world may be older than the config
