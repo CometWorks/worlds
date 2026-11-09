@@ -1961,8 +1961,10 @@ with it off, the same quotes are paid and the starter ship is refused.
 the first run, a new account's balance, no economy top-up of OCT while the rules are
 on (and the game's with them off), the tax by `!oct taxday`, two payouts by
 `!oct payday`, OCT topped up to its floor, the day's totals and the state read back
-after a restart. `OCT_WORLD_SOURCE` points the rig at a world built by
-`build_world.py` instead of `octahedron/server`. `tests/test_money_restart.py` checks
+after a restart. The rig builds its world with
+`build_world.py --seed 42` into `~/.se-test/<task>-world` and builds it again when the
+generator, `config/` or `blueprints/` change; `OCT_WORLD_SOURCE` points it at another
+world instead. `tests/test_money_restart.py` checks
 without a client that a restart pays no hour twice and that hours missed while down
 make one payout. `tests/money/MoneyTests` checks the arithmetic of the tax, the payout,
 a whole day of payouts and Hangar's retrieval fee alone
