@@ -158,6 +158,7 @@ def __getattr__(name: str):
         return world_source()
     raise AttributeError(name)
 
+
 PULSAR = TEST_ROOT / f"{TASK}-c0"
 LAUNCHER = PULSAR / "Interim.bin"
 APPDATA = TEST_ROOT / f"{TASK}-c0-data"
@@ -310,7 +311,9 @@ def prepare_world(
     settings = {"TrashRemovalEnabled": "false", **(settings or {})}
     shutil.rmtree(WORLD, ignore_errors=True)
     shutil.copytree(
-        world_source(), WORLD, ignore=shutil.ignore_patterns("Octahedron-Asteroid-*.vx2")
+        world_source(),
+        WORLD,
+        ignore=shutil.ignore_patterns("Octahedron-Asteroid-*.vx2"),
     )
     # The mod configs and the station patch blueprints octahedron.cfg names, as the deploy
     # stages them: the committed world may be older than the config
