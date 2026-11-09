@@ -94,10 +94,21 @@ def run(bench) -> None:
             )
             for partition in dump.get("partitions", []):
                 for entity in partition.get("entities", []):
+                    if not grids.shown:
+                        print(
+                            "diag row",
+                            entity.get("entityId"),
+                            entity.get("displayName"),
+                            entity.get("velocity"),
+                            flush=True,
+                        )
                     if entity.get("displayName") in GRIDS:
                         found[entity["displayName"]] = entity
             cursor = dump.get("nextCursor")
+        grids.shown = True
         return found
+
+    grids.shown = False
 
     def state() -> dict[str, str]:
         """name -> offline, awake or asleep"""
