@@ -402,6 +402,18 @@ An item can name several ids separated by commas, like
 `PhysicalGunObject/Welder2Item,PhysicalGunObject/Welder3Item`. Their amounts count
 together toward the minimum, and each one missing is one of them at random.
 
+The item `Datapad/Datapad` gives out lore data pads from `DataPads` instead
+(SE-1308): each one missing is a configured pad at random that the block doesn't
+hold yet. Only pads whose title is in `DataPads` count toward the minimum, so a
+player's own pad left in the box stays and doesn't fill it. A pad's text can
+hold `{GPS:StorageName:Label}`, which becomes a GPS line (the game's data pad
+screen offers "Create GPS" for it) of the center of the voxel map with that
+storage name, read from the loaded world, so it always matches the world the
+server runs. A pad whose voxel map the world doesn't have is never given out,
+and the missing map is logged once. Octahedron's Free Tools boxes keep one pad
+each, with scraps of the rare ore distribution and the 4 ice asteroids of the
+ring, and a taken pad is replaced after 10 minutes (a second Free Tools rule).
+
 ### World edge
 
 The world is a sphere: `WorldEdgeCenter` and `WorldEdgeRadius` (Octahedron: EarthLike's
@@ -1881,7 +1893,7 @@ in the middle of a build, with nobody connected. `tests/test_shipyard_hydrogen.p
 new ship's hydrogen and oxygen come from, on free and paid builds, and
 `tests/shipyard_hydrogen_cluster.py` does that on a cluster. `tests/test_bottle_swap.py` leaves a half full and an empty bottle in Alpha's
 Free Tools box for full ones and checks the next refill takes them out and tops the box up, also with a rule that
-lists no hydrogen bottles; `tests/bottle_swap_cluster.py` does that on a cluster. `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
+lists no hydrogen bottles; `tests/bottle_swap_cluster.py` does that on a cluster. `tests/test_data_pads.py` checks that no lore pad tells more than one rare ore or ice asteroid and that together they tell all, then in game that every Free Tools box at Alpha keeps one pad, a taken one comes back as another, every pad turns up, the ice pads' GPS lines are the asteroids' centers in the save, and a player's own pad stays (`--offline` runs only the first part). `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
 the shipyard's mods: the quote and the order, the hydrogen from a docked ship's tank into
 the new ship's, the payment and OCT's stock, a press while it builds, an order queued
 behind the finished ship and canceled after a restart, and a free order canceled with

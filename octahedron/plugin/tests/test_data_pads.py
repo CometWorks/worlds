@@ -67,6 +67,19 @@ def check_split(pads: list[tuple[str, str]]) -> None:
     check(ice == want, f"together the pads give all 4 ice asteroids: {sorted(ice)}")
 
 
+def test_config(text: str) -> str:
+    """The config with the pad rule's interval cut to seconds and a pad whose voxel map the
+    world lacks"""
+    text, count = PAD_RULE.subn(rf"\g<1>{INTERVAL}\g<2>", text)
+    check(count == 1, "the Free Tools pad rule's interval cut to seconds")
+    return text.replace(
+        "</DataPads>",
+        f"<DataPadEntry><Title>{MISSING}</Title>"
+        "<Text>{GPS:No-Such-Rock:Nowhere}</Text></DataPadEntry></DataPads>",
+        1,
+    )
+
+
 def storage_size(path) -> int:
     """Edge length of a saved octree storage, as build_world.storage_size"""
     data = gzip.open(path).read()
@@ -105,14 +118,16 @@ def boxes(reply: str) -> list[list[str]]:
     return [[p for p in b.split("|") if p] for b in body.split(";")]
 
 
-def run(remote, pads: list[tuple[str, str]], centers) -> None:
+def run(probe, check, pads: list[tuple[str, str]], centers) -> None:
+    """probe(args) runs a station probe command where the station is and returns its reply,
+    check(ok, what) records a check"""
     ours = {t for t, _ in pads}
     full = lambda b: len(b) == BOXES and all(  # noqa: E731
         sum(p.split("@")[0] in ours for p in box) == 1 for box in b
     )
 
     first = st.wait_until(
-        lambda: full(b := boxes(probe(remote, f"datapads {STATION}"))) and b, 60, 2
+        lambda: full(b := boxes(probe(f"datapads {STATION}"))) and b, 60, 2
     )
     check(bool(first), f"every Free Tools box holds one of our pads: {first}")
 
@@ -120,7 +135,7 @@ def run(remote, pads: list[tuple[str, str]], centers) -> None:
     misses = 0
     for _ in range(40):
         got = st.wait_until(
-            lambda: full(b := boxes(probe(remote, f"datapads {STATION}"))) and b,
+            lambda: full(b := boxes(probe(f"datapads {STATION}"))) and b,
             INTERVAL * 5,
             1,
         )
@@ -135,7 +150,7 @@ def run(remote, pads: list[tuple[str, str]], centers) -> None:
                 seen[title] = gps
         if ours - {MISSING} <= set(seen):
             break
-        probe(remote, f"datapads {STATION} take")
+        probe(f"datapads {STATION} take")
     log(f"pads seen: {sorted(seen)}")
     check(
         misses <= 2, f"a taken pad comes back within {INTERVAL * 5} s ({misses} misses)"
@@ -156,10 +171,10 @@ def run(remote, pads: list[tuple[str, str]], centers) -> None:
         )
         check(ok, f"{title}: GPS {got} is the center of {storage} {center}")
 
-    probe(remote, f"datapads {STATION} take")
-    probe(remote, f"datapads {STATION} add")
+    probe(f"datapads {STATION} take")
+    probe(f"datapads {STATION} add")
     after = st.wait_until(
-        lambda: full(b := boxes(probe(remote, f"datapads {STATION}"))) and b,
+        lambda: full(b := boxes(probe(f"datapads {STATION}"))) and b,
         INTERVAL * 5,
         1,
     )
@@ -175,14 +190,7 @@ def main() -> int:
     if "--offline" in sys.argv:
         return st.summary("data pads")
 
-    text, count = PAD_RULE.subn(rf"\g<1>{INTERVAL}\g<2>", text)
-    check(count == 1, "the Free Tools pad rule's interval cut to seconds")
-    text = text.replace(
-        "</DataPads>",
-        f"<DataPadEntry><Title>{MISSING}</Title>"
-        "<Text>{GPS:No-Such-Rock:Nowhere}</Text></DataPadEntry></DataPads>",
-        1,
-    )
+    text = test_config(text)
     pads = config_pads(text)
 
     rig.stop_client()
@@ -196,7 +204,7 @@ def main() -> int:
     remote = rig.start_client()
     start = time.monotonic()
     try:
-        run(remote, pads, centers)
+        run(lambda args: probe(remote, args), check, pads, centers)
     finally:
         log(f"in game for {time.monotonic() - start:.0f} s")
         rig.stop_client()
