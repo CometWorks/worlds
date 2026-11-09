@@ -85,11 +85,18 @@ def run(bench) -> None:
         """name -> the node's entity row (physicsActive, velocity), for the test grids it holds"""
         found = {}
         dump = cluster.node("node-1", "/cluster/diag?depth=entities", timeout=60)
+        if not grids.shown:
+            grids.shown = True
+            print(f"diag keys {list(dump)[:30]}", flush=True)
+            for partition in dump.get("partitions", [])[:3]:
+                print(f"diag partition {json.dumps(partition)[:1500]}", flush=True)
         for partition in dump.get("partitions", []):
             for entity in partition.get("entities", []):
                 if entity.get("displayName") in GRIDS:
                     found[entity["displayName"]] = entity
         return found
+
+    grids.shown = False
 
     def state() -> dict[str, str]:
         """name -> offline, awake or asleep"""
