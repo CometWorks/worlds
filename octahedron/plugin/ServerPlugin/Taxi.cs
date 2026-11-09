@@ -27,11 +27,13 @@ namespace ServerPlugin;
 // seats and O2/H2 generator of a bot's cab (ShipyardBotSteamIds) are opened to everyone, so a
 // passenger can take or fill a bottle there; a player driving a cab sets its share modes as they like.
 //
-// "!oct taxi call" calls the nearest free cab (one with a driver and nobody else in it, standing at
-// a station) to where the caller is, in space only. The driver hears "Call from NAME at X Y Z" and
-// flies there. When the caller sits down in that cab they pay TaxiCallFare to the driver, or all
-// they have when that is less, for the ride to the nearest station, and the driver hears the usual
-// "Fare paid by". A caller who dies before pays TaxiCancelFee and the call ends ("Call cancelled:
+// "!oct taxi call" calls the nearest free cab (one with a driver, nobody else in it and no other
+// call, waiting at a station or on its way home) to where the caller is, in space only. The driver
+// hears "Call from NAME at X Y Z" and flies there. When the caller sits down in that cab they pay
+// the call fare to the driver (TaxiCallFarePerKm per whole km from the caller to the nearest
+// station, at least TaxiCallFare), or all they have when that is less, for the ride to that
+// station, and the driver hears the usual "Fare paid by". A call from within AtStation of a station
+// is a regular fare from there instead. A caller who dies before pays TaxiCancelFee and the call ends ("Call cancelled:
 // NAME"), as it does free after TaxiCallTimeout or when the cab or its driver is gone. Calls live
 // in this process: on a cluster a call reaches the cabs of the caller's node only.
 internal static class Taxi
@@ -48,6 +50,17 @@ internal static class Taxi
 
     // The passengers this node saw seated at its last tick: identity -> (cab, seat)
     private static readonly Dictionary<long, (long Cab, long Seat)> seated = new();
+
+    // A paid ride on its way: refunded in full when it can't get there (UpdateTrips)
+    private sealed class Trip
+    {
+        public long Cab;
+        public long Driver;
+        public long Paid;
+        public string Dest;
+    }
+
+    private static readonly Dictionary<long, Trip> trips = new();
 
     private sealed class Call
     {
@@ -77,6 +90,7 @@ internal static class Taxi
         {
             seated.Clear();
             calls.Clear();
+            trips.Clear();
             return;
         }
         if (now >= nextScan)
@@ -125,6 +139,7 @@ internal static class Taxi
                 continue;
             GotOut(cab, seat, passenger);
         }
+        UpdateTrips(seen);
         seated.Clear();
         foreach (var (passenger, at) in seen)
             seated[passenger] = at;
@@ -186,7 +201,7 @@ internal static class Taxi
         Tell(bestDriver, $"Call from {Name(caller)} at {at.X:F0} {at.Y:F0} {at.Z:F0}");
         var price = StationAt(at) is { } near
             ? $"you are at {near}, so it is a regular fare: pick where to go then, for {Sc(Config.TaxiFare)}"
-            : $"the ride to the nearest station, {NearestStation(at)}, costs {Sc(Config.TaxiCallFare)} then, "
+            : $"the ride to the nearest station, {NearestStation(at)}, costs {Sc(CallFare(at))} then, "
                 + "or all you have when that is less";
         return $"{Name(bestDriver)} is on the way from {from}, {nearest / 1000:F1} km. Stay here and sit down in "
             + $"the cab when it stops by you: {price}. If you die before, the call is cancelled and you pay "
@@ -229,11 +244,17 @@ internal static class Taxi
     }
 
     // The caller sat down in the called cab: the ride to the nearest station, paid as far as they can
-    private static void PickUp(MyCubeGrid cab, MyCockpit seat, long passenger, long driver)
+    private static void PickUp(
+        MyCubeGrid cab,
+        MyCockpit seat,
+        long passenger,
+        long driver,
+        Call call
+    )
     {
         calls.Remove(passenger);
         var station = NearestStation(cab.PositionComp.GetPosition());
-        var paid = Charge(passenger, Config.TaxiCallFare, driver);
+        var paid = Charge(passenger, CallFare(call.At), driver);
         Write(seat, passenger, station);
         var name = Name(passenger);
         Plugin.Log.Info(
@@ -242,8 +263,65 @@ internal static class Taxi
         Tell(driver, $"Passenger in: {name}");
         Tell(driver, $"Fare paid by {name}. Destination: {station}");
         Tell(passenger, $"You paid {Sc(paid)}. {Name(driver)} takes you to {station}.");
+        StartTrip(passenger, cab, driver, paid, station);
         firstIn[cab.EntityId] = passenger;
         RideAlong(cab, passenger, station);
+    }
+
+    private static void StartTrip(
+        long passenger,
+        MyCubeGrid cab,
+        long driver,
+        long paid,
+        string dest
+    )
+    {
+        if (paid > 0)
+            trips[passenger] = new Trip
+            {
+                Cab = cab.EntityId,
+                Driver = driver,
+                Paid = paid,
+                Dest = dest,
+            };
+    }
+
+    // A paid ride ends when the passenger is out: arrived, or out early alive (no refund, the
+    // passenger's choice); dead, or the driver or the cab gone, refunds the fare in full.
+    private static void UpdateTrips(Dictionary<long, (long Cab, long Seat)> seen)
+    {
+        foreach (var (passenger, trip) in trips.ToList())
+        {
+            var cabHere = MyEntities.TryGetEntityById(trip.Cab, out MyCubeGrid cab);
+            var identity = MySession.Static.Players.TryGetIdentity(passenger);
+            var dead = identity != null && (identity.IsDead || identity.Character?.IsDead == true);
+            if (seen.TryGetValue(passenger, out var at) && at.Cab == trip.Cab)
+            {
+                if (Driver(cab) != trip.Driver)
+                    Refund(passenger, trip, "the driver left the cab");
+                continue;
+            }
+            if (cabHere && StationAt(cab.PositionComp.GetPosition()) == trip.Dest)
+                trips.Remove(passenger); // there
+            else if (dead)
+                Refund(passenger, trip, "you died on the way");
+            else if (!cabHere && identity?.Character != null)
+                Refund(passenger, trip, "the cab is gone");
+            else // got out on the way (the fare stays paid), or both are on another node now
+                trips.Remove(passenger);
+        }
+    }
+
+    private static void Refund(long passenger, Trip trip, string why)
+    {
+        trips.Remove(passenger);
+        var back = Charge(trip.Driver, trip.Paid, passenger);
+        Plugin.Log.Info(
+            $"Taxi: {Name(passenger)} ({passenger}) refunded {back} of {trip.Paid} SC by {Name(trip.Driver)}"
+                + $" ({trip.Driver}): {why}, not at {trip.Dest}"
+        );
+        Tell(passenger, $"The cab didn't get you to {trip.Dest} ({why}): {Sc(back)} refunded.");
+        Tell(trip.Driver, $"Refunded: {Name(passenger)}");
     }
 
     // Up to 'amount' SC from the payer to the driver, as much as the payer has; what was paid
@@ -317,6 +395,7 @@ internal static class Taxi
                 + $" from {here ?? "space"} to {station}"
         );
         Tell(driver, $"Fare paid by {name}. Destination: {station}");
+        StartTrip(passenger, cab, driver, fare, station);
         RideAlong(cab, passenger, station);
         return $"You paid {Sc(fare)}. {Name(driver)} takes you to {station}. "
             + "The fare is not refunded if you get out before the cab arrives.";
@@ -341,7 +420,7 @@ internal static class Taxi
         {
             if (StationAt(call.At) == null)
             {
-                PickUp(cab, seat, passenger, driver);
+                PickUp(cab, seat, passenger, driver, call);
                 return;
             }
             // called from near a station: a regular fare from there, the passenger picks where to
@@ -482,17 +561,30 @@ internal static class Taxi
     // The station within AtStation of the point, else null
     private static string StationAt(Vector3D position) => NearestStation(position, AtStation);
 
-    private static string NearestStation(Vector3D position, double within = double.MaxValue)
+    // A call from out in space: TaxiCallFarePerKm for each whole km to the nearest station, at least TaxiCallFare
+    private static long CallFare(Vector3D at)
+    {
+        var km = (long)Math.Floor(Vector3D.Distance(at, Nearest(at).Position) / 1000);
+        return Math.Max(Config.TaxiCallFare, Config.TaxiCallFarePerKm * km);
+    }
+
+    private static string NearestStation(Vector3D position, double within = double.MaxValue) =>
+        Nearest(position, within).Name;
+
+    private static (string Name, Vector3D Position) Nearest(
+        Vector3D position,
+        double within = double.MaxValue
+    )
     {
         var names = Stations.StationNames().ToHashSet();
-        string best = null;
+        (string, Vector3D) best = (null, position);
         var nearest = within;
         foreach (var faction in MySession.Static.Factions)
         foreach (var station in faction.Value.Stations)
         {
             var d = Vector3D.Distance(station.Position, position);
             if (d < nearest && names.Contains(station.Name))
-                (best, nearest) = (station.Name, d);
+                (best, nearest) = ((station.Name, station.Position), d);
         }
         return best;
     }
