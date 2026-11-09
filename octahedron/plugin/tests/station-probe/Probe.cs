@@ -1226,6 +1226,62 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "give",
+        "Hands a grid to a player, every block theirs, as if they had built it: GIVEN grid-id blocks",
+        "!sprobe give <grid id> <player name>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Give(long grid, string player)
+    {
+        if (!MyEntities.TryGetEntityById(grid, out MyCubeGrid found))
+            return $"GIVEN {grid} gone";
+        var identity = MySession
+            .Static.Players.GetAllIdentities()
+            .FirstOrDefault(i => i.DisplayName == player);
+        if (identity == null)
+            return $"GIVEN no player {player}";
+        foreach (var block in found.GetBlocks())
+            block.TransferAuthorship(identity.IdentityId);
+        found.ChangeGridOwnership(identity.IdentityId, MyOwnershipShareModeEnum.Faction);
+        return $"GIVEN {found.EntityId} {found.BlocksCount}";
+    }
+
+    [Command(
+        "wreck",
+        "Shoots a ship up, as weapons would: destroys that many armor blocks of its hull and damages that many more to half: WRECK grid-id destroyed damaged blocks",
+        "!sprobe wreck <grid id> <destroy> <damage>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Wreck(long grid, int destroy, int damage)
+    {
+        if (!MyEntities.TryGetEntityById(grid, out MyCubeGrid found))
+            return $"WRECK {grid} gone";
+        // hull armor: a block with an empty side, the outermost first, so the ship still flies
+        var center = (found.Min + found.Max) / 2;
+        var hull = found
+            .GetBlocks()
+            .Where(b =>
+                b.FatBlock == null
+                && b.Min == b.Max
+                && Base6Directions.IntDirections.Any(d =>
+                    found.GetCubeBlock(b.Position + d) == null
+                )
+            )
+            .OrderByDescending(b => (b.Position - center).RectangularLength())
+            .ThenBy(b => b.Position.X)
+            .ThenBy(b => b.Position.Y)
+            .ThenBy(b => b.Position.Z)
+            .ToList();
+        var shot = hull.Take(destroy).ToList();
+        var hit = hull.Skip(destroy).Where((_, i) => i % 3 == 0).Take(damage).ToList();
+        foreach (IMySlimBlock b in shot)
+            b.DoDamage(b.Integrity + 1, MyDamageType.Bullet, true);
+        foreach (IMySlimBlock b in hit)
+            b.DoDamage(b.MaxIntegrity / 2, MyDamageType.Bullet, true);
+        return $"WRECK {found.EntityId} destroyed={shot.Count} damaged={hit.Count} blocks={found.BlocksCount}";
+    }
+
+    [Command(
         "balance",
         "Adds to the caller's account and shows it: BALANCE sc",
         "!kprobe balance [SC to add]"
