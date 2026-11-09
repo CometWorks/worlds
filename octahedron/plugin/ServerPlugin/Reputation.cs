@@ -37,7 +37,8 @@ namespace ServerPlugin;
 // "Owns most of" is the game's BigOwners: the owners of the most ownable blocks of the grid, or
 // of its mechanical group's largest grid when the grid itself has none (a rotor top of armor).
 // OCT's NPC and the trader bots are members too, so taking their ships apart costs reputation.
-// The trader bots themselves have no reputation: they are OctProtectedSteamIds.
+// The trader bots themselves have no reputation: they are ShipyardBotSteamIds. OctProtectedSteamIds
+// named them too until players could grind their ships (SE-1282), so it can't tell them apart.
 //
 // A ram is the collision damage one member's ship, the faster of the two, does to other
 // members' grids, until ReputationRamGapSeconds pass without one. Its pilot pays. The first ram in
@@ -61,11 +62,6 @@ internal static class Reputation
 
     private static OctahedronConfig Config => Plugin.Config;
     public static bool On => Config.Enabled && Config.ReputationEnabled;
-
-    private static readonly SteamIdRanges Bots = new(
-        nameof(OctahedronConfig.OctProtectedSteamIds),
-        () => Config.OctProtectedSteamIds
-    );
 
     // --- on the authority ---
 
@@ -137,8 +133,7 @@ internal static class Reputation
 
     /// <summary>A player of OCT with a reputation: not an NPC, not a trader bot</summary>
     private static bool Tracked(long identity) =>
-        OctFaction.Member(identity)
-        && !Bots.Contains(MySession.Static.Players.TryGetSteamId(identity));
+        OctFaction.Member(identity) && !ShipyardOrders.IsBot(identity);
 
     private static void Add(long identity, ReputationKind kind, decimal amount, string incident)
     {
@@ -719,6 +714,8 @@ internal static class Reputation
     {
         if (!On)
             return "Reputation is off on this server.";
+        if (!Tracked(identity))
+            return $"{Name(identity)} has no reputation: only OCT's members have one, trader bots don't.";
         Add(identity, ReputationKind.Admin, amount, null);
         return $"{Name(identity)}'s reputation changes by {ReputationBook.Sc(amount)}.";
     }

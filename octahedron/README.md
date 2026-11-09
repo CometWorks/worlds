@@ -410,12 +410,20 @@ two blocks.
   are shared with everyone, and on the server the Octahedron plugin refuses
   players' changes to them (`NpcBlocksLocked`): no settings, names, texts or
   toolbars.
-- OCT's account takes no deposits from its members (`OctNoDeposits`), since only
-  its leader can take money out. Nobody grinds OCT's grids, anywhere
+- Every OCT member has a reputation (`ReputationEnabled`,
+  [SE-1283](https://tasks.cometworks.se/tasks/2199)): taking apart other members'
+  grids, the trader bots' ships among them, costs it, paying into OCT's account
+  and sharing grids with OCT raise it, and a member below -10,000 for an hour is
+  removed from OCT. So members may pay into OCT's account; only its leader can
+  take money out. Nobody grinds OCT's grids, anywhere
   (`OctGridsNoGrinding`, [SE-1160](https://tasks.cometworks.se/tasks/2060)). The
   trader bots' ships are open to grinding, as any member's ship
   ([SE-1282](https://tasks.cometworks.se/tasks/2198)); `OctProtectedSteamIds`
   with the bots' Steam ID range would protect them again.
+- `!claim` is Essentials' `!ess claim`: a member takes over a grid whose owned
+  functional blocks are all shared with OCT. The claim changes no reputation, and
+  the grid is then the claimer's own ([SE-1285](https://tasks.cometworks.se/tasks/2201)).
+  The trader bots' ships and the stations have private blocks, so they can't be claimed.
 - Human players' shipyard orders go before the trader bots' (`ShipyardBotSteamIds`):
   a human player's order takes the place of a bot's running build or of the last bot
   order of a full queue, and the bot orders again later

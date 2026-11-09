@@ -7,6 +7,11 @@ changes, and the countdown and the removal from OCT run there.
   reaches the World Authority once, and the player hears that they are below zero.
 - After a handover of the player's partition to the other node, that node sees the same
   reputation, and after a graceful stop and warm start of the cluster too.
+- SE-1285, with the world's config/octahedron.cfg as it is but for the timers: the trader bot
+  has no reputation, OCT's hull can't be ground, !claim (Essentials' !ess claim; the console
+  probe sets the alias on every process as Quasar's agent does) refuses the trader bot's hull and
+  takes another member's shared hull at no reputation, which is then free to grind. Grinding the
+  trader bot's hull costs, and only the World Authority applies it.
 - Below -10,000 the countdown (40 s here) starts with a warning, warns at 30 and 10 s left while
   the player is handed over to the other node, and removes them from OCT at its end. The client
   and its node see them out of OCT, and they hear why.
@@ -15,7 +20,8 @@ changes, and the countdown and the removal from OCT run there.
         <Test>/.venv/bin/python tests/reputation_cluster.py <Test>     (from plugin/)
 
 The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one
-headless admin client.
+headless admin client, and Essentials (OCT_ESSENTIALS_REPO, default ~/ws/se/se1/plugins/essentials,
+at the hub's commit) on the nodes.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -43,6 +50,7 @@ from wa_economy_cluster import (  # noqa: E402
 )
 
 import station_tests as st  # noqa: E402
+import test_reputation as tr  # noqa: E402
 
 NODES = ("node-1", "node-2")
 KICK_SECONDS = 40
@@ -192,9 +200,48 @@ def run(bench) -> None:
     check("the same player after the warm start", api.get_faction()["identityId"] == me)
     check("after the warm start: the same reputation", rep(api) == -5_000)
 
+    # SE-1285: the three features together, with the world's config
+    def logged(identity) -> list:
+        return re.findall(
+            rf"Reputation of [^(]*\({identity}\): (\w+) (-?[\d.]+)", log("wa-1")
+        )
+
+    for name, passed, detail in tr.integration(api, rep, logged):
+        check(name, passed, detail)
+    before, after = tr.grind(api, "Trader")
+    now = settled(api, -5_000)
+    check(
+        "grinding the trader bot's hull costs",
+        after < before and now < -5_000,
+        f"{before:.0f} -> {after:.0f} integrity, {now:.0f}",
+    )
+    wait_until(
+        lambda: ("Damage" in {k for k, _ in logged(me)}),
+        60,
+        "the damage in the WA's log",
+    )
+    time.sleep(5)
+    damage = [
+        (p, k, a)
+        for p in processes
+        for k, a in re.findall(
+            rf"Reputation of [^(]*\({me}\): (\w+) (-?[\d.]+)", log(p)
+        )
+        if k == "Damage"
+    ]
+    check(
+        "the World Authority applied the grinding, no node did",
+        damage
+        and all(p == "wa-1" for p, _, _ in damage)
+        and abs(sum(float(a) for *_, a in damage) - (now + 5_000)) < 2,
+        damage,
+    )
+    base = now
+
     since = api.get_chat_messages()
     started = time.monotonic()
     rig.chat(api, "!oct rep add -6000", 10)
+    check("below -10,000 after the change", settled(api, base) < -10_000)
     told = heard(api, since, "If it stays there", 30)
     check(
         "below -10,000 the countdown starts with a warning",
@@ -242,15 +289,60 @@ def run(bench) -> None:
 run.administrators = [CLIENT_ID]
 
 
+def build_essentials() -> Path:
+    """Essentials as a local plugin (DLL + manifest) for CLUSTER_EXTRA_PLUGINS"""
+    repo = tr.ESSENTIALS[1]
+    out = wa.lc.PLUGINS / ".build" / "Essentials"
+    subprocess.run(
+        ["nice", "-n", "19", "dotnet", "build", str(repo / "ServerPlugin/ServerPlugin.csproj"),
+         "-c", "Release", "--nologo", "-v", "q", f"-p:Magnetar={os.environ['MAGNETAR_HOME']}",
+         "-p:MagnetarData=", "-o", str(out)],
+        check=True,
+    )  # fmt: skip
+    commit = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip()
+    folder = wa.lc.PLUGINS / "Essentials"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "Essentials.dll").write_bytes((out / "Essentials.dll").read_bytes())
+    (folder / "Essentials.xml").write_text(
+        '<?xml version="1.0"?>\n<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">'
+        "<Id>DF09925B-6D53-41F2-899C-CA6214B5DD6F</Id><FriendlyName>Essentials</FriendlyName>"
+        f"<RepoId>CometWorks/essentials</RepoId><Commit>{commit}</Commit>"
+        "<Runtimes>CoreCLR</Runtimes></PluginData>\n",
+        encoding="utf-8",
+    )
+    return folder
+
+
 def main() -> int:
     # A host whose Magnetar never loaded Multigrid Projector gets its build from elsewhere
     wa.MGP_CACHE = Path(os.environ.get("OCT_MGP_CACHE", wa.MGP_CACHE))
     run.world_template = wa.prepare()
+    # The world's config as it is, but for the countdown
+    tr.check_shipped_config()
     wa.set_config(
-        ReputationEnabled="true",
-        ReputationKickAfterSeconds=KICK_SECONDS,
-        ReputationWarnSeconds="30,10",
+        ReputationKickAfterSeconds=KICK_SECONDS, ReputationWarnSeconds="30,10"
     )
+    # SE-1285: the hulls, their owners in OCT, Essentials and the !claim alias
+    sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
+    text = sector.read_text(encoding="utf-8")
+    text = text.replace(
+        "</SectorObjects>",
+        "".join(tr.hull(n) for n in ("Trader", "Shared", "OCT")) + "</SectorObjects>",
+        1,
+    )
+    sector.write_text(text, encoding="utf-8")
+    tr.add_members(rig.WORLD)
+    essentials = build_essentials()
+    os.environ["CLUSTER_EXTRA_PLUGINS"] = ",".join(
+        [
+            os.environ["CLUSTER_EXTRA_PLUGINS"].replace("wa:", ""),
+            f"node:{essentials}",
+        ]
+    )
+    os.environ.update(tr.ALIASES)
     label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-reputation")
     results = bench_module.HOST.results / label
     results.mkdir(parents=True, exist_ok=True)

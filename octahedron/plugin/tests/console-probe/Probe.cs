@@ -29,6 +29,8 @@ namespace ConsoleProbe;
 /// Lines "tug grid player" in CONSOLEPROBE_PLAN.tow give the tug to the player and join it to the grid as a
 /// connector would, on the process holding the tug, and are written to CONSOLEPROBE_PLAN.towed.
 /// While the file CONSOLEPROBE_PLAN.air exists, suits stay charged and full on every process: long tests outlast them.
+/// CONSOLEPROBE_ALIASES, "!source=!target;...", sets chat command aliases on every process it is loaded on, as
+/// Quasar's agent does on a cluster's nodes from the profile's commandAliases.
 /// </summary>
 public class Probe : IPlugin, ICommandResponder
 {
@@ -66,8 +68,25 @@ public class Probe : IPlugin, ICommandResponder
         output = new StreamWriter(outPath, append: true) { AutoFlush = true };
     }
 
+    private bool aliased;
+
     public void Update()
     {
+        if (!aliased && MySession.Static is { Ready: true })
+        {
+            aliased = true;
+            var aliases = Environment.GetEnvironmentVariable("CONSOLEPROBE_ALIASES");
+            if (!string.IsNullOrEmpty(aliases))
+                ServerCommands.SetAliases(
+                    aliases
+                        .Split(';', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(a => a.Split('=', 2))
+                        .Select(a => new System.Collections.Generic.KeyValuePair<string, string>(
+                            a[0],
+                            a[1]
+                        ))
+                );
+        }
         Convert();
         Tow();
         if (planPath == null || MySession.Static is not { Ready: true })
