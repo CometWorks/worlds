@@ -912,8 +912,8 @@ public class OctahedronConfig : PluginConfig
 
     [DoubleOption(
         0,
-        description: "Seconds after re-pasting a completed bot ship before storing it in the orderer's Hangar. "
-            + "0 disables fast storage. The ship is delivered normally if Hangar cannot store it.",
+        description: "Seconds after re-pasting a completed bot ship before storing it in the orderer's Hangar "
+            + "when another job is waiting. 0 disables fast storage. The ship is delivered normally otherwise.",
         Parent = "shipyard"
     )]
     public double ShipyardBotHangarDelaySeconds

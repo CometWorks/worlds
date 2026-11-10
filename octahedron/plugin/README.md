@@ -1138,9 +1138,10 @@ the player's turn. The `!oct shipyards` admin command lists the shipyards, their
 rotors and the running builds with their arm.
 
 `ShipyardBotHangarDelaySeconds` stores a completed, re-pasted bot ship in its
-orderer's Hangar after that many seconds, once the authority records the finished
-order. Zero disables it. If the Hangar cannot take the ship, it stays in the
-shipyard for its owner to collect. Octahedron sets the delay to one second.
+orderer's Hangar after that many seconds if another job is waiting, once the
+authority records the finished order. Zero disables it. With no waiting job, or
+if the Hangar cannot take the ship, the owner collects it from the shipyard.
+Octahedron sets the delay to one second.
 `!oct shipyard strip <station> <item>` takes an item out of a shipyard's
 containers and welders, so tests can stall a build.
 `!oct shipyard clear [station]` (admin, on the node that simulates the station)
