@@ -1,5 +1,5 @@
 """Drift stop on a local test cluster (SE-1326): drifting wrecks keep their partitions online, stopped ones go
-offline. A World Authority and one regular node, no client. Far from the stations, each in a partition of its
+offline. A World Authority and two regular nodes, no client. Far from the stations, each in a partition of its
 own, 20 km apart: a wreck with no power drifting at 0.5 m/s, debris at 8 m/s and a wreck at 25 m/s, faster than
 DriftStopMaxSpeed (20). No player is within sync distance.
 
@@ -29,7 +29,8 @@ wa.ROOT = Path.home() / f"cluster-runs/drift-stop-{os.environ['OCT_TASK']}"
 wa.lc.PLUGINS = wa.ROOT / "plugins"
 wa.lc.PLAN = wa.ROOT / "probe-plan.txt"
 wa.lc.OUT = wa.ROOT / "probe-out.txt"
-PROCESSES = ("wa-1", "node-1")
+NODES = ("node-1", "node-2")
+PROCESSES = ("wa-1", *NODES)
 BASE = 777000132610000
 # name -> (entity id, blocks, size, speed)
 GRIDS = {
@@ -84,11 +85,12 @@ def run(bench) -> None:
     def grids() -> dict[str, dict]:
         """name -> the node's entity row (physicsActive, velocity), for the test grids it holds"""
         found = {}
-        dump = cluster.node("node-1", "/cluster/diag?depth=entities", timeout=60)
-        for partition in dump.get("partitions", []):
-            for entity in partition.get("entities", []):
-                if entity.get("displayName") in GRIDS:
-                    found[entity["displayName"]] = entity
+        for node in NODES:
+            dump = cluster.node(node, "/cluster/diag?depth=entities", timeout=60)
+            for partition in dump.get("partitions", []):
+                for entity in partition.get("entities", []):
+                    if entity.get("displayName") in GRIDS:
+                        found[entity["displayName"]] = entity
         return found
 
     def state() -> dict[str, str]:
@@ -111,7 +113,8 @@ def run(bench) -> None:
     def stops() -> list[str]:
         return [
             line
-            for log in (bench.run_root / "node-1-data").glob(
+            for node in NODES
+            for log in (bench.run_root / f"{node}-data").glob(
                 "SpaceEngineersDedicated_*.log"
             )
             for line in log.read_text(errors="replace").splitlines()
@@ -124,10 +127,11 @@ def run(bench) -> None:
         link_mods(bench.run_root / f"{process}-data" / "Mods")
     cluster.start(list(PROCESSES))
     cluster.wait_ready(nodes=list(PROCESSES))
+    # The world's partitions start offline but for the stations': nobody came by yet. Live, a drifting wreck
+    # is online because somebody did, so the test loads them all, with nothing going offline meanwhile.
     cluster.handover_config(
         {
-            "offline.minOnlineSeconds": "0",
-            "offline.graceSeconds": "0",
+            "offline.enabled": "false",
             # Unowned grids nobody visits would be removed after 5 minutes
             "cleanup.unownedMinutes": "0",
         }
@@ -136,9 +140,23 @@ def run(bench) -> None:
     def placed() -> bool:
         now = state()
         print(f"placed: {json.dumps(now)}", flush=True)
-        return all(s != "missing" for s in now.values())
+        if all(s not in ("missing", "offline") for s in now.values()):
+            return True
+        # A load asked for right after the start can be lost: ask again each poll
+        for row in cluster.get("/registry/partitions/offline").get("Partitions", []):
+            cluster.post(
+                f"/registry/partitions/offline/load?partition={row['Partition']}&reason=test"
+            )
+        return False
 
-    wait_until(placed, 300, "the grids on node-1", interval=10)
+    wait_until(placed, 300, "the grids on the nodes", interval=10)
+    cluster.handover_config(
+        {
+            "offline.enabled": "true",
+            "offline.minOnlineSeconds": "0",
+            "offline.graceSeconds": "0",
+        }
+    )
 
     # 1. Off
     samples = []
@@ -198,14 +216,13 @@ def run(bench) -> None:
 
 def main() -> int:
     run.world_template = wa.prepare()
-    run.regular_nodes = 1
     add_grids()
     wa.set_config(DriftStopEnabled="false", DriftStopSeconds=ds.SECONDS)
-    # The probe runs the reload on the node, where the rule runs
+    # The probe runs the reload everywhere: the rule runs on the nodes
     os.environ["CLUSTER_EXTRA_PLUGINS"] = os.environ["CLUSTER_EXTRA_PLUGINS"].replace(
         f"wa:{wa.lc.PLUGINS / 'ConsoleProbe'}", str(wa.lc.PLUGINS / "ConsoleProbe")
     )
-    os.environ["CONSOLEPROBE_NODE"] = "node-1"
+    os.environ.pop("CONSOLEPROBE_NODE", None)
     results = bench_module.HOST.results / datetime.now(timezone.utc).strftime(
         "%Y%m%d-%H%M%SZ-drift-stop"
     )
