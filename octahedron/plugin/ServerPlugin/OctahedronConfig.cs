@@ -910,6 +910,18 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "";
 
+    [DoubleOption(
+        0,
+        description: "Seconds after re-pasting a completed bot ship before storing it in the orderer's Hangar "
+            + "when another job is waiting. 0 disables fast storage. The ship is delivered normally otherwise.",
+        Parent = "shipyard"
+    )]
+    public double ShipyardBotHangarDelaySeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
     [StringOption(
         description: "Name of the station button panel next to the hologram table. Its first button orders the blueprint "
             + "loaded into the table, or cancels the presser's queue entry, a running build on a second press within 10 s.",

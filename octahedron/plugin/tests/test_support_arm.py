@@ -416,7 +416,7 @@ def wait_state(remote, station: str, pattern: str, timeout: float) -> str | None
     return None
 
 
-def order(remote, case: str) -> tuple:
+def order(remote, case: str, **options) -> tuple:
     station, ship, blocks, paid, _, _ = CASES[case]
     exempt = case == "exempt"
     with_config(
@@ -429,6 +429,7 @@ def order(remote, case: str) -> tuple:
             "false" if os.environ.get("OCT_REPASTE") == "0" else "true"
         ),
         **(EXEMPT_CONFIG if exempt else {}),
+        **options,
     )
     if paid:
         for item, count in STOCK.items():

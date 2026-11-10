@@ -345,7 +345,8 @@ internal static partial class ShipyardOrders
         string message,
         Action done = null,
         long ship = 0,
-        int percent = 100
+        int percent = 100,
+        Action<bool> completed = null
     )
     {
         Builds.Execute(
@@ -367,6 +368,7 @@ internal static partial class ShipyardOrders
                     Plugin.Log.Error($"Shipyard order {order.Id} did not end its build: {answer}");
                 Tell(order.Player, answer.Length > 0 ? $"{message} {answer}" : message);
                 done?.Invoke();
+                completed?.Invoke(ok);
             }
         );
         Plugin.Log.Info(
