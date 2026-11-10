@@ -26,6 +26,16 @@ public sealed class Commands : CommandModule
         {
             [var w] when w.Equals("call", StringComparison.OrdinalIgnoreCase) =>
                 ServerPlugin.Taxi.CallCab(Context.Caller.IdentityId),
+            ["accept-pickup", var token] => ServerPlugin.Taxi.AnswerPickup(
+                Context.Caller.IdentityId,
+                token,
+                true
+            ),
+            ["decline-pickup", var token] => ServerPlugin.Taxi.AnswerPickup(
+                Context.Caller.IdentityId,
+                token,
+                false
+            ),
             [var w] when w.Equals("giveup", StringComparison.OrdinalIgnoreCase) =>
                 ServerPlugin.Taxi.GiveUp(Context.Caller.IdentityId),
             _ => ServerPlugin.Taxi.Pay(Context.Caller.IdentityId, string.Join(" ", station)),

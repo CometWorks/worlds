@@ -93,6 +93,21 @@ internal static class Taxi
     // Open calls by caller
     private static readonly Dictionary<long, Call> calls = new();
 
+    private sealed class PickupRequest
+    {
+        public long Caller;
+        public long Body;
+        public long Only;
+        public Vector3D At;
+        public HashSet<long> Tried = new();
+        public long Cab;
+        public long Driver;
+        public Guid Token;
+        public DateTime Until;
+    }
+
+    private static readonly Dictionary<long, PickupRequest> pickups = new();
+
     private static OctahedronConfig Config => Plugin.Config;
 
     public static void Update()
@@ -105,6 +120,7 @@ internal static class Taxi
         {
             seated.Clear();
             calls.Clear();
+            pickups.Clear();
             trips.Clear();
             return;
         }
@@ -178,6 +194,8 @@ internal static class Taxi
         foreach (var (passenger, at) in seen)
             seated[passenger] = at;
         UpdateCalls(now);
+        foreach (var pickup in pickups.Values.Where(p => p.Until <= now).ToList())
+            AdvancePickup(pickup);
     }
 
     // !oct taxi call, the reply goes to the caller
@@ -192,51 +210,114 @@ internal static class Taxi
             return "You sit in a cab already.";
         if (calls.TryGetValue(caller, out var open))
             return $"{Name(open.Driver)} is on the way already. Stay where you called from.";
-        var at = character.PositionComp.GetPosition();
-        var gravity = MyGravityProviderSystem.CalculateNaturalGravityInPoint(at).Length();
-        var planet = MyGamePruningStructure.GetClosestPlanet(at);
-        var air = planet is { HasAtmosphere: true } ? planet.GetAirDensity(at) : 0;
-        var unsuitable = false;
+        if (pickups.ContainsKey(caller))
+            return "Still checking whether a cab can come.";
+        return OfferNext(
+            new PickupRequest
+            {
+                Caller = caller,
+                Body = character.EntityId,
+                At = character.PositionComp.GetPosition(),
+                Only = only,
+            }
+        );
+    }
+
+    private static bool Free(long id, out MyCubeGrid cab)
+    {
+        return MyEntities.TryGetEntityById(id, out cab)
+            && Plugin.Simulated(cab)
+            && !calls.Values.Any(c => c.Cab == id)
+            && !PassengerSeats(cab).Any(s => s.Pilot != null);
+    }
+
+    private static string OfferNext(PickupRequest pickup)
+    {
+        pickups.Remove(pickup.Caller);
+        if (Body(pickup.Caller)?.EntityId != pickup.Body)
+            return "Taxi request cancelled: your character is gone.";
 
         MyCubeGrid best = null;
+        MyCockpit bestSeat = null;
         long bestDriver = 0;
         var nearest = double.MaxValue;
         foreach (var id in cabs)
         {
             if (
-                !MyEntities.TryGetEntityById(id, out MyCubeGrid cab)
-                || !Plugin.Simulated(cab)
-                || calls.Values.Any(c => c.Cab == id)
-                || PassengerSeats(cab).Any(s => s.Pilot != null)
+                pickup.Tried.Contains(id)
+                || pickups.Values.Any(p => p.Cab == id)
+                || !Free(id, out var cab)
             )
                 continue;
             var seat = DriverSeat(cab);
             var driver = seat?.Pilot?.GetPlayerIdentityId() ?? 0;
-            if (driver == 0 || (only != 0 && driver != only))
+            if (driver == 0 || (pickup.Only != 0 && pickup.Only != driver))
                 continue;
-            if (!CanPickUp(cab, seat, planet, air, gravity))
-            {
-                unsuitable = true;
-                continue;
-            }
-            var d = Vector3D.Distance(cab.PositionComp.GetPosition(), at);
-            if (d < nearest)
-                (best, bestDriver, nearest) = (cab, driver, d);
+            var distance = Vector3D.Distance(cab.PositionComp.GetPosition(), pickup.At);
+            if (distance < nearest)
+                (best, bestSeat, bestDriver, nearest) = (cab, seat, driver, distance);
         }
-        if (best == null && unsuitable)
-            return only != 0
-                ? "My cab cannot fly safely at your pickup point. !oct taxi call checks other cabs."
-                : "No free cab can fly safely at your pickup point.";
         if (best == null)
-            return only != 0
-                ? "My cab is busy right now. !oct taxi call sends the nearest free cab."
+        {
+            if (pickup.Tried.Count > 0)
+                return pickup.Only != 0
+                    ? "My cab can't come to your pickup point right now."
+                    : "None of the free cabs can come to your pickup point right now.";
+            return pickup.Only != 0
+                ? "My cab is busy right now. !oct taxi call checks other cabs."
                 : "No cab is free right now. Try again later.";
+        }
 
+        pickup.Tried.Add(best.EntityId);
+        var gravity = MyGravityProviderSystem.CalculateNaturalGravityInPoint(pickup.At).Length();
+        if (!ShipyardOrders.IsBot(bestDriver))
+        {
+            // Human drivers do not run the taxi controller. Keep their existing space calls.
+            return gravity == 0 ? Dispatch(pickup, best, bestDriver) : OfferNext(pickup);
+        }
+        pickup.Cab = best.EntityId;
+        pickup.Driver = bestDriver;
+        pickup.Token = Guid.NewGuid();
+        pickup.Until = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        pickups[pickup.Caller] = pickup;
+        Tell(bestDriver, PickupOffer(pickup, best, bestSeat, gravity));
+        return "Checking whether a cab can come.";
+    }
+
+    internal static string AnswerPickup(long driver, string token, bool accepts)
+    {
+        if (!Guid.TryParseExact(token, "N", out var id))
+            return "Invalid taxi offer.";
+        var pickup = pickups.Values.FirstOrDefault(p => p.Driver == driver && p.Token == id);
+        if (pickup == null || pickup.Until <= DateTime.UtcNow)
+            return "That taxi offer expired.";
+        pickups.Remove(pickup.Caller);
+        if (Body(pickup.Caller)?.EntityId != pickup.Body)
+            return "The caller is gone.";
+        if (accepts && Free(pickup.Cab, out var cab) && Driver(cab) == driver)
+            Tell(pickup.Caller, Dispatch(pickup, cab, driver));
+        else
+            AdvancePickup(pickup);
+        return "Taxi offer answered.";
+    }
+
+    private static void AdvancePickup(PickupRequest pickup)
+    {
+        var result = OfferNext(pickup);
+        if (!pickups.ContainsKey(pickup.Caller))
+            Tell(pickup.Caller, result);
+    }
+
+    private static string Dispatch(PickupRequest pickup, MyCubeGrid best, long bestDriver)
+    {
+        var caller = pickup.Caller;
+        var at = pickup.At;
+        var nearest = Vector3D.Distance(best.PositionComp.GetPosition(), at);
         calls[caller] = new Call
         {
             Cab = best.EntityId,
             Driver = bestDriver,
-            Body = character.EntityId,
+            Body = pickup.Body,
             At = at,
             Until = DateTime.UtcNow + TimeSpan.FromSeconds(Config.TaxiCallTimeout),
         };
@@ -720,14 +801,16 @@ internal static class Taxi
         Hydrogen,
     }
 
-    private static bool CanPickUp(
+    // Send measurements only. The controller decides what reserve and environment to require.
+    private static string PickupOffer(
+        PickupRequest pickup,
         MyCubeGrid cab,
         MyCockpit seat,
-        MyPlanet planet,
-        float air,
         double gravity
     )
     {
+        var planet = MyGamePruningStructure.GetClosestPlanet(pickup.At);
+        var air = planet is { HasAtmosphere: true } ? planet.GetAirDensity(pickup.At) : 0;
         var upward = new double[3];
         foreach (var thrust in cab.GetFatBlocks().OfType<MyThrust>())
         {
@@ -759,19 +842,15 @@ internal static class Taxi
                 thrust.ThrustForceLength * effectiveness * (gravity > 0 ? projection : 1);
         }
 
-        var strongest = upward.Max();
-        if (strongest <= 0)
-            return false;
-        if (gravity > 0 && (cab.Physics == null || strongest < 1.5 * cab.Physics.Mass * gravity))
-            return false;
-        if (upward[(int)Propulsion.Hydrogen] == strongest)
-            return true;
-        if (air <= 0)
-            return upward[(int)Propulsion.Ion] == strongest;
         var position = cab.PositionComp.GetPosition();
-        return upward[(int)Propulsion.Atmospheric] == strongest
+        var samePlanet =
+            planet != null
             && planet == MyGamePruningStructure.GetClosestPlanet(position)
             && MyGravityProviderSystem.CalculateNaturalGravityInPoint(position).LengthSquared() > 0;
+        var mass = cab.Physics?.Mass ?? 0;
+        return FormattableString.Invariant(
+            $"Pickup offer {pickup.Token:N} {gravity:R} {mass:R} {air:R} {(samePlanet ? 1 : 0)} {upward[0]:R} {upward[1]:R} {upward[2]:R}"
+        );
     }
 
     private static MyCockpit DriverSeat(MyCubeGrid cab) =>
