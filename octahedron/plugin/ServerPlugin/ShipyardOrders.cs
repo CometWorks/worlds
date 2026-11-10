@@ -148,6 +148,8 @@ internal static partial class ShipyardOrders
         // The finished ship's entity id while it docks to the arm
         public long Docking;
 
+        public DateTime? RepastedAt;
+
         // The blueprint's name
         public string Name = "";
 
@@ -197,6 +199,11 @@ internal static partial class ShipyardOrders
     }
 
     private static readonly Dictionary<long, Dock> docks = new();
+
+    private static readonly Dictionary<
+        long,
+        (MyCubeGrid Yard, MyCubeGrid Ship, long Player, DateTime Due)
+    > botHangars = new();
 
     // By shipyard entity id
     private static readonly Dictionary<long, Order> orders = new();
@@ -1358,6 +1365,8 @@ internal static partial class ShipyardOrders
         ShipyardArm.Update();
         if (docks.Count > 0)
             UpdateDocks();
+        if (botHangars.Count > 0)
+            UpdateBotHangars();
         if (trials.Count > 0)
             WatchTrials();
         if (refused.Count > 0)
@@ -2094,7 +2103,12 @@ internal static partial class ShipyardOrders
     }
 
     // ship: the grid the order leaves in the build space
-    private static void Finish(BuildOrder order, string message, long ship = 0)
+    private static void Finish(
+        BuildOrder order,
+        string message,
+        long ship = 0,
+        Action<bool> completed = null
+    )
     {
         Builds.Execute(
             Guid.NewGuid(),
@@ -2114,6 +2128,7 @@ internal static partial class ShipyardOrders
                         order.Player,
                         ok && answer.Length > 0 ? $"{message.TrimEnd('.')}. {answer}" : message
                     );
+                completed?.Invoke(ok);
             }
         );
         Plugin.Log.Info(
@@ -2249,6 +2264,22 @@ internal static partial class ShipyardOrders
                         : "its components are sold for you."
                 )
                 + " Order again later.";
+        var botHangar =
+            ship != null
+            && !gone
+            && why == null
+            && !order.Canceled
+            && !order.Refund
+            && order.Clang == null
+            && order.Missing == null
+            && order.GivenUp == null
+            && order.RepastedAt.HasValue
+            && order.Id.Length > 0
+            && Config.ShipyardBotHangarDelaySeconds > 0
+            && IsBot(order.Player);
+        if (botHangar)
+            message =
+                $"Your ship '{name}' at {shipyard.DisplayName} will go into your Hangar shortly.";
         if (!gone)
             message +=
                 GasText(H2, order.Hydrogen, filled.H2, order.Free)
@@ -2262,6 +2293,28 @@ internal static partial class ShipyardOrders
             Player = order.Player,
             Ship = name,
         };
+        void Schedule(bool ok)
+        {
+            if (!botHangar)
+                return;
+            if (!ok)
+            {
+                Tell(
+                    order.Player,
+                    $"Your ship '{name}' is ready in {shipyard.DisplayName}. Fly it out to make room for the next order."
+                );
+                return;
+            }
+            botHangars[ship.EntityId] = (
+                shipyard,
+                ship,
+                order.Player,
+                order.RepastedAt.Value.AddSeconds(Config.ShipyardBotHangarDelaySeconds)
+            );
+            Plugin.Log.Info(
+                $"Shipyard {shipyard.DisplayName}: queued '{name}' for fast Hangar storage"
+            );
+        }
         if (order.Id.Length > 0 && !order.Free)
             After(
                 ended,
@@ -2274,10 +2327,11 @@ internal static partial class ShipyardOrders
                 ship: left,
                 percent: why == null || left == 0 || order.Blocks == 0
                     ? 100
-                    : Math.Min(100, Built(ship) * 100 / order.Blocks)
+                    : Math.Min(100, Built(ship) * 100 / order.Blocks),
+                completed: Schedule
             );
         else if (order.Id.Length > 0)
-            Finish(ended, message, left);
+            Finish(ended, message, left, Schedule);
         else
         {
             Tell(order.Player, message);
@@ -2945,7 +2999,11 @@ internal static partial class ShipyardOrders
             projector.Enabled = false;
             var blocks = ShipBlocksOnArm(order);
             if (blocks.Count > 0 && Config.ShipyardRepasteShips)
+            {
                 ship = Repaste(shipyard, order, grid, blocks, blueprint);
+                if (ship != null)
+                    order.RepastedAt = DateTime.UtcNow;
+            }
             else if (blocks.Count > 0)
             {
                 // A split of a static grid is static, and the clients may miss an event on
@@ -3014,6 +3072,60 @@ internal static partial class ShipyardOrders
                 continue;
             docks.Remove(id);
             Docked(dock.Shipyard, dock.Order, dock.Ship, connected, dock.Why);
+        }
+    }
+
+    private static void UpdateBotHangars()
+    {
+        foreach (var (id, pending) in botHangars.ToList())
+        {
+            if (DateTime.UtcNow < pending.Due)
+                continue;
+            botHangars.Remove(id);
+            var (yard, ship, player, _) = pending;
+            if (ship.MarkedForClose || yard.MarkedForClose || !Plugin.Simulated(yard))
+            {
+                Plugin.Log.Warning(
+                    $"Shipyard {yard.DisplayName}: fast Hangar storage skipped for '{ship.DisplayName}' (ship closed={ship.MarkedForClose}, yard closed={yard.MarkedForClose}, simulated={Plugin.Simulated(yard)})"
+                );
+                continue;
+            }
+            var grids = Grids(ship);
+            var table = StationTables()
+                .Values.SelectMany(tables => tables)
+                .FirstOrDefault(t => FindShipyard(t) == yard);
+            if (
+                table != null
+                && !grids.SelectMany(g => g.GetFatBlocks<MyCockpit>()).Any(c => c.Pilot != null)
+            )
+            {
+                var (stored, _, error) = HangarFee.Store(
+                    player,
+                    grids,
+                    table.PositionComp.GetPosition()
+                );
+                if (stored)
+                {
+                    Plugin.Log.Info(
+                        $"Shipyard {yard.DisplayName}: '{ship.DisplayName}' went into the Hangar of {Name(player)}"
+                    );
+                    Tell(
+                        player,
+                        $"'{ship.DisplayName}' is complete, so it is in your Hangar now. !hangar load {ship.DisplayName} brings it back, free at this station."
+                    );
+                    continue;
+                }
+                Plugin.Log.Warning(
+                    $"Shipyard {yard.DisplayName}: '{ship.DisplayName}' could not be stored: {error}"
+                );
+            }
+            Plugin.Log.Warning(
+                $"Shipyard {yard.DisplayName}: fast Hangar storage unavailable for '{ship.DisplayName}'"
+            );
+            Tell(
+                player,
+                $"Your ship '{ship.DisplayName}' is ready in {yard.DisplayName}. Fly it out to make room for the next order."
+            );
         }
     }
 

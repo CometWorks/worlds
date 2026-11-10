@@ -601,8 +601,11 @@ def start_server(timeout: float = 2400.0, env: dict | None = None) -> None:
             raise TimeoutError(f"The server did not get ready, see {SERVER_LOG}")
     # A plugin whose Init throws leaves the server running with only some of its patches
     magnetar_log = SERVER_CONFIG / "info.log"
-    if "Failed to initialize" in magnetar_log.read_text(errors="replace"):
-        raise RuntimeError(f"A plugin failed to initialize, see {magnetar_log}")
+    log = magnetar_log.read_text(errors="replace")
+    if "Failed to initialize" in log or "Failed to build" in log:
+        raise RuntimeError(
+            f"A plugin failed to build or initialize, see {magnetar_log}"
+        )
 
 
 def stop_server() -> None:
