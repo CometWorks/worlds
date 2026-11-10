@@ -35,7 +35,7 @@ namespace ServerPlugin;
 // passenger can take or fill a bottle there; a player driving a cab sets its share modes as they like.
 //
 // "!oct taxi call" calls the nearest free cab (one with a driver, nobody else in it and no other
-// call, waiting at a station or on its way home) to where the caller is, in space only. The driver
+// call, waiting at a station or on its way home) that can fly at the pickup point. The driver
 // hears "Call from NAME at X Y Z" and flies there. When the caller sits down in that cab they pay
 // the call fare to the driver (TaxiCallFarePerKm per whole km from the caller to the nearest
 // station, at least TaxiCallFare), or all they have when that is less, for the ride to that
@@ -193,8 +193,10 @@ internal static class Taxi
         if (calls.TryGetValue(caller, out var open))
             return $"{Name(open.Driver)} is on the way already. Stay where you called from.";
         var at = character.PositionComp.GetPosition();
-        if (MyGravityProviderSystem.CalculateNaturalGravityInPoint(at).LengthSquared() > 0)
-            return "Cabs don't fly into gravity yet: call one from space.";
+        var gravity = MyGravityProviderSystem.CalculateNaturalGravityInPoint(at).Length();
+        var planet = MyGamePruningStructure.GetClosestPlanet(at);
+        var air = planet is { HasAtmosphere: true } ? planet.GetAirDensity(at) : 0;
+        var unsuitable = false;
 
         MyCubeGrid best = null;
         long bestDriver = 0;
@@ -208,13 +210,23 @@ internal static class Taxi
                 || PassengerSeats(cab).Any(s => s.Pilot != null)
             )
                 continue;
-            var driver = Driver(cab);
-            if (only != 0 && driver != only)
+            var seat = DriverSeat(cab);
+            var driver = seat?.Pilot?.GetPlayerIdentityId() ?? 0;
+            if (driver == 0 || (only != 0 && driver != only))
                 continue;
+            if (!CanPickUp(cab, seat, planet, air, gravity))
+            {
+                unsuitable = true;
+                continue;
+            }
             var d = Vector3D.Distance(cab.PositionComp.GetPosition(), at);
-            if (driver != 0 && d < nearest)
+            if (d < nearest)
                 (best, bestDriver, nearest) = (cab, driver, d);
         }
+        if (best == null && unsuitable)
+            return only != 0
+                ? "My cab cannot fly safely at your pickup point. !oct taxi call checks other cabs."
+                : "No free cab can fly safely at your pickup point.";
         if (best == null)
             return only != 0
                 ? "My cab is busy right now. !oct taxi call sends the nearest free cab."
@@ -701,17 +713,74 @@ internal static class Taxi
     }
 
     // The identity at the cab's controls, 0 when nobody
-    private static long Driver(MyCubeGrid cab)
+    private enum Propulsion
     {
-        foreach (var block in cab.GetFatBlocks())
-            if (
-                block is MyCockpit seat
-                && seat.BlockDefinition.EnableShipControl
-                && seat.Pilot != null
-            )
-                return seat.Pilot.GetPlayerIdentityId();
-        return 0;
+        Atmospheric,
+        Ion,
+        Hydrogen,
     }
+
+    private static bool CanPickUp(
+        MyCubeGrid cab,
+        MyCockpit seat,
+        MyPlanet planet,
+        float air,
+        double gravity
+    )
+    {
+        var upward = new double[3];
+        foreach (var thrust in cab.GetFatBlocks().OfType<MyThrust>())
+        {
+            if (!thrust.IsWorking)
+                continue;
+            var projection = Vector3D.Dot(thrust.WorldMatrix.Backward, seat.WorldMatrix.Up);
+            if (gravity > 0 && projection <= 0)
+                continue;
+            var def = thrust.BlockDefinition;
+            var type =
+                thrust.FuelDefinition?.Id.SubtypeName == "Hydrogen" ? Propulsion.Hydrogen
+                : def.NeedsAtmosphereForInfluence ? Propulsion.Atmospheric
+                : Propulsion.Ion;
+            var effectiveness = 1f;
+            if (def.NeedsAtmosphereForInfluence && air <= 0)
+                effectiveness = def.EffectivenessAtMinInfluence;
+            else if (def.MaxPlanetaryInfluence != def.MinPlanetaryInfluence)
+            {
+                var ratio =
+                    (air - def.MinPlanetaryInfluence)
+                    / (def.MaxPlanetaryInfluence - def.MinPlanetaryInfluence);
+                effectiveness = MathHelper.Lerp(
+                    def.EffectivenessAtMinInfluence,
+                    def.EffectivenessAtMaxInfluence,
+                    MathHelper.Clamp(ratio, 0, 1)
+                );
+            }
+            upward[(int)type] +=
+                thrust.ThrustForceLength * effectiveness * (gravity > 0 ? projection : 1);
+        }
+
+        var strongest = upward.Max();
+        if (strongest <= 0)
+            return false;
+        if (gravity > 0 && (cab.Physics == null || strongest < 1.5 * cab.Physics.Mass * gravity))
+            return false;
+        if (upward[(int)Propulsion.Hydrogen] == strongest)
+            return true;
+        if (air <= 0)
+            return upward[(int)Propulsion.Ion] == strongest;
+        var position = cab.PositionComp.GetPosition();
+        return upward[(int)Propulsion.Atmospheric] == strongest
+            && planet == MyGamePruningStructure.GetClosestPlanet(position)
+            && MyGravityProviderSystem.CalculateNaturalGravityInPoint(position).LengthSquared() > 0;
+    }
+
+    private static MyCockpit DriverSeat(MyCubeGrid cab) =>
+        cab.GetFatBlocks()
+            .OfType<MyCockpit>()
+            .FirstOrDefault(seat => seat.BlockDefinition.EnableShipControl && seat.Pilot != null);
+
+    private static long Driver(MyCubeGrid cab) =>
+        DriverSeat(cab)?.Pilot?.GetPlayerIdentityId() ?? 0;
 
     private static IEnumerable<MyCockpit> PassengerSeats(MyCubeGrid cab) =>
         cab.GetFatBlocks().OfType<MyCockpit>().Where(s => !s.BlockDefinition.EnableShipControl);
