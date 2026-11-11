@@ -158,6 +158,29 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     Check(BuildBook.Fee(0, 10) == 0 && BuildBook.Fee(500, 0) == 0, "fee: none");
 }
 
+// A bot's finished ship: the bot always hears where it is, unless the ship is gone
+{
+    var flags = new[] { false, true };
+    foreach (var closed in flags)
+    foreach (var storable in flags)
+    foreach (var waiting in flags)
+    {
+        Check(
+            ShipyardPlacement.BotShipEnd(closed, false, storable, waiting) == BotShip.Ready,
+            $"bot ship: the yard is no longer simulated here, ready (closed={closed}, storable={storable}, waiting={waiting})"
+        );
+        Check(
+            ShipyardPlacement.BotShipEnd(closed, true, storable, waiting)
+                == (
+                    closed ? BotShip.Gone
+                    : storable && waiting ? BotShip.Hangar
+                    : BotShip.Ready
+                ),
+            $"bot ship: yard here, gone, Hangar or ready (closed={closed}, storable={storable}, waiting={waiting})"
+        );
+    }
+}
+
 // Quote: at the Store's price, what it doesn't have is missing
 {
     var (w, m, market, b) = Setup();

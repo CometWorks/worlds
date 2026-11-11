@@ -45,4 +45,22 @@ internal static class ShipyardPlacement
     // better from the lobby; a longer one in the middle.
     public static double Offset(double shipLength, double shipyardLength) =>
         shipLength < shipyardLength / 4 ? shipyardLength / 6 : 0;
+
+    // Where a bot's finished ship goes once the delay is up. Only the node that simulates the
+    // yard can store it in the bot's Hangar, and only when another job waits. A ship closed there
+    // is gone and gets no word; one that left with the yard, in a handover to another node, or
+    // that can't be stored is ready in the shipyard, so the bot never waits in vain while its
+    // ship blocks the yard.
+    public static BotShip BotShipEnd(bool closed, bool yardHere, bool storable, bool waiting) =>
+        !yardHere ? BotShip.Ready
+        : closed ? BotShip.Gone
+        : storable && waiting ? BotShip.Hangar
+        : BotShip.Ready;
+}
+
+internal enum BotShip
+{
+    Gone,
+    Ready,
+    Hangar,
 }
