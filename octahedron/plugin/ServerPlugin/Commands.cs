@@ -16,8 +16,8 @@ public sealed class Commands : CommandModule
         "taxi",
         "Pays a cab's fare and names where it takes you, or calls a cab to you",
         "!oct taxi <station>: sit in a cab's passenger seat first. The fare goes to the driver now and is not "
-            + "refunded when you get out before the cab arrives. !oct taxi call: a cab comes to where you are, "
-            + "in space; sitting down in it pays the ride to the nearest station. !oct taxi giveup: a driver "
+            + "refunded when you get out before the cab arrives. !oct taxi call: a free cab that can fly at your location comes to you. "
+            + "Sitting down in it pays the ride to the nearest station. !oct taxi giveup: a driver "
             + "who can't come ends their calls, free."
     )]
     [Permission(MyPromoteLevel.None)]
@@ -26,6 +26,16 @@ public sealed class Commands : CommandModule
         {
             [var w] when w.Equals("call", StringComparison.OrdinalIgnoreCase) =>
                 ServerPlugin.Taxi.CallCab(Context.Caller.IdentityId),
+            ["accept-pickup", var token] => ServerPlugin.Taxi.AnswerPickup(
+                Context.Caller.IdentityId,
+                token,
+                true
+            ),
+            ["decline-pickup", var token] => ServerPlugin.Taxi.AnswerPickup(
+                Context.Caller.IdentityId,
+                token,
+                false
+            ),
             [var w] when w.Equals("giveup", StringComparison.OrdinalIgnoreCase) =>
                 ServerPlugin.Taxi.GiveUp(Context.Caller.IdentityId),
             _ => ServerPlugin.Taxi.Pay(Context.Caller.IdentityId, string.Join(" ", station)),
