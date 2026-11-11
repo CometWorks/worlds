@@ -1661,6 +1661,22 @@ def clean_checkpoint(checkpoint):
             node.remove(child)
 
 
+def world_patch_ledger(checkpoint):
+    """The plugin's world patch ledger (WorldPatches.cs) listing every patch of config/octahedron.cfg: a
+    world built here has their grids already, so the plugin adds none of them again."""
+    config = ET.parse(CONFIG / "octahedron.cfg").getroot()
+    ids = sorted(
+        e.findtext("Id") for e in config.iterfind("WorldPatches/WorldPatchEntry")
+    )
+    if not ids:
+        return
+    variables = checkpoint.find("ScriptManagerData/variables/dictionary")
+    item = el(variables, "item")
+    el(item, "Key", "Octahedron-WorldPatches")
+    value = el(item, "Value", ",".join(ids))
+    value.set(XSI_TYPE, "xsd:string")
+
+
 def write_xml(tree, path):
     tree.write(path, encoding="utf-8", xml_declaration=True)
     # xsi:type values name xsd types, so the root needs xsd declared even where ElementTree sees no use for it
@@ -1832,6 +1848,7 @@ def main():
     # The space elevators came last, so every id drawn before them stays as it was
     for lane in elevators:
         add_lane(*lane)
+    world_patch_ledger(checkpoint)
 
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),

@@ -2115,6 +2115,18 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = new();
+
+    [StructOption(
+        "World patches: grids added to a kept world once, in this order (SE-1358). The world's ledger, kept by "
+            + "the server or a cluster's World Authority, holds the ids applied; a world built with the grids "
+            + "already lists them. Empty by default.",
+        Parent = "patches"
+    )]
+    public List<WorldPatchEntry> WorldPatches
+    {
+        get;
+        set => SetField(ref field, value);
+    } = new();
 }
 
 public struct RefillContainer
@@ -2190,4 +2202,21 @@ public struct StationPatchEntry
 
     [StructMember("The new blueprint of the grid, prepared like From.")]
     public string To { get; set; }
+}
+
+public struct WorldPatchEntry
+{
+    [
+        StructMember(
+            "Patch id: letters, digits, '.', '_' and '-'. The world's ledger keeps it once applied."
+        ),
+        StructCaption
+    ]
+    public string Id { get; set; }
+
+    [StructMember(
+        "Blueprint file of the grids to add, at their world positions, made by world_patch.py: next to this "
+            + "config file, else in the world's Storage/Octahedron, unless the path is absolute."
+    )]
+    public string Grids { get; set; }
 }
