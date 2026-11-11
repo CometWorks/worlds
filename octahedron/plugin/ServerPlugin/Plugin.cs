@@ -13,8 +13,8 @@ using VRage.Plugins;
 
 // Magnetar compiles the plugin from source and needs the version here
 #if !LOCAL_BUILD
-[assembly: AssemblyVersion("1.2.1.0")]
-[assembly: AssemblyFileVersion("1.2.1.0")]
+[assembly: AssemblyVersion("1.2.2.0")]
+[assembly: AssemblyFileVersion("1.2.2.0")]
 
 #endif
 
