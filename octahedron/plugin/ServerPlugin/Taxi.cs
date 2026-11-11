@@ -3,20 +3,25 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using HarmonyLib;
 using PluginSdk.Clustering;
 using Sandbox.Engine.Multiplayer;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Character;
+using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.Gui;
 using Sandbox.Game.World;
 using VRage.Game;
+using VRage.Game.Entity;
 using VRage.GameServices;
+using VRage.Network;
 using VRageMath;
 
 namespace ServerPlugin;
@@ -31,8 +36,10 @@ namespace ServerPlugin;
 // <station>" ("-" before paying): it moves with the grid when a cluster node hands the cab's
 // partition to another node, so that node neither asks again nor misses the passenger leaving.
 // Faking it gains nothing: the driver flies only when told that a fare was paid. The passenger
-// seats and O2/H2 generator of a bot's cab (ShipyardBotSteamIds) are opened to everyone, so a
-// passenger can take or fill a bottle there; a player driving a cab sets its share modes as they like.
+// seats, O2/H2 generator and connector of a bot's cab (ShipyardBotSteamIds) are opened to
+// everyone, so a passenger can take or fill a bottle there and store cargo in the connector, which
+// is the paying passenger's alone during their ride (Book); not its cockpit or other blocks. A
+// player driving a cab sets its share modes as they like.
 //
 // "!oct taxi call" calls the nearest free cab (one with a driver, nobody else in it and no other
 // call, waiting at a station or on its way home) that can fly at the pickup point. The driver
@@ -165,6 +172,10 @@ internal static class Taxi
                         generator.OwnerId,
                         MyOwnershipShareModeEnum.All
                     );
+            var bot = cab.BigOwners.FirstOrDefault(ShipyardOrders.IsBot);
+            if (bot != 0)
+                foreach (var connector in cab.GetFatBlocks().OfType<MyShipConnector>())
+                    Book(cab, connector, bot);
             foreach (var seat in PassengerSeats(cab))
             {
                 // A bot's cab is built with the bot's faction share: open its passenger seats to all
@@ -773,6 +784,131 @@ internal static class Taxi
                         : ""
                 )
         );
+    }
+
+    // A bot's connector is shared with all, so anyone can store cargo in it, until a passenger who
+    // paid sits in the cab: then it is theirs alone (owner, shared with nobody; there is no share
+    // mode for one other player), until they are out and either it is empty or the cab has left
+    // the station (within AtStation) where they got out. The driver waits for them before it
+    // leaves (!oct taxi cargo, taxi.py). Nothing is remembered but the connector's owner, so a
+    // restart, a cluster handover or a driver gone mid-ride changes nothing, and whatever ends a
+    // ride (out on the way, dead, gone) gives the connector back to the cab's bot once its cargo
+    // is out or the cab moves on. The bot keeps the use of it meanwhile (DriverRights).
+    private static void Book(MyCubeGrid cab, MyShipConnector connector, long bot)
+    {
+        var holder = Holder(connector, bot);
+        var payer = Payer(cab, holder);
+        var owner =
+            holder != 0
+            && holder != payer
+            && HoldsCargo(connector)
+            && StationAt(cab.PositionComp.GetPosition()) != null
+                ? holder
+                : payer;
+        if (owner == 0)
+            ShipyardTurn.SetOwner(connector, bot, MyOwnershipShareModeEnum.All);
+        else
+            ShipyardTurn.SetOwner(connector, owner, MyOwnershipShareModeEnum.None);
+        if (owner != holder)
+            Plugin.Log.Info(
+                $"Taxi: the connector of '{cab.DisplayName}' ({cab.EntityId}) is "
+                    + (owner == 0 ? "shared again" : $"{Name(owner)}'s ({owner}) now")
+            );
+    }
+
+    // The player the connector is booked for, 0 when it is the cab's
+    private static long Holder(MyShipConnector connector, long bot) =>
+        connector.OwnerId == 0
+        || connector.OwnerId == bot
+        || ShipyardOrders.IsBot(connector.OwnerId)
+            ? 0
+            : connector.OwnerId;
+
+    // The passenger seated in the cab who paid (the holder first, then who got in first), else 0
+    private static long Payer(MyCubeGrid cab, long holder)
+    {
+        var paid = PassengerSeats(cab)
+            .Select(s => (Id: s.Pilot?.GetPlayerIdentityId() ?? 0, Record: Record(s)))
+            .Where(p =>
+                p.Id != 0
+                && p.Record.Passenger == p.Id
+                && p.Record.Station != null
+                && p.Record.Station != Unpaid
+            )
+            .Select(p => p.Id)
+            .ToList();
+        if (paid.Contains(holder))
+            return holder;
+        return firstIn.TryGetValue(cab.EntityId, out var first) && paid.Contains(first)
+            ? first
+            : paid.FirstOrDefault();
+    }
+
+    private static bool HoldsCargo(MyShipConnector connector) =>
+        connector.GetInventory()?.ItemCount > 0;
+
+    // !oct taxi cargo, for a driver about to leave: "left" while a passenger who is out has cargo in
+    // the cab's connector, which the driver waits for (taxi.py); "aboard" when its holder sits in
+    // the cab, "shared" for cargo in a connector nobody booked, "none" when the connectors are empty.
+    public static string Cargo(long driver)
+    {
+        foreach (var id in cabs)
+        {
+            if (!MyEntities.TryGetEntityById(id, out MyCubeGrid cab) || Driver(cab) != driver)
+                continue;
+            var bot = cab.BigOwners.FirstOrDefault(ShipyardOrders.IsBot);
+            var seated = PassengerSeats(cab)
+                .Select(s => s.Pilot?.GetPlayerIdentityId() ?? 0)
+                .ToHashSet();
+            var holders = cab.GetFatBlocks()
+                .OfType<MyShipConnector>()
+                .Where(HoldsCargo)
+                .Select(c => Holder(c, bot))
+                .ToList();
+            var state =
+                holders.Count == 0 ? "none"
+                : holders.Any(h => h != 0 && !seated.Contains(h)) ? "left"
+                : holders.Any(h => h != 0) ? "aboard"
+                : "shared";
+            return $"Taxi cargo: {state}";
+        }
+        return "Taxi cargo: no cab";
+    }
+
+    // A connector booked for a passenger is theirs, but the driver docks with it, and the server
+    // checks ownership for that (MyShipConnector.TryConnect) and for its inventory: the bot that
+    // owns the cab passes those checks on the cab's connectors.
+    [HarmonyPatch]
+    private static class DriverRights
+    {
+        private static MethodBase TargetMethod() =>
+            AccessTools.Method(
+                AccessTools.TypeByName("Sandbox.Game.Replication.MyReplicableRightsValidator"),
+                "HasRights",
+                new[] { typeof(MyCubeBlock), typeof(EndpointId), typeof(ValidationType) }
+            );
+
+        private static void Postfix(
+            MyCubeBlock block,
+            EndpointId endpointId,
+            ref ValidationResult __result
+        )
+        {
+            if (
+                __result == ValidationResult.Passed
+                || block is not MyShipConnector
+                || block.CubeGrid == null
+                || !cabs.Contains(block.CubeGrid.EntityId)
+            )
+                return;
+            var identity = MySession.Static.Players.TryGetIdentityId(endpointId.Value);
+            if (
+                identity != 0
+                && ShipyardOrders.IsBot(identity)
+                && block.CubeGrid.BigOwners.Contains(identity)
+            )
+                __result = ValidationResult.Passed;
+        }
     }
 
     private static string Question(List<string> destinations, MyCubeGrid cab) =>
