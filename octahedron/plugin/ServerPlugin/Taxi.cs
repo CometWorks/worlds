@@ -55,6 +55,9 @@ internal static class Taxi
         nextScan;
     private static readonly HashSet<long> cabs = new();
 
+    // Cab -> its mass with its mechanical subgrids, kg (CabMass)
+    private static readonly Dictionary<long, double> cabMasses = new();
+
     // The passengers this node saw seated at its last tick: identity -> (cab, seat)
     private static readonly Dictionary<long, (long Cab, long Seat)> seated = new();
 
@@ -791,6 +794,8 @@ internal static class Taxi
                 ) == true
             )
                 cabs.Add(grid.EntityId);
+        foreach (var id in cabMasses.Keys.Where(id => !cabs.Contains(id)).ToList())
+            cabMasses.Remove(id);
     }
 
     // The identity at the cab's controls, 0 when nobody
@@ -847,12 +852,28 @@ internal static class Taxi
             planet != null
             && planet == MyGamePruningStructure.GetClosestPlanet(position)
             && MyGravityProviderSystem.CalculateNaturalGravityInPoint(position).LengthSquared() > 0;
-        // A locked connector can weld the cab to the station's rigid body.
-        // Use the cab's own shape mass, including its cargo.
-        var mass = cab.Physics?.Shape?.MassProperties?.Mass ?? cab.Physics?.Mass ?? 0;
+        var mass = CabMass(cab);
         return FormattableString.Invariant(
             $"Pickup offer {pickup.Token:N} {gravity:R} {mass:R} {air:R} {(samePlanet ? 1 : 0)} {upward[0]:R} {upward[1]:R} {upward[2]:R}"
         );
+    }
+
+    // The mass the cab's thrusters lift: the shape masses of its grid and of the grids its rotors,
+    // hinges, pistons and wheels hold, with cargo and driver. Shape mass is what gravity pulls on;
+    // like physics, it counts cargo divided by BlocksInventorySizeMultiplier. Physics.Mass doesn't
+    // work docked, where a locked connector welds the cab to the station's rigid body, and the
+    // mechanical group leaves out what connectors and landing gear hold. Measured once per cab:
+    // later cargo or block changes keep the first value until the cab leaves this node.
+    private static double CabMass(MyCubeGrid cab)
+    {
+        if (cabMasses.TryGetValue(cab.EntityId, out var mass))
+            return mass;
+        mass = MyCubeGridGroups
+            .Static.Mechanical.GetGroupNodes(cab)
+            .Sum(grid => (double)(grid.Physics?.Shape?.MassProperties?.Mass ?? 0));
+        if (mass > 0)
+            cabMasses[cab.EntityId] = mass;
+        return mass;
     }
 
     private static MyCockpit DriverSeat(MyCubeGrid cab) =>

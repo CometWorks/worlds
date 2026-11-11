@@ -1903,6 +1903,10 @@ Viktor's "Clang with Piston" contraption with a thruster added, and with `CLANG_
 two clang drives from the Workshop, a sliding door one and a merge block one.
 `tests/clang_drive_cluster.py` checks a speed jump, a ram in a safe zone and a crash
 outside on a cluster node, without a client.
+`tests/test_taxi_cab_mass.py` runs one server without a client: tests/cab-mass-probe docks a
+cab with a piston head and a wheel at a static station, with a ship docked to it too, and
+checks the mass a taxi pickup offer reports. It counts the cab and its head and wheel, not
+the docked ship, and stays the same after the cab takes on cargo.
 `tests/test_target_neutrals.py` builds blocks with Target Neutrals on in each way
 with the client, welding them through shipyard orders, with the rule off too, and a
 test mod's turret whose definition has it on. It buys ships at a store block and
