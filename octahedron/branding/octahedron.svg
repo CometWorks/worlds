@@ -11,12 +11,12 @@
   </defs>
   <rect width="512" height="512" fill="url(#background)"/>
   <g id="station">
-    <path d="M256 78 112 218 246 242Z" fill="#f1f8fc"/>
-    <path d="m266 88 134 130-134 24Z" fill="#a6bacd"/>
-    <path d="m112 234 134 24v20l-134-24Z" fill="#718da9"/>
-    <path d="m266 258 134-24v20l-134 24Z" fill="#435f7b"/>
-    <path d="m112 278 134 24v119Z" fill="#c7d8e7"/>
-    <path d="m266 302 134-24-134 143Z" fill="#718da9"/>
+    <path d="M246 84 112 218 246 242Z" fill="#f1f8fc"/>
+    <path d="M266 84 400 218 266 242Z" fill="#a6bacd"/>
+    <path d="M112 234 246 258 246 278 112 254Z" fill="#718da9"/>
+    <path d="M400 234 266 258 266 278 400 254Z" fill="#435f7b"/>
+    <path d="M112 278 246 302 246 412Z" fill="#c7d8e7"/>
+    <path d="M400 278 266 302 266 412Z" fill="#718da9"/>
   </g>
   <g id="cometworks-comet" transform="translate(41 31) scale(0.3375)" fill="url(#comet)" stroke="#0b1525" stroke-width="9" stroke-linejoin="round" paint-order="stroke fill">
     <path d="M98 321C174 255 256 210 350 193 254 226 182 276 112 348Z"/>
