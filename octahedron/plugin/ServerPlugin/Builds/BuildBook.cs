@@ -228,8 +228,11 @@ public readonly record struct BreakdownItem(
 
 public sealed class BuildSettings
 {
+    public const int LoadTestQueueMax = 3;
+
     // Queue entries per shipyard, the one being built included
     public int QueueMax = 6;
+    public bool LoadTest;
 
     // The item the build's hydrogen is bought as; it is not loaded into the shipyard
     public string HydrogenItem = "Ore/Ice";
@@ -440,6 +443,12 @@ public sealed class BuildBook
             return BuildResult.No(
                 $"'{mine.Ship}' is in a shipyard's queue for you already, one entry at a time."
             );
+        // A bumped order still has a row until it leaves the queue.
+        if (
+            s.LoadTest
+            && orders.Values.Count(o => o.Station == order.Station) >= LoadTestQueueMax(s)
+        )
+            return BuildResult.No($"The shipyard's queue is full, {LoadTestQueueMax(s)} ships.");
         var queue = Queue(order.Station).Where(o => !o.Bumped).ToList();
         var bumped = new List<BuildOrder>();
         if (!order.Bot)
@@ -463,6 +472,9 @@ public sealed class BuildBook
             order
         );
     }
+
+    private static int LoadTestQueueMax(BuildSettings settings) =>
+        Math.Min(settings.QueueMax, BuildSettings.LoadTestQueueMax);
 
     /// <summary>
     /// A towed grid's breakdown takes the free shipyard: the order comes back, already building.

@@ -897,6 +897,16 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 6;
 
+    [BoolOption(
+        "For a load test, cap each shipyard at three displayed orders and publish queue counts on the World Authority.",
+        Parent = "shipyard"
+    )]
+    public bool ShipyardLoadTest
+    {
+        get;
+        set => SetField(ref field, value);
+    }
+
     [StringOption(
         description: "Steam IDs of bots whose shipyard orders give way to human players', comma separated; first-last is a range. "
             + "A human player's order goes ahead of the bots' waiting ones and cancels a bot's build in progress, "

@@ -702,6 +702,33 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     long[] Players() => b.Queue(A).Select(o => o.Player).ToArray();
     long[] BumpedOnes() => b.Queue(A).Where(o => o.Bumped).Select(o => o.Player).ToArray();
 
+    {
+        var (testWorld, testMarketBook, _, testBuilds) = Setup();
+        var loadTest = new BuildSettings { LoadTest = true };
+        foreach (var player in new long[] { 11, 12, 13 })
+            Ok(
+                testWorld,
+                "load test admits a trader",
+                () => testBuilds.Order(testWorld, loadTest, Free(player, true), none)
+            );
+        testBuilds.Queue(A)[0].Bumped = true;
+        Refused(
+            testWorld,
+            testBuilds,
+            testMarketBook,
+            "load test counts all three displayed rows, including the bumped trader",
+            () => testBuilds.Order(testWorld, loadTest, Free(1), none),
+            "queue is full, 3 ships"
+        );
+        Ok(testWorld, "load test removes the bumped trader", () => testBuilds.Cancel(A, 11));
+        Ok(
+            testWorld,
+            "load test admits the next order",
+            () => testBuilds.Order(testWorld, loadTest, Free(1), none)
+        );
+        Check(testBuilds.Queue(A).Count == 3, "load test remains at three rows");
+    }
+
     var bot11 = Ok(w, "bot 11 orders", () => b.Order(w, s, Free(11, true), none)).Order;
     w.Now += 10;
     Ok(w, "human 1 orders", () => b.Order(w, s, Free(1), none));

@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -7,6 +10,7 @@ using HarmonyLib;
 using PluginSdk.Clustering;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
+using VRage.FileSystem;
 
 namespace ServerPlugin;
 
@@ -28,11 +32,17 @@ internal static class Builds
     private static IDisposable commandRegistration;
     private static IDisposable readRegistration;
     private static bool registrationFailed;
+    private static readonly Stopwatch queueSampleClock = Stopwatch.StartNew();
 
     private static OctahedronConfig Config => Plugin.Config;
 
     public static BuildSettings Settings =>
-        new() { QueueMax = Config.ShipyardQueueMax, TurnMinutes = Config.ShipyardTurnMinutes };
+        new()
+        {
+            QueueMax = Config.ShipyardQueueMax,
+            TurnMinutes = Config.ShipyardTurnMinutes,
+            LoadTest = Config.ShipyardLoadTest,
+        };
 
     /// <summary>The queues, on the authority only, loaded from the world on first use.</summary>
     public static BuildBook Book
@@ -299,6 +309,9 @@ internal static class Builds
     /// <summary>On a cluster's World Authority: serves the nodes' requests once the plugin services are up.</summary>
     public static void Update()
     {
+        if (Config.ShipyardLoadTest && Stations.IsAuthority && MySession.Static?.Ready == true)
+            PublishQueueCounts();
+
         if (
             commandRegistration != null
             || registrationFailed
@@ -317,6 +330,40 @@ internal static class Builds
         }
         readRegistration = Plugin.Cluster.RegisterHandler(ReadTopic, ServeRead);
         Plugin.Log.Info("Serving the shipyard queues on the World Authority");
+    }
+
+    private static void PublishQueueCounts()
+    {
+        if (queueSampleClock.ElapsedMilliseconds < 1000)
+            return;
+        queueSampleClock.Restart();
+
+        try
+        {
+            var counts = Book.Orders.ToLookup(o => o.Station);
+            var stations = Stations.StationNames().Union(counts.Select(g => g.Key));
+            var path = Path.Combine(MyFileSystem.UserDataPath, "octahedron-shipyard-queues.tsv");
+            var temporary = path + ".tmp";
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var cap = Math.Min(Config.ShipyardQueueMax, BuildSettings.LoadTestQueueMax);
+            using var process = Process.GetCurrentProcess();
+            File.WriteAllLines(
+                temporary,
+                new[] { FormattableString.Invariant($"{process.Id}\t{timestamp}\t{cap}") }.Concat(
+                    stations.Select(name =>
+                        name + "\t" + counts[name].Count().ToString(CultureInfo.InvariantCulture)
+                    )
+                )
+            );
+            if (File.Exists(path))
+                File.Replace(temporary, path, null);
+            else
+                File.Move(temporary, path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Plugin.Log.Warning($"Could not publish shipyard queue counts: {e.Message}");
+        }
     }
 
     private static byte[] Serve(byte[] payload) =>
