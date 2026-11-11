@@ -3084,65 +3084,74 @@ internal static partial class ShipyardOrders
                 continue;
             botHangars.Remove(id);
             var (yard, ship, player, orderId, _) = pending;
-            if (ship.MarkedForClose || yard.MarkedForClose || !Plugin.Simulated(yard))
-            {
-                Plugin.Log.Warning(
-                    $"Shipyard {yard.DisplayName}: fast Hangar storage skipped for '{ship.DisplayName}' (ship closed={ship.MarkedForClose}, yard closed={yard.MarkedForClose}, simulated={Plugin.Simulated(yard)})"
-                );
-                continue;
-            }
-            var station = StationTables()
-                .FirstOrDefault(entry => entry.Value.Any(t => FindShipyard(t) == yard));
+            bool Here() => !yard.MarkedForClose && Plugin.Simulated(yard);
+            var station = Here()
+                ? StationTables()
+                    .FirstOrDefault(entry => entry.Value.Any(t => FindShipyard(t) == yard))
+                : default;
             var table = station.Value?.FirstOrDefault(t => FindShipyard(t) == yard);
-            void Ready() =>
+            if (table == null)
+                End(null);
+            else
+                Builds.Read(
+                    new BuildRequest { Verb = BuildVerb.Queue, Station = station.Key },
+                    (text, _) => End(text)
+                );
+
+            // The bot hears exactly once where its ship is, unless it is gone
+            void End(string queue)
+            {
+                var here = Here();
+                var grids = here && !ship.MarkedForClose ? Grids(ship) : [];
+                var end = ShipyardPlacement.BotShipEnd(
+                    ship.MarkedForClose,
+                    here,
+                    storable: table != null
+                        && !table.MarkedForClose
+                        && !grids
+                            .SelectMany(g => g.GetFatBlocks<MyCockpit>())
+                            .Any(c => c.Pilot != null),
+                    waiting: queue != null
+                        && DecodeQueue(queue).Any(o => o.Id != orderId && !o.Active && !o.Bumped)
+                );
+                if (end == BotShip.Gone)
+                {
+                    Plugin.Log.Warning(
+                        $"Shipyard {yard.DisplayName}: fast Hangar storage skipped, '{ship.DisplayName}' is gone"
+                    );
+                    return;
+                }
+                if (end == BotShip.Hangar)
+                {
+                    var (stored, _, error) = HangarFee.Store(
+                        player,
+                        grids,
+                        table.PositionComp.GetPosition()
+                    );
+                    if (stored)
+                    {
+                        Plugin.Log.Info(
+                            $"Shipyard {yard.DisplayName}: '{ship.DisplayName}' went into the Hangar of {Name(player)}"
+                        );
+                        Tell(
+                            player,
+                            $"'{ship.DisplayName}' is complete, so it is in your Hangar now. !hangar load {ship.DisplayName} brings it back, free at this station."
+                        );
+                        return;
+                    }
+                    Plugin.Log.Warning(
+                        $"Shipyard {yard.DisplayName}: '{ship.DisplayName}' could not be stored: {error}"
+                    );
+                }
+                else
+                    Plugin.Log.Info(
+                        $"Shipyard {yard.DisplayName}: '{ship.DisplayName}' stays in the yard (simulated here={here}, queue read={queue != null})"
+                    );
                 Tell(
                     player,
                     $"Your ship '{ship.DisplayName}' is ready in {yard.DisplayName}. Fly it out to make room for the next order."
                 );
-            if (table == null)
-            {
-                Ready();
-                continue;
             }
-            Builds.Read(
-                new BuildRequest { Verb = BuildVerb.Queue, Station = station.Key },
-                (text, _) =>
-                {
-                    if (ship.MarkedForClose || yard.MarkedForClose || !Plugin.Simulated(yard))
-                        return;
-                    var grids = Grids(ship);
-                    if (
-                        text != null
-                        && !table.MarkedForClose
-                        && DecodeQueue(text).Any(o => o.Id != orderId && !o.Active && !o.Bumped)
-                        && !grids
-                            .SelectMany(g => g.GetFatBlocks<MyCockpit>())
-                            .Any(c => c.Pilot != null)
-                    )
-                    {
-                        var (stored, _, error) = HangarFee.Store(
-                            player,
-                            grids,
-                            table.PositionComp.GetPosition()
-                        );
-                        if (stored)
-                        {
-                            Plugin.Log.Info(
-                                $"Shipyard {yard.DisplayName}: '{ship.DisplayName}' went into the Hangar of {Name(player)}"
-                            );
-                            Tell(
-                                player,
-                                $"'{ship.DisplayName}' is complete, so it is in your Hangar now. !hangar load {ship.DisplayName} brings it back, free at this station."
-                            );
-                            return;
-                        }
-                        Plugin.Log.Warning(
-                            $"Shipyard {yard.DisplayName}: '{ship.DisplayName}' could not be stored: {error}"
-                        );
-                    }
-                    Ready();
-                }
-            );
         }
     }
 

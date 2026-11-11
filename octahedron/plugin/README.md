@@ -1141,6 +1141,9 @@ rotors and the running builds with their arm.
 orderer's Hangar after that many seconds if another job is waiting, once the
 authority records the finished order. Zero disables it. With no waiting job, or
 if the Hangar cannot take the ship, the owner collects it from the shipyard.
+The bot is told either way, also when the station has gone to another cluster node
+during the delay; only a ship that is gone gets no word. A restart during the delay
+forgets the pending ship, and the bot hears nothing more about it.
 Octahedron sets the delay to one second.
 `!oct shipyard strip <station> <item>` takes an item out of a shipyard's
 containers and welders, so tests can stall a build.
@@ -1969,7 +1972,8 @@ filaments too.
 (`dotnet run -c Release --project tests/builds/BuildTests`): the labor fee, quotes
 from OCT's stock, paid orders and their turns, the purchase at the start all or none,
 hydrogen, the sale of what a turn leaves, towed grids, free orders, the queue, human
-players' orders before the bots', the formats, blueprints in parts, and that no money
+players' orders before the bots', where a bot's finished ship goes, the formats,
+blueprints in parts, and that no money
 is made or lost. `tests/test_shipyard_human_priority.py` checks in game, with a
 second client as the bot, that a human player's order cancels the bot's running free
 build (its ship removed, the free build not counted), pushes the bot's waiting order
