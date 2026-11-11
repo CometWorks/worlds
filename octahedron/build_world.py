@@ -110,9 +110,13 @@ NORTH_MOON_LANE_NORTH = (-350.0, 190.0)
 # Earth end this far from the center, about 1 km above the ground (SE-1358). The ground there,
 # from the up and down heightmaps (radius 60 km + HillParams -0.01..0.12): 61,787 m under North
 # Station and 61,977 m under South Station, at most 61,821 and 62,146 m within 500 m of the line.
+# Each Earth end names the station there, or None for no station: the end is then named after
+# its place. The lane computers' From and To and the lanes' grid names carry that name, and the
+# sebot traders and taxis take a lane only to a station on their map (cluster-regression
+# lanes.departures), so a station built under a gate later needs only its name here.
 ELEVATORS = {
-    "North Station": ("North Pole", 62_800.0),
-    "South Station": ("South Pole", 63_000.0),
+    "North Station": {"place": "North Pole", "station": None, "radius": 62_800.0},
+    "South Station": {"place": "South Pole", "station": None, "radius": 63_000.0},
 }
 # The station end of an elevator, as far out as a Moon lane's, keeps its gates 700 m from those
 # of the station's other lanes (at 1 km they came within 360 m of the lanes to Delta and Beta)
@@ -1106,7 +1110,11 @@ def lane_up(direction, home, target, north, polar_normal):
     the side of the track it was on."""
     # A Moon lane follows its Earth station's circle (Delta's: the equator's), an elevator its
     # station's
-    ends = {home, target} - {"Moon Station"} - {pole for pole, _ in ELEVATORS.values()}
+    ends = (
+        {home, target}
+        - {"Moon Station"}
+        - {elevator_end(e) for e in ELEVATORS.values()}
+    )
     if ends <= EQUATOR_STATIONS:
         return norm(perpendicular_part(north, direction))
     assert ends <= POLAR_STATIONS, ends
@@ -1342,13 +1350,18 @@ def elevator_lanes(places, earth, first_id):
     from first_id: from ELEVATOR_ENDPOINT_DISTANCE below each pole station down to its pole.
     """
     result = []
-    for number, (name, (pole, radius)) in enumerate(ELEVATORS.items(), first_id):
+    for number, (name, elevator) in enumerate(ELEVATORS.items(), first_id):
         center = places[name][0]
         down = norm(sub(earth.center, center))
         start = add(center, mul(down, ELEVATOR_ENDPOINT_DISTANCE))
-        end = sub(earth.center, mul(down, radius))
-        result.append((f"{number:02d}", name, pole, start, end))
+        end = sub(earth.center, mul(down, elevator["radius"]))
+        result.append((f"{number:02d}", name, elevator_end(elevator), start, end))
     return result
+
+
+def elevator_end(elevator):
+    """The name of an elevator's Earth end: the station there, or the place without one"""
+    return elevator["station"] or elevator["place"]
 
 
 def gate_points(start, end, interval=LANE_RING_INTERVAL):
