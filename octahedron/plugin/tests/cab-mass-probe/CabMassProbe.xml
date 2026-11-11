@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>cab-mass-probe</Id>
+    <GroupId>cab-mass-probe</GroupId>
+    <RepoId>local/cab-mass-probe</RepoId>
+
+    <FriendlyName>Cab Mass Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: docks the test's taxi cab and writes the masses the server has for it</Tooltip>
+    <Description>Test only. Puts a piston head and a wheel on the "Taxi Mass Cab" grid, locks its
+        connectors to the "TM Station" and "TM Parked" grids, and writes the cab's masses, the taxi
+        pickup offer's among them, to cab-mass-probe.txt in the game's user data folder.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>
