@@ -14,6 +14,7 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.Entities.Planet;
 using Sandbox.Game.GameSystems;
 using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.Gui;
@@ -44,9 +45,10 @@ namespace ServerPlugin;
 // "!oct taxi call" calls the nearest free cab (one with a driver, nobody else in it and no other
 // call, waiting at a station or on its way home) that can fly at the pickup point. The driver
 // hears "Call from NAME at X Y Z" and flies there. When the caller sits down in that cab they pay
-// the call fare to the driver (TaxiCallFarePerKm per whole km from the caller to the nearest
-// station, at least TaxiCallFare), or all they have when that is less, for the ride to that
-// station, and the driver hears the usual "Fare paid by". A call from within AtStation of a station
+// the call fare to the driver, or all they have when that is less, for the ride to the nearest
+// station or up the space elevator whose Earth end is nearer (TaxiFares), and the driver hears the
+// usual "Fare paid by". The fare is TaxiCallFare within TaxiCallRange of that station or Earth
+// end, plus TaxiCallFarePerKm for each whole km beyond it. A call from within AtStation of a station
 // is a regular fare from there instead. A caller who dies before pays TaxiCancelFee and the call ends ("Call cancelled:
 // NAME"), as it does free after TaxiCallTimeout or when the cab or its driver is gone. Calls live
 // in this process: on a cluster a call reaches the cabs of the caller's node only.
@@ -346,7 +348,7 @@ internal static class Taxi
         Tell(bestDriver, $"Call from {Name(caller)} at {at.X:F0} {at.Y:F0} {at.Z:F0}");
         var price = StationAt(at) is { } near
             ? $"you are at {near}, so it is a regular fare: pick where to go then, for {Sc(Config.TaxiFare)}"
-            : $"the ride to the nearest station, {NearestStation(at)}, costs {Sc(CallFare(at))} then, "
+            : $"the ride to {CallRide(at).Station} costs {Sc(CallRide(at).Fare)} then, "
                 + "or all you have when that is less";
         return $"{Name(bestDriver)} is on the way from {from}, {nearest / 1000:F1} km. Stay here and sit down in "
             + $"the cab when it stops by you: {price}. If you die before, the call is cancelled and you pay "
@@ -538,8 +540,8 @@ internal static class Taxi
     )
     {
         calls.Remove(passenger);
-        var station = NearestStation(cab.PositionComp.GetPosition());
-        var paid = Charge(passenger, CallFare(call.At), driver);
+        var (station, fare) = CallRide(call.At);
+        var paid = Charge(passenger, fare, driver);
         Write(seat, passenger, station);
         var name = Name(passenger);
         Plugin.Log.Info(
@@ -1054,11 +1056,40 @@ internal static class Taxi
     // The station within AtStation of the point, else null
     private static string StationAt(Vector3D position) => NearestStation(position, AtStation);
 
-    // A call from out in space: TaxiCallFarePerKm for each whole km to the nearest station, at least TaxiCallFare
-    private static long CallFare(Vector3D at)
+    // A call from out in space: where the ride goes and its fare, from the stations and the space elevators' Earth ends
+    private static (string Station, long Fare) CallRide(Vector3D at)
     {
-        var km = (long)Math.Floor(Vector3D.Distance(at, Nearest(at).Position) / 1000);
-        return Math.Max(Config.TaxiCallFare, Config.TaxiCallFarePerKm * km);
+        var names = Stations.StationNames().ToHashSet();
+        var stations = MySession
+            .Static.Factions.SelectMany(f => f.Value.Stations)
+            .Where(s => names.Contains(s.Name))
+            .GroupBy(s => s.Name)
+            .ToDictionary(g => g.Key, g => g.First().Position);
+        var gates = stations.Select(s => (s.Key, Vector3D.Distance(at, s.Value))).ToList();
+        foreach (var elevator in Config.TaxiElevators ?? [])
+        {
+            if (elevator.Station == null || !stations.TryGetValue(elevator.Station, out var top))
+                continue;
+            var planet = MyPlanets
+                .GetPlanets()
+                .OrderBy(p => Vector3D.Distance(p.PositionComp.GetPosition(), top))
+                .FirstOrDefault();
+            if (planet == null)
+                continue;
+            var c = planet.PositionComp.GetPosition();
+            var end = TaxiFares.ElevatorEnd(
+                (top.X, top.Y, top.Z),
+                (c.X, c.Y, c.Z),
+                elevator.Radius
+            );
+            gates.Add((elevator.Station, Vector3D.Distance(at, new Vector3D(end.X, end.Y, end.Z))));
+        }
+        return TaxiFares.CallRide(
+            gates,
+            Config.TaxiCallRange,
+            Config.TaxiCallFare,
+            Config.TaxiCallFarePerKm
+        );
     }
 
     private static string NearestStation(Vector3D position, double within = double.MaxValue) =>
