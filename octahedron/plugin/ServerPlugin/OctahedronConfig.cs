@@ -2060,9 +2060,10 @@ public class OctahedronConfig : PluginConfig
 
     [LongOption(
         0,
-        description: "The least SC a player who called a cab with '!oct taxi call' from out in space pays when sitting "
-            + "down in it, for the ride to the nearest station: the fare is the larger of this and TaxiCallFarePerKm "
-            + "for each whole km from the caller to that station. One who has less pays all they have.",
+        description: "SC a player who called a cab with '!oct taxi call' from out in space pays when sitting down in "
+            + "it, for the ride to the nearest station or up the nearer space elevator (TaxiElevators): this within "
+            + "TaxiCallRange of that station or elevator's Earth end, plus TaxiCallFarePerKm for each whole km "
+            + "beyond it. One who has less pays all they have.",
         Parent = "taxi"
     )]
     public long TaxiCallFare
@@ -2073,7 +2074,8 @@ public class OctahedronConfig : PluginConfig
 
     [LongOption(
         0,
-        description: "SC per whole km from a caller out in space to the nearest station in the call fare (TaxiCallFare).",
+        description: "SC per whole km beyond TaxiCallRange from a caller out in space to the nearest station or "
+            + "space elevator's Earth end, on top of TaxiCallFare.",
         Parent = "taxi"
     )]
     public long TaxiCallFarePerKm
@@ -2081,6 +2083,28 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 100;
+
+    [DoubleOption(
+        0,
+        description: "Meters from a station or a space elevator's Earth end within which a call costs TaxiCallFare alone.",
+        Parent = "taxi"
+    )]
+    public double TaxiCallRange
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5000;
+
+    [StructOption(
+        "Space elevators: lanes from a station down to a planet that the taxis take. A call near an elevator's "
+            + "Earth end is a ride up to its station, priced from that end. Empty by default.",
+        Parent = "taxi"
+    )]
+    public List<TaxiElevatorEntry> TaxiElevators
+    {
+        get;
+        set => SetField(ref field, value);
+    } = new();
 
     [LongOption(
         0,
@@ -2202,6 +2226,21 @@ public struct StationPatchEntry
 
     [StructMember("The new blueprint of the grid, prepared like From.")]
     public string To { get; set; }
+}
+
+public struct TaxiElevatorEntry
+{
+    [
+        StructMember("Name of the station at the elevator's top, for example North Station."),
+        StructCaption
+    ]
+    public string Station { get; set; }
+
+    [StructMember(
+        "Meters from the center of the planet nearest to the station to the elevator's Earth end, which is on the "
+            + "line between them (build_world.py ELEVATORS)."
+    )]
+    public double Radius { get; set; }
 }
 
 public struct WorldPatchEntry

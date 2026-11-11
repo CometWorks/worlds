@@ -1441,10 +1441,12 @@ Whispers to other players and global chat are left alone.
 into gravity yet): the nearest one with a driver, nobody else in it and no other call,
 waiting at a station or on its way home empty. The driver hears `Call from NAME at X Y
 Z` and comes, through the lanes as far as they lead and straight on from there. When the
-caller sits down in that cab, they pay the call fare to the driver, `TaxiCallFarePerKm`
-(100) SC for each whole km from where they called to the nearest station but at least
-`TaxiCallFare` (1,000), or all they have when that is less, for the ride to the nearest
-station, and the driver hears the usual `Fare paid by`. A call from within 3 km of a
+caller sits down in that cab, they pay the call fare to the driver, or all they have when
+that is less, and the driver hears the usual `Fare paid by`. The ride goes to the nearest
+station, or up a space elevator (`TaxiElevators`) to its station when the elevator's Earth
+end is nearer. The fare is `TaxiCallFare` (1,000) SC within `TaxiCallRange` (5 km) of that
+station or Earth end, plus `TaxiCallFarePerKm` (100) SC for each whole km beyond it
+(`TaxiFares.cs`, tested offline by `tests/taxi-fares`: `dotnet test`). A call from within 3 km of a
 station is a regular fare instead: the caller is asked where to go and pays `TaxiFare`,
 as if they had sat down in the cab at that station. A caller who dies before pays
 `TaxiCancelFee` (100) SC and the call ends: the driver hears `Call cancelled: NAME`. A
