@@ -18,7 +18,8 @@ public sealed class Commands : CommandModule
         "!oct taxi <station>: sit in a cab's passenger seat first. The fare goes to the driver now and is not "
             + "refunded when you get out before the cab arrives. !oct taxi call: a free cab that can fly at your location comes to you. "
             + "Sitting down in it pays the ride to the nearest station. !oct taxi giveup: a driver "
-            + "who can't come ends their calls, free."
+            + "who can't come ends their calls, free. !oct taxi cargo: a driver asks whether a passenger "
+            + "left cargo in the cab's connector."
     )]
     [Permission(MyPromoteLevel.None)]
     public string Taxi(params string[] station) =>
@@ -36,6 +37,8 @@ public sealed class Commands : CommandModule
                 token,
                 false
             ),
+            [var w] when w.Equals("cargo", StringComparison.OrdinalIgnoreCase) =>
+                ServerPlugin.Taxi.Cargo(Context.Caller.IdentityId),
             [var w] when w.Equals("giveup", StringComparison.OrdinalIgnoreCase) =>
                 ServerPlugin.Taxi.GiveUp(Context.Caller.IdentityId),
             _ => ServerPlugin.Taxi.Pay(Context.Caller.IdentityId, string.Join(" ", station)),
