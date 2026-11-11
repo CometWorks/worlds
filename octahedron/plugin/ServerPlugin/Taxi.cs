@@ -847,7 +847,9 @@ internal static class Taxi
             planet != null
             && planet == MyGamePruningStructure.GetClosestPlanet(position)
             && MyGravityProviderSystem.CalculateNaturalGravityInPoint(position).LengthSquared() > 0;
-        var mass = cab.Physics?.Mass ?? 0;
+        // A locked connector can weld the cab to the station's rigid body.
+        // Use the cab's own shape mass, including its cargo.
+        var mass = cab.Physics?.Shape?.MassProperties?.Mass ?? cab.Physics?.Mass ?? 0;
         return FormattableString.Invariant(
             $"Pickup offer {pickup.Token:N} {gravity:R} {mass:R} {air:R} {(samePlanet ? 1 : 0)} {upward[0]:R} {upward[1]:R} {upward[2]:R}"
         );
