@@ -847,10 +847,17 @@ internal static class Taxi
     private static bool HoldsCargo(MyShipConnector connector) =>
         connector.GetInventory()?.ItemCount > 0;
 
-    // !oct taxi cargo, for a driver about to leave: "left" while a passenger who is out has cargo in
-    // the cab's connector, which the driver waits for (taxi.py); "aboard" when its holder sits in
-    // the cab, "shared" for cargo in a connector nobody booked, "none" when the connectors are empty.
+    // !oct taxi cargo, for a driver about to leave, answered privately from Taxi like the driver's
+    // other news: "left" while a passenger who is out has cargo in the cab's connector, which the
+    // driver waits for (taxi.py); "aboard" when its holder sits in the cab, "shared" for cargo in a
+    // connector nobody booked, "none" when the connectors are empty.
     public static string Cargo(long driver)
+    {
+        Tell(driver, CargoState(driver));
+        return null;
+    }
+
+    private static string CargoState(long driver)
     {
         foreach (var id in cabs)
         {
