@@ -1,0 +1,207 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ShipBlueprints>
+    <ShipBlueprint xsi:type="MyObjectBuilder_ShipBlueprintDefinition">
+      <Id Type="MyObjectBuilder_ShipBlueprintDefinition" Subtype="2026-11-12-space-elevators" />
+      <DisplayName>2026-11-12-space-elevators</DisplayName>
+      <CubeGrids>
+        <CubeGrid>
+          <SubtypeName />
+          <PositionAndOrientation>
+            <Position x="0.0" y="62800.0" z="0.0" />
+            <Forward x="-0.0" y="1.0" z="-0.0" />
+            <Up x="0.8007917165136793" y="0.0" z="-0.598942924461985" />
+          </PositionAndOrientation>
+          <EntityId>134702083511482818</EntityId>
+          <PersistentFlags>CastShadows InScene</PersistentFlags>
+          <GridSizeEnum>Large</GridSizeEnum>
+          <CubeBlocks>
+            <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_BatteryBlock">
+              <SubtypeName>TradeLaneComputer</SubtypeName>
+              <EntityId>135583534987221974</EntityId>
+              <Min x="0" y="0" z="0" />
+              <ComponentContainer>
+                <Components>
+                  <ComponentData>
+                    <TypeId>MyModStorageComponent</TypeId>
+                    <Component xsi:type="MyObjectBuilder_ModStorageComponent">
+                      <Storage>
+                        <dictionary>
+                          <item>
+                            <Key>74de02b3-27f9-4960-b1c4-27351f2b06d1</Key>
+                            <Value>TLID:12
+From:North Pole
+To:North Station
+Speed:10000
+RingInterval:10000
+GpsMarkers:false
+Target:GPS:TL 12 North Station:0.00:138500.00:0.00:</Value>
+                          </item>
+                        </dictionary>
+                      </Storage>
+                    </Component>
+                  </ComponentData>
+                </Components>
+              </ComponentContainer>
+              <CustomName>Trade Lane Computer</CustomName>
+              <ShowOnHUD>false</ShowOnHUD>
+              <Enabled>true</Enabled>
+            </MyObjectBuilder_CubeBlock>
+          </CubeBlocks>
+          <IsStatic>true</IsStatic>
+          <IsUnsupportedStation>true</IsUnsupportedStation>
+          <DestructibleBlocks>false</DestructibleBlocks>
+          <Editable>false</Editable>
+          <DisplayName>TL 12 North Pole &gt; North Station</DisplayName>
+        </CubeGrid>
+        <CubeGrid>
+          <SubtypeName />
+          <PositionAndOrientation>
+            <Position x="0.0" y="138500.0" z="0.0" />
+            <Forward x="0.0" y="-1.0" z="0.0" />
+            <Up x="0.8007917165136793" y="0.0" z="-0.598942924461985" />
+          </PositionAndOrientation>
+          <EntityId>135498496292923154</EntityId>
+          <PersistentFlags>CastShadows InScene</PersistentFlags>
+          <GridSizeEnum>Large</GridSizeEnum>
+          <CubeBlocks>
+            <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_BatteryBlock">
+              <SubtypeName>TradeLaneComputer</SubtypeName>
+              <EntityId>115037039240445120</EntityId>
+              <Min x="0" y="0" z="0" />
+              <ComponentContainer>
+                <Components>
+                  <ComponentData>
+                    <TypeId>MyModStorageComponent</TypeId>
+                    <Component xsi:type="MyObjectBuilder_ModStorageComponent">
+                      <Storage>
+                        <dictionary>
+                          <item>
+                            <Key>74de02b3-27f9-4960-b1c4-27351f2b06d1</Key>
+                            <Value>TLID:12
+From:North Station
+To:North Pole
+Speed:10000
+RingInterval:10000
+GpsMarkers:false
+Target:GPS:TL 12 North Pole:0.00:62800.00:0.00:</Value>
+                          </item>
+                        </dictionary>
+                      </Storage>
+                    </Component>
+                  </ComponentData>
+                </Components>
+              </ComponentContainer>
+              <CustomName>Trade Lane Computer</CustomName>
+              <ShowOnHUD>false</ShowOnHUD>
+              <Enabled>true</Enabled>
+            </MyObjectBuilder_CubeBlock>
+          </CubeBlocks>
+          <IsStatic>true</IsStatic>
+          <IsUnsupportedStation>true</IsUnsupportedStation>
+          <DestructibleBlocks>false</DestructibleBlocks>
+          <Editable>false</Editable>
+          <DisplayName>TL 12 North Station &gt; North Pole</DisplayName>
+        </CubeGrid>
+        <CubeGrid>
+          <SubtypeName />
+          <PositionAndOrientation>
+            <Position x="0.0" y="-63000.0" z="0.0" />
+            <Forward x="-0.0" y="-1.0" z="-0.0" />
+            <Up x="0.8007917165136793" y="0.0" z="-0.598942924461985" />
+          </PositionAndOrientation>
+          <EntityId>82006237960217963</EntityId>
+          <PersistentFlags>CastShadows InScene</PersistentFlags>
+          <GridSizeEnum>Large</GridSizeEnum>
+          <CubeBlocks>
+            <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_BatteryBlock">
+              <SubtypeName>TradeLaneComputer</SubtypeName>
+              <EntityId>96493114736429076</EntityId>
+              <Min x="0" y="0" z="0" />
+              <ComponentContainer>
+                <Components>
+                  <ComponentData>
+                    <TypeId>MyModStorageComponent</TypeId>
+                    <Component xsi:type="MyObjectBuilder_ModStorageComponent">
+                      <Storage>
+                        <dictionary>
+                          <item>
+                            <Key>74de02b3-27f9-4960-b1c4-27351f2b06d1</Key>
+                            <Value>TLID:13
+From:South Pole
+To:South Station
+Speed:10000
+RingInterval:10000
+GpsMarkers:false
+Target:GPS:TL 13 South Station:0.00:-138500.00:0.00:</Value>
+                          </item>
+                        </dictionary>
+                      </Storage>
+                    </Component>
+                  </ComponentData>
+                </Components>
+              </ComponentContainer>
+              <CustomName>Trade Lane Computer</CustomName>
+              <ShowOnHUD>false</ShowOnHUD>
+              <Enabled>true</Enabled>
+            </MyObjectBuilder_CubeBlock>
+          </CubeBlocks>
+          <IsStatic>true</IsStatic>
+          <IsUnsupportedStation>true</IsUnsupportedStation>
+          <DestructibleBlocks>false</DestructibleBlocks>
+          <Editable>false</Editable>
+          <DisplayName>TL 13 South Pole &gt; South Station</DisplayName>
+        </CubeGrid>
+        <CubeGrid>
+          <SubtypeName />
+          <PositionAndOrientation>
+            <Position x="0.0" y="-138500.0" z="0.0" />
+            <Forward x="0.0" y="1.0" z="0.0" />
+            <Up x="0.8007917165136793" y="0.0" z="-0.598942924461985" />
+          </PositionAndOrientation>
+          <EntityId>132189740181980477</EntityId>
+          <PersistentFlags>CastShadows InScene</PersistentFlags>
+          <GridSizeEnum>Large</GridSizeEnum>
+          <CubeBlocks>
+            <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_BatteryBlock">
+              <SubtypeName>TradeLaneComputer</SubtypeName>
+              <EntityId>91765879474942295</EntityId>
+              <Min x="0" y="0" z="0" />
+              <ComponentContainer>
+                <Components>
+                  <ComponentData>
+                    <TypeId>MyModStorageComponent</TypeId>
+                    <Component xsi:type="MyObjectBuilder_ModStorageComponent">
+                      <Storage>
+                        <dictionary>
+                          <item>
+                            <Key>74de02b3-27f9-4960-b1c4-27351f2b06d1</Key>
+                            <Value>TLID:13
+From:South Station
+To:South Pole
+Speed:10000
+RingInterval:10000
+GpsMarkers:false
+Target:GPS:TL 13 South Pole:0.00:-63000.00:0.00:</Value>
+                          </item>
+                        </dictionary>
+                      </Storage>
+                    </Component>
+                  </ComponentData>
+                </Components>
+              </ComponentContainer>
+              <CustomName>Trade Lane Computer</CustomName>
+              <ShowOnHUD>false</ShowOnHUD>
+              <Enabled>true</Enabled>
+            </MyObjectBuilder_CubeBlock>
+          </CubeBlocks>
+          <IsStatic>true</IsStatic>
+          <IsUnsupportedStation>true</IsUnsupportedStation>
+          <DestructibleBlocks>false</DestructibleBlocks>
+          <Editable>false</Editable>
+          <DisplayName>TL 13 South Station &gt; South Pole</DisplayName>
+        </CubeGrid>
+      </CubeGrids>
+    </ShipBlueprint>
+  </ShipBlueprints>
+</Definitions>

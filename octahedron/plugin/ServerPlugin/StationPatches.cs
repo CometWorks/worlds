@@ -83,15 +83,22 @@ internal static class StationPatches
     }
 
     // A blueprint file next to the config file, else in the world's Storage/Octahedron, where a world
-    // gets the worlds repo's config/storage (SE-1235); an absolute path as it is
-    private static string BlueprintPath(string name)
+    // gets the worlds repo's config/storage (SE-1235): of the folder the world is saved to, or the one
+    // it loaded from (a cluster node's premade-world). An absolute path as it is
+    internal static string BlueprintPath(string name)
     {
         var next = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(Plugin.ConfigPath)), name);
-        var world = MySession.Static?.CurrentPath;
-        if (File.Exists(next) || world == null)
+        if (File.Exists(next))
             return next;
-        var stored = Path.Combine(world, "Storage", Plugin.Name, name);
-        return File.Exists(stored) ? stored : next;
+        foreach (var world in new[] { MySession.Static?.CurrentPath, Plugin.LoadedFrom })
+        {
+            if (world == null)
+                continue;
+            var stored = Path.Combine(world, "Storage", Plugin.Name, name);
+            if (File.Exists(stored))
+                return stored;
+        }
+        return next;
     }
 
     private static StationPatch FromBlueprints(

@@ -6,6 +6,7 @@ using PluginSdk.Clustering;
 using PluginSdk.Commands;
 using PluginSdk.Config;
 using PluginSdk.Logging;
+using Sandbox.Game.World;
 using VRage.FileSystem;
 using VRage.Game.Entity;
 using VRage.Plugins;
@@ -47,6 +48,8 @@ public class Plugin : IPlugin
     public void Init(object gameInstance)
     {
         LoadConfig();
+        // Before the first save moves CurrentPath to where the world is saved
+        MySession.AfterLoading += () => LoadedFrom = MySession.Static?.CurrentPath;
         new Harmony(Name).PatchAll(Assembly.GetExecutingAssembly());
         MesCluster.Init();
         ServerCommands.Register(
@@ -66,6 +69,12 @@ public class Plugin : IPlugin
         Log.Info($"Config loaded from {ConfigPath}");
     }
 
+    // The folder the session loaded from. A cluster node loads its world from premade-world and
+    // saves it under Saves before the game is ready, without the folders in Storage no loaded mod
+    // owns, like Storage/Octahedron with the patch blueprints (SE-1358); a plain server saves where
+    // it loaded from.
+    internal static string LoadedFrom { get; private set; }
+
     public void Update()
     {
         if (failed || !Config.Enabled)
@@ -79,6 +88,7 @@ public class Plugin : IPlugin
             StationCharging.Update();
             StationRelease.Update();
             StationPatches.Update();
+            WorldPatches.Update();
             worldEdge.Update();
             NoGravityDrives.Update();
             ClangDrives.Update();

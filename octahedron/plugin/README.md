@@ -246,7 +246,53 @@ once every kept world they were for has been wiped.
 
 Patches don't change grid ids, partitions or names the plugin keys on: don't
 rename a station's hologram tables, buttons, panels or arm rotors with them.
-Moving grids, and new or removed stations, still need a wipe (see SE-1238).
+Moving grids, and new or removed stations, still need a wipe (see SE-1238). New
+grids that aren't stations, like lane computers, go in through world patches.
+
+### World patches
+
+A world patch adds grids to a kept world once (SE-1358). It's for what a station
+patch can't do, since that only changes grids the world already has. The first one
+adds the space elevators' four lane computers to the worlds built before them.
+
+`world_patch.py` builds the world from the commit the live world was built from and
+from the working tree, with the same seed, and writes the grids only the new one has
+(by name) to a blueprint in `config/storage/Octahedron`, at their world positions:
+
+```
+python world_patch.py 2026-11-12-space-elevators --since 70fcefb --seed 2
+```
+
+`WorldPatches` in the config is the list, applied in order:
+
+```xml
+<WorldPatches>
+  <WorldPatchEntry>
+    <Id>2026-11-12-space-elevators</Id>
+    <Grids>2026-11-12-space-elevators.sbc</Grids>
+  </WorldPatchEntry>
+</WorldPatches>
+```
+
+The world's ledger is the world variable `Octahedron-WorldPatches`, kept by the
+server or by a cluster's World Authority. A plain server creates the grids of a
+patch the ledger lacks itself, skipping any grid whose name a loaded grid already
+has, and adds the id. On a cluster the World Authority, which simulates nothing,
+sends the patch to the first regular node by name, always with the same operation
+id. The node creates the grids, and the cluster puts each into a partition by its
+position: one near a station joins the station's partition, one far from
+everything gets a partition of its own. When the node's answer says APPLIED, the
+World Authority adds the id to the ledger. A patch no node took is tried again a
+minute later. If the answer is lost (a timeout), the node may have added the grids,
+so the World Authority puts `?<id>` in the ledger and doesn't send the patch again.
+It logs `World patch UNKNOWN`, and an admin checks the world, then removes `?<id>`
+from the variable to send it again.
+
+`build_world.py` writes every id of the config's `WorldPatches` into a new world's
+ledger, because that world has the grids already. At its first check after a start the
+ledger's keeper logs `World patch LEDGER <ids>`, and each patch it adds logs `World
+patch APPLIED <id>: <n> grids: <name> <entity id>, ...` on the node and the World
+Authority. Deploy Octahedron reports from those lines.
 
 ### Shared NPC blocks
 
@@ -2127,6 +2173,13 @@ items, a name, a grid setting), both copies prepared by `station_patch.py`, with
 the market unchanged; and staged patches in
 `StationPatches` for Beta Station, ops and a blueprint, applied once by the node
 that loads it.
+`tests/test_world_patch.py` checks world patches on a plain server: a world built
+from before the space elevators gets the patch's lane computers once, a restart adds
+none, and a world built now lists the patch and keeps its own computers.
+`tests/world_patch_cluster.py` does the same on a local test cluster (WA and two
+nodes): the World Authority has a node add the grids, both log them, the grids are in
+partitions, a stop and start adds nothing, and the admin client finds one grid of
+each name at its place.
 `tests/market/MarketTests` checks the market's bookkeeping without the game
 (`dotnet run -c Release --project tests/market/MarketTests`): OCT's prices with the
 tax and rounding, stock, the hourly restock and profiles, specialty and drift, the
