@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Octahedron cluster</title>
+  <desc id="desc">The station's pointed roof, open docking deck and tapered underside, with a small three-tailed CometWorks comet in the upper left and a double-helix Moon shipyard in the upper right.</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1">
+      <stop stop-color="#15273e"/><stop offset="1" stop-color="#070e1b"/>
+    </linearGradient>
+    <linearGradient id="comet" x1="0" y1="1" x2="1" y2="0">
+      <stop stop-color="#007eae"/><stop offset="1" stop-color="#39d7f5"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#background)"/>
+  <g id="station">
+    <path d="M246 84 112 218 246 242Z" fill="#f1f8fc"/>
+    <path d="M266 84 400 218 266 242Z" fill="#a6bacd"/>
+    <path d="M112 234 246 258 246 278 112 254Z" fill="#718da9"/>
+    <path d="M400 234 266 258 266 278 400 254Z" fill="#435f7b"/>
+    <path d="M112 278 246 302 246 412Z" fill="#c7d8e7"/>
+    <path d="M400 278 266 302 266 412Z" fill="#718da9"/>
+  </g>
+  <g id="cometworks-comet" transform="translate(41 31) scale(0.3375)" fill="url(#comet)" stroke="#0b1525" stroke-width="9" stroke-linejoin="round" paint-order="stroke fill">
+    <path d="M98 321C174 255 256 210 350 193 254 226 182 276 112 348Z"/>
+    <path d="M127 366C201 286 269 232 354 208 274 250 215 312 160 393Z"/>
+    <path d="M183 408C231 321 288 254 363 224 297 272 260 338 226 429Z"/>
+    <path fill-rule="evenodd" d="M422 195a43 43 0 1 1-86 0 43 43 0 1 1 86 0ZM371 180a9 9 0 1 0-18 0 9 9 0 1 0 18 0Z"/>
+    <circle cx="362" cy="180" r="9" fill="#0b1525" stroke="none"/>
+  </g>
+  <g id="moon-shipyard" transform="translate(386 126) rotate(-40)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M-16-48C-16-24 16-24 16 0S-16 24-16 48" stroke="#79d7ec" stroke-width="8"/>
+    <path d="M16-48C16-24-16-24-16 0S16 24 16 48" stroke="#0b1525" stroke-width="14"/>
+    <path d="M16-48C16-24-16-24-16 0S16 24 16 48" stroke="#008bb6" stroke-width="8"/>
+    <path d="M0-24C8-18 16-12 16 0" stroke="#0b1525" stroke-width="14"/>
+    <path d="M0-24C8-18 16-12 16 0" stroke="#79d7ec" stroke-width="8"/>
+  </g>
+</svg>
