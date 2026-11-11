@@ -106,6 +106,21 @@ EQUATOR_LANE_NORTH = 200.0
 # look away from EarthLike (SE-1066), the Moon's above Moon Station's decks, which sit higher
 # in the zone with the Moon Shipyard (SE-1069). The other lanes needed no move.
 NORTH_MOON_LANE_NORTH = (-350.0, 190.0)
+# Space elevators: a lane from each pole station straight down toward EarthLike's center, its
+# Earth end this far from the center, about 1 km above the ground (SE-1358). The ground there,
+# from the up and down heightmaps (radius 60 km + HillParams -0.01..0.12): 61,787 m under North
+# Station and 61,977 m under South Station, at most 61,821 and 62,146 m within 500 m of the line.
+# Each Earth end names the station there, or None for no station: the end is then named after
+# its place. The lane computers' From and To and the lanes' grid names carry that name, and the
+# sebot traders and taxis take a lane only to a station on their map (cluster-regression
+# lanes.departures), so a station built under a gate later needs only its name here.
+ELEVATORS = {
+    "North Station": {"place": "North Pole", "station": None, "radius": 62_800.0},
+    "South Station": {"place": "South Pole", "station": None, "radius": 63_000.0},
+}
+# The station end of an elevator, as far out as a Moon lane's, keeps its gates 700 m from those
+# of the station's other lanes (at 1 km they came within 360 m of the lanes to Delta and Beta)
+ELEVATOR_ENDPOINT_DISTANCE = MOON_LANE_ENDPOINT_DISTANCE
 # A shipyard's blocks stay out of the slab of its station's bounding sphere by this much
 SHIPYARD_SUN_CLEARANCE = 15.0
 # The bounding sphere of a block cell. Blocks are counted by their Min cell, so this also covers
@@ -1093,8 +1108,13 @@ def lane_up(direction, home, target, north, polar_normal):
     station. A Moon lane takes the up of its Earth station's circle: the equator's from Alpha
     and Delta, the polar ring's from North, so a ship that turns off toward the Moon keeps
     the side of the track it was on."""
-    # A Moon lane follows its Earth station's circle (Delta's: the equator's)
-    ends = {home, target} - {"Moon Station"}
+    # A Moon lane follows its Earth station's circle (Delta's: the equator's), an elevator its
+    # station's
+    ends = (
+        {home, target}
+        - {"Moon Station"}
+        - {elevator_end(e) for e in ELEVATORS.values()}
+    )
     if ends <= EQUATOR_STATIONS:
         return norm(perpendicular_part(north, direction))
     assert ends <= POLAR_STATIONS, ends
@@ -1323,6 +1343,25 @@ def lanes(places, edges):
         end = sub(pb, mul(direction, LANE_ENDPOINT_DISTANCE))
         result.append((f"{len(result) + 1:02d}", a, b, start, end))
     return result
+
+
+def elevator_lanes(places, earth, first_id):
+    """(lane id, home, target, home endpoint, target endpoint) of the space elevators, numbered
+    from first_id: from ELEVATOR_ENDPOINT_DISTANCE below each pole station down to its pole.
+    """
+    result = []
+    for number, (name, elevator) in enumerate(ELEVATORS.items(), first_id):
+        center = places[name][0]
+        down = norm(sub(earth.center, center))
+        start = add(center, mul(down, ELEVATOR_ENDPOINT_DISTANCE))
+        end = sub(earth.center, mul(down, elevator["radius"]))
+        result.append((f"{number:02d}", name, elevator_end(elevator), start, end))
+    return result
+
+
+def elevator_end(elevator):
+    """The name of an elevator's Earth end: the station there, or the place without one"""
+    return elevator["station"] or elevator["place"]
 
 
 def gate_points(start, end, interval=LANE_RING_INTERVAL):
@@ -1691,7 +1730,8 @@ def main():
     polar_normal = norm(sub(places["Alpha Station"][0], earth.center))
     straight_lanes = lanes(places, edges)
     lane_list = lanes_off_sun(straight_lanes, sun)
-    gates = gate_centers(lane_list, earth.up, polar_normal)
+    elevators = elevator_lanes(places, earth, len(lane_list) + 1)
+    gates = gate_centers(lane_list + elevators, earth.up, polar_normal)
     # The ring's axis turns with the octahedron, so the ring still passes Beta and Delta
     # Station on the same sides
     axis = rotate(
@@ -1751,7 +1791,7 @@ def main():
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
         objects.append(safe_zone(ids, center, radius, name))
 
-    for lane_id, home, target, start, end in lane_list:
+    def add_lane(lane_id, home, target, start, end):
         direction = norm(sub(end, start))
         up = lane_up(direction, home, target, earth.up, polar_normal)
         for position, here, there, facing, partner in (
@@ -1762,6 +1802,9 @@ def main():
             objects.append(
                 lane_computer(ids, position, facing, up, lane_id, here, there, partner)
             )
+
+    for lane in lane_list:
+        add_lane(*lane)
 
     add_trade_stations(checkpoint, ids, faction, trade_stations)
 
@@ -1786,6 +1829,10 @@ def main():
                 )
             )
 
+    # The space elevators came last, so every id drawn before them stays as it was
+    for lane in elevators:
+        add_lane(*lane)
+
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),
         (checkpoint_tree, "Sandbox.sbc"),
@@ -1799,7 +1846,7 @@ def main():
     rts.mkdir(parents=True, exist_ok=True)
     shutil.copy(RELATIVE_TOP_SPEED, rts / "RelativeTopSpeed.cfg")
     print(
-        f"{out}: {len(places)} stations, {len(lane_list)} lanes, {RING_ASTEROIDS} + 4 asteroids, seed {args.seed}"
+        f"{out}: {len(places)} stations, {len(lane_list) + len(elevators)} lanes, {RING_ASTEROIDS} + 4 asteroids, seed {args.seed}"
     )
 
 

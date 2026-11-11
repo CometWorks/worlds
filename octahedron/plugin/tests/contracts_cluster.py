@@ -460,7 +460,7 @@ def run(bench) -> None:
     ]
     check(
         "the world's lane computers are up, ownerless",
-        len(lanes) == 22 and not any(e["ownerIdentityId"] for e in lanes),
+        len(lanes) == 26 and not any(e["ownerIdentityId"] for e in lanes),
         [(e["displayName"], e["ownerIdentityId"]) for e in lanes][:3],
     )
 
