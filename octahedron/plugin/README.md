@@ -1435,7 +1435,16 @@ someone sitting in that driver's cab. The driver's words don't care about case,
 punctuation or the word "station", and forgive a typo in a short word and two in a longer
 one (`TaxiWords.cs`, tested offline by `tests/taxi-words`: `dotnet test`); two equally
 close answers, or anything else, get a reply saying what the driver understands.
-Whispers to other players and global chat are left alone.
+Whispers to other players and global chat are left alone, except GPS points.
+
+A GPS point instead of a station (SE-1344): a GPS link (`GPS:name:X:Y:Z:...`, as the game
+shares it) whispered to the driver, or said in any chat by the first passenger before paying,
+pays the ride to that point. It costs what a call from that point would (`TaxiFares.CallRide`:
+`TaxiCallFare` within `TaxiCallRange` of the nearest station or Earth end, plus
+`TaxiCallFarePerKm` beyond), and is refused when the passenger can't pay it all. A point within
+3 km of a station is that station's regular fare. The driver hears `Fare paid by NAME.
+Destination: GPS X Y Z`, flies there as to a caller (above it on a planet), and waits for the
+passenger to get out. The ride counts as arrived within 1 km of the point.
 
 `!oct taxi call` calls a cab to where the caller is, out in space only (cabs don't fly
 into gravity yet): the nearest one with a driver, nobody else in it and no other call,

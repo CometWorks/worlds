@@ -59,6 +59,7 @@ internal static class Taxi
     private static readonly TimeSpan Tick = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan Rescan = TimeSpan.FromSeconds(10);
     private const double AtStation = 3_000; // m: a cab this near a station is at it
+    private const double AtPoint = 1_000; // m: a cab this near a GPS destination is there
 
     private static DateTime nextTick,
         nextScan;
@@ -394,12 +395,14 @@ internal static class Taxi
         ChatMessageCustomData? data
     )
     {
-        if (
-            channel != ChatChannel.Private
-            || string.IsNullOrWhiteSpace(text)
-            || text.StartsWith("!")
-            || !Config.TaxiEnabled
-        )
+        if (string.IsNullOrWhiteSpace(text) || text.StartsWith("!") || !Config.TaxiEnabled)
+            return;
+        if (TaxiWords.TryGps(text, out var gps))
+        {
+            OnGps(steamId, channel, target, new Vector3D(gps.X, gps.Y, gps.Z));
+            return;
+        }
+        if (channel != ChatChannel.Private)
             return;
         if (!IsDriver(target))
             return;
@@ -419,6 +422,27 @@ internal static class Taxi
                 _ => Understood(inMine),
             }
         );
+    }
+
+    // A GPS point in chat (SE-1344): whispered to the driver of the sender's cab, or said in any channel by a passenger
+    // seated there who has not paid yet, it pays the ride there (PayGps). Other GPS points are left alone.
+    private static void OnGps(ulong steamId, ChatChannel channel, long target, Vector3D point)
+    {
+        var whispered = channel == ChatChannel.Private;
+        if (whispered && !IsDriver(target))
+            return;
+        var sender = MySession.Static.Players.TryGetIdentityId(steamId);
+        var (cab, seat) = SeatOf(sender);
+        if (seat == null || (whispered && Driver(cab) != target))
+        {
+            if (whispered)
+                Tell(sender, "Sit in my cab first, then send me the GPS point.");
+            return;
+        }
+        var record = Record(seat);
+        if (!whispered && record.Passenger == sender && record.Station != Unpaid)
+            return;
+        Tell(sender, PayGps(sender, point));
     }
 
     private static string Understood(bool inMine) =>
@@ -588,7 +612,7 @@ internal static class Taxi
                     Refund(passenger, trip, "the driver left the cab");
                 continue;
             }
-            if (cabHere && StationAt(cab.PositionComp.GetPosition()) == trip.Dest)
+            if (cabHere && Arrived(cab.PositionComp.GetPosition(), trip.Dest))
                 trips.Remove(passenger); // there
             else if (dead)
                 Refund(passenger, trip, "you died on the way");
@@ -685,6 +709,57 @@ internal static class Taxi
         StartTrip(passenger, cab, driver, fare, station);
         RideAlong(cab, passenger, station);
         return $"You paid {Sc(fare)}. {Name(driver)} takes you to {station}. "
+            + "The fare is not refunded if you get out before the cab arrives.";
+    }
+
+    // A GPS point as the destination (SE-1344): a point at a station is that station's fare, any other is charged like a
+    // call from there (CallRide), refused when the balance is short. The driver hears "Destination: GPS X Y Z".
+    public static string PayGps(long passenger, Vector3D point)
+    {
+        var (cab, seat) = SeatOf(passenger);
+        if (seat == null)
+            return $"Sit in a cab's passenger seat first: a ship named {Config.TaxiGridName} with a driver.";
+        var station = StationAt(point);
+        if (station != null)
+            return Pay(passenger, station);
+        var driver = Driver(cab);
+        if (driver == 0)
+            return "This cab has no driver right now.";
+        var record = Record(seat);
+        if (record.Passenger == passenger && record.Station != Unpaid)
+            return $"This cab takes you to {record.Station}.";
+        if (
+            firstIn.TryGetValue(cab.EntityId, out var first)
+            && first != passenger
+            && SeatOf(first).Cab == cab
+        )
+            return $"{Name(first)} got in first and picks where this cab goes. You ride along for free.";
+
+        var (_, fare) = CallRide(point);
+        if (fare > 0 && !MyBankingSystem.ChangeBalance(passenger, -fare))
+        {
+            var balance = MyBankingSystem.Static.TryGetAccountInfo(passenger, out var account)
+                ? account.Balance
+                : 0;
+            return $"A ride to that point is {Sc(fare)}, you have {Sc(balance)}.";
+        }
+        if (fare > 0 && !MyBankingSystem.ChangeBalance(driver, fare))
+            Plugin.Log.Error(
+                $"Taxi: {fare} SC taken from {passenger} but not paid to the driver {driver}"
+            );
+
+        var dest = TaxiWords.GpsDestination((point.X, point.Y, point.Z));
+        var here = StationAt(cab.PositionComp.GetPosition());
+        Write(seat, passenger, dest);
+        var name = Name(passenger);
+        Plugin.Log.Info(
+            $"Taxi: {name} ({passenger}) paid {fare} SC to {Name(driver)} ({driver}) in '{cab.DisplayName}'"
+                + $" from {here ?? "space"} to {dest}"
+        );
+        Tell(driver, $"Fare paid by {name}. Destination: {dest}");
+        StartTrip(passenger, cab, driver, fare, dest);
+        RideAlong(cab, passenger, dest);
+        return $"You paid {Sc(fare)}. {Name(driver)} takes you to the GPS point ({dest[4..]}). "
             + "The fare is not refunded if you get out before the cab arrives.";
     }
 
@@ -923,7 +998,8 @@ internal static class Taxi
     private static string Question(List<string> destinations, MyCubeGrid cab) =>
         $"Where to? {string.Join(", ", destinations)}. Whisper the driver the station (/w \"{Name(Driver(cab))}\", "
         + $"then e.g. {Short(destinations.FirstOrDefault() ?? "Moon")}), or type !oct taxi <station>. The fare, "
-        + $"{Sc(Config.TaxiFare)}, goes to the driver then and is not refunded if you get out early.";
+        + $"{Sc(Config.TaxiFare)}, goes to the driver then and is not refunded if you get out early. "
+        + "Or send a GPS point in chat: that ride costs what a call from there would.";
 
     // The cabs among the grids this node has, by name
     private static void Scan()
@@ -1052,6 +1128,12 @@ internal static class Taxi
 
     private static void Write(MyCockpit seat, long passenger, string station) =>
         seat.CustomData = $"{passenger} {station}";
+
+    // At a ride's destination: the station's, or within AtPoint of a GPS destination
+    private static bool Arrived(Vector3D position, string dest) =>
+        TaxiWords.TryGpsDestination(dest, out var p)
+            ? Vector3D.Distance(position, new Vector3D(p.X, p.Y, p.Z)) <= AtPoint
+            : StationAt(position) == dest;
 
     // The station within AtStation of the point, else null
     private static string StationAt(Vector3D position) => NearestStation(position, AtStation);
