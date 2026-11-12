@@ -109,6 +109,7 @@ public class Plugin : IPlugin
             OfflineCharacters.Update();
             Reputation.Update();
             Taxi.Update();
+            Police.Update();
         }
         catch (Exception e)
         {
@@ -182,6 +183,7 @@ public class Plugin : IPlugin
         ShipyardArm.Dispose();
         Reputation.Dispose();
         Taxi.Dispose();
+        Police.Dispose();
         // Harmony patches stay: unpatching all may break other plugins
     }
 }

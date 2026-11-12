@@ -1509,6 +1509,28 @@ cluster a cab's paid rides go with it to the node it flies into (the grid handov
 call stays open on the caller's node while its cab is on another one, and a give-up and
 the messages to a driver reach every node.
 
+### Police
+
+Police bots defend the stations (SE-1384). An officer is a bot (`ShipyardBotSteamIds`)
+that said `!oct police duty <station>`, flying a ship named `PoliceGridName*` (Police),
+the "Raptor - Ion" in the station's color (cluster-regression `sebot/tools/trader/police.py`).
+
+- Weapon damage (bullets, rockets, explosions, mines) to any grid or character within
+  `PoliceAlertRange` (2 km) of a station's center makes the attacker a target: the grid of
+  the weapon block or missile launcher that did it, with every grid mechanically connected
+  to it. Damage by a police ship, by a station grid and by hand weapons raises no alert.
+- Every `PoliceReportSeconds` (2) the officers on duty at that station hear, privately from
+  `Police`, `Target KEY at X Y Z moving VX VY VZ grids ID,... weapons N`, until the target is
+  clear: `Clear KEY: WHY`, once all its grids are beyond `PoliceChaseRange` (3 km) of the
+  station, it has no working weapon block, or it is gone.
+- A police ship of an officer on duty docked at a station's trading connector gets its
+  hydrogen tanks filled, and its guns and its cargo (`PoliceCargoAmmo` of the volume, 0.5)
+  filled with its guns' ammo, free, every second. A service station is to do this later.
+- `!oct police list` (admins) lists the officers on duty and the targets.
+
+Officers and targets live in the process: on a cluster each node knows the officers who went
+on duty there and the stations it simulates. The bots say it again now and then.
+
 ### Contracts
 
 With `ContractsEnabled` on, OCT (`MoneyAuthorityFactionTag`) posts the stations'
