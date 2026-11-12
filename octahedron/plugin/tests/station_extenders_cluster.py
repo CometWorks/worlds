@@ -289,9 +289,11 @@ def run(bench) -> None:
     check("and the ships are still docked", ships and len(still) == len(ships), still)
 
     # ============================== the other stations ==============================
-    for name, at in wa.stations().items():
+    # The stations the patches name: wa.stations() has the lanes' computers too
+    places = wa.stations()
+    for name in [e.findtext("Grid") for e in entries() if PATCH in e.findtext("Id")]:
         if name != GRID:
-            api.character_teleport(*at)
+            api.character_teleport(*places[name])
             time.sleep(10)
             patched(api, name, before[name])
 
