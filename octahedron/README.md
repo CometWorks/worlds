@@ -389,8 +389,9 @@ two blocks.
   docked ship gets no hydrogen or conveyor access from the station and no
   player can turn trading off. Trading needs no access to them. On the server
   the Octahedron plugin keeps them that way (`StationConnectorsTrade`), in a
-  world from before the rule too, and charges a docked ship's batteries from
-  the station (`StationDockCharging`).
+  world from before the rule too, charges a docked ship's batteries from
+  the station for free (`StationDockCharging`) and fills its H2 tanks for the
+  ice's price at the station's Store (`StationDockHydrogen`, SE-1387).
 - A ship stays docked at a station while one of its owners or their faction
   is online in the station's safe zone. Without them it is let go after 10
   minutes, and so is the ship docked the longest while every connector of

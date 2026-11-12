@@ -49,6 +49,9 @@ import test_shipyard_order as so  # noqa: E402
 from test_client import log, with_config  # noqa: E402
 from test_table_rules import blueprint_xml  # noqa: E402
 
+# Written for half full H2 tanks on new ships and no hydrogen for docked ships (SE-1387)
+rig.CONFIG_PINS.update(ShipyardHydrogenFillPercent=50, StationDockHydrogen="false")
+
 PLATE = "Component/SteelPlate"
 SHIP = "PaidTest"
 BLUEPRINT = rig.grid(

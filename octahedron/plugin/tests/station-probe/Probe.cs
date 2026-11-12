@@ -214,6 +214,9 @@ public sealed class ProbeCommands : CommandModule
                 ownerId
             );
             tank.FilledRatio = float.Parse(h2.Substring(3), CultureInfo.InvariantCulture);
+            // H2OFF: the tank turned off
+            if (items.Contains("H2OFF"))
+                tank.Enabled = false;
             // Stockpiling, it takes hydrogen from any tank or generator it reaches too. Laid along
             // the ship, its port at its base faces the container, so conveyors reach it.
             if (items.Contains("STOCKPILE"))
@@ -267,6 +270,7 @@ public sealed class ProbeCommands : CommandModule
                 || pair.StartsWith("BATS=")
                 || pair.StartsWith("AT=")
                 || pair == "STOCKPILE"
+                || pair == "H2OFF"
             )
                 continue;
             var f = pair.Split('=');
@@ -1444,6 +1448,34 @@ public sealed class ProbeCommands : CommandModule
         foreach (var c in free)
             c.TradingEnabled.Value = state == "on";
         return $"TRADING {station} {state} {free.Count}";
+    }
+
+    [Command(
+        "energy",
+        "The batteries and jump drives of a grid and its subgrids: ENERGY grid-id batteries=MWh/MWh jumps=MWh/MWh",
+        "!sprobe energy <grid id|grid name>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Energy(string grid)
+    {
+        var found = MyEntities
+            .GetEntities()
+            .OfType<MyCubeGrid>()
+            .FirstOrDefault(g => g.EntityId.ToString() == grid || g.DisplayName == grid);
+        if (found == null)
+            return $"NOGRID {grid}";
+        var grids = MyCubeGridGroups.Static.Mechanical.GetGroupNodes(found);
+        var batteries = grids.SelectMany(g => g.GetFatBlocks<MyBatteryBlock>()).ToList();
+        var jumps = grids.SelectMany(g => g.GetFatBlocks<MyJumpDrive>()).ToList();
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "ENERGY {0} batteries={1:0.000}/{2:0.000} jumps={3:0.000}/{4:0.000}",
+            found.EntityId,
+            batteries.Sum(b => b.CurrentStoredPower),
+            batteries.Sum(b => b.MaxStoredPower),
+            jumps.Sum(j => ((Sandbox.ModAPI.Ingame.IMyJumpDrive)j).CurrentStoredPower),
+            jumps.Sum(j => j.BlockDefinition.PowerNeededForJump)
+        );
     }
 
     [Command(

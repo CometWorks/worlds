@@ -47,6 +47,9 @@ from test_table_rules import (
     settled,
 )  # noqa: E402
 
+# Written for half full H2 tanks on new ships and no hydrogen for docked ships (SE-1387)
+rig.CONFIG_PINS.update(ShipyardHydrogenFillPercent=50, StationDockHydrogen="false")
+
 # OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
 STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 PLATE = "Component/SteelPlate"

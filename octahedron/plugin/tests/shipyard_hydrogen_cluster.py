@@ -219,6 +219,9 @@ def main() -> int:
         MoneySubsidyPerActivePlayer=0,
         MoneyPlayerTaxThreshold=1_000_000_000,
         MoneyOctCap=1_000_000_000_000,
+        # Written for half full H2 tanks on new ships and no hydrogen for docked ships (SE-1387)
+        ShipyardHydrogenFillPercent=50,
+        StationDockHydrogen="false",
     )
     label = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ-shipyard-hydrogen")
     results = bench_module.HOST.results / label
