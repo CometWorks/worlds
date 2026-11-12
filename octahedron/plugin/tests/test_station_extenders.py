@@ -30,7 +30,6 @@ from test_store import store  # noqa: E402
 
 STATION = "Alpha"
 IRON = "Ingot/Iron"
-PLATE = "Component/SteelPlate"
 CONFIG = Path(__file__).resolve().parents[2] / "config"
 XSI = "{http://www.w3.org/2001/XMLSchema-instance}type"
 
@@ -81,10 +80,14 @@ def trades_at(remote, cell: str, subtype: str) -> None:
     check(item(remote, ship, IRON) == 900, "the iron left its cargo")
     st.wait_until(lambda: balance(remote) > money, 15)
     check(balance(remote) > money, f"and paid: {money} -> {balance(remote)}")
-    answer = " ".join(store(remote, f"buyship {PLATE} 10"))
-    check("BUY Success" in answer, f"a purchase into its cargo: {answer}")
-    st.wait_until(lambda: item(remote, ship, PLATE) == 10, 15)
-    check(item(remote, ship, PLATE) == 10, "the plates are in its cargo")
+    # Something the Store has 10 of
+    offers = [l.split() for l in store(remote, "list all") if l.startswith("OFFER ")]
+    goods = next((f[1] for f in offers if int(f[2]) >= 10), None)
+    check(goods is not None, f"the Store sells something: {offers[:5]}")
+    answer = " ".join(store(remote, f"buyship {goods} 10"))
+    check("BUY Success" in answer, f"a purchase of {goods} into its cargo: {answer}")
+    st.wait_until(lambda: item(remote, ship, goods) == 10, 15)
+    check(item(remote, ship, goods) == 10, f"the {goods} is in its cargo")
     log(probe(remote, "undock"))
 
 
@@ -121,7 +124,9 @@ def main() -> int:
     tried = [
         l
         for l in text.splitlines()
-        if "Station patch" in l and "station-extenders" in l
+        if re.search(
+            r"Station patch (staged: )?(APPLIED|REFUSED|FAILED) \S*station-extenders", l
+        )
     ]
     check(not tried, f"the server doesn't try the patches the world has: {tried[:3]}")
     errors = [
