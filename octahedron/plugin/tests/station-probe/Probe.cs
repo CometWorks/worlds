@@ -914,7 +914,8 @@ public sealed class ProbeCommands : CommandModule
                 MyFloatingObjects.Spawn(
                     new VRage.Game.Entity.MyPhysicalInventoryItem(
                         10,
-                        (MyObjectBuilder_PhysicalObject)MyObjectBuilderSerializer.CreateNewObject(stone)
+                        (MyObjectBuilder_PhysicalObject)
+                            MyObjectBuilderSerializer.CreateNewObject(stone)
                     ),
                     at + new Vector3D(i * 3, 0, 0),
                     Vector3D.Forward,
@@ -2001,6 +2002,33 @@ public sealed class ProbeCommands : CommandModule
         var to = ((SpaceEngineers.Game.ModAPI.IMyLandingGear)gear).GetAttachedEntity();
         return $"GEARSTATE {id} mode={gear.LockMode} auto={(gear.AutoLock ? "yes" : "no")} "
             + $"to={(to == null ? "none" : to.EntityId.ToString())}";
+    }
+
+    [Command(
+        "gearbox",
+        "A landing gear's lock box and what is in it (SE-1383): GEARBOX mode working pivot-offset=right,up,back normal=right,up,back half=x,y,z in=entity-ids",
+        "!sprobe gearbox <gear block id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string GearBox(long id)
+    {
+        if (!MyEntities.TryGetEntityById(id, out MyLandingGear gear))
+            return $"NOGEAR {id}";
+        gear.GetBoxFromMatrix(gear.LockPositions[0], out var half, out var pivot, out var turn);
+        var normal = Vector3D.Transform(Vector3D.Up, turn);
+        var m = gear.WorldMatrix;
+        string Local(Vector3D v) =>
+            $"{Vector3D.Dot(v, m.Right):F2},{Vector3D.Dot(v, m.Up):F2},{Vector3D.Dot(v, m.Backward):F2}";
+        var grown = half * new Vector3(2f, 1f, 2f);
+        var box = new MyOrientedBoundingBoxD(pivot, grown, turn);
+        var inside = MyEntities
+            .GetEntitiesInOBB(ref box)
+            .Select(e => e.GetTopMostParent().EntityId)
+            .Where(e => e != gear.CubeGrid.EntityId)
+            .Distinct()
+            .ToList();
+        return $"GEARBOX {gear.LockMode} working={gear.IsWorking} pivot-offset={Local(pivot - m.Translation)} "
+            + $"normal={Local(normal)} half={half.X:F2},{half.Y:F2},{half.Z:F2} in={string.Join(",", inside)}";
     }
 
     [Command(
