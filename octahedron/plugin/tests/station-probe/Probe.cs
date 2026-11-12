@@ -901,7 +901,7 @@ public sealed class ProbeCommands : CommandModule
         "Garbage for the janitors (SE-1383) at a point: debris (a small grid of nobody's, 4 armor blocks and a cargo "
             + "container), piece (the same, the caller's), big (nobody's, 24 armor blocks: salvage size) or floating "
             + "(3 floating objects of stone): JUNK grid-id or JUNK floating",
-        "!kprobe junk <debris|piece|big|floating> <x> <y> <z>"
+        "!sprobe junk <debris|piece|big|floating> <x> <y> <z>"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Junk(string kind, double x, double y, double z)
