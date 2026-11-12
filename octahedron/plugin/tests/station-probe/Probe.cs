@@ -2006,11 +2006,11 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "gearbox",
-        "A landing gear's lock box and what is in it (SE-1383): GEARBOX mode working pivot-offset=right,up,back normal=right,up,back half=x,y,z in=entity-ids",
-        "!sprobe gearbox <gear block id>"
+        "A landing gear's lock box and what is in it (SE-1383): GEARBOX mode working pivot-offset=right,up,back normal=right,up,back half=x,y,z found=what the game's lock check finds [target-relv= target-dist=] in=entity-ids",
+        "!sprobe gearbox <gear block id> [target entity id]"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string GearBox(long id)
+    public string GearBox(long id, long target = 0)
     {
         if (!MyEntities.TryGetEntityById(id, out MyLandingGear gear))
             return $"NOGEAR {id}";
@@ -2027,8 +2027,28 @@ public sealed class ProbeCommands : CommandModule
             .Where(e => e != gear.CubeGrid.EntityId)
             .Distinct()
             .ToList();
+        // What the game's own lock check finds (FindBody: the penetrations of the box that CanAttachTo takes)
+        var args = new object[] { null, null };
+        var found = (VRage.Game.Entity.MyEntity)
+            typeof(MyLandingGear)
+                .GetMethod("FindBody", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(gear, args);
+        var relative = "";
+        if (
+            target != 0
+            && MyEntities.TryGetEntityById(target, out VRage.Game.Entity.MyEntity other)
+            && other.Physics != null
+        )
+        {
+            var v =
+                gear.CubeGrid.Physics.GetVelocityAtPoint(pivot)
+                - other.Physics.GetVelocityAtPoint(pivot);
+            relative =
+                $" target-relv={v.Length():F2} target-dist={other.PositionComp.WorldAABB.Distance(pivot):F2}";
+        }
         return $"GEARBOX {gear.LockMode} working={gear.IsWorking} pivot-offset={Local(pivot - m.Translation)} "
-            + $"normal={Local(normal)} half={half.X:F2},{half.Y:F2},{half.Z:F2} in={string.Join(",", inside)}";
+            + $"normal={Local(normal)} half={half.X:F2},{half.Y:F2},{half.Z:F2} found={found?.EntityId ?? 0}{relative} "
+            + $"in={string.Join(",", inside)}";
     }
 
     [Command(
