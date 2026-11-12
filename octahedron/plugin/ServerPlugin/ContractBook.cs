@@ -75,6 +75,9 @@ internal sealed class ContractGrid
     // Towed: the player whose ship holds it
     public long Tower;
 
+    // What its blocks' components are worth at OCT's market prices, SC: no cargo, no tank fill
+    public double Value;
+
     private static string N(double v) => v.ToString("R", CultureInfo.InvariantCulture);
 
     public string Encode() =>
@@ -94,7 +97,8 @@ internal sealed class ContractGrid
             Owner.ToString(CultureInfo.InvariantCulture),
             Builder.ToString(CultureInfo.InvariantCulture),
             Pcu.ToString(CultureInfo.InvariantCulture),
-            Tower.ToString(CultureInfo.InvariantCulture)
+            Tower.ToString(CultureInfo.InvariantCulture),
+            N(Value)
         );
 
     public static ContractGrid Decode(string line)
@@ -116,6 +120,8 @@ internal sealed class ContractGrid
             Builder = long.Parse(p[12], CultureInfo.InvariantCulture),
             Pcu = int.Parse(p[13], CultureInfo.InvariantCulture),
             Tower = long.Parse(p[14], CultureInfo.InvariantCulture),
+            // Absent in rows saved before component values
+            Value = p.Length > 15 ? D(15) : 0,
         };
     }
 }

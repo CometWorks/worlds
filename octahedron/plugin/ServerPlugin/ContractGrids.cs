@@ -214,6 +214,7 @@ internal static class ContractGrids
         if (group.Any(InSafeZone))
             row.Flags |= ContractGridFlags.SafeZone;
         row.MassKg = group.Sum(Mass);
+        row.Value = Value(group);
         row.Pcu = GroupPcuLimit.GroupPcu(grid);
         row.Owner =
             (
@@ -238,9 +239,36 @@ internal static class ContractGrids
             z.Enabled && !z.MarkedForClose && z.Contains(grid.PositionComp.WorldAABB.Center)
         );
 
-    // A static grid's physics has no mass
-    private static double Mass(MyCubeGrid grid) =>
-        grid.IsStatic ? grid.GetBlocks().Sum(b => (double)b.GetMass()) : grid.Physics?.Mass ?? 0;
+    // The blocks only: a ship's physics mass has its cargo and tank fill too (SE-1025)
+    private static double Mass(MyCubeGrid grid) => grid.GetBlocks().Sum(b => (double)b.GetMass());
+
+    // The components mounted on the blocks and waiting in their stockpiles, at the market's
+    // reference prices; never what the blocks' inventories hold
+    public static double Value(IEnumerable<MyCubeGrid> group)
+    {
+        var milli = 0L;
+        var prices = new Dictionary<VRage.Game.MyDefinitionId, long>();
+        long Price(VRage.Game.MyDefinitionId id)
+        {
+            if (!prices.TryGetValue(id, out var price))
+                prices[id] = price = Market.ReferencePrice(Stations.ItemName(id));
+            return price;
+        }
+        foreach (var block in group.SelectMany(g => g.GetBlocks()))
+        {
+            var stack = block.ComponentStack;
+            for (var i = 0; i < stack.GroupCount; i++)
+            {
+                var mounted = stack.GetGroupInfo(i).MountedCount;
+                if (mounted > 0)
+                    milli += mounted * Price(block.BlockDefinition.Components[i].DeconstructItem.Id);
+            }
+            if (!block.StockpileEmpty)
+                foreach (var item in block.GetObjectBuilder().ConstructionStockpile.Items)
+                    milli += item.Amount * Price(item.PhysicalContent.GetObjectId());
+        }
+        return milli / 1000.0;
+    }
 
     private static bool Ownable(MyCubeGrid grid) =>
         grid.GetFatBlocks()
