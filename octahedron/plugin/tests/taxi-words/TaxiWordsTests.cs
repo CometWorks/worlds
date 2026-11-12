@@ -72,4 +72,31 @@ public class TaxiWordsTests
 
     [Fact]
     public void PrefixOfThreeOrMore() => Assert.Equal((Kind.Station, "Delta Station"), M("del"));
+
+    [Theory]
+    [InlineData("GPS:Drop:-111987.17:-96.8:83803.52:#FFFFFF00:", -111987.17, -96.8, 83803.52)]
+    [InlineData("take me here GPS:My base:100:200:-300: please", 100, 200, -300)]
+    [InlineData("gps:x:1.5:2:3:", 1.5, 2, 3)]
+    public void GpsLinks(string text, double x, double y, double z)
+    {
+        Assert.True(TryGps(text, out var p));
+        Assert.Equal((x, y, z), p);
+    }
+
+    [Theory]
+    [InlineData("moon")]
+    [InlineData("GPS:broken:1:2:")]
+    [InlineData("GPS 1 2 3")]
+    public void NoGpsLink(string text) => Assert.False(TryGps(text, out _));
+
+    [Fact]
+    public void GpsDestinationRoundTrip()
+    {
+        var dest = GpsDestination((-111987.4, -96.8, 83803.5));
+        Assert.Equal("GPS -111987 -97 83804", dest);
+        Assert.True(TryGpsDestination(dest, out var p));
+        Assert.Equal((-111987.0, -97.0, 83804.0), p);
+        Assert.False(TryGpsDestination("Moon Station", out _));
+        Assert.False(TryGpsDestination("GPS Station", out _));
+    }
 }

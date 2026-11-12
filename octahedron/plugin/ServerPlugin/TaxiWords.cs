@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ServerPlugin;
 
@@ -72,6 +74,55 @@ public static class TaxiWords
         if (words.Count > 1)
             words.RemoveAll(w => Distance(w, "station") <= 2);
         return string.Join(" ", words);
+    }
+
+    private static readonly Regex GpsLink = new(
+        @"GPS:[^:]*:(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?):",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    );
+
+    /// <summary>The point of the first GPS link in a chat line ("GPS:name:X:Y:Z:..." as the game shares it).</summary>
+    public static bool TryGps(string text, out (double X, double Y, double Z) point)
+    {
+        point = default;
+        var m = GpsLink.Match(text ?? "");
+        if (!m.Success)
+            return false;
+        double Coord(int i) => double.Parse(m.Groups[i].Value, CultureInfo.InvariantCulture);
+        point = (Coord(1), Coord(2), Coord(3));
+        return true;
+    }
+
+    /// <summary>A GPS destination as the driver hears it and the seat records it: "GPS X Y Z", whole metres.</summary>
+    public static string GpsDestination((double X, double Y, double Z) point) =>
+        string.Format(
+            CultureInfo.InvariantCulture,
+            "GPS {0:F0} {1:F0} {2:F0}",
+            point.X,
+            point.Y,
+            point.Z
+        );
+
+    /// <summary>The point of a "GPS X Y Z" destination, false for a station's name.</summary>
+    public static bool TryGpsDestination(string dest, out (double X, double Y, double Z) point)
+    {
+        point = default;
+        var parts = (dest ?? "").Split(' ');
+        if (parts.Length != 4 || parts[0] != "GPS")
+            return false;
+        var ok = new double[3];
+        for (var i = 0; i < 3; i++)
+            if (
+                !double.TryParse(
+                    parts[i + 1],
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out ok[i]
+                )
+            )
+                return false;
+        point = (ok[0], ok[1], ok[2]);
+        return true;
     }
 
     private static int Allowed(string key) => key.Length <= 4 ? 1 : 2;
