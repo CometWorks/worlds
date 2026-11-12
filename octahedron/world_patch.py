@@ -11,6 +11,12 @@ writes config/storage/Octahedron/2026-11-12-space-elevators.sbc, a blueprint of 
 their world positions, and prints the entry for octahedron.cfg. config/storage goes into every
 new world's Storage folder, and Deploy Octahedron stages it into a kept world's, where the plugin
 finds the file. A world built after the entry is in octahedron.cfg lists the patch as applied.
+
+Grids an earlier world patch of octahedron.cfg adds are left out. A shipyard both worlds have,
+at another place or turned, gets a GridMoves entry instead (SE-1369,
+plugin/ServerPlugin/GridMoves.cs), id <id>-<the station's first word>: the plugin moves the kept
+world's shipyard there, with its rotor heads, once it is idle. Other grids that moved are only
+named.
 """
 
 import argparse
@@ -58,6 +64,41 @@ def grids(folder: Path, seed: int, out: Path) -> dict[str, list[ET.Element]]:
     return found
 
 
+def placement(entity: ET.Element) -> tuple[tuple[float, ...], ...]:
+    """(position, forward, up) of an entity"""
+    where = entity.find("PositionAndOrientation")
+    return tuple(
+        tuple(float(where.find(part).get(k)) for k in "xyz")
+        for part in ("Position", "Forward", "Up")
+    )
+
+
+def moved(old: list[ET.Element], new: list[ET.Element]) -> bool:
+    return len(old) != len(new) or any(
+        max(
+            abs(a - b) for u, v in zip(placement(o), placement(n)) for a, b in zip(u, v)
+        )
+        > 0.001
+        for o, n in zip(old, new)
+    )
+
+
+def move_entry(patch: str, name: str, entity: ET.Element) -> str:
+    position, forward, up = (
+        ",".join(f"{c:.6f}".rstrip("0").rstrip(".") for c in v)
+        for v in placement(entity)
+    )
+    return (
+        "    <GridMoveEntry>\n"
+        f"      <Id>{patch}-{name.split()[0].lower()}</Id>\n"
+        f"      <Grid>{name}</Grid>\n"
+        f"      <Position>{position}</Position>\n"
+        f"      <Forward>{forward}</Forward>\n"
+        f"      <Up>{up}</Up>\n"
+        "    </GridMoveEntry>"
+    )
+
+
 def blueprint(patch: str, added: list[ET.Element]) -> ET.ElementTree:
     ET.register_namespace("xsi", XSI)
     root = ET.Element("Definitions")
@@ -100,21 +141,44 @@ def main():
             f"warning: the patch doesn't remove grids: {', '.join(gone)}",
             file=sys.stderr,
         )
-    added = [e for name in sorted(set(new) - set(old)) for e in new[name]]
-    if not added:
-        sys.exit(f"no new grids since {args.since}")
-    path = HERE / "config/storage/Octahedron" / f"{args.id}.sbc"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    blueprint(args.id, added).write(path, encoding="utf-8", xml_declaration=True)
-    print(
-        f"{path.relative_to(HERE)}: {len(added)} grids: {', '.join(e.findtext('DisplayName') for e in added)}"
-    )
-    print(
-        "    <WorldPatchEntry>\n"
-        f"      <Id>{args.id}</Id>\n"
-        f"      <Grids>{path.name}</Grids>\n"
-        "    </WorldPatchEntry>"
-    )
+    # Grids a world patch of the config adds already
+    config = ET.parse(HERE / "config/octahedron.cfg").getroot()
+    patched = {
+        grid.findtext("DisplayName")
+        for entry in config.iterfind("WorldPatches/WorldPatchEntry")
+        for grid in ET.parse(
+            HERE / "config/storage/Octahedron" / entry.findtext("Grids")
+        ).iter("CubeGrid")
+    }
+    added = [e for name in sorted(set(new) - set(old) - patched) for e in new[name]]
+    shifted = sorted(n for n in set(old) & set(new) if moved(old[n], new[n]))
+    shipyards = [n for n in shifted if n.endswith(" Shipyard") and len(new[n]) == 1]
+    # The rotor heads go with their shipyard
+    others = [n for n in shifted if n not in shipyards and n != "Subgrid"]
+    if others:
+        print(
+            f"warning: the patch doesn't move these grids: {', '.join(others)}",
+            file=sys.stderr,
+        )
+    if not added and not shipyards:
+        sys.exit(f"no new grids and no moved shipyards since {args.since}")
+    if added:
+        path = HERE / "config/storage/Octahedron" / f"{args.id}.sbc"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        blueprint(args.id, added).write(path, encoding="utf-8", xml_declaration=True)
+        print(
+            f"{path.relative_to(HERE)}: {len(added)} grids: {', '.join(e.findtext('DisplayName') for e in added)}"
+        )
+        print(
+            "    <WorldPatchEntry>\n"
+            f"      <Id>{args.id}</Id>\n"
+            f"      <Grids>{path.name}</Grids>\n"
+            "    </WorldPatchEntry>"
+        )
+    if shipyards:
+        print(f"GridMoves: {', '.join(shipyards)}")
+        for name in shipyards:
+            print(move_entry(args.id, name, new[name][0]))
 
 
 if __name__ == "__main__":

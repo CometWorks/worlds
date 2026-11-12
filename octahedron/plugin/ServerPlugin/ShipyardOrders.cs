@@ -3936,7 +3936,7 @@ internal static partial class ShipyardOrders
 
     // A grid with a block in the shipyard's free space that isn't the shipyard or on its rotors.
     // A ship docked at the connectors is outside the walls, so outside the free space.
-    private static MyCubeGrid Obstacle(MyCubeGrid shipyard)
+    internal static MyCubeGrid Obstacle(MyCubeGrid shipyard)
     {
         var own = Grids(shipyard);
         var space = FreeSpace(shipyard);
@@ -3945,7 +3945,7 @@ internal static partial class ShipyardOrders
 
     // GridsIn goes by the world axis box around each grid, which at a shipyard lying at an angle
     // holds much that is outside the shipyard
-    private static bool HasBlockIn(MyCubeGrid grid, MyOrientedBoundingBoxD box)
+    internal static bool HasBlockIn(MyCubeGrid grid, MyOrientedBoundingBoxD box)
     {
         var toGrid = grid.PositionComp.WorldMatrixNormalizedInv;
         var local = new MyOrientedBoundingBoxD(

@@ -2151,6 +2151,17 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = new();
+
+    [StructOption(
+        "Grid moves: a station's shipyard of a kept world moved where a world built now has it, once, when idle "
+            + "(SE-1369). The grid's ledger keeps the id; a grid already there only gets the id. Empty by default.",
+        Parent = "patches"
+    )]
+    public List<GridMoveEntry> GridMoves
+    {
+        get;
+        set => SetField(ref field, value);
+    } = new();
 }
 
 public struct RefillContainer
@@ -2258,4 +2269,29 @@ public struct WorldPatchEntry
             + "config file, else in the world's Storage/Octahedron, unless the path is absolute."
     )]
     public string Grids { get; set; }
+}
+
+public struct GridMoveEntry
+{
+    [
+        StructMember(
+            "Move id: letters, digits, '.', '_' and '-'. The grid's ledger keeps it once applied."
+        ),
+        StructCaption
+    ]
+    public string Id { get; set; }
+
+    [StructMember("Name of the shipyard grid, for example Gamma Station Shipyard.")]
+    public string Grid { get; set; }
+
+    [StructMember(
+        "The grid's new position in world coordinates, X,Y,Z (m), made by world_patch.py."
+    )]
+    public string Position { get; set; }
+
+    [StructMember("The grid's new forward, a unit vector X,Y,Z.")]
+    public string Forward { get; set; }
+
+    [StructMember("The grid's new up, a unit vector X,Y,Z at right angles to Forward.")]
+    public string Up { get; set; }
 }

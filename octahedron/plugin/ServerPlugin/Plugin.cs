@@ -89,6 +89,7 @@ public class Plugin : IPlugin
             StationRelease.Update();
             StationPatches.Update();
             WorldPatches.Update();
+            GridMoves.Update();
             worldEdge.Update();
             NoGravityDrives.Update();
             ClangDrives.Update();

@@ -200,6 +200,17 @@ SHIPYARD_TURN_DEGREES = {
     "Alpha Station": -80.0,
     "Gamma Station": 30.0,
 }
+# Then these turn further about their center line, their open top still more toward the lobby,
+# and go down again as far as the Sun allows. Seen from their lobbies, a bottom beam crossed the
+# middle of these four: from 25-51 % of the lobby the build space's center was in sight, from
+# 87 % at Beta and Delta Station. Turned, 65-91 % see it, Alpha Station's own walls hide it from
+# the rest (SE-1369). The stations stay where the shipyards' first turn put them.
+SHIPYARD_EXTRA_ROLL_DEGREES = {
+    "North Station": 45.0,
+    "South Station": 45.0,
+    "Alpha Station": 40.0,
+    "Gamma Station": 45.0,
+}
 # The pair's block bounds stay this far inside the safe zone's edge
 SAFE_ZONE_MARGIN = 10.0
 # Moon Station has the Alien Shipyard instead (make_moon_shipyard.py, SE-986, SE-1118), in a
@@ -852,7 +863,9 @@ def box_corners(grid, center, forward, up):
     return corners
 
 
-def station_and_shipyard(station_grid, zone, forward, up, sun, gates, turn=0.0):
+def station_and_shipyard(
+    station_grid, zone, forward, up, sun, gates, turn=0.0, extra_roll=0.0
+):
     """(station center, (shipyard center, forward, up)) in the safe zone around zone.
 
     The shipyard takes SHIPYARD_PLACE in the station's axes, its center line level with the
@@ -861,7 +874,9 @@ def station_and_shipyard(station_grid, zone, forward, up, sun, gates, turn=0.0):
     out of the slab of the Sun's rays through the station's bounding sphere: seen from the
     station, the Sun never goes behind it. The pair is centered on the zone, then moved
     together by as little as keeps every gate's shadow off the station's decks, its blocks from
-    STATION_DECKS_BOTTOM up, with both block bounds SAFE_ZONE_MARGIN inside the zone.
+    STATION_DECKS_BOTTOM up, with both block bounds SAFE_ZONE_MARGIN inside the zone. Last the
+    shipyard turns extra_roll degrees more about its center line and goes down again as far as
+    the Sun allows; the station stays where it is.
     """
     right = cross(forward, up)
     local = lambda v: rotate(
@@ -869,26 +884,31 @@ def station_and_shipyard(station_grid, zone, forward, up, sun, gates, turn=0.0):
         up,
         math.radians(turn),
     )
-    offset, yard_forward, yard_up = map(local, SHIPYARD_PLACE)
-    offset = mul(perpendicular_part(offset, up), SHIPYARD_REACH)
+    place, yard_forward, base_up = map(local, SHIPYARD_PLACE)
+    place = mul(perpendicular_part(place, up), SHIPYARD_REACH)
     yard_forward = norm(perpendicular_part(yard_forward, up))
-    yard_up = rotate(
-        norm(perpendicular_part(yard_up, yard_forward)),
-        yard_forward,
-        math.radians(SHIPYARD_ROLL_DEGREES),
-    )
+    base_up = norm(perpendicular_part(base_up, yard_forward))
     yard = shipyard_template()
     # Above the station's slab, its lowest block just out of it
     side = mul(sun, 1 if dot(up, sun) >= 0 else -1)
-    low = min(
-        dot(add(offset, o), side) for o in block_offsets(yard, yard_forward, yard_up)
-    )
-    rise = sun_slab(station_grid, forward, up) + BLOCK_RADIUS - low
-    offset = add(offset, mul(up, rise / dot(up, side)))
+    slab = sun_slab(station_grid, forward, up) + BLOCK_RADIUS
 
+    def lowered(roll):
+        yard_up = rotate(base_up, yard_forward, math.radians(roll))
+        low = min(
+            dot(add(place, o), side) for o in block_offsets(yard, yard_forward, yard_up)
+        )
+        return add(place, mul(up, (slab - low) / dot(up, side))), yard_up
+
+    offset, yard_up = lowered(SHIPYARD_ROLL_DEGREES)
     corners = box_corners(station_grid, (0, 0, 0), forward, up) + box_corners(
         yard, offset, yard_forward, yard_up
     )
+    if extra_roll:
+        offset, yard_up = lowered(SHIPYARD_ROLL_DEGREES + extra_roll)
+        turned = box_corners(yard, offset, yard_forward, yard_up)
+    else:
+        turned = []
     centered = sub(zone, enclosing_center(corners))
     decks = [
         dot(o, sun)
@@ -905,7 +925,7 @@ def station_and_shipyard(station_grid, zone, forward, up, sun, gates, turn=0.0):
     def fits(center):
         return all(
             dist(add(center, c), zone) <= STATION_SAFE_ZONE_RADIUS - SAFE_ZONE_MARGIN
-            for c in corners
+            for c in corners + turned
         )
 
     def unshaded(center):
@@ -1800,6 +1820,7 @@ def main():
                 sun,
                 gates,
                 SHIPYARD_TURN_DEGREES.get(name, 0.0),
+                SHIPYARD_EXTRA_ROLL_DEGREES.get(name, 0.0),
             )
         shipyards[name] = yard
         grid = station(template, ids, name, station_center, forward, up, owner)
