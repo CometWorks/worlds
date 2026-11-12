@@ -31,13 +31,14 @@ import rig  # noqa: E402
 
 WORKSHOP = rig.WORKSHOP
 MODS = {3040438530: "ToolCore", 3412657089: "OmniCorp The OmniArc Project: Adv Tools"}
-# A world built with --filament-mod has the Moon Shipyard's filament tools (SE-1067)
-FILAMENTS = re.search(
-    r'FriendlyName="OctahedronFilaments">\s*<Name>[^<]*</Name>\s*<PublishedFileId>(\d+)<',
+# A world built with --octahedron-mod has the Moon Shipyard's filament tools (SE-1067)
+# (OctahedronFilaments was the mod's name before SE-1394)
+OCTAHEDRON_MOD = re.search(
+    r'FriendlyName="Octahedron(?:Mod|Filaments)">\s*<Name>[^<]*</Name>\s*<PublishedFileId>(\d+)<',
     (rig.WORLD_SOURCE / "Sandbox_config.sbc").read_text(encoding="utf-8"),
 )
-if FILAMENTS:
-    MODS[int(FILAMENTS[1])] = "OctahedronFilaments"
+if OCTAHEDRON_MOD:
+    MODS[int(OCTAHEDRON_MOD[1])] = "OctahedronMod"
 LOCAL_WORLD_MODS = rig.LOCAL_WORLD_MODS
 MGP = (
     "multigrid-projector",

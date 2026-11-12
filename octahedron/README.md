@@ -9,7 +9,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 |---|---|
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
-| `make_filament_mod.py` | builds the OctahedronFilaments mod, the Moon Shipyard's welders and deconstructors that draw filaments instead of laser beams (SE-1067) and the stations' radar LCD script (SE-1380); `filament-tools/` is its script |
+| `make_octahedron_mod.py` | builds OctahedronMod, the world's mod for its small scripts and data: the Moon Shipyard's welders and deconstructors that draw filaments instead of laser beams (SE-1067) and the stations' radar LCD script (SE-1380); `octahedron-mod/` is its source |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `build_trader_ships.py` | builds the offline "Octahedron Trader Ships" showcase save of the SE-948 cargo ships listed in `trader_ships.txt` (SE-985); see its docstring |
@@ -45,7 +45,7 @@ there don't lead them to the server's.
 
 ```bash
 uv run make_ore_mod.py --seed 42
-python3 build_world.py server --seed 42 [--ore-mod <Workshop id>] [--filament-mod <Workshop id>]
+python3 build_world.py server --seed 42 [--ore-mod <Workshop id>] [--octahedron-mod <Workshop id>]
 uv run ore_stats.py server OctahedronOres ORES.md --seed 42
 ```
 
@@ -157,8 +157,8 @@ station and shipyard blueprints are in `blueprints/`.
   - It works like the other shipyards. It is named "Moon Station Shipyard" and owned by
     OCT, and its blocks are set up the same way: reactors with 10 ingots, connectors
     and welders off, and the OmniArc tools with the Omni Arc Beam Shipyard's ToolCore
-    settings, so the deconstructors stay on and never shoot. With `--filament-mod` its
-    tools are the OctahedronFilaments mod's filament welders and deconstructors. Its lights are shared with
+    settings, so the deconstructors stay on and never shoot. With `--octahedron-mod` its
+    tools are OctahedronMod's filament welders and deconstructors. Its lights are shared with
     everyone. The two arm rotors carry the names the plugin looks for
     (`ShipyardArmRotors`): the large head's arm builds large grid ships and the small
     head's arm small grid ones. In a player's turn the player can own more of its
@@ -312,21 +312,32 @@ maps and changes only these:
 The mod is about 14 MB, nearly all of it EarthLike's ore maps. Rerun it after a
 game update that changes the planet or voxel material definitions or maps.
 
-## OctahedronFilaments
+## OctahedronMod
+
+OctahedronMod (Workshop 3833786664) is the world's own mod for its small scripts,
+definitions and data. `make_octahedron_mod.py` writes it into `OctahedronMod/`
+(ignored here, like OctahedronOres) from `octahedron-mod/` and the generated block
+definitions. New small Octahedron scripts and data go here. The impostor packs and
+OctahedronMusic stay separate mods: they are large and rarely change.
+
+It was called OctahedronFilaments until SE-1394 and kept its Workshop item, its
+block subtypes and its LCD script id, so a world saved with the old name loads it
+unchanged.
+
+### Filament tools
 
 The Moon Shipyard's tools look alien, like the shipyard of Laconia Station in The
 Expanse: dark filaments reach out from them to the blocks they build or take
-apart, instead of laser beams (SE-1067). `make_filament_mod.py` writes the mod
-into `OctahedronFilaments/` (ignored here, like OctahedronOres) from the
-OmniArc welder and deconstructor definitions of the Workshop copy:
+apart, instead of laser beams (SE-1067). `make_octahedron_mod.py` makes their
+blocks from the OmniArc welder and deconstructor definitions of the Workshop copy:
 
 - `OctahedronFilamentWelder` and `OctahedronFilamentDeconstructor` are copies of
   `OmniArcBeam` and `OmniArcDestro` with the same stats, reach, turret and
   animations, without the laser beams and sparks. At work they sound like
   Pertam's electric storm instead of OmniArc's laser (SE-1089): the game's
-  lightning waves, which `make_filament_mod.py` copies from the game install (`--game`)
+  lightning waves, which `make_octahedron_mod.py` copies from the game install (`--game`)
   into the mod, since a mod's sound can't point at the game's `Content/Audio`.
-- The mod's script (`filament-tools/`) draws the filaments on the clients:
+- The mod's script (`octahedron-mod/`) draws the filaments on the clients:
   while a tool works, eight threads run from around its ring to the block it
   aims at, spread over the block, with short strands between them. They are
   dark gray, 0.5 m wide to be seen from across the shipyard, and bent by
@@ -341,20 +352,22 @@ OmniArc welder and deconstructor definitions of the Workshop copy:
   the script hands them the models and icons of their OmniArc originals when a
   world loads. A world with this mod needs ToolCore and OmniArc too.
 - The blocks are not public: players can't build them, and their own OmniArc
-  tools keep the laser beams. `build_world.py --filament-mod <id>` lists the mod
+  tools keep the laser beams. `build_world.py --octahedron-mod <id>` lists the mod
   and swaps them in for the Moon Shipyard's OmniArc tools (`FILAMENT_TOOLS`); the
   other shipyards keep OmniArc's tools, and without the option the Moon Shipyard
   does too.
 
-The mod also carries the stations' radar (SE-1380), the `OctahedronRadar` LCD
-script of `filament-tools/Data/Scripts/OctahedronFilaments/StationRadar.cs`, which
+### Station radar
+
+The stations' radar (SE-1380) is the `OctahedronRadar` LCD
+script of `octahedron-mod/Data/Scripts/OctahedronMod/StationRadar.cs`, which
 the station blueprint's "LCD Panel - Station Lounge big map" runs. It shows the grids
-within 3 km of the screen, one marker per group of grids joined by connectors,
+within 6 km of the screen, one marker per group of grids joined by connectors,
 rotors or pistons, above or below the station's deck plane, and leaves out the
 station's own installations: groups with a static grid that the station's owner or
 nobody owns, which are the shipyard and the lane computers. Arthur's Lcd Mod radar
 the screen ran before showed them, and has no way to leave grids out. A world built
-without `--filament-mod` has no radar script on that screen.
+without `--octahedron-mod` has no radar script on that screen.
 
 OmniArc is licensed CC BY-NC-ND 4.0 by its author; the mod is our own block
 definitions on top of it and needs it installed, it doesn't copy its models,

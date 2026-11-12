@@ -14,7 +14,7 @@ using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
 
-namespace OctahedronFilaments
+namespace OctahedronMod
 {
     // Registers the filament tools for FilamentWeb to draw, on the clients. Not in Init,
     // which runs on a worker thread for grids that are pasted or streamed in

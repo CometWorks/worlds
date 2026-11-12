@@ -11,7 +11,7 @@ plugin's switch sent at every 10 s check turns on again (SE-963, SE-1126); =none
 packets; =handover empties the server's client lists of the shipyard's tools before the order,
 as a cluster node has them after a handover that brought the shipyard and the client along,
 which keeps its tools and so never asks the new node for them again (SE-1115). All of its welders must shoot on the client after that, and some must hit, also once
-all blocks are placed and only their integrity is left. With the OctahedronFilaments tools
+all blocks are placed and only their integrity is left. With OctahedronMod's filament tools
 the client must draw their filaments too.
 
     OCT_TASK=SE-782 OCT_WORLD_SOURCE=<world from build_world.py> \\

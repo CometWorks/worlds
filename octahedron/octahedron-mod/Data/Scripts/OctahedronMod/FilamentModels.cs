@@ -5,7 +5,7 @@ using VRage.Game.Components;
 using VRage.ObjectBuilders;
 using VRage.Utils;
 
-namespace OctahedronFilaments
+namespace OctahedronMod
 {
     // The filament tools (SE-1067) are OmniArc's welder and deconstructor with
     // other effects, and they look like them: this gives them the models and
@@ -46,7 +46,7 @@ namespace OctahedronFilaments
                 )
                 {
                     MyLog.Default.WriteLineAndConsole(
-                        $"OctahedronFilaments: {pair[1]} not found, {subtype} keeps its placeholder model. Is OmniArc loaded?"
+                        $"OctahedronMod: {pair[1]} not found, {subtype} keeps its placeholder model. Is OmniArc loaded?"
                     );
                     continue;
                 }

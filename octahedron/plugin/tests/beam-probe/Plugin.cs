@@ -89,7 +89,7 @@ public class Plugin : IPlugin
         IsShipyard(Get(comp, "Grid") as MyCubeGrid)
         && Welders.Contains((Get(comp, "BlockTool") as IMyCubeBlock)?.BlockDefinition.SubtypeName);
 
-    // OmniArc's welder, or the OctahedronFilaments mod's copy of it (SE-1067)
+    // OmniArc's welder, or OctahedronMod's copy of it (SE-1067)
     private static readonly string[] Welders = { "OmniArcBeam", "OctahedronFilamentWelder" };
 
     private static void ZoneEvent(MethodBase __originalMethod, long entityId)
@@ -194,7 +194,7 @@ public class Plugin : IPlugin
         );
     }
 
-    // The OctahedronFilaments mod's webs on a client (SE-1115): how many tools it knows, how
+    // OctahedronMod's filament webs on a client (SE-1115): how many tools it knows, how
     // many ToolCore told it hit, and how many it draws threads for. Nothing without the mod.
     private Type filamentWeb;
 
@@ -207,7 +207,7 @@ public class Plugin : IPlugin
     {
         filamentWeb ??= AppDomain
             .CurrentDomain.GetAssemblies()
-            .Select(a => a.GetType("OctahedronFilaments.FilamentWeb"))
+            .Select(a => a.GetType("OctahedronMod.FilamentWeb"))
             .LastOrDefault(t => t != null);
         if (filamentWeb == null)
             return "";

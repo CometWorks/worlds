@@ -1,4 +1,4 @@
-"""The stations' big map LCD runs the OctahedronRadar script of the OctahedronFilaments mod, which
+"""The stations' big map LCD runs the OctahedronRadar script of OctahedronMod, which
 leaves out the station's shipyard and lane computers and shows the other grids (SE-1380).
 
 The world is one built before the change (OCT_WORLD_SOURCE, from the commit the live world has),
@@ -10,10 +10,10 @@ each station's LCD, reads the sprites it rendered and saves a screenshot.
 After: every LCD runs OctahedronRadar, lists its probe ship and no lane computer ("TL ..."),
 shipyard or shipyard arm. Before: only reports what Arthur's radar draws, for comparison.
 
-    OCT_TASK=SE-1380 OCT_WORLD_SOURCE=<world built from main with --filament-mod 3833786664> \\
+    OCT_TASK=SE-1380 OCT_WORLD_SOURCE=<world built from main with --octahedron-mod 3833786664> \\
         uv run --no-project --with httpx python tests/test_station_radar.py after|before [OUT]
 
-Builds the OctahedronFilaments mod from this working copy (make_filament_mod.py) and serves it as
+Builds OctahedronMod from this working copy (make_octahedron_mod.py) and serves it as
 Workshop item 3833786664, with Arthur's Lcd Mod from the local Workshop copy. Screenshots and the
 sprite texts go to OUT (default ~/.se-test/<task>-radar-<mode>). Prints one line per check and a
 pass/fail summary; exit code 0 = all passed. About 10 minutes.
@@ -41,7 +41,7 @@ OUT = (
     if len(sys.argv) > 2
     else rig.TEST_ROOT / f"{rig.TASK}-radar-{MODE}"
 )
-FILAMENTS = 3833786664
+OCTAHEDRON_MOD = 3833786664
 ARTHUR = 3730092649
 # The lane computers are its blocks: without it their grids load empty and go
 TRADE_LANES = 3816175430
@@ -125,7 +125,7 @@ def prepare(found) -> None:
         {
             TRADE_LANES: "Trade Lanes MP",
             ARTHUR: "Arthur's Lcd Mod",
-            FILAMENTS: "OctahedronFilaments",
+            OCTAHEDRON_MOD: "OctahedronMod",
         }
     )
     for name in ("Sandbox.sbc", "Sandbox_config.sbc"):
@@ -134,16 +134,16 @@ def prepare(found) -> None:
             path.read_text(encoding="utf-8").replace("<Mods>", "<Mods>" + mods, 1),
             encoding="utf-8",
         )
-    built = rig.TEST_ROOT / f"{rig.TASK}-filaments"
+    built = rig.TEST_ROOT / f"{rig.TASK}-octahedron-mod"
     shutil.rmtree(built, ignore_errors=True)
     subprocess.run(
-        [sys.executable, str(rig.PLUGIN.parent / "make_filament_mod.py"), str(built)],
+        [sys.executable, str(rig.PLUGIN.parent / "make_octahedron_mod.py"), str(built)],
         check=True,
         stdout=subprocess.DEVNULL,
     )
     for folder in (rig.SERVER_DATA / "Mods", rig.APPDATA / "Mods"):
         rig.link_mods(folder, [TRADE_LANES, ARTHUR])
-        target = folder / f"{FILAMENTS}.sbm"
+        target = folder / f"{OCTAHEDRON_MOD}.sbm"
         if target.is_symlink():
             target.unlink()
         shutil.rmtree(target, ignore_errors=True)

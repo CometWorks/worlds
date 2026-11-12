@@ -2103,7 +2103,7 @@ mid-build and loads its save offline. `tests/shipyard_beams_cluster.py` does the
 check on a test cluster, with a trip to a station on the other node.
 `OCT_BEAM_STEPS=handover` has the server forget which clients have the tools before the
 order, as a node does after a handover that brought the client along. With the
-OctahedronFilaments tools (`OCT_SHIPYARD_STATION=Moon`) the client must draw their
+OctahedronMod's filament tools (`OCT_SHIPYARD_STATION=Moon`) the client must draw their
 filaments too.
 `tests/panel-text/PanelTextTests` checks the queue panel's layout without the game
 (`dotnet run -c Release --project tests/panel-text/PanelTextTests`) and
