@@ -1,7 +1,7 @@
 """Checks the free-build rule at its defaults and with its options changed, with the
-headless client: FreeBuildPcuLimit (60,000), FreeBuildExcludedComponents (the prototech
+headless client: FreeBuildPcuLimit (30,000), FreeBuildExcludedComponents (the prototech
 frame) and FreeBuildBlockedBlocks (none). StarterShipMaxShipPcu stays at its 10,000. Hangar
-runs on the server, as in tests/test_client.py, with a 59,950 PCU ship of the player's. All
+runs on the server, as in tests/test_client.py, with a 29,950 PCU ship of the player's. All
 at the table near the player: it quotes a blueprint loaded into it, and again after each config
 reload.
 
@@ -11,9 +11,9 @@ reload.
   blocking JumpDrive/* for the jump drive alone.
 - A ship with a prototech frame (a prototech battery) is paid. It is free with no excluded
   components, and paid again when FreeBuildBlockedBlocks names the battery.
-- With 59,950 PCU a ship is free, and paid with the limit lowered to that.
-- The 62 PCU starter ship takes the player to 60,012 PCU, so another !oct ship (cooldown
-  off) is refused and the shipyard quotes a paid build, both naming the 60,000 PCU limit.
+- With 29,950 PCU a ship is free, and paid with the limit lowered to that.
+- The 62 PCU starter ship takes the player to 30,012 PCU, so another !oct ship (cooldown
+  off) is refused and the shipyard quotes a paid build, both naming the 30,000 PCU limit.
   With the limit raised by one PCU past that the quote is free.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> \\
@@ -31,9 +31,9 @@ import rig  # noqa: E402
 import test_client as tc  # noqa: E402
 from test_table_rules import blueprint_xml  # noqa: E402
 
-LIMIT = "60,000"
+LIMIT = "30,000"
 STARTER_LIMIT = "10,000"
-HANGAR_PCU = 59_950
+HANGAR_PCU = 29_950
 STARTER_PCU = 62
 FREE = "A free build."
 PAID = "A paid build:"
@@ -147,7 +147,7 @@ def main() -> None:
     rig.prepare_world(table_blueprint=BIG)
     config = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
     check(
-        "<FreeBuildPcuLimit>60000<" in config
+        "<FreeBuildPcuLimit>30000<" in config
         and "<FreeBuildExcludedComponents>PrototechFrame<" in config
         and "<FreeBuildBlockedBlocks><" in config
         and "StarterShipMaxShipPcu" not in config,

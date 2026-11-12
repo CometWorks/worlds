@@ -696,7 +696,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = 60_000;
+    } = 30_000;
 
     [IntOption(
         0,
