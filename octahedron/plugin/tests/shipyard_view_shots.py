@@ -90,6 +90,9 @@ def main() -> int:
         rig.ensure_character(remote)
         if remote.get_view()["thirdPerson"]:
             remote.key("V")
+        # The first station streams in slower than the others
+        remote.character_teleport(*at(world[f"{STATIONS[0]} Station"], LOBBY_FEET))
+        time.sleep(60)
         for name in STATIONS:
             station = world[f"{name} Station"]
             feet = at(station, LOBBY_FEET)
@@ -101,6 +104,8 @@ def main() -> int:
             path = SHOTS / f"{name}-{LABEL}.png"
             remote.screenshot_save(str(path), 1280, 720)
             log(f"screenshot {path}")
+        # The client writes the file after the call returns
+        time.sleep(10)
     finally:
         rig.stop_client()
         rig.stop_server()
