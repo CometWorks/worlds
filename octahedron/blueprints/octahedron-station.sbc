@@ -26383,7 +26383,7 @@ ShadowRange=39.996
                         </BackgroundColor>
                         <CurrentShownTexture>0</CurrentShownTexture>
                         <ContentType>SCRIPT</ContentType>
-                        <SelectedScript>LcdMod_Radar</SelectedScript>
+                        <SelectedScript>OctahedronRadar</SelectedScript>
                         <TextPadding>2</TextPadding>
                         <CustomizeScripts>true</CustomizeScripts>
                         <ScriptBackgroundColor>
