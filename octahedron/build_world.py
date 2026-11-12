@@ -1830,7 +1830,8 @@ def station_patch_ledgers(objects):
         patches[entry.findtext("Grid")].append(entry.findtext("Id"))
     for grid in objects:
         ids = patches.get(grid.findtext("DisplayName"))
-        if not ids:
+        # Not the station's safe zone, which has its name too
+        if not ids or grid.get(XSI_TYPE) != "MyObjectBuilder_CubeGrid":
             continue
         storage = next(
             (
