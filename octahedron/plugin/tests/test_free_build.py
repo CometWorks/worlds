@@ -164,6 +164,9 @@ def main() -> None:
     rig.start_server()
     log("server ready")
     remote = rig.start_client()
+    # The tables start with BIG as the station NPC's: with NpcBlocksLocked (SE-975) a load must
+    # replace its projection, which only an admin with "Use terminals" may
+    remote.set_admin_flag("useTerminals", True)
     rules(remote)
     # After the login the station may stream in a little after the character
     tables = rig.wait_until(lambda: tc.tables(remote), 60, "a table near the player")
