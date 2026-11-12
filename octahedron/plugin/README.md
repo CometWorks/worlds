@@ -1550,6 +1550,17 @@ the "Raptor - Ion" in the station's color (cluster-regression `sebot/tools/trade
 Officers and targets live in the process: on a cluster each node knows the officers who went
 on duty there and the stations it simulates. The bots say it again now and then.
 
+### Bot ships
+
+A bot (`ShipyardBotSteamIds`) that gives its ship up, because it is stuck, out of
+power or spent, removes it with `!oct scrap <grid id>` (SE-1147), so the ships a
+fleet of bots gives up don't pile up in the world. The command is for bots only and
+removes the ship with the grids joined to it by rotors, pistons and hinges. It
+refuses a ship that is not on this node, one with a grid the bot doesn't own or a
+station grid among them (a build still on a shipyard's arm), and one with someone
+else seated in it (a cab with a passenger). The bot itself is put out of its seat
+first. The answer names the grid id: `Ship 123 scrapped.`
+
 ### Contracts
 
 With `ContractsEnabled` on, OCT (`MoneyAuthorityFactionTag`) posts the stations'
