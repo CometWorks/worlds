@@ -37,8 +37,8 @@ namespace ServerPlugin;
 // left, or it is gone. Damage by a police ship, by a station grid (its own turrets) and by hand
 // weapons raises no alert.
 //
-// A police ship of an officer on duty, docked at a station's trading connector, gets its hydrogen
-// tanks filled and its guns and cargo (PoliceCargoAmmo of the volume) filled with the guns' ammo,
+// A police ship of an officer on duty, docked at a connector of a station or of its shipyard (where
+// they park), gets its hydrogen tanks filled and its guns and cargo (PoliceCargoAmmo of the volume) filled with the guns' ammo,
 // for free, every second it stays there. A later service station is to do this instead.
 //
 // Officers and targets live in this process: on a cluster each node knows the officers who said
@@ -342,22 +342,45 @@ internal static class Police
 
     // ------------------------------------------------------------------ resupply
 
+    // The police ships of the officers on duty, found again every Rescan
+    private static readonly TimeSpan Rescan = TimeSpan.FromSeconds(10);
+    private static DateTime nextScan;
+    private static readonly HashSet<long> ships = new();
+
     private static void Resupply()
     {
         if (officers.Count == 0)
             return;
-        foreach (var (_, station) in SimulatedStations())
-        foreach (var connector in station.GetFatBlocks<MyShipConnector>())
+        var now = DateTime.UtcNow;
+        if (now >= nextScan)
+        {
+            nextScan = now + Rescan;
+            ships.Clear();
+            foreach (var entity in MyEntities.GetEntities())
+                if (
+                    entity is MyCubeGrid grid
+                    && Named(grid)
+                    && grid.BigOwners.Any(officers.ContainsKey)
+                )
+                    ships.Add(grid.EntityId);
+        }
+        foreach (var id in ships)
             if (
-                connector.Connected
-                && connector.TradingEnabled
-                && connector.Other?.CubeGrid is { } ship
-                && ship != station
-                && Named(ship)
-                && ship.BigOwners.Any(officers.ContainsKey)
+                MyEntities.TryGetEntityById(id, out MyCubeGrid ship)
+                && Plugin.Simulated(ship)
+                && Docked(ship)
             )
                 Fill(ship);
     }
+
+    // Locked on a connector of a station or a shipyard
+    private static bool Docked(MyCubeGrid ship) =>
+        ship.GetFatBlocks<MyShipConnector>()
+            .Any(c =>
+                c.Connected
+                && c.Other?.CubeGrid is { } other
+                && (Stations.StationOf(other) != null || ShipyardZoneWelding.IsShipyard(other))
+            );
 
     private static void Fill(MyCubeGrid ship)
     {
