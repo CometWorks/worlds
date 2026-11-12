@@ -160,6 +160,15 @@ public sealed class Commands : CommandModule
     public string ShipyardDone() => ShipyardOrders.Done(Context.Caller.IdentityId);
 
     [Command(
+        "scrap",
+        "A bot removes a ship of its own that it gave up",
+        "!oct scrap <grid id>: bots only. The ship must be the bot's alone and on this node, with nobody else "
+            + "seated in it. The bot is put out of its seat."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public string Scrap(long ship) => BotShips.Scrap(Context.Caller.IdentityId, ship);
+
+    [Command(
         "shipyard clear",
         "Ends every order and turn in a station's shipyard queue, as each player's cancel or !oct shipyard done would",
         "!oct shipyard clear [station]: run it on the node that simulates the station. Without a station, the one whose "
