@@ -2,7 +2,8 @@
 and empty jump drives, and a ship docked at a station connector gets its H2 tanks filled for the
 ice it takes at the station's Store price, paid by its owner to OCT.
 
-- New ship: a free build of a ship with an H2 tank, a battery and a jump drive.
+- New ship: a free build of a ship with an H2 tank, a battery and a jump drive. The jump drive
+  is left to the ship: its own battery starts charging it, so it is checked under 10 %.
 - Paid: a ship with an empty H2 tank docks; the tank fills and the player pays
   ceil(1,000,000 L / 20 L per kg x the Store's ice price), OCT gets it.
 - Partial: with a few SC the tank gets what they buy and the balance ends at 0.
@@ -108,21 +109,23 @@ def new_ship(a) -> None:
     check(got == TANK, f"new ship: its H2 tank is full: {got:,} of {TANK:,} L")
     stored, most, jump, jump_most = energy(a, SHIP)
     check(
-        most > 0 and abs(stored - most) < 1e-3,
+        # Full at the hand-over; by now it has given the jump drive a little
+        most > 0 and stored >= most * 0.95,
         f"new ship: its battery is full: {stored} of {most} MWh",
     )
+    # The plugin leaves it empty; the ship's own full battery starts charging it at once
     check(
-        jump_most > 0 and jump == 0,
-        f"new ship: its jump drive is empty: {jump} of {jump_most} MWh",
+        jump_most > 0 and jump < jump_most * 0.1,
+        f"new ship: its jump drive isn't filled: {jump} of {jump_most} MWh",
     )
-    check(
-        bool(
-            re.search(
-                r"Shipyard order .* [1-9]\d* batteries charged", rig.server_game_log()
-            )
+    charged = st.wait_until(
+        lambda: re.search(
+            rf"Shipyard order .*'{SHIP}'.* [1-9]\d* batteries charged",
+            rig.server_game_log(),
         ),
-        "new ship: the server log has the charge",
+        30,
     )
+    check(bool(charged), "new ship: the server log has the charge")
     log(probe(a, "undock"))
     tt.ship_gone(a, SHIP)
     tr.remove(a)
