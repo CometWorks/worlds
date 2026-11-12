@@ -31,7 +31,8 @@ namespace ServerPlugin;
 //     Target KEY at X Y Z moving VX VY VZ grids ID,ID,... weapons N
 //     Clear KEY: WHY
 //
-// KEY is the attacker's grid with the smallest entity id when it was first seen. A target is clear
+// X Y Z and the velocity are the biggest grid's, which the grid list names first. KEY is the
+// attacker's grid with the smallest entity id when it was first seen. A target is clear
 // once all its grids are beyond PoliceChaseRange of the station, it has no working weapon block
 // left, or it is gone. Damage by a police ship, by a station grid (its own turrets) and by hand
 // weapons raises no alert.
@@ -277,7 +278,7 @@ internal static class Police
             v.X,
             v.Y,
             v.Z,
-            string.Join(",", grids.Select(g => g.EntityId)),
+            string.Join(",", grids.OrderBy(g => g != main).Select(g => g.EntityId)),
             Weapons(grids)
         );
     }
