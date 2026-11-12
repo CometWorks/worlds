@@ -303,7 +303,7 @@ internal static class StationPatches
         }
     }
 
-    private static void Claim()
+    internal static void Claim()
     {
         if (claimed)
             return;

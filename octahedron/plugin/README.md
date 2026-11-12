@@ -294,6 +294,44 @@ ledger's keeper logs `World patch LEDGER <ids>`, and each patch it adds logs `Wo
 patch APPLIED <id>: <n> grids: <name> <entity id>, ...` on the node and the World
 Authority. Deploy Octahedron reports from those lines.
 
+### Grid moves
+
+A grid move turns and moves a station's shipyard of a kept world to where a world
+built now has it, once (SE-1369). Neither a station patch, which changes blocks, nor a
+world patch, which adds grids, can do that. The first ones turn the shipyards of Alpha,
+Gamma, North and South Station about their center line, so a bottom beam no longer
+hides the middle of the build space from the lobby.
+
+`world_patch.py` writes a `GridMoveEntry` for each shipyard that has another place or
+facing in the world built from the working tree than in the one built from `--since`,
+and leaves out grids an earlier world patch adds:
+
+```
+python world_patch.py 2026-11-13-shipyard-turns --since 70fcefb --seed 2
+```
+
+```xml
+<GridMoves>
+  <GridMoveEntry>
+    <Id>2026-11-13-shipyard-turns-gamma</Id>
+    <Grid>Gamma Station Shipyard</Grid>
+    <Position>-112119.536872,81.137552,83892.854914</Position>
+    <Forward>0.957285,0.184106,-0.222958</Forward>
+    <Up>-0.07497,0.902762,0.423557</Up>
+  </GridMoveEntry>
+</GridMoves>
+```
+
+The process that simulates the shipyard teleports it, with its rotor heads, once it
+is idle: no job running or coming, no grid in its build space, none docked to it,
+nobody in its bounds or where it goes, and no other grid where it goes. Until then it
+logs `Grid move WAITING <id> on <grid>: <why>` and tries again a minute later. The id
+goes into the grid's station patch ledger, so a grid moves once wherever it goes. A
+shipyard that is where its entry puts it already, as in a world built with the move,
+only gets the id: `Grid move THERE`. Each move logs `Grid move APPLIED <id> on <grid>:
+moved <m> m, turned <deg> deg`, and every process logs `Grid move READY` at its first
+check. Moves happen seconds after a start, before players are back after a deploy.
+
 ### Shared NPC blocks
 
 Whoever a block is shared with can also change it: the game's ownership check
