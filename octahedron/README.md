@@ -9,7 +9,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 |---|---|
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
-| `make_filament_mod.py` | builds the OctahedronFilaments mod, the Moon Shipyard's welders and deconstructors that draw filaments instead of laser beams (SE-1067); `filament-tools/` is its script |
+| `make_filament_mod.py` | builds the OctahedronFilaments mod, the Moon Shipyard's welders and deconstructors that draw filaments instead of laser beams (SE-1067) and the stations' radar LCD script (SE-1380); `filament-tools/` is its script |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `build_trader_ships.py` | builds the offline "Octahedron Trader Ships" showcase save of the SE-948 cargo ships listed in `trader_ships.txt` (SE-985); see its docstring |
@@ -345,6 +345,16 @@ OmniArc welder and deconstructor definitions of the Workshop copy:
   and swaps them in for the Moon Shipyard's OmniArc tools (`FILAMENT_TOOLS`); the
   other shipyards keep OmniArc's tools, and without the option the Moon Shipyard
   does too.
+
+The mod also carries the stations' radar (SE-1380), the `OctahedronRadar` LCD
+script of `filament-tools/Data/Scripts/OctahedronFilaments/StationRadar.cs`, which
+the station blueprint's "LCD Panel - Station Lounge big map" runs. It shows the grids
+within 3 km of the screen, one marker per group of grids joined by connectors,
+rotors or pistons, above or below the station's deck plane, and leaves out the
+station's own installations: groups with a static grid that the station's owner or
+nobody owns, which are the shipyard and the lane computers. Arthur's Lcd Mod radar
+the screen ran before showed them, and has no way to leave grids out. A world built
+without `--filament-mod` has no radar script on that screen.
 
 OmniArc is licensed CC BY-NC-ND 4.0 by its author; the mod is our own block
 definitions on top of it and needs it installed, it doesn't copy its models,
