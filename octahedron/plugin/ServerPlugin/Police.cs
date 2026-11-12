@@ -37,8 +37,8 @@ namespace ServerPlugin;
 // left, or it is gone. Damage by a police ship, by a station grid (its own turrets) and by hand
 // weapons raises no alert.
 //
-// A police ship of an officer on duty, docked at a connector of a station or of its shipyard (where
-// they park), gets its hydrogen tanks filled and its guns and cargo (PoliceCargoAmmo of the volume) filled with the guns' ammo,
+// A police ship of an officer on duty, docked at a station's connector (where they park), gets its
+// hydrogen tanks filled and its guns and cargo (PoliceCargoAmmo of the volume) filled with the guns' ammo,
 // for free, every second it stays there. A later service station is to do this instead.
 //
 // Officers and targets live in this process: on a cluster each node knows the officers who said
@@ -373,13 +373,11 @@ internal static class Police
                 Fill(ship);
     }
 
-    // Locked on a connector of a station or a shipyard
+    // Locked on a station's connector
     private static bool Docked(MyCubeGrid ship) =>
         ship.GetFatBlocks<MyShipConnector>()
             .Any(c =>
-                c.Connected
-                && c.Other?.CubeGrid is { } other
-                && (Stations.StationOf(other) != null || ShipyardZoneWelding.IsShipyard(other))
+                c.Connected && c.Other?.CubeGrid is { } other && Stations.StationOf(other) != null
             );
 
     private static void Fill(MyCubeGrid ship)

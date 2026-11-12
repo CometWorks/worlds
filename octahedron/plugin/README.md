@@ -1523,8 +1523,8 @@ the "Raptor - Ion" in the station's color (cluster-regression `sebot/tools/trade
   `Police`, `Target KEY at X Y Z moving VX VY VZ grids ID,... weapons N`, until the target is
   clear: `Clear KEY: WHY`, once all its grids are beyond `PoliceChaseRange` (3 km) of the
   station, it has no working weapon block, or it is gone.
-- A police ship of an officer on duty docked at a connector of a station or of a shipyard
-  (where the officers park) gets its hydrogen tanks filled, and its guns and its cargo (`PoliceCargoAmmo` of the volume, 0.5)
+- A police ship of an officer on duty docked at a station's connector (where the officers
+  park) gets its hydrogen tanks filled, and its guns and its cargo (`PoliceCargoAmmo` of the volume, 0.5)
   filled with its guns' ammo, free, every second. A service station is to do this later.
 - `!oct police list` (admins) lists the officers on duty and the targets.
 
