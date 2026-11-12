@@ -1039,7 +1039,11 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   box that no player owns are removed too, and so are players' wrecks: grids with no power
   and no cockpit or remote control in their whole mechanical group. Characters,
   players' other grids and the shipyard's own grids stay; those still block the
-  next build until they leave. In a no-welding safe zone ToolCore on the clients,
+  next build until they leave. An idle shipyard, with no build, ship docking or
+  repair slot, does the same every 10 s (`ShipyardSweepIdle`, on): the sebot
+  janitors (SE-1383) bring garbage grids and floating objects into its build
+  space for it to clear away. A grid a bot (`ShipyardBotSteamIds`) tows to a
+  shipyard doesn't become the bot's, as other players' tows of NPC grids do. In a no-welding safe zone ToolCore on the clients,
   which don't have the shipyard exception above, would turn the tools off and
   show no beams (SE-441): while a build runs, the plugin tells the clients every
   10 s that the zones don't hold the shipyard grid, and puts it back at the end.
