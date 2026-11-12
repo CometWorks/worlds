@@ -1,13 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
+using Sandbox.Game.GameSystems.BankingAndCurrency;
 using Sandbox.Game.World;
 using Sandbox.ModAPI.Ingame;
 using VRage;
+using VRage.Game;
+using VRage.Game.ModAPI;
+using VRage.Game.ObjectBuilders.Definitions;
 
 namespace ServerPlugin;
 
@@ -20,6 +26,10 @@ namespace ServerPlugin;
 // Fuse: while the docked ships want more than the station has to spare, the one drawing the most
 // stops charging until the connectors it was docked to let go of it. Each cluster node charges at
 // the stations it simulates.
+// Hydrogen (StationDockHydrogen): the docked ship's H2 tanks that are on are filled whenever they are
+// 1 % or more short of full, for what the ice would cost at the station's Store
+// (DockHydrogenMath), paid by the ship's owner to the station's faction. Short of money, the tanks
+// get what the balance buys. Shipyards are no stations: nothing is refilled there.
 internal static class StationCharging
 {
     private const float Seconds = 1;
@@ -28,6 +38,14 @@ internal static class StationCharging
     // The ships whose fuse tripped, by their grid with the smallest entity id, with the station
     // connectors that held them then
     private static readonly Dictionary<long, HashSet<long>> tripped = new();
+
+    // The ships told they can't pay for hydrogen, until they let go
+    private static readonly HashSet<long> broke = new();
+
+    // Fill the H2 tanks only once they lack this share, so a ship burning hydrogen while docked
+    // isn't billed every second
+    private const double HydrogenShortRatio = 0.01;
+    private const string Ice = "Ore/Ice";
 
     private sealed class Ship
     {
@@ -44,10 +62,11 @@ internal static class StationCharging
             return;
         nextTick = now.AddSeconds(Seconds);
         if (!Plugin.Config.StationDockCharging)
-        {
             tripped.Clear();
+        if (!Plugin.Config.StationDockHydrogen)
+            broke.Clear();
+        if (!Plugin.Config.StationDockCharging && !Plugin.Config.StationDockHydrogen)
             return;
-        }
 
         var held = new Dictionary<long, HashSet<long>>();
         foreach (var faction in MySession.Static.Factions)
@@ -55,9 +74,12 @@ internal static class StationCharging
             if (
                 MyEntities.TryGetEntityById(station.StationEntityId, out MyCubeGrid grid)
                 && Plugin.Simulated(grid)
+                && !ShipyardZoneWelding.IsShipyard(grid)
             )
-                foreach (var ship in Charge(grid))
+                foreach (var ship in Charge(grid, station, faction.Value.FactionId))
                     held[ship.Key] = ship.Value;
+
+        broke.RemoveWhere(key => !held.ContainsKey(key));
 
         foreach (var key in tripped.Keys.ToList())
             if (!held.TryGetValue(key, out var connectors) || !connectors.Overlaps(tripped[key]))
@@ -67,8 +89,13 @@ internal static class StationCharging
             }
     }
 
-    // Charges the ships docked at the station and returns them with the connectors holding them
-    private static IEnumerable<KeyValuePair<long, HashSet<long>>> Charge(MyCubeGrid station)
+    // Charges the ships docked at the station, fills their hydrogen, and returns them with the
+    // connectors holding them
+    private static IEnumerable<KeyValuePair<long, HashSet<long>>> Charge(
+        MyCubeGrid station,
+        IMyFactionStation entry,
+        long factionId
+    )
     {
         var ships = new Dictionary<long, Ship>();
         foreach (var connector in station.GetFatBlocks<MyShipConnector>())
@@ -90,6 +117,16 @@ internal static class StationCharging
         if (ships.Count == 0)
             return [];
 
+        if (Plugin.Config.StationDockHydrogen)
+            foreach (var ship in ships)
+                Hydrogen(station, entry, factionId, ship.Key, ship.Value.Grids);
+        if (Plugin.Config.StationDockCharging)
+            Power(station, ships);
+        return ships.Select(s => new KeyValuePair<long, HashSet<long>>(s.Key, s.Value.Connectors));
+    }
+
+    private static void Power(MyCubeGrid station, Dictionary<long, Ship> ships)
+    {
         var distributor = station.GridSystems.ResourceDistributor;
         var electricity = MyResourceDistributorComponent.ElectricityId;
         var spare =
@@ -118,8 +155,116 @@ internal static class StationCharging
             energy += mwh;
         }
         Debit(station, energy);
+    }
 
-        return ships.Select(s => new KeyValuePair<long, HashSet<long>>(s.Key, s.Value.Connectors));
+    // Fills the ship's H2 tanks for the ice it takes at the station's Store price
+    private static void Hydrogen(
+        MyCubeGrid station,
+        IMyFactionStation entry,
+        long factionId,
+        long key,
+        List<MyCubeGrid> grids
+    )
+    {
+        var tanks = grids
+            .SelectMany(g => g.GetFatBlocks<MyGasTank>())
+            .Where(t =>
+                t.IsFunctional
+                && t.Enabled
+                && t.BlockDefinition is MyGasTankDefinition d
+                && d.StoredGasId.SubtypeName == "Hydrogen"
+            )
+            .ToList();
+        var capacity = tanks.Sum(t => (double)t.Capacity);
+        var wanted = tanks.Sum(t => (1 - t.FilledRatio) * t.Capacity);
+        if (capacity <= 0 || wanted < capacity * HydrogenShortRatio)
+            return;
+
+        var main = grids.MaxBy(g => g.BlocksCount);
+        var owner = main.BigOwners.FirstOrDefault();
+        if (owner == 0 || MySession.Static.Players.IdentityIsNpc(owner))
+            return;
+        var price = IcePrice(entry);
+        var balance = MyBankingSystem.Static.TryGetAccountInfo(owner, out var account)
+            ? account.Balance
+            : 0;
+        var (liters, sc) = DockHydrogenMath.Bill(
+            wanted,
+            price,
+            Plugin.Config.ShipyardHydrogenLitersPerIce,
+            balance
+        );
+        if (sc <= 0 || !MyBankingSystem.ChangeBalance(owner, -sc))
+        {
+            if (broke.Add(key))
+                Tell(
+                    station,
+                    owner,
+                    price <= 0
+                        ? $"{station.DisplayName} has no ice for sale: no hydrogen for {main.DisplayName}."
+                        : $"{main.DisplayName} needs {wanted:N0} L of hydrogen for {Sc(Bill(wanted, price))} "
+                            + $"({price:N0} SC per kg of ice), you have {Sc(balance)}."
+                );
+            return;
+        }
+        if (!MyBankingSystem.ChangeBalance(factionId, sc))
+            Plugin.Log.Error(
+                $"Station charging: {sc} SC taken from {owner} for hydrogen but not paid to faction {factionId}"
+            );
+
+        var left = liters;
+        foreach (var tank in tanks)
+        {
+            var give = Math.Min(left, (1 - tank.FilledRatio) * tank.Capacity);
+            if (give <= 0)
+                continue;
+            ((Sandbox.ModAPI.IMyGasTank)tank).ChangeFilledRatio(
+                Math.Min(1, tank.FilledRatio + give / tank.Capacity),
+                true
+            );
+            left -= give;
+        }
+
+        var text =
+            $"{main.DisplayName} got {liters:N0} L of hydrogen for {Sc(sc)} ({price:N0} SC per kg of ice)"
+            + (
+                liters < wanted - 0.5
+                    ? $", all you could pay for of the {wanted:N0} L it needed."
+                    : "."
+            );
+        Plugin.Log.Info($"Station charging: hydrogen at {station.DisplayName} for {owner}: {text}");
+        if (liters < wanted - 0.5)
+            broke.Add(key);
+        Tell(station, owner, text);
+    }
+
+    private static long Bill(double liters, long price) =>
+        DockHydrogenMath
+            .Bill(liters, price, Plugin.Config.ShipyardHydrogenLitersPerIce, long.MaxValue)
+            .Sc;
+
+    // What OCT sells a kg of ice for at the station's Store, in SC; 0 when it has none for sale
+    private static long IcePrice(IMyFactionStation entry)
+    {
+        if (entry is not MyFactionStation station || !Stations.TryItemId(Ice, out var id))
+            return 0;
+        return station
+                .StoreItems.FirstOrDefault(i =>
+                    i.StoreItemType == StoreItemTypes.Offer
+                    && i.Amount > 0
+                    && i.Item.HasValue
+                    && (MyDefinitionId)i.Item.Value == id
+                )
+                ?.PricePerUnit
+            ?? 0;
+    }
+
+    private static string Sc(long amount) => $"{amount:N0} SC";
+
+    private static void Tell(MyCubeGrid station, long owner, string text)
+    {
+        if (MySession.Static.Players.IsPlayerOnline(owner))
+            MyVisualScriptLogicProvider.SendChatMessage(text, station.DisplayName, owner);
     }
 
     private static Ship Demand(List<MyCubeGrid> grids)

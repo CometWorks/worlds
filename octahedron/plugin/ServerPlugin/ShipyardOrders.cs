@@ -2202,6 +2202,10 @@ internal static partial class ShipyardOrders
             HandOver(ship, order.Player);
             NoteFreeEnd(order, name);
             filled = Fill(shipyard, ship, order);
+            var charged = ChargeBatteries(ship);
+            Plugin.Log.Info(
+                $"Shipyard order {order.Id} '{name}' at {shipyard.DisplayName}: {charged} batteries charged"
+            );
             Dynamic(shipyard, ship);
         }
         if (order.Free)
@@ -3155,6 +3159,24 @@ internal static partial class ShipyardOrders
         }
     }
 
+    // A new ship's batteries full, with ShipyardChargeBatteries; jump drives aren't batteries.
+    // Returns how many were charged.
+    private static int ChargeBatteries(MyCubeGrid ship)
+    {
+        if (!Config.ShipyardChargeBatteries)
+            return 0;
+        var charged = 0;
+        foreach (
+            var battery in Group(ship)
+                .SelectMany(g => ((MyCubeGrid)g).GetFatBlocks<MyBatteryBlock>())
+        )
+        {
+            battery.CurrentStoredPower = battery.MaxStoredPower;
+            charged++;
+        }
+        return charged;
+    }
+
     // The end of a build with an arm: the gas through the connector, or by the plugin
     // itself, the arm destroyed, the ship handed over
     private static void Docked(
@@ -3171,19 +3193,12 @@ internal static partial class ShipyardOrders
         if (alive)
         {
             filled = Fill(shipyard, ship, order);
-            if (connected)
-                foreach (
-                    var battery in Group(ship)
-                        .SelectMany(g => ((MyCubeGrid)g).GetFatBlocks<MyBatteryBlock>())
-                )
-                {
-                    battery.CurrentStoredPower = battery.MaxStoredPower;
-                    charged++;
-                }
+            charged = ChargeBatteries(ship);
         }
         Plugin.Log.Info(
             $"Shipyard order {order.Id} '{order.Name}' at {shipyard.DisplayName}: "
-                + (connected ? $"docked, {charged} batteries charged" : "no dock, admin fill")
+                + (connected ? "docked" : "no dock, admin fill")
+                + $", {charged} batteries charged"
                 + $", {filled.H2:N0} of {order.Hydrogen:N0} L hydrogen"
                 + $", {filled.O2:N0} of {order.Oxygen:N0} L oxygen"
         );

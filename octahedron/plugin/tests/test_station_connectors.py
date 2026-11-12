@@ -30,6 +30,9 @@ import test_support_arm as sa  # noqa: E402
 from station_tests import check, probe  # noqa: E402
 from test_client import log, with_config  # noqa: E402
 
+# The hydrogen checks are about the connector; the plugin's paid hydrogen is test_dock_hydrogen.py's (SE-1387)
+rig.CONFIG_PINS.update(StationDockHydrogen="false")
+
 STATION = "Alpha"
 EMPTY = "H2=0,BAT=0,STOCKPILE"
 WATCH = 45

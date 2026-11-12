@@ -130,6 +130,18 @@ public class OctahedronConfig : PluginConfig
     } = true;
 
     [BoolOption(
+        "Fill the H2 tanks of a ship docked at a station's trading connector once they are 1 % short of full, "
+            + "for what the ice costs at the station's Store at ShipyardHydrogenLitersPerIce liters per kg, rounded up to a whole SC. "
+            + "The ship's owner pays the station's faction; short of money, the tanks get what the balance buys. Tanks that are off get nothing.",
+        Parent = "stations"
+    )]
+    public bool StationDockHydrogen
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [BoolOption(
         "Station connectors hold a docked ship while one of its biggest owners or their faction (not OCT) is online in the station's safe zone, "
             + "and let it go after a countdown otherwise. While no connector of a station is free, the ship docked there the longest gets "
             + "the countdown anyway, until one frees up. Turns the game's own auto unlock off on the stations' connectors.",
@@ -976,12 +988,23 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = 50;
+    } = 100;
+
+    [BoolOption(
+        "Charge a new ship's batteries fully when the shipyard hands it over. Jump drives stay empty.",
+        Parent = "shipyard"
+    )]
+    public bool ShipyardChargeBatteries
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
 
     [DoubleOption(
         0.001,
         description: "Liters of hydrogen per kg of ice, as a gas generator makes it. Hydrogen a paid build buys "
-            + "at the station is bought as ice, and hydrogen taken from a ship at the station counts as ice.",
+            + "at the station is bought as ice, hydrogen taken from a ship at the station counts as ice, "
+            + "and a ship docked at a station pays for its hydrogen as ice (StationDockHydrogen).",
         Parent = "shipyard"
     )]
     public double ShipyardHydrogenLitersPerIce

@@ -175,14 +175,7 @@ def ship_reply(remote, text: str = "!oct ship") -> str:
 
 def with_config(remote, **values) -> None:
     """The world's config with some options replaced, reloaded"""
-    text = rig.CONFIG_SOURCE.read_text(encoding="utf-8")
-    for key, value in values.items():
-        text, count = re.subn(rf"<{key}>[^<]*</{key}>", f"<{key}>{value}</{key}>", text)
-        if not count:
-            text = text.replace(
-                "</OctahedronConfig>", f"  <{key}>{value}</{key}>\n</OctahedronConfig>"
-            )
-    rig.write_plugin_config(text)
+    rig.write_plugin_config(rig.config_text(**values))
     log(f"config {values or 'of the world'}: {rig.chat(remote, '!oct reload', 3)}")
 
 

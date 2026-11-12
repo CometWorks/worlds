@@ -501,12 +501,27 @@ def wait_until(predicate, timeout: float, description: str, interval: float = 2.
 # --- server ---------------------------------------------------------------------
 
 
+# Options a test pins over the world's config, for what it was written against: set at import
+CONFIG_PINS: dict[str, object] = {}
+
+
+def config_text(**values) -> str:
+    """The world's octahedron.cfg with CONFIG_PINS, then the given options, replaced"""
+    text = CONFIG_SOURCE.read_text(encoding="utf-8")
+    for key, value in {**CONFIG_PINS, **values}.items():
+        text, count = re.subn(rf"<{key}>[^<]*</{key}>", f"<{key}>{value}</{key}>", text)
+        if not count:
+            text = text.replace(
+                "</OctahedronConfig>", f"  <{key}>{value}</{key}>\n</OctahedronConfig>"
+            )
+    return text
+
+
 def write_plugin_config(text: str | None = None) -> None:
-    """The world's octahedron.cfg, or the given text, as the server's Octahedron.cfg"""
+    """The world's octahedron.cfg with CONFIG_PINS, or the given text, as the server's Octahedron.cfg"""
     SERVER_DATA.mkdir(parents=True, exist_ok=True)
     (SERVER_DATA / "Octahedron.cfg").write_text(
-        text if text is not None else CONFIG_SOURCE.read_text(encoding="utf-8"),
-        encoding="utf-8",
+        text if text is not None else config_text(), encoding="utf-8"
     )
 
 

@@ -90,6 +90,23 @@ of the station that held it lets go; docking again resets the fuse. A ship's
 grids on rotors, pistons or its own connectors count as one ship. On a cluster
 each node charges at the stations it simulates.
 
+With `StationDockHydrogen` on (SE-1387), the docked ship's H2 tanks are filled
+too, but not for free. Once the tanks that are on lack 1 % or more of their
+capacity, the plugin fills them and bills the ice a gas generator would need for
+that hydrogen at the station's Store price:
+
+    SC = ceil(liters / ShipyardHydrogenLitersPerIce x ice price), at least 1
+
+with 20 L of H2 per kg of ice, the vanilla H2/O2 generator's ratio, and the ice
+price OCT asks at that station's Store, in whole SC per kg. A full small H2 tank
+of a large grid, 1,000,000 L, is 50,000 kg of ice: 150,000 SC at 3 SC per kg. The
+owner of the ship's biggest grid pays OCT and gets a chat message. Short of money,
+the tanks get what the balance buys, the whole balance, and the owner hears so
+once per docking. Without ice for sale at the Store there is no hydrogen. Only the
+money moves: the Store's ice stock stays. A tank turned off gets nothing, so a
+player can opt out. Shipyards are no stations: a ship docked at a shipyard
+connector gets neither power nor hydrogen from the plugin.
+
 ### Station patches
 
 A kept world's stations change in place through station patches (SE-1234,
@@ -908,7 +925,7 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   per 100 PCU of the blueprint, rounded up, paid to OCT on every build. At 0 there
   is no fee, and the quote and the messages don't mention one. The materials also
   include the gas to fill the ship's H2 tanks to `ShipyardHydrogenFillPercent`
-  (50 %) and its O2 tanks to `ShipyardOxygenFillPercent` (50 %): from the tanks of
+  (100 %) and its O2 tanks to `ShipyardOxygenFillPercent` (50 %): from the tanks of
   the player's ships docked at the shipyard or the station's connectors first, each
   keeping half its capacity, then ice (`ShipyardHydrogenLitersPerIce`, 20 L of H2
   per kg, and `ShipyardOxygenLitersPerIce`, 10 L of O2 per kg, as a gas generator
@@ -1209,8 +1226,10 @@ pastes them anew as one dynamic ship, with no grid split. A split (the option
 off) leaves the clients a copy of the ship they can sit in but not fly; SE-746
 tracks why. With a connector the arm's connector locks onto the ship's;
 docked within `ShipyardArmDockSeconds` (1), the ship's H2 and O2 tanks get the
-build's gas and its batteries are charged. Without a dock the plugin fills the
-tanks itself. Then the plugin hands the ship over and takes the arm down at
+build's gas. Without a dock the plugin fills the tanks itself. Either way, and for
+a ship built without an arm too, `ShipyardChargeBatteries` (on) charges the new
+ship's batteries fully when it is handed over (SE-1387). Its jump drives stay
+empty. Then the plugin hands the ship over and takes the arm down at
 once, never the rotor head itself; the shipyard starts its next build after
 that. An idle shipyard takes down anything an NPC built that is left on its
 rotor heads. An unfinished ship that is delivered leaves the arm's projector
@@ -2088,7 +2107,13 @@ for the slot's player and faction, and a build and a repair slot going on after 
 partition free to go offline, and `tests/shipyard_stop_cluster.py` with a cluster stop and start
 in the middle of a build, with nobody connected. `tests/test_shipyard_hydrogen.py` checks where a
 new ship's hydrogen and oxygen come from, on free and paid builds, and
-`tests/shipyard_hydrogen_cluster.py` does that on a cluster. `tests/test_bottle_swap.py` leaves a half full and an empty bottle in Alpha's
+`tests/shipyard_hydrogen_cluster.py` does that on a cluster; both, and the other tests written for
+half full tanks, pin `ShipyardHydrogenFillPercent` 50 and `StationDockHydrogen` off through
+`rig.CONFIG_PINS`. `tests/test_refill_rules.py` checks the SE-1387 rules in game at Alpha: a new
+ship's full battery and H2 tank and empty jump drive, the hydrogen a docked ship buys at the Store's
+ice price, a partial fill with little money, nothing for a tank turned off or barely short, nothing
+at the shipyard; `tests/dock-hydrogen/DockHydrogenTests` checks the bill's arithmetic
+(`dotnet run -c Release --project tests/dock-hydrogen/DockHydrogenTests`). `tests/test_bottle_swap.py` leaves a half full and an empty bottle in Alpha's
 Free Tools box for full ones and checks the next refill takes them out and tops the box up, also with a rule that
 lists no hydrogen bottles; `tests/bottle_swap_cluster.py` does that on a cluster. `tests/test_data_pads.py` checks that no lore pad tells more than one rare ore or ice asteroid and that together they tell all, then in game that every Free Tools box at Alpha keeps one pad, a taken one comes back as another, every pad turns up, the ice pads' GPS lines are the asteroids' centers in the save, and a player's own pad stays (`--offline` runs only the first part). `tests/test_paid_builds.py` checks paid builds in game at Alpha Station with
 the shipyard's mods: the quote and the order, the hydrogen from a docked ship's tank into
