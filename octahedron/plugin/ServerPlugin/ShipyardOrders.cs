@@ -1606,7 +1606,11 @@ internal static partial class ShipyardOrders
             if (order != null)
                 End(shipyard, order, "the ship is gone");
             else if (!starting.Contains(shipyard.EntityId))
+            {
                 ClearHeads(shipyard);
+                if (Config.ShipyardSweepIdle)
+                    Sweep(shipyard, true);
+            }
             return;
         }
         if (order?.Projector != projector)

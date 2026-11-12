@@ -827,6 +827,17 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 5;
 
+    [BoolOption(
+        "An idle shipyard clears the garbage out of its build space every 10 s: floating objects, and the grids its "
+            + "builds clear away anyway (no player's, or a wreck without power and controls). The bots' janitors bring it there (SE-1383).",
+        Parent = "shipyard"
+    )]
+    public bool ShipyardSweepIdle
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
     [DoubleOption(
         0,
         10,

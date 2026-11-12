@@ -705,7 +705,7 @@ internal static class Contracts
         SaveBook();
     }
 
-    // NPC grids towed to a shipyard: the player's, with no contract and no pay
+    // NPC grids towed to a shipyard: the player's, with no contract and no pay; a bot's tow stays as it is
     private static void Takeovers(
         MyFaction oct,
         ContractBook state,
@@ -721,7 +721,8 @@ internal static class Contracts
         );
         foreach (var grid in towed)
         {
-            if (!Near(grid.Tower, grid.Position, WitnessMeters))
+            // A bot's janitor brings garbage for the shipyard to clear away, not to own (SE-1383)
+            if (!Near(grid.Tower, grid.Position, WitnessMeters) || ShipyardOrders.IsBot(grid.Tower))
                 continue;
             Hand(oct, state, grid, grid.Tower, now);
             Plugin.Log.Info($"Towed in: grid {grid.Id} goes to {grid.Tower}");
