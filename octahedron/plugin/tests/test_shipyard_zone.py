@@ -104,7 +104,7 @@ def cells_to_world(grid, cells):
     ]
 
 
-# A shipyard's welders: OmniArc's, or the OctahedronFilaments mod's copy of it (SE-1067)
+# A shipyard's welders: OmniArc's, or OctahedronMod's copy of it (SE-1067)
 WELDERS = ("OmniArcBeam", "OctahedronFilamentWelder")
 
 

@@ -6,7 +6,7 @@
          script plays one wave after another while a tool works, the game picks which
          one, so the tools don't sound alike. Not looped: a wave plays to its end after
          the tool stops (SE-1116).
-         make_filament_mod.py copies the waves from the game: a mod's sound can't point
+         make_octahedron_mod.py copies the waves from the game: a mod's sound can't point
          at the game's Content/Audio -->
     <Sound>
       <Id>
@@ -21,16 +21,16 @@
       <Loopable>false</Loopable>
       <Waves>
         <Wave Type="D3">
-          <Start>Audio\OctahedronFilaments\Lightning_0.wav</Start>
+          <Start>Audio\OctahedronMod\Lightning_0.wav</Start>
         </Wave>
         <Wave Type="D3">
-          <Start>Audio\OctahedronFilaments\Lightning_1.wav</Start>
+          <Start>Audio\OctahedronMod\Lightning_1.wav</Start>
         </Wave>
         <Wave Type="D3">
-          <Start>Audio\OctahedronFilaments\Lightning_2.wav</Start>
+          <Start>Audio\OctahedronMod\Lightning_2.wav</Start>
         </Wave>
         <Wave Type="D3">
-          <Start>Audio\OctahedronFilaments\Lightning_3.wav</Start>
+          <Start>Audio\OctahedronMod\Lightning_3.wav</Start>
         </Wave>
       </Waves>
     </Sound>

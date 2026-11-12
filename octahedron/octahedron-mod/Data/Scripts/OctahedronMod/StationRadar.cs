@@ -9,7 +9,7 @@ using VRageMath;
 using IngameCubeBlock = VRage.Game.ModAPI.Ingame.IMyCubeBlock;
 using IngameTextSurface = Sandbox.ModAPI.Ingame.IMyTextSurface;
 
-namespace OctahedronFilaments
+namespace OctahedronMod
 {
     // The radar on the stations' big map LCD (SE-1380): the grids within Range of the screen, one
     // marker per logical group (connectors, rotors, pistons), above or below the station's deck

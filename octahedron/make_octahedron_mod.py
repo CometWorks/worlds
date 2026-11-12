@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
-"""Generates the OctahedronFilaments mod: the Moon Shipyard's welder and deconstructor (SE-1067).
+"""Generates OctahedronMod, the Octahedron world's own mod for its small scripts and data (SE-1394).
 
-    python3 make_filament_mod.py [output folder, default: OctahedronFilaments next to this script]
+    python3 make_octahedron_mod.py [output folder, default: OctahedronMod next to this script]
         [--omniarc <OmniArc Workshop folder>] [--game <SpaceEngineers folder>]
+
+The mod is octahedron-mod/ (scripts, sounds) plus what this script generates: the
+Moon Shipyard's filament welder and deconstructor (SE-1067). It also has the
+stations' radar LCD script (SE-1380). It was called OctahedronFilaments before
+SE-1394 and kept its Workshop item (3833786664) and its block and script ids.
 
 The filament tools are copies of the OmniArc beam welder and deconstructor
 (Workshop 3412657089) that work with thin filaments instead of laser beams, like
 the web of carbon fiber threads of Laconia Station's shipyard in The Expanse.
 Their definitions here are OmniArc's (stats, reach, turret, animations)
 without its laser beams and sparks, and with the thunder of Pertam's electric
-storm instead of its laser sound (filament-tools/Data/Audio_*.sbc, with the
-game's waves copied in); the mod's script (filament-tools/) plays that sound and
+storm instead of its laser sound (octahedron-mod/Data/Audio_*.sbc, with the
+game's waves copied in); the mod's script (octahedron-mod/) plays that sound and
 draws the filaments while a tool works, and gives the
 blocks the models and icons of their OmniArc originals when a world loads.
 
 The mod ships no OmniArc files, so a world with it needs OmniArc and ToolCore
 too. The blocks are not public: only the Moon Shipyard has them (build_world.py
---filament-mod), players can't build them.
+--octahedron-mod), players can't build them.
 
 Rerun it after an OmniArc update that changes these two blocks.
 """
@@ -30,7 +35,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 OMNIARC = Path.home() / ".steam/steam/steamapps/workshop/content/244850/3412657089"
 GAME = Path.home() / ".steam/steam/steamapps/common/SpaceEngineers"
-SCRIPTS = HERE / "filament-tools"
+SCRIPTS = HERE / "octahedron-mod"
 BLOCKS_FILE = "CubeBlocks_OctahedronFilaments.sbc"
 
 # Ours -> OmniArc's definition file and subtype, our name and description
@@ -56,7 +61,7 @@ TOOLS = {
 # sound map that doesn't exist plays nothing
 SOUND = "MaterialProperties/OctahedronFilamentsSilent"
 # The storm's waves: Pertam's lightning (the game's WM_Lightning), from Content/Audio to the
-# mod's Audio/OctahedronFilaments
+# mod's Audio/OctahedronMod
 SOUND_WAVES = [f"ARC/EVENT/Lightning_{i}.wav" for i in range(4)]
 # Placeholder model and icon until the script swaps in OmniArc's
 PLACEHOLDER_MODEL = r"Models\Cubes\Large\ConveyorSorter.mwm"
@@ -110,9 +115,7 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument(
-        "output", nargs="?", type=Path, default=HERE / "OctahedronFilaments"
-    )
+    parser.add_argument("output", nargs="?", type=Path, default=HERE / "OctahedronMod")
     parser.add_argument("--omniarc", type=Path, default=OMNIARC)
     parser.add_argument("--game", type=Path, default=GAME)
     args = parser.parse_args()
@@ -126,7 +129,7 @@ def main():
     shutil.rmtree(out, ignore_errors=True)
     shutil.copytree(SCRIPTS, out)
     write(root, out / "Data" / BLOCKS_FILE)
-    waves = out / "Audio/OctahedronFilaments"
+    waves = out / "Audio/OctahedronMod"
     waves.mkdir(parents=True)
     for wave in SOUND_WAVES:
         shutil.copy(args.game / "Content/Audio" / wave, waves)

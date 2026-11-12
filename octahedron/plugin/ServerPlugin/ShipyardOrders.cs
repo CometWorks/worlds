@@ -4264,7 +4264,7 @@ internal static partial class ShipyardOrders
             .Where(b => ((IMyTerminalBlock)b).GetProperty(ShootProperty) != null)
             .Where(b => WelderSubtypes.Contains(b.BlockDefinition.Id.SubtypeName));
 
-    // The OctahedronFilaments mod's welder (SE-1067), and the OmniArc welder it copies, which
+    // OctahedronMod's filament welder (SE-1067), and the OmniArc welder it copies, which
     // worlds built before it have
     internal static readonly HashSet<string> WelderSubtypes = new HashSet<string>
     {
