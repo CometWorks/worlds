@@ -44,6 +44,24 @@ public sealed class Commands : CommandModule
             _ => ServerPlugin.Taxi.Pay(Context.Caller.IdentityId, string.Join(" ", station)),
         };
 
+    [Command(
+        "police",
+        "Police bots go on or off duty at a station; admins list the officers and targets",
+        "!oct police duty <station>|off: police bots only. !oct police list: admins."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public string Police(params string[] words) =>
+        words switch
+        {
+            ["duty", .. var station] when station.Length > 0 => ServerPlugin.Police.Duty(
+                Context.Caller.IdentityId,
+                string.Join(" ", station)
+            ),
+            ["list"] when Context.Caller.PromoteLevel >= MyPromoteLevel.Admin =>
+                ServerPlugin.Police.Describe(),
+            _ => "Usage: !oct police duty <station>|off",
+        };
+
     [Command("reload", "Rereads the plugin's config file")]
     [Permission(MyPromoteLevel.Admin)]
     public string Reload()

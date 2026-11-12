@@ -29,6 +29,7 @@ namespace ServerPlugin;
 [Section("faction", caption: "OCT Faction")]
 [Section("patches", caption: "Station Patches")]
 [Section("taxi", caption: "Taxi")]
+[Section("police", caption: "Police")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -2151,6 +2152,75 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 1800;
+
+    [BoolOption(
+        "Police bots defend the stations (SE-1384): weapon damage within PoliceAlertRange of a station makes the "
+            + "officers on duty there (bots that said !oct police duty <station>) hear the attacking ships, until "
+            + "they are beyond PoliceChaseRange or have no working weapon. A police ship docked at a station gets "
+            + "its hydrogen and ammo filled for free.",
+        Parent = "police"
+    )]
+    public bool PoliceEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [StringOption(
+        description: "Start of a police ship's grid name (case-insensitive). Only ships of officers on duty count.",
+        Parent = "police"
+    )]
+    public string PoliceGridName
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Police";
+
+    [DoubleOption(
+        0,
+        description: "Weapon damage this near a station's center (m) calls its police.",
+        Parent = "police"
+    )]
+    public double PoliceAlertRange
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 2000;
+
+    [DoubleOption(
+        0,
+        description: "The police chase an attacker while it is this near the station's center (m).",
+        Parent = "police"
+    )]
+    public double PoliceChaseRange
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 3000;
+
+    [DoubleOption(
+        0.5,
+        description: "Seconds between the target reports the officers hear during an alert.",
+        Parent = "police"
+    )]
+    public double PoliceReportSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 2;
+
+    [DoubleOption(
+        0,
+        1,
+        description: "Part of a docked police ship's cargo volume that the free resupply fills with ammo for its "
+            + "guns, besides filling the guns themselves (0 to 1).",
+        Parent = "police"
+    )]
+    public double PoliceCargoAmmo
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 0.5;
 
     [StructOption(
         "Station patches every process applies to the station and shipyard grids it loads, in this order, "
