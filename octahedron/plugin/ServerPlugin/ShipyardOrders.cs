@@ -4359,7 +4359,12 @@ internal static partial class ShipyardOrders
             shipyard.PositionComp.WorldMatrixRef
         );
         var entities = MyEntities.GetEntitiesInOBB(ref box);
-        var floating = entities.OfType<MyFloatingObject>().ToList();
+        // Garbage a landing gear still holds waits for the next sweep: a ship locked to a grid or floating object
+        // that is deleted under it stops dead (SE-1383, a janitor towing garbage in)
+        var floating = entities
+            .OfType<MyFloatingObject>()
+            .Where(f => f.m_holdingLandingGears.Count == 0)
+            .ToList();
         var found = grids
             ? entities
                 .OfType<MyCubeGrid>()
@@ -4383,7 +4388,9 @@ internal static partial class ShipyardOrders
                         builtShips.TryGetValue(shipyard.EntityId, out var built)
                         && built.Any(b => b.Grid == g.EntityId)
                     )
-                ) || !Garbage(group)
+                )
+                || !Garbage(group)
+                || group.Any(Held)
             )
                 continue;
             foreach (var grid in group)
@@ -4397,6 +4404,14 @@ internal static partial class ShipyardOrders
                 $"Shipyard {shipyard.DisplayName}: removed {floating.Count} floating objects and "
                     + $"{removed.Count} grids: {string.Join(", ", removed.Select(g => g.DisplayName))}"
             );
+    }
+
+    // Locked to a grid outside its own mechanical group: a landing gear or a connector holds it
+    private static bool Held(MyCubeGrid grid)
+    {
+        var physical = MyCubeGridGroups.Static.Physical.GetGroup(grid);
+        var mechanical = MyCubeGridGroups.Static.Mechanical.GetGroup(grid);
+        return (physical?.Nodes.Count ?? 1) > (mechanical?.Nodes.Count ?? 1);
     }
 
     private static bool Garbage(List<MyCubeGrid> group)
