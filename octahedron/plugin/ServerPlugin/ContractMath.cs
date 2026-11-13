@@ -49,9 +49,27 @@ internal static class ContractMath
     public static int AcquisitionAmount(long missing, long pending, int max) =>
         (int)Math.Max(0, Math.Min(max, missing - pending));
 
-    // The market's reference price is in milli-SC per unit
-    public static int AcquisitionReward(int amount, long milliPrice, int percent) =>
-        Sc(amount * (milliPrice / 1000.0) * percent / 100);
+    // The market's reference price is in milli-SC per unit. Each unit pays shortagePercent more at
+    // an empty stock, less as the stock nears its target: the further below, the better it pays.
+    public static int AcquisitionReward(
+        int amount,
+        long milliPrice,
+        int percent,
+        long missing = 0,
+        long target = 0,
+        int shortagePercent = 0
+    ) =>
+        Sc(
+            amount
+                * (milliPrice / 1000.0)
+                * percent
+                / 100
+                * (1 + shortagePercent / 100.0 * Shortage(missing, target))
+        );
+
+    // How far the stock is below its target: 0 at the target, 1 when out
+    public static double Shortage(long missing, long target) =>
+        target <= 0 ? 0 : Math.Clamp((double)missing / target, 0, 1);
 
     public static int BountyReward(double threat, double perThreat) => Sc(threat * perThreat);
 

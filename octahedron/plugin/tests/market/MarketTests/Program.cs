@@ -291,6 +291,12 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
         "used down to none, produced back up"
     );
 
+    // What players sold over a produced item's amount stays: OCT only stops topping it up (SE-1429)
+    var sold = new MarketBook();
+    sold.SetStock(A, Plate, 1000 * U);
+    sold.Restock(w, s, [A], _ => profile, produced: (_, item) => item == Plate);
+    Check(sold.Stock(A, Plate) == 1000 * U, "over the profile: left alone");
+
     // Every 10 minutes a sixth of that
     s.RestockMinutes = 10;
     w.Now += 600;

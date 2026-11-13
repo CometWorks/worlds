@@ -1482,10 +1482,22 @@ stock as long as its entry keeps the name.
 - Players must mine the metals of `MarketPlayerMinedMetals` (gold, silver,
   platinum and uranium). OCT never restocks their ores and ingots, nor any
   component whose blueprint needs those ingots (Thrust, Superconductor, Reactor,
-  Gravity Generator and others; the server logs the list), and its acquisition
-  contracts don't ask for them, whatever the two stock lists name. OCT still buys
-  them from players and sells what it bought. Free shipyard builds need no
-  components, so the rule doesn't touch them, nor the Free Tools boxes.
+  Gravity Generator and others; the server logs the list), whatever
+  `MarketMinStock` names. Only a station's own `MarketStationStock` entry restocks
+  one there: Moon Station tops up 10 uranium ingots, for the NPC fleet's reactors
+  (players may take some too). OCT still buys them from players and sells what it
+  bought. Free shipyard builds need no components, so the rule doesn't touch them,
+  nor the Free Tools boxes.
+- OCT tops an item up only to its profile amount; what players sell on top of it
+  stays in the Store.
+- `MarketTargetStock` is every station's target stock of what OCT doesn't top up:
+  10,000 uranium ore and 1,000 ingots, 100,000 gold and silver ore and 10,000 of
+  their ingots, 1,000 platinum ore and 100 ingots, and a few hundred of the
+  components made from them. Below the target, an item's price at the station is
+  higher, up to `MarketScarcityPercent` (130 %) when it is out, until players or
+  traders bring the stock up; OCT's acquisition contracts ask for the rest. It wins
+  over the profile amount for prices and contracts, so Moon's uranium ingots
+  target 1,000 while OCT tops up only 10.
 - `MarketSpecialties` names what each station buys at `MarketSpecialtyPercent`
   (120 %) less the tax, up to `MarketSpecialtyDailyTonnes` (50 t) a UTC day per
   station; past that OCT pays its normal price. Such an item sells there at no less,
@@ -1653,11 +1665,16 @@ Every minute the plugin fills each station up again:
   `ContractHaulingRewardPerKm` (20 SC) per km between the stations, and has
   `ContractHaulingMinutes` (20) plus a minute for every 3 km to arrive. The package
   is the game's: it goes into the player's inventory when they take the contract.
-- Acquisitions: for each item of the station's minimum stock (`MarketMinStock`) that
-  OCT holds less of there, OCT posts one acquisition for the rest,
-  less what open and taken acquisitions bring already, at most
-  `ContractAcquisitionMaxAmount` (5,000) items, paying `ContractAcquisitionPricePercent`
-  (100 %) of the market's reference price. The player delivers the items at the
+- Acquisitions: for each item OCT holds less of at a station than its target, OCT
+  posts one acquisition for the rest, less what open and taken acquisitions bring
+  already, at most `ContractAcquisitionMaxAmount` (5,000) items. The targets are the
+  station's `MarketTargetStock` (gold, silver, platinum and uranium ores and ingots
+  and the components made from them, which only players bring) and its market
+  profile for the rest (`MarketMinStock` and `MarketStationStock`, ice among them).
+  Each item pays
+  `ContractAcquisitionPricePercent` (100 %) of the market's reference price, plus
+  up to `ContractAcquisitionShortagePercent` (100 %) more by how far below the
+  target the stock is: double when the station is out. The player delivers the items at the
   station's contract block from their docked ship or inventory, and they go into
   OCT's stock there, on the Store, not into the station's containers.
 - Bounties: up to `ContractBountiesPerStation` (3) on the NPC grids within

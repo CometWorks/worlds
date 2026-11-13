@@ -530,6 +530,8 @@ internal static class Market
     private static Dictionary<string, List<(Regex Items, long Percent)>> stationPrices = new();
     private static string pricesKey;
     private static Dictionary<string, long> prices = new();
+    private static string targetsKey;
+    private static List<KeyValuePair<string, long>> targetStock = new();
 
     /// <summary>The items OCT trades at every station.</summary>
     public static IReadOnlyList<string> Catalog()
@@ -581,8 +583,9 @@ internal static class Market
     /// <summary>
     /// The station's profile, raw amounts: what it stocks at least, MarketMinStock and its part of
     /// MarketStationStock, which wins for an item in both. It tells what an hour's restock brings
-    /// back and what OCT's acquisition contracts ask for.
-    /// Items out of the catalog are left out: OCT never stocks what its Stores don't trade.
+    /// back and what OCT's acquisition contracts ask for. Player-mined items come only from the
+    /// station's own part. Items out of the catalog are left out: OCT never stocks what its Stores
+    /// don't trade.
     /// </summary>
     public static IReadOnlyList<KeyValuePair<string, long>> Profile(string station)
     {
@@ -600,10 +603,12 @@ internal static class Market
             MarketBook.ParseProfiles,
             "MarketStationStock"
         );
-        var merged = own.TryGetValue(station, out var extra)
-            ? common.Where(c => extra.All(e => e.Key != c.Key)).Concat(extra)
-            : common;
-        return merged.Where(c => !PlayerMined(c.Key) && Catalog().Contains(c.Key)).ToList();
+        var extra = own.TryGetValue(station, out var e) ? e : [];
+        return common
+            .Where(c => !PlayerMined(c.Key) && extra.All(x => x.Key != c.Key))
+            .Concat(extra)
+            .Where(c => Catalog().Contains(c.Key))
+            .ToList();
     }
 
     /// <summary>Whether the station produces the item: it is in the station's part of MarketStationStock, or the station has none.</summary>
@@ -658,11 +663,36 @@ internal static class Market
     }
 
     /// <summary>
-    /// For OCT's acquisition contracts, on the authority: the items of the station's profile OCT
-    /// holds less of, with the amount missing (raw).
+    /// The station's target stock, raw: MarketTargetStock, and its profile for the rest. OCT's
+    /// prices there follow it, and its acquisition contracts ask for what it lacks.
     /// </summary>
-    public static List<KeyValuePair<string, long>> Missing(string station) =>
-        Book.Missing(station, Profile(station));
+    public static List<KeyValuePair<string, long>> Targets(string station)
+    {
+        var targets = Parsed(
+                Config.MarketTargetStock,
+                ref targetsKey,
+                ref targetStock,
+                MarketBook.ParseAmounts,
+                "MarketTargetStock"
+            )
+            .Where(t => Catalog().Contains(t.Key))
+            .ToList();
+        return targets
+            .Concat(Profile(station).Where(p => targets.All(t => t.Key != p.Key)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// For OCT's acquisition contracts, on the authority: the items OCT holds less of at the station
+    /// than its target, with the amount missing and the target (raw).
+    /// </summary>
+    public static List<(string Item, long Missing, long Target)> Missing(string station)
+    {
+        var targets = Targets(station);
+        return Book.Missing(station, targets)
+            .Select(m => (m.Key, m.Value, targets.First(t => t.Key == m.Key).Value))
+            .ToList();
+    }
 
     private static Dictionary<string, HashSet<string>> Specialties() =>
         Parsed(
@@ -769,7 +799,7 @@ internal static class Market
         public long BasePrice(string item) => ReferencePrice(item);
 
         public long Target(string station, string item) =>
-            Profile(station).FirstOrDefault(p => p.Key == item).Value;
+            Targets(station).FirstOrDefault(p => p.Key == item).Value;
 
         public IEnumerable<string> Catalog(string station) =>
             Market.Catalog().Where(i => ReferencePrice(i) > 0);
