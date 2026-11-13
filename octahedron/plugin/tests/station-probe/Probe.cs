@@ -897,6 +897,64 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "junk",
+        "Garbage for the janitors (SE-1383) at a point: debris (a small grid of nobody's, 4 armor blocks and a cargo "
+            + "container), piece (the same, the caller's), big (nobody's, 24 armor blocks: salvage size) or floating "
+            + "(3 floating objects of stone): JUNK grid-id or JUNK floating",
+        "!sprobe junk <debris|piece|big|floating> <x> <y> <z>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Junk(string kind, double x, double y, double z)
+    {
+        var at = new Vector3D(x, y, z);
+        if (kind == "floating")
+        {
+            var stone = new MyDefinitionId(typeof(MyObjectBuilder_Ore), "Stone");
+            for (var i = 0; i < 3; i++)
+                MyFloatingObjects.Spawn(
+                    new VRage.Game.Entity.MyPhysicalInventoryItem(
+                        10,
+                        (MyObjectBuilder_PhysicalObject)
+                            MyObjectBuilderSerializer.CreateNewObject(stone)
+                    ),
+                    at + new Vector3D(i * 3, 0, 0),
+                    Vector3D.Forward,
+                    Vector3D.Up
+                );
+            return "JUNK floating";
+        }
+        var owner = kind == "piece" ? Context.Caller.IdentityId : 0;
+        var blocks = new List<MyObjectBuilder_CubeBlock>
+        {
+            Block<MyObjectBuilder_CargoContainer>("SmallBlockSmallContainer", Vector3I.Zero, owner),
+        };
+        for (var i = 1; i <= (kind == "big" ? 24 : 4); i++)
+            blocks.Add(
+                new MyObjectBuilder_CubeBlock
+                {
+                    SubtypeName = "SmallBlockArmorBlock",
+                    Min = new Vector3I(i % 6, i / 6, 0),
+                    BlockOrientation = new SerializableBlockOrientation(
+                        Base6Directions.Direction.Forward,
+                        Base6Directions.Direction.Up
+                    ),
+                }
+            );
+        var grid = new MyObjectBuilder_CubeGrid
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Small,
+            IsStatic = false,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            DisplayName = "Junk " + kind,
+            PositionAndOrientation = new MyPositionAndOrientation(at, Vector3.Forward, Vector3.Up),
+            CubeBlocks = blocks,
+        };
+        var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
+        return $"JUNK {entity.EntityId}";
+    }
+
+    [Command(
         "yardtow",
         "A wreck of an NPC faction by the shipyard, held by a tug of the caller's as by a connector, and the PCU limit a tow is judged by",
         "!kprobe yardtow <station> <pcu limit>"
@@ -2054,6 +2112,53 @@ public sealed class ProbeCommands : CommandModule
         var to = ((SpaceEngineers.Game.ModAPI.IMyLandingGear)gear).GetAttachedEntity();
         return $"GEARSTATE {id} mode={gear.LockMode} auto={(gear.AutoLock ? "yes" : "no")} "
             + $"to={(to == null ? "none" : to.EntityId.ToString())}";
+    }
+
+    [Command(
+        "gearbox",
+        "A landing gear's lock box and what is in it (SE-1383): GEARBOX mode working pivot-offset=right,up,back normal=right,up,back half=x,y,z found=what the game's lock check finds [target-relv= target-dist=] in=entity-ids",
+        "!sprobe gearbox <gear block id> [target entity id]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string GearBox(long id, long target = 0)
+    {
+        if (!MyEntities.TryGetEntityById(id, out MyLandingGear gear))
+            return $"NOGEAR {id}";
+        gear.GetBoxFromMatrix(gear.LockPositions[0], out var half, out var pivot, out var turn);
+        var normal = Vector3D.Transform(Vector3D.Up, turn);
+        var m = gear.WorldMatrix;
+        string Local(Vector3D v) =>
+            $"{Vector3D.Dot(v, m.Right):F2},{Vector3D.Dot(v, m.Up):F2},{Vector3D.Dot(v, m.Backward):F2}";
+        var grown = half * new Vector3(2f, 1f, 2f);
+        var box = new MyOrientedBoundingBoxD(pivot, grown, turn);
+        var inside = MyEntities
+            .GetEntitiesInOBB(ref box)
+            .Select(e => e.GetTopMostParent().EntityId)
+            .Where(e => e != gear.CubeGrid.EntityId)
+            .Distinct()
+            .ToList();
+        // What the game's own lock check finds (FindBody: the penetrations of the box that CanAttachTo takes)
+        var args = new object[] { null, null };
+        var found = (VRage.Game.Entity.MyEntity)
+            typeof(MyLandingGear)
+                .GetMethod("FindBody", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(gear, args);
+        var relative = "";
+        if (
+            target != 0
+            && MyEntities.TryGetEntityById(target, out VRage.Game.Entity.MyEntity other)
+            && other.Physics != null
+        )
+        {
+            var v =
+                gear.CubeGrid.Physics.GetVelocityAtPoint(pivot)
+                - other.Physics.GetVelocityAtPoint(pivot);
+            relative =
+                $" target-relv={v.Length():F2} target-dist={other.PositionComp.WorldAABB.Distance(pivot):F2}";
+        }
+        return $"GEARBOX {gear.LockMode} working={gear.IsWorking} pivot-offset={Local(pivot - m.Translation)} "
+            + $"normal={Local(normal)} half={half.X:F2},{half.Y:F2},{half.Z:F2} found={found?.EntityId ?? 0}{relative} "
+            + $"in={string.Join(",", inside)}";
     }
 
     [Command(

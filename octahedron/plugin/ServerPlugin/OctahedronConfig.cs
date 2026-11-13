@@ -828,6 +828,17 @@ public class OctahedronConfig : PluginConfig
     } = 5;
 
     [BoolOption(
+        "An idle shipyard clears the garbage out of its build space every 10 s: floating objects, and the grids its "
+            + "builds clear away anyway (no player's, or a wreck without power and controls). The bots' janitors bring it there (SE-1383).",
+        Parent = "shipyard"
+    )]
+    public bool ShipyardSweepIdle
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [BoolOption(
         "A repair slot buys what the shipyard's welders lack for the player's blocks in its build volume, damaged or projected, "
             + "from the station's Store: as far as the stock, the containers' room and the player's account go, less what the "
             + "shipyard and the player's docked ships hold.",
