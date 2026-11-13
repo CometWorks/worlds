@@ -200,7 +200,6 @@ def repair(a) -> None:
 
 def grind(a, b) -> None:
     """The player's ship in the volume is ground into their docked ship; nothing else is"""
-    scrap = place(a, "Scrap Me", "me", "in", "Component/SteelPlate=30")
     keep = place(a, "Keep Me", "me", "out")
     kept = info(a, keep)
     with Second():
@@ -216,8 +215,9 @@ def grind(a, b) -> None:
     check(docked is not None, f"the player's cargo ship at a connector: {docked}")
     hauler = docked[1] if docked else "0"
     check(st.wait_docked(a, hauler), "it docks")
-    # It comes with one plate; the slot may end, and fill it, before it docks
-    plates = 1.0
+    plates = float(info(a, hauler).get("plates", 0))
+    # The scrap comes in once the hauler is docked: 24 deconstructors grind it in seconds
+    scrap = place(a, "Scrap Me", "me", "in", "Component/SteelPlate=30")
     yard_id = rs.shipyard_id(a)
     check(
         wait_for(
