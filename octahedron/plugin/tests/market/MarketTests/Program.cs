@@ -69,7 +69,23 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
         ice.Key == "Ore/Ice" && ice.Value / (U / 1000) == 10,
         "ice: 0.01 SC per kg: " + ice.Value
     );
-    Check(MarketBook.Cost(10_000 * U, 10, up: true) == 100, "ice: 10,000 kg at 0.01 SC is 100 SC");
+    Check(
+        m.OctAsk(w, s, B, "Ore/Ice") == 1_000 && m.OctBid(w, s, B, "Ore/Ice") == 0,
+        "ice without lots: 1 SC per kg, not bought"
+    );
+    // In 1,000 kg lots (MarketLots) the Store prices a lot in whole SC: 10.2 SC sells at 10, 9.8 buys at 9
+    var lots = new MarketSettings { DriftKg = 0, Lots = { ["Ore/Ice"] = 1000 } };
+    Check(lots.Lot("Ore/Ice") == 1000 && lots.Lot(Iron) == 1, "lots by item");
+    Check(
+        m.OctAsk(w, lots, B, "Ore/Ice") == 10 && m.OctBid(w, lots, B, "Ore/Ice") == 9,
+        $"ice in lots: 10 SC a lot, bought at 9: {m.OctAsk(w, lots, B, "Ore/Ice")} {m.OctBid(w, lots, B, "Ore/Ice")}"
+    );
+    Check(m.OctAsk(w, lots, B, Iron) == 10_000, "lots of one item change no other");
+    m.SetStock(B, "Ore/Ice", 50_000 * U);
+    var fill = m.PlanBuy(w, lots, B, "Ore/Ice", 10_000 * U);
+    Check(fill.Cost == 100, $"a build pays 100 SC for 10,000 kg of ice: {fill.Cost}");
+    Check(m.SalePrice(w, lots, B, "Ore/Ice") == 9, "leftover ice sells at 9 SC a t");
+    m.SetStock(B, "Ore/Ice", 0);
 
     var tax = new MarketSettings { DriftKg = 0, TaxPercent = 6 };
     Check(m.OctAsk(w, tax, B, Motor) == 106_000, "the tax is a setting");
@@ -449,6 +465,7 @@ sealed class FakeWorld : IMarketWorld
         ["Ingot/Platinum"] = (1, false, 35_000),
         ["Ingot/Gold"] = (1, false, 0),
         ["Ore/Grit"] = (1, false, 400),
+        ["Ore/Ice"] = (1, false, 10),
         ["Component/ZoneChip"] = (0.25, true, 0),
     };
 

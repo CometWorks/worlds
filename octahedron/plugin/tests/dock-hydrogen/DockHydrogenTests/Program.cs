@@ -22,6 +22,10 @@ bool Near(double a, double b) => Math.Abs(a - b) < 1e-6;
 var (liters, sc) = DockHydrogenMath.Bill(1_000_000, 3, 20, 1_000_000);
 Check(Near(liters, 1_000_000) && sc == 150_000, $"a full small tank: {liters} L for {sc} SC");
 
+// SE-1469: ice at 0.01 SC per kg, 10 SC a 1,000 kg lot: the full small tank's 50,000 kg are 500 SC
+(liters, sc) = DockHydrogenMath.Bill(1_000_000, 0.01, 20, 1_000_000);
+Check(Near(liters, 1_000_000) && sc == 500, $"cheap ice: {liters} L for {sc} SC");
+
 // Rounded up to a whole SC: 30 L is 1.5 kg, 4.5 SC
 (liters, sc) = DockHydrogenMath.Bill(30, 3, 20, 100);
 Check(Near(liters, 30) && sc == 5, $"rounded up: {liters} L for {sc} SC");

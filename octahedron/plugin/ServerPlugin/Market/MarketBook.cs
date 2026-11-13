@@ -38,6 +38,12 @@ public sealed class MarketSettings
     // kept topped up to FixedStock (raw): the zone chips
     public Dictionary<(string Station, string Item), long> FixedAsks = new();
     public long FixedStock;
+
+    // Items a Store trades in lots of this many units, priced in whole SC per lot: ice in tonnes
+    public Dictionary<string, long> Lots = new();
+
+    /// <summary>Units of the item in one unit of a Store block, 1 if it has no lots.</summary>
+    public long Lot(string item) => Lots.TryGetValue(item, out long lot) && lot > 1 ? lot : 1;
 }
 
 /// <summary>What the market needs from the game: time, items, prices and accounts.</summary>
@@ -209,7 +215,10 @@ public sealed class MarketBook
             : Math.Max(surplus, 1 + (surplus - 1) * (stock - 1) / 2);
     }
 
-    // A Store block's prices are whole SC per unit
+    /// <summary>Whole SC per lot as milli-SC per unit.</summary>
+    public static long PerUnit(long scPerLot, long lot) => scPerLot * MilliPerSc / lot;
+
+    // A Store block's prices are whole SC per unit, or per lot of the item
     private long Price(
         IMarketWorld w,
         MarketSettings s,
@@ -228,7 +237,8 @@ public sealed class MarketBook
             / 100
             * Factor(s, station, item, w.Now)
             * Scarcity(w, s, station, item);
-        return (long)Math.Round(sc, MidpointRounding.AwayFromZero) * MilliPerSc;
+        long lot = s.Lot(item);
+        return PerUnit((long)Math.Round(sc * lot, MidpointRounding.AwayFromZero), lot);
     }
 
     /// <summary>What OCT sells the item for at the station, milli-SC per unit; 0: it doesn't. A specialty sells at no less than the station pays for it, or the Store itself would be a way to make money.</summary>
@@ -241,10 +251,10 @@ public sealed class MarketBook
         int percent = w.Specialty(station, item)
             ? Math.Max(s.OctSellPercent, s.SpecialtyPercent)
             : s.OctSellPercent;
-        return Math.Max(MilliPerSc, Price(w, s, station, item, percent, s.TaxPercent));
+        return Math.Max(PerUnit(1, s.Lot(item)), Price(w, s, station, item, percent, s.TaxPercent));
     }
 
-    /// <summary>What OCT pays for the item at the station, milli-SC per unit; 0: it doesn't buy it. At least 1 SC below what it sells for, whatever the rounding to whole SC does to the tax.</summary>
+    /// <summary>What OCT pays for the item at the station, milli-SC per unit; 0: it doesn't buy it. At least 1 SC a Store unit (or lot) below what it sells for, whatever the rounding to whole SC does to the tax.</summary>
     public long OctBid(
         IMarketWorld w,
         MarketSettings s,
@@ -261,7 +271,7 @@ public sealed class MarketBook
             0,
             Math.Min(
                 Price(w, s, station, item, percent, -s.TaxPercent),
-                OctAsk(w, s, station, item) - MilliPerSc
+                OctAsk(w, s, station, item) - PerUnit(1, s.Lot(item))
             )
         );
     }
