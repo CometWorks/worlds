@@ -108,10 +108,8 @@ def run(bench) -> None:
         return next((r for r in rows if r.get("controllingSteamId") == CLIENT_ID), None)
 
     def ship_at(ship: str) -> tuple[float, ...] | None:
-        m = re.search(
-            r"at \(?X:(\S+) Y:(\S+) Z:(\S+?)\)?(?:\s|$)", probe(api, f"docked {ship}")
-        )
-        return tuple(float(v.rstrip("}")) for v in m.groups()) if m else None
+        m = re.search(r" at (\S+) (\S+) (\S+)", probe(api, f"docked {ship}"))
+        return tuple(float(v) for v in m.groups()) if m else None
 
     # ============================== setup ==============================
     cluster.kill()
