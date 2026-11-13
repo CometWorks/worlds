@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,6 +10,7 @@ using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
+using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.World;
@@ -101,6 +103,18 @@ internal static class StationPatches
         return next;
     }
 
+    // A whole station's pair is megabytes, so it may be gzipped: a name ending in .gz (SE-1449)
+    private static byte[] ReadBlueprint(string name)
+    {
+        var bytes = File.ReadAllBytes(BlueprintPath(name));
+        if (!name.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+            return bytes;
+        using var gzip = new GZipStream(new MemoryStream(bytes), CompressionMode.Decompress);
+        using var xml = new MemoryStream();
+        gzip.CopyTo(xml);
+        return xml.ToArray();
+    }
+
     private static StationPatch FromBlueprints(
         string id,
         string grid,
@@ -115,8 +129,8 @@ internal static class StationPatches
         try
         {
             // Read here, not by the game's path: its serializer only takes files under Mods
-            var oldXml = File.ReadAllBytes(BlueprintPath(from));
-            var newXml = File.ReadAllBytes(BlueprintPath(to));
+            var oldXml = ReadBlueprint(from);
+            var newXml = ReadBlueprint(to);
             var old = XDocument.Load(new MemoryStream(oldXml));
             var now = XDocument.Load(new MemoryStream(newXml));
             var oldGrid = BlueprintDiff.MainGrid(old);
@@ -204,7 +218,9 @@ internal static class StationPatches
         {
             var ledger = Ledger(grid);
             var applied = false;
-            foreach (var patch in staged.Where(p => p.Grid == grid.DisplayName))
+            // A grid's staged moves go first: a patch builds where the grid is going to be (SE-1449)
+            var moving = GridMoves.Pending(grid);
+            foreach (var patch in staged.Where(p => p.Grid == grid.DisplayName && !moving))
             {
                 if (ledger.Contains(patch.Id))
                     continue;
@@ -346,6 +362,9 @@ internal static class StationPatches
             return $"REFUSED {where}: {error}";
         if (!apply)
             return $"CHECKED {where}: {steps.Count} ops would apply";
+        var inTheWay = InTheWay(grid, steps);
+        if (inTheWay != null)
+            return $"WAITING {where}: {inTheWay}";
 
         Claim();
         var before = Lines(grid);
@@ -376,6 +395,115 @@ internal static class StationPatches
         var diff = gone.Take(20).Select(l => "- " + l).Concat(added.Take(20).Select(l => "+ " + l));
         Plugin.Log.Info($"Station patch {head}; {string.Join("; ", diff)}");
         return string.Join("\n", diff.Prepend(head));
+    }
+
+    /// <summary>
+    /// What is where the patch builds (SE-1449): a character standing in a cell it builds or builds again, or seated in
+    /// a block it takes out, is taken out of the way with its inventory kept (OfflineCharacters.Evict), and a block of
+    /// another grid in such a cell makes it wait. Null when nothing is in the way.
+    /// </summary>
+    private static string InTheWay(MyCubeGrid grid, List<PatchStep> steps)
+    {
+        var cells = new HashSet<Vector3I>();
+        var bodies = new HashSet<MyCharacter>();
+        foreach (var step in steps)
+        {
+            foreach (var cell in step.New?.Cells ?? [])
+                cells.Add(V(cell));
+            if (
+                step.Op.Kind != PatchOpKind.Set
+                && step.Old?.Game is MySlimBlock { FatBlock: MyCockpit { Pilot: { } pilot } }
+            )
+                bodies.Add(pilot);
+        }
+        string ship = null;
+        if (cells.Count > 0)
+        {
+            // Every cell a patch builds in, as a box around the grid's own
+            var local = BoundingBoxD.CreateInvalid();
+            foreach (var cell in cells)
+                local.Include(
+                    new BoundingBoxD(
+                        ((Vector3D)cell - 0.5) * grid.GridSize,
+                        ((Vector3D)cell + 0.5) * grid.GridSize
+                    )
+                );
+            local.Include((BoundingBoxD)grid.PositionComp.LocalAABB);
+            var box = new MyOrientedBoundingBoxD(local, grid.WorldMatrix);
+            var entities = MyEntities.GetEntitiesInOBB(ref box);
+            foreach (var entity in entities)
+            {
+                if (entity is MyCharacter { IsDead: false } body && Stands(grid, body, cells))
+                    bodies.Add(body);
+                else if (
+                    ship == null
+                    && entity is MyCubeGrid other
+                    && other != grid
+                    && !other.MarkedForClose
+                    && Occupies(grid, other, cells)
+                )
+                    ship = other.DisplayName;
+            }
+            entities.Clear();
+        }
+        var stuck = bodies
+            .Where(b => !OfflineCharacters.Evict(b))
+            .Select(b => b.DisplayName)
+            .ToList();
+        var why = new List<string>();
+        if (bodies.Count > stuck.Count)
+            why.Add($"{bodies.Count - stuck.Count} characters where it builds are taken out first");
+        if (stuck.Count > 0)
+            why.Add($"{string.Join(", ", stuck)} where it builds can't be taken out");
+        if (ship != null)
+            why.Add($"{ship} is where it builds");
+        return why.Count > 0 ? string.Join("; ", why) : null;
+    }
+
+    // A standing body's feet, middle or head in one of the cells
+    private static bool Stands(MyCubeGrid grid, MyCharacter body, HashSet<Vector3I> cells)
+    {
+        if (body.Parent != null)
+            return false;
+        var at = body.PositionComp.GetPosition();
+        var up = body.WorldMatrix.Up;
+        return new[] { 0.2, 1.0, 1.7 }.Any(h =>
+            cells.Contains(grid.WorldToGridInteger(at + up * h))
+        );
+    }
+
+    // Whether another grid has a block in one of the cells: each of its blocks' cells by its center and points near
+    // its corners
+    private static bool Occupies(MyCubeGrid grid, MyCubeGrid other, HashSet<Vector3I> cells)
+    {
+        var size = other.GridSize;
+        var toGrid = other.WorldMatrix * grid.PositionComp.WorldMatrixNormalizedInv;
+        var corners = new Vector3D[9];
+        foreach (var block in other.GetBlocks())
+            for (
+                var it = new Vector3I_RangeIterator(ref block.Min, ref block.Max);
+                it.IsValid();
+                it.MoveNext()
+            )
+            {
+                corners[0] = it.Current;
+                for (var i = 1; i < 9; i++)
+                    corners[i] =
+                        (Vector3D)it.Current
+                        + 0.4
+                            * new Vector3D(
+                                (i & 1) == 0 ? -1 : 1,
+                                (i & 2) == 0 ? -1 : 1,
+                                (i & 4) == 0 ? -1 : 1
+                            );
+                foreach (var corner in corners)
+                {
+                    var local = Vector3D.Transform(corner * size, toGrid) / grid.GridSize;
+                    if (cells.Contains(Vector3I.Round(local)))
+                        return true;
+                }
+            }
+        return false;
     }
 
     private static string Do(MyCubeGrid grid, PatchStep step)

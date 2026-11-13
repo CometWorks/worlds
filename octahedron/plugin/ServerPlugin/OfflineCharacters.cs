@@ -41,6 +41,9 @@ namespace ServerPlugin;
 // do. Nothing is removed until a save holds the inventory: a node dying before the removal brings
 // the body back, the keeper knows it by its entity id and it is removed without a second deposit.
 //
+// A station patch that builds where a body is, or rebuilds the seat it sits in, has it taken out the same way at
+// once, its player online or not (Evict, SE-1449): the player's next body, on the station, gets the inventory.
+//
 // On a cluster a body usually goes offline with its partition minutes before its time is up, so
 // the WA asks the gateway to load that partition then. A plain server's save holds the world and
 // this book together, so there is nothing to wait for.
@@ -121,6 +124,9 @@ internal static class OfflineCharacters
 
     // A take keeps its operation id until it is answered, so a lost answer isn't lost items
     private static readonly Dictionary<long, Guid> takes = new();
+
+    // Bodies a station patch needs out of its way: parked and removed whether their players are online or not
+    private static readonly HashSet<long> evicted = [];
 
     // Bodies brought back and emptied, not to empty again what the player picks up after
     private static readonly HashSet<long> emptied = [];
@@ -290,9 +296,17 @@ internal static class OfflineCharacters
         foreach (var line in request.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var f = line.Split(' ');
-            var verdict = Book.Status(Number(f[0]), Number(f[1]), f[2] == "1", Now, Limit, durable);
+            var verdict = Book.Status(
+                Number(f[0]),
+                Number(f[1]),
+                f[2] == "1",
+                Now,
+                Limit,
+                durable,
+                force: f[2] == "2"
+            );
             // Whoever looks at the time before the online list is in may see a player gone
-            if (verdict == ParkingVerdict.Park && !OnlineListReady)
+            if (verdict == ParkingVerdict.Park && !OnlineListReady && f[2] != "2")
                 verdict = ParkingVerdict.Wait;
             verdicts.Add(verdict.ToString());
         }
@@ -300,15 +314,16 @@ internal static class OfflineCharacters
         return string.Join("\n", verdicts);
     }
 
-    // "identity body credits items": answers ok, or why not
+    // "identity body credits items [force]": answers ok, or why not
     private static string Park(string payload)
     {
         var f = payload.Split(' ');
+        var force = f.Length > 4 && f[4] == "1";
         var (identity, body, credits) = (Number(f[0]), Number(f[1]), Number(f[2]));
         // A body the world can't pay out stays until it can
         if (credits > 0 && !HasAccount(identity))
             return $"{identity} has no bank account";
-        var outcome = Book.Park(identity, body, credits, f[3], Now, Limit, NextSave);
+        var outcome = Book.Park(identity, body, credits, f[3], Now, Limit, NextSave, force);
         if (outcome != ParkOutcome.Added)
             return outcome.ToString();
         dirty = true;
@@ -557,13 +572,21 @@ internal static class OfflineCharacters
             nextScan = utc + ScanInterval;
             questions.AddRange(OfflineBodies().Select(b => (b.Identity, b.Body.EntityId, false)));
         }
+        evicted.RemoveWhere(body => Evictee(body) == null);
+        foreach (var body in evicted)
+        {
+            questions.RemoveAll(q => q.Body == body);
+            questions.Add((Evictee(body).GetPlayerIdentityId(), body, false));
+        }
         if (questions.Count == 0 || asking)
             return;
 
         asking = true;
         var request = string.Join(
             "\n",
-            questions.Select(q => $"{N(q.Identity)} {N(q.Body)} {(q.Online ? 1 : 0)}")
+            questions.Select(q =>
+                $"{N(q.Identity)} {N(q.Body)} {(evicted.Contains(q.Body) ? 2 : q.Online ? 1 : 0)}"
+            )
         );
         Ask(
             request,
@@ -679,7 +702,36 @@ internal static class OfflineCharacters
     }
 
     private static MyCharacter Offline(long identity, long body) =>
-        OfflineBodies().Find(b => b.Identity == identity && b.Body.EntityId == body).Body;
+        evicted.Contains(body)
+            ? Evictee(body)
+            : OfflineBodies().Find(b => b.Identity == identity && b.Body.EntityId == body).Body;
+
+    /// <summary>
+    /// Takes a player's body out of a station patch's way (SE-1449): its inventory is kept and the player's next body,
+    /// spawned on a station, gets it. False when this server keeps no offline characters or the body is no player's.
+    /// </summary>
+    public static bool Evict(MyCharacter body)
+    {
+        if (!On || body.IsDead || body.MarkedForClose)
+            return false;
+        var identity = body.GetPlayerIdentityId();
+        if (identity == 0 || MySession.Static.Players.IdentityIsNpc(identity))
+            return false;
+        if (evicted.Add(body.EntityId))
+            Plugin.Log.Info(
+                $"Offline character of {identity}: body {body.EntityId} is in a station patch's way, taken out"
+            );
+        return true;
+    }
+
+    // A body to evict that is still here, simulated by this process
+    private static MyCharacter Evictee(long body) =>
+        MyEntities.GetEntityById(body) is MyCharacter c
+        && !c.IsDead
+        && !c.MarkedForClose
+        && Plugin.Simulated(c.GetTopMostParent() ?? c)
+            ? c
+            : null;
 
     private static void SendPark(long identity, long bodyId)
     {
@@ -690,7 +742,7 @@ internal static class OfflineCharacters
         Call(
             ParkCommand,
             Guid.NewGuid(),
-            $"{N(identity)} {N(bodyId)} {N(credits)} {items}",
+            $"{N(identity)} {N(bodyId)} {N(credits)} {items}{(evicted.Contains(bodyId) ? " 1" : "")}",
             (reply, error) =>
             {
                 busy.Remove(bodyId);
@@ -706,8 +758,19 @@ internal static class OfflineCharacters
     {
         if (Offline(identity, bodyId) is not { } body)
             return;
+        evicted.Remove(bodyId);
         if (body.Parent is MyCockpit seat && seat.Pilot == body)
             seat.RemovePilot();
+        // A player in the body gets the respawn screen: emptied first, it drops nothing
+        if ((body.ControllerInfo?.ControllingIdentityId ?? 0) != 0)
+        {
+            (body.GetInventory() as MyInventory)?.Clear();
+            body.Kill(true, new MyDamageInformation(false, 1000f, MyDamageType.Suicide, 0));
+            Plugin.Log.Info(
+                $"Offline character of {identity}: body {bodyId} taken from its player, who respawns"
+            );
+            return;
+        }
         var owner = MySession.Static.Players.TryGetIdentity(identity);
         if (owner?.Character == body)
             owner.ChangeCharacter(null);
@@ -773,7 +836,7 @@ internal static class OfflineCharacters
 
         var credits = Number(f[1]);
         var words =
-            "Your last character was taken off the station while you were away, and this one has its inventory.";
+            "Your last character was taken off the station, and this one has its inventory.";
         if (credits > 0)
             words +=
                 $" The {credits.ToString("N0", CultureInfo.InvariantCulture)} SC it carried are in your bank account.";

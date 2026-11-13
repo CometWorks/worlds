@@ -12,13 +12,15 @@ using VRageMath;
 namespace ServerPlugin;
 
 /// <summary>
-/// Moves a station's shipyard of a kept world to where a world built now has it (SE-1369): what
+/// Moves a station or its shipyard of a kept world to where a world built now has it (SE-1369, SE-1449): what
 /// neither a station patch, which changes blocks, nor a world patch, which adds grids, can do.
 /// The process that simulates the shipyard moves and turns it, with the grids on its rotors, once it
 /// is idle: no job running or coming, no grid in its build space, none docked, nobody in its
 /// bounds or where it goes, and no other grid where it goes. The id goes into the grid's station
 /// patch ledger, so it moves once wherever the grid goes. A shipyard that is where the entry puts
-/// it already, as in a world built with the move, only gets the id.
+/// it already, as in a world built with the move, only gets the id. A station moves the same way,
+/// within its safe zone, which stays; a character on board is taken out of the way first, with its
+/// inventory kept (OfflineCharacters.Evict). The grid's staged station patches wait for its moves.
 /// </summary>
 internal static class GridMoves
 {
@@ -51,7 +53,7 @@ internal static class GridMoves
             .GetEntities()
             .OfType<MyCubeGrid>()
             .Where(g => !g.Closed && names.Contains(g.DisplayName))
-            .Where(g => ShipyardZoneWelding.IsShipyard(g))
+            .Where(g => ShipyardZoneWelding.IsShipyard(g) || Stations.StationOf(g) != null)
             .Where(g => Plugin.Simulated(g))
             .ToList();
         if (!reported)
@@ -97,6 +99,16 @@ internal static class GridMoves
             // The grid's later moves wait for this one
             break;
         }
+    }
+
+    /// <summary>Whether the grid has a staged move it hasn't made yet.</summary>
+    public static bool Pending(MyCubeGrid grid)
+    {
+        if (parsedFrom != Plugin.Config)
+            Parse(Plugin.Config);
+        return staged.Any(m =>
+            m.Grid == grid.DisplayName && !StationPatches.Ledger(grid).Contains(m.Id)
+        );
     }
 
     private static string Run(MyCubeGrid grid, Move move)
@@ -154,9 +166,10 @@ internal static class GridMoves
     // Why the shipyard can't move now, or null
     private static string NotIdle(MyCubeGrid grid, MatrixD target)
     {
-        if (ShipyardOrders.Busy(grid.EntityId))
+        var shipyard = ShipyardZoneWelding.IsShipyard(grid);
+        if (shipyard && ShipyardOrders.Busy(grid.EntityId))
             return "the shipyard has a job";
-        var obstacle = ShipyardOrders.Obstacle(grid);
+        var obstacle = shipyard ? ShipyardOrders.Obstacle(grid) : null;
         if (obstacle != null)
             return $"{obstacle.DisplayName} is in its build space";
         var own =
@@ -177,7 +190,14 @@ internal static class GridMoves
         {
             var box = new MyOrientedBoundingBoxD((BoundingBoxD)bounds, matrix);
             var entities = MyEntities.GetEntitiesInOBB(ref box);
-            var character = entities.OfType<MyCharacter>().FirstOrDefault(c => !c.IsDead);
+            var bodies = entities.OfType<MyCharacter>().Where(c => !c.IsDead).ToList();
+            // On a station: taken out with the inventory kept. Seated ones move with it
+            if (!shipyard && !there && bodies.Count > 0 && bodies.All(OfflineCharacters.Evict))
+            {
+                entities.Clear();
+                return $"{bodies.Count} characters on board are taken out first";
+            }
+            var character = bodies.FirstOrDefault();
             var other = there
                 ? entities
                     .OfType<MyCubeGrid>()

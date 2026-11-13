@@ -189,6 +189,34 @@ book.Observe([(Me, true)], 0);
 book.Observe([], 31 * 24 * 3600);
 Check(book.Players.Count == 0, "forgotten after a month");
 
+// A body in a station patch's way (SE-1449): parked at once, its player online or not, and removed once saved
+book = new ParkingBook();
+book.Observe([(Me, true)], 1000);
+Check(
+    book.Status(Me, Body, true, 1000, Limit, Saved, force: true) == ParkingVerdict.Park,
+    "forced: an online player's body parks at once"
+);
+Check(
+    book.Park(Me, Body, 5, "items", 1000, Limit, 3) == ParkOutcome.Refused,
+    "not forced: an online player's body still doesn't"
+);
+Check(
+    book.Park(Me, Body, 5, "items", 1000, Limit, 3, force: true) == ParkOutcome.Added,
+    "forced: kept"
+);
+Check(
+    book.Status(Me, Body, true, 1000, Limit, 2, force: true) == ParkingVerdict.Hold,
+    "forced: held until a save has it"
+);
+Check(
+    book.Status(Me, Body, true, 1000, Limit, 3, force: true) == ParkingVerdict.Remove,
+    "forced: removed once saved"
+);
+Check(
+    book.Status(Me, Next, true, 1000, Limit, 3) == ParkingVerdict.Take,
+    "the next body takes the inventory"
+);
+
 // A book it can't read isn't silently emptied
 try
 {

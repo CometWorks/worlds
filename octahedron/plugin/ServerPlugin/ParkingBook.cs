@@ -124,10 +124,11 @@ internal sealed class ParkingBook
         bool bodyOnline,
         long now,
         long limit,
-        long durable
+        long durable,
+        bool force = false
     )
     {
-        if (bodyOnline)
+        if (bodyOnline && !force)
         {
             if (Parked.Any(p => p.Identity == identity && p.Body == body && !p.Delivered))
                 return ParkingVerdict.TakeBack;
@@ -138,7 +139,7 @@ internal sealed class ParkingBook
         var parked = Parked.Find(p => p.Identity == identity && p.Body == body);
         if (parked != null)
             return parked.Order <= durable ? ParkingVerdict.Remove : ParkingVerdict.Hold;
-        return Due(identity, now, limit) ? ParkingVerdict.Park : ParkingVerdict.Wait;
+        return force || Due(identity, now, limit) ? ParkingVerdict.Park : ParkingVerdict.Wait;
     }
 
     public ParkOutcome Park(
@@ -148,12 +149,13 @@ internal sealed class ParkingBook
         string items,
         long now,
         long limit,
-        long order
+        long order,
+        bool force = false
     )
     {
         if (Parked.Any(p => p.Identity == identity && p.Body == body))
             return ParkOutcome.Known;
-        if (!Due(identity, now, limit))
+        if (!force && !Due(identity, now, limit))
             return ParkOutcome.Refused;
         Parked.Add(
             new ParkedCharacter

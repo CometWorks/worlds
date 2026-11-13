@@ -23,6 +23,7 @@ the files.
 """
 
 import argparse
+import gzip
 import importlib.util
 import io
 import random
@@ -132,6 +133,9 @@ def trim(old: ET.ElementTree, new: ET.ElementTree):
 def write(world, tree: ET.ElementTree, path: Path):
     ET.indent(tree, "  ")
     world.write_xml(tree, path)
+    if path.suffix == ".gz":
+        # write_xml wrote plain XML; the plugin reads a .gz name gzipped
+        path.write_bytes(gzip.compress(path.read_bytes(), mtime=0))
 
 
 def main():
@@ -149,6 +153,11 @@ def main():
         "--since",
         default="HEAD",
         help="the commit the live world was built from (default HEAD)",
+    )
+    parser.add_argument(
+        "--gz",
+        action="store_true",
+        help="write the files gzipped, .sbc.gz: a whole station's pair is megabytes",
     )
     parser.add_argument(
         "--out",
@@ -171,7 +180,8 @@ def main():
         for id_, grid in (
             stations if args.stations else [(args.id, g) for g in args.grids]
         ):
-            source, target = f"{id_}-from.sbc", f"{id_}-to.sbc"
+            ext = ".sbc.gz" if args.gz else ".sbc"
+            source, target = f"{id_}-from{ext}", f"{id_}-to{ext}"
             pair = prepare(old, grid), prepare(new, grid)
             changed = trim(*pair)
             write(old, pair[0], args.out / source)
