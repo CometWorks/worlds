@@ -34,7 +34,6 @@ from se_remote import CallOp  # noqa: E402
 from test_client import log, ship_reply, tables, with_config  # noqa: E402
 
 SHOTS = os.environ.get("OCT_SHOTS")
-FIRST_LINE = "Press the button to confirm build!"
 # OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
 STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 CONFIG = {"FreeBuildCooldownMinutes": 0, "ShipyardTableMinutes": 600}
@@ -190,8 +189,8 @@ def first_order(a, b, oct_owner: str) -> None:
     check(shown["holder"] == "OctTester", f"the loader holds it: {shown['holder']}")
     parts = settled(a, "details", "Steel Plate")
     check(
-        parts.startswith(FIRST_LINE + "\n"),
-        f"billboard keeps its first line: {parts!r}",
+        parts.startswith("'Order Test'"),
+        f"the billboard starts with the ship (SE-1386): {parts!r}",
     )
     check("Need" in parts and "Steel Plate" in parts, "billboard lists the parts")
     check("Order Test" in parts, "billboard names the ship")
@@ -244,10 +243,10 @@ def first_order(a, b, oct_owner: str) -> None:
 
     reply = press(a)
     check("is in the queue" in reply, f"one press queues the ship: {reply}")
-    parts = settled(a, "details", "Ordered ship details")
+    parts = settled(a, "details", "Book the shipyard here.")
     check(
-        "Steel Plate" not in parts and parts.startswith(FIRST_LINE),
-        f"the parts list is gone: {parts!r}",
+        "Steel Plate" not in parts and "Book the shipyard here." in parts,
+        f"the parts list is gone, the instructions are back after the confirmation: {parts!r}",
     )
     shown = screens(a)
     check(shown["blueprint"] == "False", "the blueprint is off the table")
