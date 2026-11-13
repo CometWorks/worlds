@@ -2330,14 +2330,17 @@ tests on a cluster (`console_probe.py`). `tests/world_config_cluster.py` buys an
 on a node of a cluster, with the stock on the World Authority.
 `tests/test_contracts.py` checks the contracts with the client's admin commands: three
 hauling contracts and an acquisition at every station and none of the game's, a bounty
-on an NPC grid and salvage of a derelict placed near Alpha Station, a hauling and an
+on an NPC grid and a wreck contract on a derelict placed near Alpha Station, a hauling and an
 acquisition handed in and paid by OCT with the items in OCT's stock, the derelict
 finished at the shipyard by the plugin with the derelict given to the player, a player's own
-ownerless block refused, the bounty completed, and after a restart the same open contracts. `tests/contracts/ContractTests` checks the rewards, time limits
+ownerless block, debris, refused as an area cleanup, the bounty completed, and after a restart
+the same open contracts. `tests/contracts/ContractTests` checks the rewards, time limits
 and amounts alone (`dotnet run -c Release --project tests/contracts/ContractTests`), and
-the rules of bounties, salvage and wrecks against a clock the test sets, the offline week
-both ways among them. `tests/contracts_cluster.py` runs them on a local cluster; `clock`
-in the console probe's plan moves the clock that ages offline partitions.
+the rules of bounties, wrecks and debris areas against a clock the test sets.
+`tests/contracts_cluster.py` runs the wreck hunt on a local cluster: the targets of every kind,
+the sync range, the player away and back, keep or `!oct scrap`, a stripped wreck paying less and
+an area cleared; `away` in the console probe's plan moves the clock players are away by.
+`tests/contracts_offline_grids.py` posts wrecks from the gateway's rows of offline partitions.
 `tests/leaderboard/LeaderboardTests` checks the leaderboard's arithmetic, ranking,
 text and wire formats alone (`dotnet run -c Release --project tests/leaderboard/LeaderboardTests`).
 `tests/test_leaderboard.py` checks it in game with the client and the station probe: two
