@@ -6,10 +6,9 @@ block On"). On the live world that took the names Build, Repair, Hack and Grind 
 press answered "This button books nothing".
 
 On a world built from this working copy, server only:
-- the four stations left as built: their panels are armed and keep their names;
-- Alpha, Beta and North as the live world has them since 2026-11-13: the game's names on all four
-  buttons, and the ledger without the 2026-11-13-mode-panel-names-<station> patch, which builds
-  the panel again with its names.
+- the stations as built: their panels are armed and keep their names;
+- Alpha, Beta, North and Delta as the live world has them since 2026-11-13, armed and named by the
+  game: their buttons get their mode names back by their place on the panel.
 
     OCT_TASK=SE-1409 uv run --no-project --with httpx python tests/test_mode_panel_names.py
 
@@ -31,8 +30,8 @@ import rig  # noqa: E402
 PANEL_NAME = "Button Panel - Book Shipyard"
 MODES = ["Build", "Repair", "Hack", "Grind"]
 GAME_NAME = f"{PANEL_NAME} - Toggle block On"
-BROKEN = ["Alpha Station", "Beta Station", "North Station"]
-STATIONS = BROKEN + ["Delta Station", "Gamma Station", "Moon Station", "South Station"]
+BROKEN = ["Alpha Station", "Beta Station", "North Station", "Delta Station"]
+STATIONS = BROKEN + ["Gamma Station", "Moon Station", "South Station"]
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
 
 failures = 0
@@ -45,27 +44,44 @@ def check(ok: bool, what: str) -> None:
 
 
 def break_names(sector) -> None:
-    """Alpha, Beta and North as the live world has them: the game's names on the buttons and no
-    names patch in the ledger"""
+    """Alpha, Beta, North and Delta as the live world has them: each button armed with the
+    panel's On switch and named after it by the game"""
     text = sector.read_text(encoding="utf-8")
     parts = re.split(r"(?=<MyObjectBuilder_EntityBase )", text)
     done = 0
     for i, part in enumerate(parts):
         name = re.search(r"<DisplayName>([^<]*)</DisplayName>", part)
-        if not name or name[1] not in BROKEN or "MyObjectBuilder_CubeGrid" not in part[:200]:
+        if (
+            not name
+            or name[1] not in BROKEN
+            or "MyObjectBuilder_CubeGrid" not in part[:200]
+        ):
             continue
         panel = part.index(f"<CustomName>{PANEL_NAME}</CustomName>")
+        start = part.rindex("<MyObjectBuilder_CubeBlock", 0, panel)
+        entity_id = re.search(r"<EntityId>(\d+)</EntityId>", part[start:panel])[1]
+        slots = part.index("<Slots />", panel)
         end = part.index("</CustomButtonNames>", panel)
         names, count = re.subn(
             r"<Value>(?:Build|Repair|Hack|Grind)</Value>",
             f"<Value>{GAME_NAME}</Value>",
-            part[panel:end],
+            part[slots:end],
         )
         assert count == 4, (name[1], count)
-        part = part[:panel] + names + part[end:]
-        part, count = re.subn(r",2026-11-13-mode-panel-names-\w+", "", part)
-        assert count == 1, (name[1], count)
-        parts[i] = part
+        names = names.replace(
+            "<Slots />",
+            "<Slots>"
+            + "".join(
+                f"<Slot><Index>{k}</Index><Item />"
+                f'<Data xsi:type="MyObjectBuilder_ToolbarItemTerminalBlock">'
+                f"<Action>OnOff_On</Action><BlockEntityId>{entity_id}</BlockEntityId>"
+                f"</Data></Slot>"
+                for k in range(4)
+            )
+            + "</Slots>",
+            1,
+        )
+        parts[i] = part[:slots] + names + part[end:]
         done += 1
     assert done == len(BROKEN), done
     sector.write_text("".join(parts), encoding="utf-8")
@@ -97,28 +113,32 @@ def main() -> int:
     break_names(sector)
     before = panels(sector)
     for name in BROKEN:
-        check(before[name][0] == [GAME_NAME] * 4, f"{name}: starts with the game's names")
+        check(
+            before[name][0] == [GAME_NAME] * 4, f"{name}: starts with the game's names"
+        )
     rig.write_plugin_config(rig.CONFIG_SOURCE.read_text(encoding="utf-8"))
     rig.prepare_server()
     rig.start_server()
     try:
-        # The plugin arms the panels as it refreshes the stations, every few seconds
+        # The plugin arms and names the panels as it refreshes the stations, every few seconds
         deadline = time.monotonic() + 300
         while time.monotonic() < deadline:
             log = rig.server_game_log()
-            if (
-                len(re.findall(r"Shipyard button \d+ armed", log)) >= len(STATIONS)
-                and log.count("APPLIED 2026-11-13-mode-panel-names-") >= len(BROKEN)
-            ):
+            armed = len(re.findall(r"Shipyard button \d+ armed", log))
+            healed = len(re.findall(r"Shipyard button \d+: button \d named", log))
+            if armed >= len(STATIONS) - len(BROKEN) and healed >= 4 * len(BROKEN):
                 break
             time.sleep(3)
         time.sleep(10)
     finally:
         rig.stop_server()
     log = rig.server_game_log()
-    for name in BROKEN:
-        patch = f"2026-11-13-mode-panel-names-{name.split()[0].lower()}"
-        check(f"APPLIED {patch} on {name}" in log, f"{name}: {patch} applied")
+    healed = len(
+        re.findall(r"Shipyard button \d+: button \d named .* is \w+ again", log)
+    )
+    check(
+        healed == 4 * len(BROKEN), f"{4 * len(BROKEN)} buttons named again ({healed})"
+    )
     check(
         "books nothing" not in log and "Station patch FAILED" not in log,
         "no failed patch or empty press in the log",

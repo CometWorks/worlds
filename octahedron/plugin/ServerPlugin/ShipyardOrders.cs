@@ -643,9 +643,19 @@ internal static partial class ShipyardOrders
         );
     }
 
+    // A mode panel's buttons from the left, as the station blueprint names them
+    private static readonly PressMode[] PanelModes =
+    [
+        PressMode.Build,
+        PressMode.Repair,
+        PressMode.Hack,
+        PressMode.Grind,
+    ];
+
     // The button gets a toolbar item, its own On switch, so that clients let players press it.
     // The game names a button after the item put on it ("<panel> - Toggle block On"), which
-    // would lose the mode names ModeOf reads (SE-1409), so the button keeps its own name.
+    // loses the mode names ModeOf reads (SE-1409): the button keeps its own name, and a mode
+    // panel button that has none of a mode gets its mode's name by its place on the panel.
     private static void ArmButton(MyButtonPanel button)
     {
         var armed = false;
@@ -663,6 +673,18 @@ internal static partial class ShipyardOrders
         }
         if (armed)
             Plugin.Log.Info($"Shipyard button {button.EntityId} armed");
+        if (button.BlockDefinition.ButtonCount != PanelModes.Length)
+            return;
+        for (var i = 0; i < PanelModes.Length; i++)
+            if (ModeOf(button, i) == null)
+            {
+                Plugin.Log.Info(
+                    $"Shipyard button {button.EntityId}: button {i + 1} named "
+                        + $"'{(button.HasCustomButtonName(i) ? button.GetCustomButtonName(i) : "")}' "
+                        + $"is {PanelModes[i]} again"
+                );
+                button.SetCustomButtonName(PanelModes[i].ToString(), i);
+            }
     }
 
     // !oct order presses the button of the nearest table for an admin

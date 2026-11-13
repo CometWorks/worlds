@@ -855,6 +855,12 @@ which, so the order and the rest of the name, the tooltip, are the blueprint's:
   or running slot for the new booking. In the window of a turn they only say when it
   ends, and during a build they ask for Build to cancel it first.
 
+The plugin puts the panel's own On switch on each empty button so that clients let
+players press it; the game would then name the button after that toolbar item, so the
+button gets its own name back. A button of a 4-button panel whose name names no mode,
+like the live stations' after the game renamed them, gets its mode's name by its place:
+Build, Repair, Hack, Grind (SE-1409). `tests/test_mode_panel_names.py` checks both.
+
 `!oct shipyard book <build|repair|grind|hack> [table name]` presses a button for a
 player by the table, for bots and tests.
 
