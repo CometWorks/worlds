@@ -20,6 +20,14 @@ public enum BuildPhase
 }
 
 /// <summary>An entry of a shipyard's queue: a free build, a paid one, or a towed grid to break down.</summary>
+/// <summary>What a shipyard slot, an entry without a blueprint, is for.</summary>
+public enum SlotKind
+{
+    Repair,
+    Grind,
+    Hack,
+}
+
 public sealed class BuildOrder
 {
     public string Id = "";
@@ -55,8 +63,12 @@ public sealed class BuildOrder
     // settings.
     public bool Exempt;
 
-    // A slot for the player to repair a ship with the shipyard's welders: no blueprint or payer
+    // A slot at the shipyard with no blueprint or payer: Slot says what for. The name is from when
+    // repair was the only kind.
     public bool Repair;
+
+    // What a slot (Repair) is for: weld, grind or hack a ship in the shipyard's build volume
+    public SlotKind Slot;
 
     // A bot ordered it (ShipyardBotSteamIds): a human player's order goes first
     public bool Bot;
@@ -424,6 +436,7 @@ public sealed class BuildBook
                 );
             mine.Grid = 0;
             mine.Repair = false;
+            mine.Slot = SlotKind.Repair;
             mine.Payer = order.Payer;
             mine.Fee = order.Fee;
             mine.Paid = 0;
@@ -457,7 +470,7 @@ public sealed class BuildBook
         order.Items = order.Free ? new Dictionary<string, long>() : Bill(needed);
         return new BuildResult(
             true,
-            order.Repair ? $"'{order.Ship}' is in the queue."
+            order.Repair ? $"Your {order.Slot.ToString().ToLowerInvariant()} slot is in the queue."
                 : order.Free ? $"'{order.Ship}' is in the queue, a free build."
                 : $"'{order.Ship}' is in the queue. At its turn you load the components and press the button.",
             order
@@ -489,6 +502,54 @@ public sealed class BuildBook
         long player,
         IReadOnlyDictionary<string, long> items
     ) => new(true, MarketBook.Sc(market?.SellOff(station, player, items) ?? 0));
+
+    /// <summary>
+    /// A repair slot buys the components its welders lack: as much of each item as the station
+    /// has and the player can pay, cheapest lines first. The answer's order, which is in no queue,
+    /// lists what was bought, raw; nothing bought is no failure.
+    /// </summary>
+    public static BuildResult Buy(
+        IMarketWorld w,
+        IBuildMarket market,
+        string station,
+        long player,
+        IReadOnlyDictionary<string, long> needed
+    )
+    {
+        if (market == null || !Amounts.ValidName(station))
+            return BuildResult.No("No market at this station.");
+        var bought = new BuildOrder { Station = station, Player = player };
+        long cost = 0;
+        foreach (
+            var item in needed.Where(n => n.Value > 0).OrderBy(n => n.Key, StringComparer.Ordinal)
+        )
+        {
+            // Whole units, as many as the money allows
+            var fill = market.PlanBuy(station, item.Key, item.Value);
+            var raw = fill.Amount;
+            var balance = w.Balance(player);
+            if (raw > 0 && fill.Cost > balance)
+            {
+                raw = balance <= 0 ? 0 : raw / Amounts.Unit * balance / fill.Cost * Amounts.Unit;
+                fill = market.PlanBuy(station, item.Key, raw);
+                while (raw > 0 && fill.Cost > balance)
+                {
+                    raw -= Amounts.Unit;
+                    fill = market.PlanBuy(station, item.Key, raw);
+                }
+            }
+            if (raw <= 0 || !market.Buy(station, player, item.Key, raw).Ok)
+                continue;
+            cost += fill.Cost;
+            bought.Items[item.Key] = raw;
+        }
+        bought.Paid = cost;
+        return new BuildResult(
+            true,
+            bought.Items.Count == 0 ? "" : $"Bought for {MarketBook.Sc(cost)}.",
+            bought
+        );
+    }
 
     private void Add(IMarketWorld w, BuildOrder order)
     {
@@ -819,9 +880,14 @@ public sealed class BuildBook
                 o.Pcu.ToString(CultureInfo.InvariantCulture),
                 Clean(o.Ship),
                 BuildQuote.N(o.Created),
-                // Flags: 2 exempt, 4 repair, 8 bot, 16 bumped
+                // Flags: 2 exempt, 4 slot, 8 bot, 16 bumped, 32 grind slot, 64 hack slot
                 (
-                    (o.Exempt ? 2 : 0) | (o.Repair ? 4 : 0) | (o.Bot ? 8 : 0) | (o.Bumped ? 16 : 0)
+                    (o.Exempt ? 2 : 0)
+                    | (o.Repair ? 4 : 0)
+                    | (o.Bot ? 8 : 0)
+                    | (o.Bumped ? 16 : 0)
+                    | (o.Repair && o.Slot == SlotKind.Grind ? 32 : 0)
+                    | (o.Repair && o.Slot == SlotKind.Hack ? 64 : 0)
                 ).ToString(CultureInfo.InvariantCulture),
                 blueprint ? o.Blueprint ?? "" : "",
                 ((int)o.Phase).ToString(CultureInfo.InvariantCulture),
@@ -863,6 +929,10 @@ public sealed class BuildBook
         order.Repair = (flags & 4) != 0;
         order.Bot = (flags & 8) != 0;
         order.Bumped = (flags & 16) != 0;
+        order.Slot =
+            (flags & 32) != 0 ? SlotKind.Grind
+            : (flags & 64) != 0 ? SlotKind.Hack
+            : SlotKind.Repair;
         for (int i = items; i < f.Length; i += 2)
             order.Items[f[i]] = BuildQuote.L(f[i + 1]);
         return order;
@@ -978,6 +1048,9 @@ public enum BuildVerb
 
     /// <summary>Needed is sold to the station for the player, at once.</summary>
     Sale,
+
+    /// <summary>The player buys what they can of Needed at the station, for a repair slot: the answer's order lists what they got.</summary>
+    Buy,
     Cancel,
     Start,
 
@@ -1019,6 +1092,7 @@ public sealed class BuildRequest
     public bool Refund;
     public bool Exempt;
     public bool Repair;
+    public SlotKind Slot;
     public bool Bot;
     public long Grid;
     public int Part;
@@ -1055,7 +1129,8 @@ public sealed class BuildRequest
             BuildQuote.N(Grid),
             Part.ToString(CultureInfo.InvariantCulture),
             Percent.ToString(CultureInfo.InvariantCulture),
-            Bot ? "1" : "0"
+            Bot ? "1" : "0",
+            ((int)Slot).ToString(CultureInfo.InvariantCulture)
         )
         + "\n"
         + Items(Needed)
@@ -1083,8 +1158,8 @@ public sealed class BuildRequest
     {
         var lines = text.Split('\n');
         var f = lines[0].Split('\t');
-        // A node from before the bots' field sends 16
-        if (lines.Length != 3 || f.Length is not (16 or 17))
+        // A node from before the bots' field sends 16, from before the slot kinds 17
+        if (lines.Length != 3 || f.Length is not (16 or 17 or 18))
             throw new FormatException("Malformed build request");
         return new BuildRequest
         {
@@ -1105,6 +1180,10 @@ public sealed class BuildRequest
             Part = int.Parse(f[14], CultureInfo.InvariantCulture),
             Percent = int.Parse(f[15], CultureInfo.InvariantCulture),
             Bot = f.Length > 16 && f[16] == "1",
+            Slot =
+                f.Length > 17
+                    ? (SlotKind)int.Parse(f[17], CultureInfo.InvariantCulture)
+                    : SlotKind.Repair,
             Needed = Items(lines[1]),
             Provided = Items(lines[2]),
         };
@@ -1165,6 +1244,7 @@ public sealed class BuildRequest
                     Blueprint = Blueprint,
                     Exempt = Exempt,
                     Repair = Repair,
+                    Slot = Repair ? Slot : SlotKind.Repair,
                     Bot = Bot,
                 },
                 Needed
@@ -1181,6 +1261,7 @@ public sealed class BuildRequest
                 }
             ),
             BuildVerb.Sale => BuildBook.Sale(market, Station, Player, Needed),
+            BuildVerb.Buy => BuildBook.Buy(w, market, Station, Player, Needed),
             BuildVerb.Cancel => book.Cancel(Station, Player),
             BuildVerb.Start => book.Start(Id),
             BuildVerb.Finish => book.Finish(Id, Grid),

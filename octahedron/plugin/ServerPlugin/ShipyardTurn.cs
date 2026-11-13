@@ -29,11 +29,14 @@ internal static class ShipyardTurn
             .Where(b => b is MyCargoContainer or MyShipConnector)
             .Concat(ShipyardOrders.Beams(shipyard));
 
-    /// <summary>Hands the blocks to the player, shared as OctFaction.BuildShare says, and on. Connectors don't trade.</summary>
-    public static void Give(MyCubeGrid shipyard, long player)
+    /// <summary>Hands the blocks to the player, shared as OctFaction.BuildShare says, and on. Connectors don't trade. A grind slot gets the deconstructors too.</summary>
+    public static void Give(MyCubeGrid shipyard, long player, bool deconstructors = false)
     {
         ShipyardOrders.WakeBeams(shipyard);
-        foreach (var block in Blocks(shipyard))
+        foreach (
+            var block in Blocks(shipyard)
+                .Concat(deconstructors ? ShipyardOrders.Deconstructors(shipyard) : [])
+        )
         {
             SetOwner(block, player, OctFaction.BuildShare(player));
             if (block is MyFunctionalBlock functional)
@@ -62,6 +65,9 @@ internal static class ShipyardTurn
             if (block is MyFunctionalBlock functional)
                 functional.Enabled = false;
         }
+        // A grind slot's: OCT's again, and on, as links of the welders' conveyor lines
+        foreach (var block in ShipyardOrders.Deconstructors(shipyard))
+            SetOwner(block, npc, IdleShare);
         return docked;
     }
 

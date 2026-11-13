@@ -28,6 +28,9 @@ namespace ServerPlugin;
 // it by name once the session is ready. A ToolCore that renamed them gets no filter and an error
 // in the log.
 //
+// A repair, grind or hack slot (SE-1386) also keeps the tools to the shipyard's build volume, and
+// the deconstructors grind only in a grind slot, only what the player may grind there.
+//
 // The clients' ToolCore doesn't have this: a client may draw a beam at another player's block
 // that the server doesn't weld.
 internal static class ShipyardOwnBlocks
@@ -83,7 +86,14 @@ internal static class ShipyardOwnBlocks
     {
         if (!Plugin.Config.Enabled || blockTool(comp) is not MyCubeBlock tool)
             return;
-        var other = ShipyardOrders.NotTheOrder(tool) ?? NotTheirs(tool);
+        var other =
+            ShipyardOrders.NotToGrind(tool) ?? ShipyardOrders.NotTheOrder(tool) ?? NotTheirs(tool);
+        // A slot works only in the shipyard's build volume (SE-1386)
+        if (other != null && ShipyardOrders.OutOfVolume(tool) is { } outside)
+        {
+            var inner = other;
+            other = b => inner(b) || outside(b);
+        }
         if (other == null)
             return;
         foreach (var layer in layers(comp).Values)

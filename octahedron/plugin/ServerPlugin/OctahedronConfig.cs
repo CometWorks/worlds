@@ -817,8 +817,8 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "A press of a station's shipyard button without a blueprint books a repair slot: the shipyard's welders, containers and "
-            + "connectors are the player's until they press it again or no building or welding happened for this many minutes. 0: no repair slots.",
+        description: "A repair, grind or hack slot ends after this many minutes without welding, grinding or a ship to hack; a press of "
+            + "its button ends it sooner. A repair slot's welders, containers and connectors are the player's meanwhile. 0: no slots.",
         Parent = "shipyard"
     )]
     public int ShipyardRepairIdleMinutes
@@ -826,6 +826,30 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 5;
+
+    [BoolOption(
+        "A repair slot buys what the shipyard's welders lack for the player's blocks in its build volume, damaged or projected, "
+            + "from the station's Store: as far as the stock, the containers' room and the player's account go, less what the "
+            + "shipyard and the player's docked ships hold.",
+        Parent = "shipyard"
+    )]
+    public bool ShipyardRepairBuy
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [IntOption(
+        1,
+        description: "A hack slot gives the player a ship that stays this many seconds in the shipyard's build volume: one they "
+            + "aren't the big owner of, not of their faction, and whose big owner isn't online on the cluster.",
+        Parent = "shipyard"
+    )]
+    public int ShipyardHackSeconds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 60;
 
     [DoubleOption(
         0,
@@ -936,15 +960,17 @@ public class OctahedronConfig : PluginConfig
     }
 
     [StringOption(
-        description: "Name of the station button panel next to the hologram table. Its first button orders the blueprint "
-            + "loaded into the table, or cancels the presser's queue entry, a running build on a second press within 10 s.",
+        description: "Name of the station button panel next to the hologram table. On a panel of several buttons the first word "
+            + "of each button's name (Build, Repair, Grind, Hack) says what it books, and a second press cancels it. A single button, "
+            + "as stations from before the mode panel have under the name 'Button Panel - Station ShipyardConfirm', orders the "
+            + "blueprint loaded into the table, cancels the presser's queue entry, or books a repair slot.",
         Parent = "shipyard"
     )]
     public string ShipyardConfirmButtonName
     {
         get;
         set => SetField(ref field, value);
-    } = "Button Panel - Station ShipyardConfirm";
+    } = "Button Panel - Book Shipyard";
 
     [StringOption(
         description: "Name of the station text panels that show the shipyard's queue.",

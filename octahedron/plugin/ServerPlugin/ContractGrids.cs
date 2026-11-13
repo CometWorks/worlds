@@ -34,6 +34,11 @@ internal static class ContractGrids
             .Select(t => t.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>An NPC of a wreck faction (ContractSalvageFactionTags): a shipyard's grind slot may scrap its grids.</summary>
+    internal static bool IsWreckOwner(long owner) =>
+        MySession.Static.Players.IdentityIsNpc(owner)
+        && WreckTags.Contains(MySession.Static.Factions.GetPlayerFaction(owner)?.Tag ?? "");
+
     // An NPC grid of another faction than OCT and the wrecks
     private static bool BountyTarget(MyCubeGrid grid, long octId)
     {
