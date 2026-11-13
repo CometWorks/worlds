@@ -55,5 +55,6 @@ internal static class ContractMath
 
     public static int BountyReward(double threat, double perThreat) => Sc(threat * perThreat);
 
-    public static int SalvageReward(double massKg, long perTonne) => Sc(massKg / 1000 * perTonne);
+    // A wreck's or area's components' value in SC, at percent
+    public static int WreckReward(double value, int percent) => Sc(value * percent / 100);
 }

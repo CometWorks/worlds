@@ -43,7 +43,8 @@ Check(ContractMath.AcquisitionReward(5_000, 10_000, 60) == 30_000, "at 60 %");
 Check(ContractMath.AcquisitionReward(1, 1, 100) == 1, "a thousandth of a credit rounds up");
 
 Check(ContractMath.BountyReward(250.4, 20) == 5_008, "bounty by threat");
-Check(ContractMath.SalvageReward(12_500, 100) == 1_250, "salvage by tonne");
+Check(ContractMath.WreckReward(12_500, 100) == 12_500, "a wreck pays its components' value");
+Check(ContractMath.WreckReward(12_500.2, 50) == 6_251, "at half, rounded up");
 
 // --- the book: every rule below runs on a clock the test sets, so no check waits ---
 
@@ -51,8 +52,9 @@ var t0 = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 var week = TimeSpan.FromDays(7);
 var goneAfter = TimeSpan.FromMinutes(3);
 var alpha = new ContractPoint(0, 0, 0);
-const ContractGridFlags Wreck = ContractGridFlags.Wreck | ContractGridFlags.Unpowered;
-const ContractGridFlags Dead = ContractGridFlags.Unpowered;
+const ContractGridFlags Wreck =
+    ContractGridFlags.Wreck | ContractGridFlags.Unpowered | ContractGridFlags.Abandoned;
+const ContractGridFlags Dead = ContractGridFlags.Unpowered | ContractGridFlags.Abandoned;
 const long Hunter = 99;
 
 ContractGrid Row(long id, ContractGridFlags flags, int blocks = 100, double x = 100_000) =>
@@ -73,6 +75,13 @@ ContractBook Book(params ContractGrid[] rows)
     return book;
 }
 
+// The wrecks the book would post with one station at alpha, its shipyard where a test puts one
+List<ContractGrid> Hunted(ContractBook book, DateTime at) =>
+    book.Hunts([(1, alpha)], _ => 99, 3000, 150, at)
+        .Where(h => h.Hunt.Kind == 'w')
+        .Select(h => h.Hunt.Grid)
+        .ToList();
+
 ContractVerdict Judge(
     ContractBook book,
     ContractTarget target,
@@ -82,80 +91,153 @@ ContractVerdict Judge(
     bool owns = false
 ) => book.Judge(target, active, alpha, near, 3000, 150, at, Hunter, owns);
 
-// The week, both ways: a dead grid isn't a wreck a second before it and is one right at it
-Check(!ContractBook.IsWreck(Dead, week - TimeSpan.FromSeconds(1), week), "dead: under a week, no");
-Check(ContractBook.IsWreck(Dead, week, week), "dead: a week, yes");
-Check(ContractBook.IsWreck(Dead, week * 4, week), "dead: a month, yes");
-Check(ContractBook.IsWreck(Wreck, TimeSpan.Zero, week), "armor only: at once");
-Check(!ContractBook.IsWreck(ContractGridFlags.None, week * 52, week), "powered: never");
-Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a derelict with power");
-
-// The same boundary through the book, with the partition's time from the offline table
+// What a wreck hunt takes: nobody's, an NPC's down for a while, a bot's, a player's long away
 {
-    var book = Book(Row(1, Dead));
-    book.Offline[1] = t0;
-    var random = new Random(1);
-    Check(
-        book.Wrecks(t0 + week - TimeSpan.FromSeconds(1), week, 10, 5, random).Count == 0,
-        "book: a second before the week"
-    );
-    Check(book.Wrecks(t0 + week, week, 10, 5, random).Count == 1, "book: at the week");
-
-    // A visit brings the partition online: back offline, its week starts anew
-    book.Offline.Remove(1);
-    Check(book.Wrecks(t0 + week * 2, week, 10, 5, random).Count == 0, "book: online, none");
-    book.Report("n1", [Row(1, Dead)], t0 + week * 2);
-    book.Offline[1] = t0 + week * 2;
-    Check(book.Wrecks(t0 + week * 2, week, 10, 5, random).Count == 0, "book: the week starts anew");
-    Check(
-        book.Wrecks(t0 + week * 3, week, 10, 5, random).Count == 1,
-        "book: a week after the visit"
-    );
-}
-
-// Not in the offline table: no wreck contract, however dead. An unknown table: none at all.
-{
-    var book = Book(Row(1, Wreck));
-    Check(book.Wrecks(t0, week, 10, 5, new Random(1)).Count == 0, "an online wreck isn't posted");
-    book.Offline[1] = t0;
-    Check(book.Wrecks(t0, week, 10, 5, new Random(1)).Count == 1, "offline: posted");
-    book.Offline = null;
-    Check(book.Wrecks(t0, week, 10, 5, new Random(1)).Count == 0, "an unknown table: none");
-}
-
-// Always from the biggest: over many draws only the pool comes up, each of it, and nothing twice
-{
-    var rows = Enumerable.Range(1, 20).Select(i => Row(i, Wreck, i * 10)).ToArray();
-    var book = Book(rows);
-    foreach (var row in rows)
-        book.Offline[row.Id] = t0;
-    var random = new Random(42);
-    var drawn = new HashSet<long>();
-    var repeats = false;
-    var orders = new HashSet<string>();
-    for (var i = 0; i < 200; i++)
+    var book = Book();
+    bool Target(ContractGridFlags flags, long owner = 0, long id = 1)
     {
-        var picked = book.Wrecks(t0, week, 5, 3, random);
-        repeats |= picked.Select(p => p.Id).Distinct().Count() != picked.Count;
-        orders.Add(string.Join(",", picked.Select(p => p.Id)));
-        foreach (var p in picked)
-            drawn.Add(p.Id);
+        var row = Row(id, flags);
+        row.Owner = owner;
+        book.Report("n1", [row], t0);
+        return book.IsTarget(book.Grids[id], t0);
     }
+    Check(Target(ContractGridFlags.Derelict), "a movable derelict, powered or not");
+    Check(Target(Wreck), "nothing works and nobody's: at once");
+    Check(Target(Dead), "nobody's without power, static too");
+    Check(!Target(ContractGridFlags.Abandoned), "a static base of nobody's with power");
+    Check(!Target(ContractGridFlags.None), "powered and someone's: never");
+    Check(!Target(ContractGridFlags.Derelict | ContractGridFlags.Seated), "someone sits in it");
+    Check(!Target(ContractGridFlags.Derelict | ContractGridFlags.SafeZone), "in a safe zone");
+    Check(!Target(ContractGridFlags.Debris), "debris: an area's piece, not a wreck");
+
+    // A player's: only once they and their faction are away
+    Check(!Target(ContractGridFlags.Unpowered, 5), "a player's, they are around");
+    book.Rules.OwnerAway = o => o == 5;
+    Check(Target(ContractGridFlags.Unpowered, 5), "a player's, they are away");
+    Check(!Target(ContractGridFlags.None, 5), "away, but it has power");
+
+    // An NPC's: out of power or control for NpcDown, counted from the first report saying so
+    var npc = ContractGridFlags.Npc | ContractGridFlags.Disabled;
+    book = Book(Row(2, npc));
+    Check(!book.IsTarget(book.Grids[2], t0 + TimeSpan.FromMinutes(9)), "NPC: 9 minutes down");
+    Check(book.IsTarget(book.Grids[2], t0 + TimeSpan.FromMinutes(10)), "NPC: 10 minutes down");
+    book.Report("n1", [Row(2, ContractGridFlags.Npc)], t0 + TimeSpan.FromMinutes(11));
+    book.Report("n1", [Row(2, npc)], t0 + TimeSpan.FromMinutes(12));
     Check(
-        drawn.SetEquals([16, 17, 18, 19, 20]),
-        "the 5 biggest and only those: " + string.Join(",", drawn)
+        !book.IsTarget(book.Grids[2], t0 + TimeSpan.FromMinutes(21)),
+        "NPC: back in control starts it anew"
     );
-    Check(!repeats, "no wreck twice in a draw");
-    Check(orders.Count > 1, "the draw is random");
-    Check(book.Wrecks(t0, week, 5, 9, random).Count == 5, "at most the pool");
-    book.Targets[99] = new ContractTarget('w', 20, 1, 200, alpha);
+    var bot = ContractGridFlags.Bot | ContractGridFlags.Unpowered;
+    book = Book(Row(3, bot));
+    Check(!book.IsTarget(book.Grids[3], t0 + TimeSpan.FromMinutes(59)), "bot: under an hour");
+    Check(book.IsTarget(book.Grids[3], t0 + TimeSpan.FromHours(1)), "bot: an hour");
+}
+
+// Posting: anywhere, at the nearest station, the most valuable first, up to the station's room
+{
+    var beta = new ContractPoint(1_000_000, 0, 0);
+    ContractGrid Valued(long id, double value, double x)
+    {
+        var row = Row(id, ContractGridFlags.Derelict, 100, x);
+        row.Value = value;
+        return row;
+    }
+    var book = Book(
+        Valued(1, 5_000, 100_000),
+        Valued(2, 9_000, 400_000),
+        Valued(3, 7_000, 900_000),
+        Valued(4, 1_000, 950_000),
+        Valued(5, 500, 300_000)
+    );
+    book.Rules.MinValue = 800;
+    var hunts = book.Hunts([(1, alpha), (2, beta)], s => s == 1 ? 1 : 5, 3000, 150, t0);
     Check(
-        !Enumerable.Range(0, 50).Any(_ => book.Wrecks(t0, week, 5, 5, random).Any(p => p.Id == 20)),
-        "a wreck with a contract isn't drawn again"
+        hunts
+            .Select(h => (h.Hunt.Grid.Id, h.Station))
+            .SequenceEqual([(2L, 1L), (3L, 2L), (4L, 2L)]),
+        "nearest station, most valuable first, room per station, the least value: "
+            + string.Join(",", hunts.Select(h => $"{h.Hunt.Grid.Id}@{h.Station}"))
+    );
+    book.Rules.PlayerNear = p => p.X == 400_000;
+    Check(
+        book.Hunts([(1, alpha), (2, beta)], _ => 9, 3000, 150, t0).All(h => h.Hunt.Grid.Id != 2),
+        "nothing a player is within sync range of"
+    );
+
+    // A gateway's row has no value: priced by its mass at what the reported grids are worth per kg
+    var row = Row(9, Dead);
+    row.MassKg = 2_000;
+    book = Book(Valued(1, 5_000, 0));
+    book.Grids[1].MassKg = 1_000;
+    Check(Math.Abs(book.Value(row) - 10_000) < 1e-6, "5 SC a kg: 10,000");
+}
+
+// Debris areas: pieces near each other, worth a contract by count or value, at most the radius
+{
+    ContractGrid Piece(long id, double x, double value = 10)
+    {
+        var row = Row(id, ContractGridFlags.Debris, 3, x);
+        row.Value = value;
+        return row;
+    }
+    var book = Book(
+        Piece(1, 10_000),
+        Piece(2, 10_200),
+        Piece(3, 10_400),
+        Piece(4, 10_600),
+        Piece(5, 10_800),
+        Piece(6, 20_000),
+        Piece(7, 20_100),
+        Piece(8, 40_000, 5_000)
+    );
+    book.Rules.MinValue = 2_000;
+    var areas = book.Areas();
+    var chain = areas.Single(a => a.Members.Contains(1));
+    Check(chain.Members.Length == 5, "a chain of 5 pieces 200 m apart");
+    Check(
+        Math.Abs(chain.Position.X - 10_400) < 1e-6 && Math.Abs(chain.Radius - 450) < 1e-6,
+        "around the center, 50 m past the farthest"
+    );
+    Check(areas.All(a => !a.Members.Contains(6)), "2 cheap pieces: none");
+    Check(areas.Any(a => a.Members.SequenceEqual([8L])), "one piece worth the least reward");
+    book.Rules.DebrisMaxRadius = 300;
+    book.Rules.DebrisMinPieces = 3;
+    Check(
+        book.Areas().Single(a => a.Members.Contains(3)).Members.Length == 3
+            && book.Areas().All(a => a.Radius <= 300),
+        "capped: the pieces farther out wait"
+    );
+
+    // Taken, done when none is left in it, with the player near
+    book.Rules.DebrisMaxRadius = 2_000;
+    book.Rules.DebrisMinPieces = 5;
+    var target = new ContractTarget('a', 1, 1, chain.Radius, chain.Position)
+    {
+        Members = chain.Members,
+    };
+    book.Targets[7] = target;
+    Check(!book.Areas().Any(a => a.Members.Contains(1)), "no second area on the same pieces");
+    Check(
+        ContractBook.ParseAnswer(book.Report("n1", [], t0)).Watched.IsSupersetOf(chain.Members),
+        "every piece is watched"
+    );
+    Check(Judge(book, target, true, true, t0) == ContractVerdict.Keep, "all there");
+    var later = t0 + goneAfter;
+    var moved = Piece(5, 12_000);
+    book.Report("n1", [Piece(1, 10_000), moved], later);
+    Check(Judge(book, target, true, true, later) == ContractVerdict.Keep, "one piece left");
+    book.Report("n1", [moved], later + goneAfter);
+    Check(
+        Judge(book, target, true, false, later + goneAfter) == ContractVerdict.Keep,
+        "empty, nobody near"
     );
     Check(
-        book.Wrecks(t0, week, 5, 5, random).Select(p => p.Id).Contains(15),
-        "the next biggest takes its place"
+        Judge(book, target, true, true, later + goneAfter) == ContractVerdict.Finish,
+        "empty, towed out or ground down, the player near"
+    );
+    Check(
+        Judge(book, target, false, false, later + goneAfter) == ContractVerdict.Withdraw,
+        "nobody took it, emptied anyway: withdrawn"
     );
 }
 
@@ -357,16 +439,6 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
         "bounties: highest first, range, threat"
     );
     Check(book.Bounties(alpha, 30_000, 5, 1).Single().Id == 2, "bounties: as many as wanted");
-
-    book = Book(
-        Row(1, ContractGridFlags.Derelict, 10, 20_000),
-        Row(2, ContractGridFlags.Derelict, 10, 5_000),
-        Row(3, ContractGridFlags.Derelict, 10, 40_000)
-    );
-    Check(
-        book.Derelicts(alpha, 30_000, 5).Select(r => r.Id).SequenceEqual([2L, 1L]),
-        "derelicts: nearest first, in range"
-    );
 }
 
 // Candidates fade when no report names them, unless their partition is offline or a contract has them
@@ -446,8 +518,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     Check(answer.Give.Count == 0 && !answer.Watched.Contains(1), "a report shows it done");
     Check(book.Grids.ContainsKey(1), "it isn't scrapped");
     Check(
-        book.Derelicts(alpha, 100_000, 5).Count == 0
-            && book.Wrecks(t0, week, 5, 5, new Random(1)).Count == 0,
+        Hunted(book, t0).Count == 0,
         "a given grid gets no new contract, or it could be disowned and sold again"
     );
 
@@ -558,7 +629,6 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     Check(Judge(book, target, false, false, t0) == ContractVerdict.Withdraw, "seated, not taken");
     book.Report("n1", [Row(1, seated, 25, 100_000)], t0);
     Check(Judge(book, target, true, true, t0) == ContractVerdict.Keep, "seated: no scrapping");
-    Check(!ContractBook.IsWreck(seated, week * 52, week), "a seat in use: no wreck");
 
     book.Report("n1", [Row(1, Dead, 100, 1100)], t0);
     Check(Judge(book, target, true, false, t0) == ContractVerdict.Keep, "towed in by someone else");
@@ -571,7 +641,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
         yard
     );
     Check(
-        book.Derelicts(alpha, 100_000, 5, 3000, 150).Select(r => r.Id).SequenceEqual([3L]),
+        Hunted(book, t0).Select(r => r.Id).SequenceEqual([3L]),
         "only the derelict to tow, and nobody's in it"
     );
 }
@@ -593,10 +663,9 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
 {
     var zone = ContractGridFlags.SafeZone;
     var wreck = ContractGridFlags.Wreck | ContractGridFlags.Unpowered;
-    var random = new Random(1);
     var book = Book(Row(1, wreck | zone, 100, 100_000), Row(2, wreck, 50, 100_000));
     book.Offline = new() { [1] = t0, [2] = t0 };
-    var wrecks = book.Wrecks(t0 + TimeSpan.FromDays(100), week, 5, 5, random);
+    var wrecks = Hunted(book, t0 + TimeSpan.FromDays(100));
     Check(wrecks.Select(r => r.Id).SequenceEqual([2L]), "still active however long it sleeps");
 
     book = Book(
@@ -604,10 +673,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
         Row(2, ContractGridFlags.Derelict, 50, 2000),
         Row(5, ContractGridFlags.Shipyard, 500, 1000)
     );
-    Check(
-        book.Derelicts(alpha, 3000, 5).Select(r => r.Id).SequenceEqual([2L]),
-        "no salvage contract in a zone"
-    );
+    Check(Hunted(book, t0).Select(r => r.Id).SequenceEqual([2L]), "no wreck contract in a zone");
     book = Book(
         Row(1, ContractGridFlags.Bounty | zone, 100, 100),
         Row(2, ContractGridFlags.Bounty, 100, 100)
@@ -780,20 +846,29 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
 
     var wreck = Groups(Offline(1, 10, 1)).Single();
     Check(
-        wreck.Grid.Flags == (ContractGridFlags.Wreck | ContractGridFlags.Unpowered),
+        wreck.Grid.Flags
+            == (
+                ContractGridFlags.Wreck
+                | ContractGridFlags.Unpowered
+                | ContractGridFlags.Abandoned
+                | ContractGridFlags.Derelict
+            ),
         "ownerless, nothing works: a wreck"
     );
     Check(
-        Groups(Offline(1, 10, 1, functional: true)).Single().Grid.Flags
-            == ContractGridFlags.Unpowered,
-        "a working terminal block: only without power"
+        Groups(Offline(1, 10, 1, functional: true, isStatic: true)).Single().Grid.Flags
+            == (ContractGridFlags.Unpowered | ContractGridFlags.Abandoned),
+        "a working terminal block, static: nobody's without power"
     );
     Check(
         Groups(Offline(1, 10, 1, owners: [5])).Single()
             is { Grid: { Owner: 5, Flags: ContractGridFlags.Unpowered } },
         "an owner: only without power, and it is kept"
     );
-    Check(Groups(Offline(1, 10, 1, functional: true, powered: true)).Count == 0, "powered: none");
+    Check(
+        Groups(Offline(1, 10, 1, functional: true, powered: true, owners: [5])).Count == 0,
+        "someone's, powered: none"
+    );
     Check(Groups(Offline(1, 2, 1)).Count == 0, "too few blocks");
     Check(Groups(Offline(1, 10, 1, station: true)).Count == 0, "a station");
     Check(Groups(Offline(1, 10, 1, owners: [9])).Count == 0, "OCT's");
@@ -888,7 +963,10 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
         "the same grid every time when two are as big"
     );
     Check(
-        Groups(Offline(3, 8, 3), Offline(7, 8, 3, powered: true, functional: true)).Count == 0,
+        Groups(
+            Offline(3, 8, 3),
+            Offline(7, 8, 3, powered: true, functional: true, owners: [5])
+        ).Count == 0,
         "powered by a docked ship"
     );
     Check(Groups(Offline(3, 8, 3), Offline(7, 8, 3, owners: [9])).Count == 0, "docked to OCT's");
@@ -915,26 +993,15 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
             [2] = t0,
             [3] = t0,
         },
-        OfflineRows = Groups(Offline(1, 10, 1), Offline(2, 10, 2, functional: true)),
+        OfflineRows = Groups(Offline(1, 10, 1), Offline(2, 10, 2, owners: [5])),
     };
     Check(
-        book.Wrecks(t0, days, 9, 9, new Random(1)).Select(r => r.Id).SequenceEqual([1L]),
-        "a row is a wreck at once, without power only in time"
+        Hunted(book, t0).Select(r => r.Id).SequenceEqual([1L]),
+        "a row of nobody's is a wreck at once, a player's only once they are away"
     );
-    Check(
-        book.Wrecks(t0 + days, days, 9, 9, new Random(1))
-            .Select(r => r.Id)
-            .Order()
-            .SequenceEqual([1L, 2L]),
-        "the one without power after the days"
-    );
-    book.Offline = new() { [2] = t0 };
-    Check(
-        book.Wrecks(t0, days, 9, 9, new Random(1)).Count == 0,
-        "a row whose partition left the table is nothing"
-    );
-    book.Offline = null;
-    Check(book.Wrecks(t0, days, 9, 9, new Random(1)).Count == 0, "a table not read yet");
+    book.Rules.OwnerAway = o => o == 5;
+    Check(Hunted(book, t0).Select(r => r.Id).Order().SequenceEqual([1L, 2L]), "they are away");
+    book.Rules.OwnerAway = _ => false;
 
     // A report wins for the id, and for the group
     book.Offline = new()
@@ -948,7 +1015,7 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     book.Report("n1", [Row(3, Dead, 100, 1100)], t0);
     Check(!book.Unreported().Any(), "a report on the group's other grid");
     Check(
-        book.Wrecks(t0 + days, days, 9, 9, new Random(1)).Select(r => r.Id).SequenceEqual([3L]),
+        Hunted(book, t0).Select(r => r.Id).SequenceEqual([3L]),
         "one contract for the group, from the report"
     );
 
@@ -958,13 +1025,14 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
         Offline = new() { [1] = t0 },
         OfflineRows = Groups(Offline(1, 10, 1, owners: [5])),
     };
-    var posted = book.Wrecks(t0 + days, days, 9, 9, new Random(1)).Single();
+    book.Rules.OwnerAway = _ => true;
+    var posted = Hunted(book, t0).Single();
     book.Grids.TryAdd(posted.Id, posted);
     book.Targets[70] = new ContractTarget('w', posted.Id, 1, posted.Blocks, posted.Position)
     {
         Owner = posted.Owner,
     };
-    Check(!book.Wrecks(t0 + days, days, 9, 9, new Random(1)).Any(), "not posted twice");
+    Check(!Hunted(book, t0).Any(), "not posted twice");
     Check(!book.IsGone(1, t0 + days), "not gone while it sleeps");
     var restarted = new ContractBook(goneAfter)
     {
@@ -973,7 +1041,8 @@ Check(!ContractBook.IsWreck(ContractGridFlags.Derelict, week * 52, week), "a der
     };
     restarted.LoadTargets(book.SerializeTargets());
     restarted.LoadGrids(book.SerializeGrids(), t0 + days);
-    Check(!restarted.Wrecks(t0 + days, days, 9, 9, new Random(1)).Any(), "nor after a restart");
+    restarted.Rules.OwnerAway = _ => true;
+    Check(!Hunted(restarted, t0).Any(), "nor after a restart");
     Check(
         restarted.Grids[1].Node == ""
             && restarted.Grids[1].Flags.HasFlag(ContractGridFlags.Unpowered),

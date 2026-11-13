@@ -1917,18 +1917,18 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         0,
-        description: "Open salvage contracts kept at each station.",
+        description: "Open wreck and area cleanup contracts kept at each station with a shipyard, the most valuable first.",
         Parent = "contracts"
     )]
-    public int ContractSalvagePerStation
+    public int ContractHuntPerStation
     {
         get;
         set => SetField(ref field, value);
-    } = 2;
+    } = 10;
 
     [IntOption(
         1,
-        description: "Least blocks of an unowned, movable grid within the bounty range that gets a salvage contract.",
+        description: "Least blocks of a wreck; a smaller grid of nobody or a wreck faction is debris.",
         Parent = "contracts"
     )]
     public int ContractSalvageMinBlocks
@@ -1938,7 +1938,7 @@ public class OctahedronConfig : PluginConfig
     } = 20;
 
     [StringOption(
-        description: "Tags of the NPC factions whose grids are wrecks, comma separated: they get salvage contracts, not bounties.",
+        description: "Tags of the NPC factions whose grids are wrecks, comma separated: they get wreck contracts, not bounties.",
         Parent = "contracts"
     )]
     public string ContractSalvageFactionTags
@@ -1947,12 +1947,12 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = "WRECKS";
 
-    [LongOption(
+    [IntOption(
         0,
-        description: "Reward of a salvage contract per tonne of the derelict (SC).",
+        description: "A wreck or area contract pays this share of what its blocks' components are worth at the market's reference prices (%).",
         Parent = "contracts"
     )]
-    public long ContractSalvageRewardPerTonne
+    public int ContractWreckValuePercent
     {
         get;
         set => SetField(ref field, value);
@@ -1960,7 +1960,7 @@ public class OctahedronConfig : PluginConfig
 
     [DoubleOption(
         1,
-        description: "A derelict this close to the station's shipyard grid (m, center to center) is delivered.",
+        description: "A wreck this close to the station's shipyard grid (m, center to center) is delivered.",
         Parent = "contracts"
     )]
     public double ContractSalvageRadius
@@ -1971,7 +1971,7 @@ public class OctahedronConfig : PluginConfig
 
     [IntOption(
         1,
-        description: "Time limit of a salvage contract, in minutes.",
+        description: "Time limit of a wreck or area contract, in minutes, plus a minute for every 3 km from the station.",
         Parent = "contracts"
     )]
     public int ContractSalvageMinutes
@@ -1980,38 +1980,82 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 180;
 
-    [IntOption(
+    [LongOption(
         0,
-        description: "On a cluster: open salvage contracts kept on wrecks in offline partitions, at any distance from a station.",
+        description: "Least reward of a wreck or area contract (SC).",
         Parent = "contracts"
     )]
-    public int ContractWreckContracts
+    public long ContractWreckMinReward
     {
         get;
         set => SetField(ref field, value);
-    } = 5;
+    } = 2_000;
 
-    [IntOption(
-        1,
-        description: "Wreck contracts pick at random from this many of the biggest wrecks, by blocks.",
+    [DoubleOption(
+        0,
+        description: "A player's grid without power is a wreck once its owner and their faction have been away for this many days.",
         Parent = "contracts"
     )]
-    public int ContractWreckPool
+    public double ContractWreckOwnerAwayDays
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 30;
+
+    [IntOption(
+        0,
+        description: "An NPC's grid is a wreck once it has been without power, or a movable one without a working cockpit or remote control, for this many minutes.",
+        Parent = "contracts"
+    )]
+    public int ContractNpcWreckMinutes
     {
         get;
         set => SetField(ref field, value);
     } = 10;
 
-    [DoubleOption(
+    [IntOption(
         0,
-        description: "A movable grid without power counts as a wreck once its partition has been offline for this many days.",
+        description: "A bot's grid (ShipyardBotSteamIds) is a wreck once it has been without power for this many minutes.",
         Parent = "contracts"
     )]
-    public double ContractWreckOfflineDays
+    public int ContractBotWreckMinutes
     {
         get;
         set => SetField(ref field, value);
-    } = 7;
+    } = 60;
+
+    [DoubleOption(
+        1,
+        description: "Debris pieces this close to each other (m) make one area cleanup contract.",
+        Parent = "contracts"
+    )]
+    public double ContractDebrisLinkMeters
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 300;
+
+    [IntOption(
+        1,
+        description: "Least pieces of an area cleanup contract, unless they are worth the least reward.",
+        Parent = "contracts"
+    )]
+    public int ContractDebrisMinPieces
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 5;
+
+    [DoubleOption(
+        100,
+        description: "Largest radius of an area cleanup contract (m).",
+        Parent = "contracts"
+    )]
+    public double ContractDebrisMaxRadius
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 2_000;
 
     [StringOption(
         description: "Name of the text panels that show the faction leaderboard (case-insensitive). Empty: no leaderboard.",

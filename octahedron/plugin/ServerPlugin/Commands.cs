@@ -161,12 +161,22 @@ public sealed class Commands : CommandModule
 
     [Command(
         "scrap",
-        "A bot removes a ship of its own that it gave up",
-        "!oct scrap <grid id>: bots only. The ship must be the bot's alone and on this node, with nobody else "
-            + "seated in it. The bot is put out of its seat."
+        "Has the shipyard take apart the wreck you just towed in for a contract; a bot removes a ship of its own",
+        "!oct scrap: within a few minutes of handing in a wreck contract at a shipyard, the station takes the wreck "
+            + "apart instead of you keeping it; the reward stays yours. !oct scrap <grid id>: bots only. The ship must "
+            + "be the bot's alone and on this node, with nobody else seated in it. The bot is put out of its seat."
     )]
     [Permission(MyPromoteLevel.None)]
-    public string Scrap(long ship) => BotShips.Scrap(Context.Caller.IdentityId, ship);
+    public string Scrap(params string[] ship) =>
+        ship switch
+        {
+            [] => ContractGrids.ScrapHandedIn(Context.Caller.IdentityId),
+            [var id] when long.TryParse(id, out var grid) => BotShips.Scrap(
+                Context.Caller.IdentityId,
+                grid
+            ),
+            _ => "!oct scrap, or a bot's !oct scrap <grid id>.",
+        };
 
     [Command(
         "shipyard clear",

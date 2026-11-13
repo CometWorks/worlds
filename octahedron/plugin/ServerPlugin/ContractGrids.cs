@@ -48,16 +48,13 @@ internal static class ContractGrids
 
     // Movable and nobody's, or a wreck faction's
     private static bool Derelict(MyCubeGrid grid) =>
-        !grid.IsStatic
-        && !IsStation(grid)
-        && (
-            grid.BigOwners.Count == 0
-            || (
-                MySession.Static.Players.IdentityIsNpc(grid.BigOwners[0])
-                && WreckTags.Contains(
-                    MySession.Static.Factions.GetPlayerFaction(grid.BigOwners[0])?.Tag ?? ""
-                )
-            )
+        !grid.IsStatic && !IsStation(grid) && (grid.BigOwners.Count == 0 || WreckFaction(grid));
+
+    private static bool WreckFaction(MyCubeGrid grid) =>
+        grid.BigOwners.Count > 0
+        && MySession.Static.Players.IdentityIsNpc(grid.BigOwners[0])
+        && WreckTags.Contains(
+            MySession.Static.Factions.GetPlayerFaction(grid.BigOwners[0])?.Tag ?? ""
         );
 
     private static bool OwnedBy(MyCubeGrid grid, long factionId) =>
@@ -189,17 +186,42 @@ internal static class ContractGrids
             row.Flags |= ContractGridFlags.Bounty;
             row.Threat = ThreatScore.Grid(grid);
         }
-        if (near && big && Derelict(grid))
+        if (big && Derelict(grid))
             row.Flags |= ContractGridFlags.Derelict;
 
         // A dead hull docked to a live ship or a base is no wreck, but a wreck on a tug stays one
-        if (big && !group.Any(g => IsStation(g) || OwnedBy(g, octId) || LaneComputer(g)))
+        if (!group.Any(g => IsStation(g) || OwnedBy(g, octId) || LaneComputer(g)))
         {
-            var terminals = group.SelectMany(g => g.GetFatBlocks<MyTerminalBlock>()).ToList();
-            if (!terminals.Any(Producing))
-                row.Flags |= ContractGridFlags.Unpowered;
-            if (group.All(g => g.BigOwners.Count == 0) && !terminals.Any(b => b.IsFunctional))
-                row.Flags |= ContractGridFlags.Wreck;
+            var abandoned = group.All(g => g.BigOwners.Count == 0) || WreckFaction(grid);
+            if (!big)
+            {
+                if (abandoned)
+                    row.Flags |= ContractGridFlags.Debris;
+            }
+            else
+            {
+                var terminals = group.SelectMany(g => g.GetFatBlocks<MyTerminalBlock>()).ToList();
+                if (!terminals.Any(Producing))
+                    row.Flags |= ContractGridFlags.Unpowered;
+                if (group.All(g => g.BigOwners.Count == 0) && !terminals.Any(b => b.IsFunctional))
+                    row.Flags |= ContractGridFlags.Wreck;
+                var owner = grid.BigOwners.FirstOrDefault();
+                if (abandoned)
+                    row.Flags |= ContractGridFlags.Abandoned;
+                else if (MySession.Static.Players.IdentityIsNpc(owner))
+                {
+                    row.Flags |= ContractGridFlags.Npc;
+                    if (
+                        !grid.IsStatic
+                        && !terminals.Any(b =>
+                            b is MyShipController { EnableShipControl: true } && b.IsFunctional
+                        )
+                    )
+                        row.Flags |= ContractGridFlags.Disabled;
+                }
+                else if (ShipyardOrders.IsBot(owner))
+                    row.Flags |= ContractGridFlags.Bot;
+            }
         }
         if (row.Flags == ContractGridFlags.None && !isWatched)
             return row;
@@ -261,7 +283,8 @@ internal static class ContractGrids
             {
                 var mounted = stack.GetGroupInfo(i).MountedCount;
                 if (mounted > 0)
-                    milli += mounted * Price(block.BlockDefinition.Components[i].DeconstructItem.Id);
+                    milli +=
+                        mounted * Price(block.BlockDefinition.Components[i].DeconstructItem.Id);
             }
             if (!block.StockpileEmpty)
                 foreach (var item in block.GetObjectBuilder().ConstructionStockpile.Items)
@@ -312,6 +335,72 @@ internal static class ContractGrids
             && Plugin.Simulated(grid)
         )
             ShipyardOrders.Tow(station, player, grid);
+    }
+
+    // Wreck hunts handed in here that their player may still have scrapped: grid -> player, station
+    private static Dictionary<long, (long Player, string Station)> scrappable = [];
+
+    public static void Scrappable(Dictionary<long, (long Player, string Station)> grids) =>
+        scrappable = grids;
+
+    /// <summary>
+    /// !oct scrap from a player: the wreck they just handed in, if this node has it, goes to pieces.
+    /// Its components and what it holds go into OCT's stock at the station; the reward is paid
+    /// already.
+    /// </summary>
+    public static string ScrapHandedIn(long player)
+    {
+        var mine = scrappable.Where(s => s.Value.Player == player).ToList();
+        if (mine.Count == 0)
+            return "You have no wreck to scrap: towing one in for a contract lets you, for a while.";
+        foreach (var (id, (_, station)) in mine)
+        {
+            if (
+                !MyEntities.TryGetEntityById(id, out var entity)
+                || entity is not MyCubeGrid { MarkedForClose: false } grid
+                || !Plugin.Simulated(grid)
+            )
+                continue;
+            var group = Attached(grid);
+            if (
+                !group.Any(g => g.BigOwners.Contains(player))
+                && group.Any(g => g.BigOwners.Count > 0)
+            )
+                return $"'{grid.DisplayName}' is not yours any more.";
+            if (group.Any(g => g.OccupiedBlocks.Count > 0))
+                return $"Someone sits in '{grid.DisplayName}'.";
+            var parts = new Dictionary<VRage.Game.MyDefinitionId, VRage.MyFixedPoint>();
+            void Count(VRage.Game.MyDefinitionId item, VRage.MyFixedPoint amount) =>
+                parts[item] = (parts.TryGetValue(item, out var had) ? had : 0) + amount;
+            foreach (var block in group.SelectMany(g => g.GetBlocks()))
+            {
+                var stack = block.ComponentStack;
+                for (var i = 0; i < stack.GroupCount; i++)
+                    if (stack.GetGroupInfo(i).MountedCount is var mounted and > 0)
+                        Count(block.BlockDefinition.Components[i].DeconstructItem.Id, mounted);
+                if (!block.StockpileEmpty)
+                    foreach (var item in block.GetObjectBuilder().ConstructionStockpile.Items)
+                        Count(item.PhysicalContent.GetObjectId(), item.Amount);
+                if (block.FatBlock == null)
+                    continue;
+                for (var i = 0; i < block.FatBlock.InventoryCount; i++)
+                    foreach (var item in block.FatBlock.GetInventory(i).GetItems())
+                        Count(item.Content.GetObjectId(), item.Amount);
+            }
+            var name = grid.DisplayName;
+            foreach (var member in group)
+                member.Close();
+            scrappable.Remove(id);
+            foreach (var (item, amount) in parts)
+            {
+                Market.AddStock(Guid.NewGuid(), station, Stations.ItemName(item), amount.RawValue);
+            }
+            Plugin.Log.Info(
+                $"Contracts: {player} scrapped the handed-in wreck {id} '{name}' at {station}, {parts.Count} kinds of items to OCT"
+            );
+            return $"{station}'s shipyard took '{name}' apart. Your reward stays yours.";
+        }
+        return "Your wreck isn't here: stand near it at the shipyard.";
     }
 
     // Scrapped, with its rotor and piston parts; a tug's connector lets go of it
