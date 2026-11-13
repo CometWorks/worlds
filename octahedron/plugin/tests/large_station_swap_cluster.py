@@ -105,8 +105,9 @@ def put_sections(**sections: str) -> None:
 
 
 def new_cell(grid: str) -> tuple[float, float, float]:
-    """The world position of a cell the swap builds where the old station has no block: 3 cells into the new
-    station's +x arm, beyond the old one's end"""
+    """Where a character stands in a cell the swap builds: an empty cell of the old station above one of its blocks
+    that the new station keeps, so the station's gravity holds the character there. The cell's floor, in the world.
+    """
     world = (
         ET.parse(sx.rig.WORLD / "SANDBOX_0_0_0_.sbs").getroot().find("SectorObjects")
     )
@@ -126,26 +127,31 @@ def new_cell(grid: str) -> tuple[float, float, float]:
         for e in cfg_entries("StationPatches", "StationPatchEntry")
         if e.findtext("Id") == f"{SWAP}-{tag}"
     )
-    new = ET.fromstring(gzip.decompress((sx.STORAGE / name).read_bytes()))
-    cells = {
-        tuple(int(b.find("Min").get(a, 0)) for a in "xyz")
-        for b in new.iter("MyObjectBuilder_CubeBlock")
-        if b.find("Min") is not None
-    }
-    old = {
-        tuple(int(b.find("Min").get(a, 0)) for a in "xyz")
-        for b in found.find("CubeBlocks")
-        if b.find("Min") is not None
-    }
-    x = 16
+
+    def mins(blocks):
+        return {
+            tuple(int(b.find("Min").get(a, 0)) for a in "xyz")
+            for b in blocks
+            if b.find("Min") is not None
+        }
+
+    new = mins(
+        ET.fromstring(gzip.decompress((sx.STORAGE / name).read_bytes())).iter(
+            "MyObjectBuilder_CubeBlock"
+        )
+    )
+    old = mins(found.find("CubeBlocks"))
     cell = min(
-        (c for c in cells if c not in old and c[0] == x),
-        key=lambda c: abs(c[1]) + abs(c[2]),
+        (
+            c
+            for c in new - old
+            if (c[0], c[1] - 1, c[2]) in old and (c[0], c[1] + 1, c[2]) not in old
+        ),
+        key=lambda c: abs(c[0]) + abs(c[2]),
     )
-    return tuple(
-        p[i] + 2.5 * (cell[0] * r[i] + cell[1] * u[i] - cell[2] * f[i])
-        for i in range(3)
-    )
+    # The cell's floor: half a cell below its center, a little above it
+    x, y, z = cell[0], cell[1] - 0.45, cell[2]
+    return tuple(p[i] + 2.5 * (x * r[i] + y * u[i] - z * f[i]) for i in range(3))
 
 
 def build_character_probe() -> str:
@@ -452,7 +458,9 @@ def run(bench) -> None:
     cprobe(api, f"seatin {seat[1]}", "SEAT")
     check(
         "the client sits in it",
-        f"PILOT {body}" in cprobe(api, f"pilot {seat[1]}", "PILOT")[0],
+        until(
+            lambda: cprobe(api, f"pilot {seat[1]}", r"PILOT (\d+)")[1] == str(body), 30
+        ),
     )
 
     # ============================== Moon: staged, stopped, started ==============================
@@ -464,7 +472,9 @@ def run(bench) -> None:
     loaded = cleared = None
     while time.monotonic() - started < 900:
         found = holder("Moon Station")
-        if not found and not loaded:
+        if not found and not (
+            loaded and loaded.get("outcome", "").startswith("requested")
+        ):
             rows = cluster.get("/registry/partitions/offline").get("Partitions", [])
             part = next(
                 (
