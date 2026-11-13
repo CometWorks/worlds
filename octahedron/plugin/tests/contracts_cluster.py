@@ -358,6 +358,8 @@ def run(bench) -> None:
                 found[current].append((int(m[1]), m[2], m[3], number(m[4]), m[5]))
             elif KNOWN_LINE.search(line):
                 known = line
+            elif line.startswith("Debris pieces"):
+                print(line, flush=True)
         return found, known
 
     def post() -> dict[str, list[tuple]]:
@@ -676,8 +678,12 @@ def run(bench) -> None:
         balances(api) == before and not grid_owner("Test Derelict"),
         f"{balances(api)} owner {grid_owner('Test Derelict')}",
     )
-    # Stripped before the tow: its arm on the rotor cut off
-    delete("Derelict Arm")
+    # Stripped before the tow: its arm on the rotor cut off (grid-delete refuses a grid on a rotor)
+    Path(f"{wa.lc.PLAN}.strip").write_text(f"{GRIDS['Derelict Arm']}\n")
+    check(
+        "the arm cut off on its node",
+        wait_until(lambda: Path(f"{wa.lc.PLAN}.stripped").exists(), 60, "the arm gone"),
+    )
     time.sleep(70)
     # The radius grows instead of the grid moving
     reconfigure(ContractSalvageRadius=1500)
@@ -1069,6 +1075,8 @@ def main() -> int:
     os.environ["CLUSTER_EXTRA_PLUGINS"] = os.environ["CLUSTER_EXTRA_PLUGINS"].replace(
         f"wa:{wa.lc.PLUGINS / 'ConsoleProbe'}", str(wa.lc.PLUGINS / "ConsoleProbe")
     )
+    Path(f"{wa.lc.PLAN}.strip").unlink(missing_ok=True)
+    Path(f"{wa.lc.PLAN}.stripped").unlink(missing_ok=True)
     Path(f"{wa.lc.PLAN}.convert").unlink(missing_ok=True)
     Path(f"{wa.lc.PLAN}.converted").unlink(missing_ok=True)
     Path(f"{wa.lc.PLAN}.tow").unlink(missing_ok=True)
