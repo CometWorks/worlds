@@ -177,7 +177,7 @@ FREE_TOOLS_COUNT = 4
 # fails here instead of silently losing the feature.
 PLUGIN_BLOCKS = (
     "Console Block - Station ShipyardProjection",
-    "Button Panel - Station ShipyardConfirm",
+    "Button Panel - Book Shipyard",
     "Text Panel - Station ShipyardQueue",
     "Billboard LCD Ship Build Details",
 )

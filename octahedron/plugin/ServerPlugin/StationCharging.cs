@@ -166,6 +166,8 @@ internal static class StationCharging
         List<MyCubeGrid> grids
     )
     {
+        if (grids.Any(Police.Resupplied))
+            return;
         var tanks = grids
             .SelectMany(g => g.GetFatBlocks<MyGasTank>())
             .Where(t =>

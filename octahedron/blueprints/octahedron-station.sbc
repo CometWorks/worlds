@@ -1263,61 +1263,13 @@
               <ColorMaskHSV x="0" y="-0.8" z="0.15" />
               <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
             </MyObjectBuilder_CubeBlock>
-            <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_ConveyorSorter">
-              <SubtypeName>LargeBlockConveyorSorter</SubtypeName>
-              <EntityId>132667889010476506</EntityId>
+            <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_ConveyorConnector">
+              <SubtypeName>ConveyorTubeDuct</SubtypeName>
+              <EntityId>120997166292498712</EntityId>
               <Min x="0" y="5" z="9" />
-              <BlockOrientation Forward="Up" Up="Forward" />
+              <BlockOrientation Forward="Right" Up="Forward" />
               <ColorMaskHSV x="0" y="-0.8" z="0.15" />
               <SkinSubtypeId>Concrete_Armor</SkinSubtypeId>
-              <Owner>196498773398234354</Owner>
-              <ShareMode>Faction</ShareMode>
-              <ComponentContainer>
-                <Components>
-                  <ComponentData>
-                    <TypeId>MyInventoryBase</TypeId>
-                    <Component xsi:type="MyObjectBuilder_Inventory">
-                      <CanPutItems>true</CanPutItems>
-                      <Items />
-                      <nextItemId>0</nextItemId>
-                      <Volume>1</Volume>
-                      <Mass>9223372036854.775807</Mass>
-                      <MaxItemCount>2147483647</MaxItemCount>
-                      <Size xsi:nil="true" />
-                      <InventoryFlags>CanSend</InventoryFlags>
-                      <RemoveEntityOnEmpty>false</RemoveEntityOnEmpty>
-                    </Component>
-                  </ComponentData>
-                  <ComponentData>
-                    <TypeId>MyModStorageComponent</TypeId>
-                    <Component xsi:type="MyObjectBuilder_ModStorageComponent">
-                      <Storage>
-                        <dictionary>
-                          <item>
-                            <Key>cd844fa4-4ac0-4d9c-8a01-73416b225772</Key>
-                            <Value>d8767114-7b3d-4ba4-b959-abe634b00642
-</Value>
-                          </item>
-                        </dictionary>
-                      </Storage>
-                    </Component>
-                  </ComponentData>
-                </Components>
-              </ComponentContainer>
-              <CustomName>Conveyor Sorter - Station Lounge algae push to food processor</CustomName>
-              <ShowOnHUD>false</ShowOnHUD>
-              <ShowInTerminal>true</ShowInTerminal>
-              <ShowInToolbarConfig>true</ShowInToolbarConfig>
-              <ShowInInventory>true</ShowInInventory>
-              <NumberInGrid>1</NumberInGrid>
-              <IsSurvivalModeForced>true</IsSurvivalModeForced>
-              <Enabled>true</Enabled>
-              <IsWhiteList>true</IsWhiteList>
-              <DefinitionIds>
-                <SerializableDefinitionId Type="MyObjectBuilder_PhysicalObject" Subtype="Algae" />
-              </DefinitionIds>
-              <DefinitionTypes />
-              <DrainAll>true</DrainAll>
             </MyObjectBuilder_CubeBlock>
             <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_CargoContainer">
               <SubtypeName>LargeBlockCargoTerminal</SubtypeName>
@@ -20756,44 +20708,255 @@ Button!</Text>
               <SkinSubtypeId>Retrofuture_Armor</SkinSubtypeId>
             </MyObjectBuilder_CubeBlock>
             <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_ButtonPanel">
-              <SubtypeName>LargeButtonPanelPedestal</SubtypeName>
-              <EntityId>86728968246567525</EntityId>
+              <SubtypeName>LargeSciFiButtonPanel</SubtypeName>
+              <EntityId>72646550236789432</EntityId>
               <Min x="4" y="7" z="0" />
               <BlockOrientation Forward="Right" Up="Up" />
-              <ColorMaskHSV x="0" y="-0.8" z="0" />
-              <SkinSubtypeId>Retrofuture_Armor</SkinSubtypeId>
+              <ColorMaskHSV x="0.7777778" y="0.2" z="-0.08" />
+              <SkinSubtypeId>Battered_Armor</SkinSubtypeId>
               <Owner>196498773398234354</Owner>
               <ShareMode>Faction</ShareMode>
               <ComponentContainer>
                 <Components>
                   <ComponentData>
-                    <TypeId>MyModStorageComponent</TypeId>
-                    <Component xsi:type="MyObjectBuilder_ModStorageComponent">
-                      <Storage>
-                        <dictionary>
-                          <item>
-                            <Key>cd844fa4-4ac0-4d9c-8a01-73416b225772</Key>
-                            <Value>18d9a1a0-2aee-4518-a5fd-08da1c9b2f32
-
-[Toolbar]
-
-[ButtonPanel]
-Name0:Confirm Shipyard Order
-</Value>
-                          </item>
-                        </dictionary>
-                      </Storage>
+                    <TypeId>MyMultiTextPanelComponent</TypeId>
+                    <Component xsi:type="MyObjectBuilder_MultiTextPanelComponent">
+                      <TextPanelsContents>
+                        <MySerializedTextPanelData>
+                          <ChangeInterval>0</ChangeInterval>
+                          <SelectedImages><string>Textures\FactionLogo\Unknown.dds</string></SelectedImages><Font Type="MyObjectBuilder_FontDefinition" Subtype="Monospace" />
+                          <FontSize>0.4</FontSize>
+                          <Text />
+                          <ShowText>NONE</ShowText>
+                          <FontColor>
+                            <PackedValue>4294967295</PackedValue>
+                            <X>255</X>
+                            <Y>255</Y>
+                            <Z>255</Z>
+                            <R>255</R>
+                            <G>255</G>
+                            <B>255</B>
+                            <A>255</A>
+                          </FontColor>
+                          <BackgroundColor>
+                            <PackedValue>4278190080</PackedValue>
+                            <X>0</X>
+                            <Y>0</Y>
+                            <Z>0</Z>
+                            <R>0</R>
+                            <G>0</G>
+                            <B>0</B>
+                            <A>255</A>
+                          </BackgroundColor>
+                          <CurrentShownTexture>0</CurrentShownTexture>
+                          <Alignment>2</Alignment>
+                          <ContentType>TEXT_AND_IMAGE</ContentType>
+                          <SelectedScript />
+                          <TextPadding>0</TextPadding>
+                          <PreserveAspectRatio>true</PreserveAspectRatio><ScriptBackgroundColor>
+                            <PackedValue>4288108544</PackedValue>
+                            <X>0</X>
+                            <Y>88</Y>
+                            <Z>151</Z>
+                            <R>0</R>
+                            <G>88</G>
+                            <B>151</B>
+                            <A>255</A>
+                          </ScriptBackgroundColor>
+                          <ScriptForegroundColor>
+                            <PackedValue>4294962611</PackedValue>
+                            <X>179</X>
+                            <Y>237</Y>
+                            <Z>255</Z>
+                            <R>179</R>
+                            <G>237</G>
+                            <B>255</B>
+                            <A>255</A>
+                          </ScriptForegroundColor>
+                          <Sprites>
+                            <Length>0</Length>
+                          </Sprites>
+                          <UpdateStartOfFirstTexture>1446560</UpdateStartOfFirstTexture>
+                        </MySerializedTextPanelData>
+                        <MySerializedTextPanelData>
+                          <ChangeInterval>0</ChangeInterval>
+                          <SelectedImages><string>MyObjectBuilder_PhysicalGunObject/WelderItem</string></SelectedImages><Font Type="MyObjectBuilder_FontDefinition" Subtype="Monospace" />
+                          <FontSize>0.4</FontSize>
+                          <Text />
+                          <ShowText>NONE</ShowText>
+                          <FontColor>
+                            <PackedValue>4294967295</PackedValue>
+                            <X>255</X>
+                            <Y>255</Y>
+                            <Z>255</Z>
+                            <R>255</R>
+                            <G>255</G>
+                            <B>255</B>
+                            <A>255</A>
+                          </FontColor>
+                          <BackgroundColor>
+                            <PackedValue>4278190080</PackedValue>
+                            <X>0</X>
+                            <Y>0</Y>
+                            <Z>0</Z>
+                            <R>0</R>
+                            <G>0</G>
+                            <B>0</B>
+                            <A>255</A>
+                          </BackgroundColor>
+                          <CurrentShownTexture>0</CurrentShownTexture>
+                          <Alignment>2</Alignment>
+                          <ContentType>TEXT_AND_IMAGE</ContentType>
+                          <SelectedScript />
+                          <TextPadding>0</TextPadding>
+                          <PreserveAspectRatio>true</PreserveAspectRatio><ScriptBackgroundColor>
+                            <PackedValue>4288108544</PackedValue>
+                            <X>0</X>
+                            <Y>88</Y>
+                            <Z>151</Z>
+                            <R>0</R>
+                            <G>88</G>
+                            <B>151</B>
+                            <A>255</A>
+                          </ScriptBackgroundColor>
+                          <ScriptForegroundColor>
+                            <PackedValue>4294962611</PackedValue>
+                            <X>179</X>
+                            <Y>237</Y>
+                            <Z>255</Z>
+                            <R>179</R>
+                            <G>237</G>
+                            <B>255</B>
+                            <A>255</A>
+                          </ScriptForegroundColor>
+                          <Sprites>
+                            <Length>0</Length>
+                          </Sprites>
+                          <UpdateStartOfFirstTexture>1446560</UpdateStartOfFirstTexture>
+                        </MySerializedTextPanelData>
+                        <MySerializedTextPanelData>
+                          <ChangeInterval>0</ChangeInterval>
+                          <SelectedImages><string>Textures\FactionLogo\DLC\CoreSystems.dds</string></SelectedImages><Font Type="MyObjectBuilder_FontDefinition" Subtype="Monospace" />
+                          <FontSize>0.4</FontSize>
+                          <Text />
+                          <ShowText>NONE</ShowText>
+                          <FontColor>
+                            <PackedValue>4294967295</PackedValue>
+                            <X>255</X>
+                            <Y>255</Y>
+                            <Z>255</Z>
+                            <R>255</R>
+                            <G>255</G>
+                            <B>255</B>
+                            <A>255</A>
+                          </FontColor>
+                          <BackgroundColor>
+                            <PackedValue>4278190080</PackedValue>
+                            <X>0</X>
+                            <Y>0</Y>
+                            <Z>0</Z>
+                            <R>0</R>
+                            <G>0</G>
+                            <B>0</B>
+                            <A>255</A>
+                          </BackgroundColor>
+                          <CurrentShownTexture>0</CurrentShownTexture>
+                          <Alignment>2</Alignment>
+                          <ContentType>TEXT_AND_IMAGE</ContentType>
+                          <SelectedScript />
+                          <TextPadding>0</TextPadding>
+                          <PreserveAspectRatio>true</PreserveAspectRatio><ScriptBackgroundColor>
+                            <PackedValue>4288108544</PackedValue>
+                            <X>0</X>
+                            <Y>88</Y>
+                            <Z>151</Z>
+                            <R>0</R>
+                            <G>88</G>
+                            <B>151</B>
+                            <A>255</A>
+                          </ScriptBackgroundColor>
+                          <ScriptForegroundColor>
+                            <PackedValue>4294962611</PackedValue>
+                            <X>179</X>
+                            <Y>237</Y>
+                            <Z>255</Z>
+                            <R>179</R>
+                            <G>237</G>
+                            <B>255</B>
+                            <A>255</A>
+                          </ScriptForegroundColor>
+                          <Sprites>
+                            <Length>0</Length>
+                          </Sprites>
+                          <UpdateStartOfFirstTexture>1446560</UpdateStartOfFirstTexture>
+                        </MySerializedTextPanelData>
+                        <MySerializedTextPanelData>
+                          <ChangeInterval>0</ChangeInterval>
+                          <SelectedImages><string>MyObjectBuilder_PhysicalGunObject/AngleGrinderItem</string></SelectedImages><Font Type="MyObjectBuilder_FontDefinition" Subtype="Monospace" />
+                          <FontSize>0.4</FontSize>
+                          <Text />
+                          <ShowText>NONE</ShowText>
+                          <FontColor>
+                            <PackedValue>4294967295</PackedValue>
+                            <X>255</X>
+                            <Y>255</Y>
+                            <Z>255</Z>
+                            <R>255</R>
+                            <G>255</G>
+                            <B>255</B>
+                            <A>255</A>
+                          </FontColor>
+                          <BackgroundColor>
+                            <PackedValue>4278190080</PackedValue>
+                            <X>0</X>
+                            <Y>0</Y>
+                            <Z>0</Z>
+                            <R>0</R>
+                            <G>0</G>
+                            <B>0</B>
+                            <A>255</A>
+                          </BackgroundColor>
+                          <CurrentShownTexture>0</CurrentShownTexture>
+                          <Alignment>2</Alignment>
+                          <ContentType>TEXT_AND_IMAGE</ContentType>
+                          <SelectedScript />
+                          <TextPadding>0</TextPadding>
+                          <PreserveAspectRatio>true</PreserveAspectRatio><ScriptBackgroundColor>
+                            <PackedValue>4288108544</PackedValue>
+                            <X>0</X>
+                            <Y>88</Y>
+                            <Z>151</Z>
+                            <R>0</R>
+                            <G>88</G>
+                            <B>151</B>
+                            <A>255</A>
+                          </ScriptBackgroundColor>
+                          <ScriptForegroundColor>
+                            <PackedValue>4294962611</PackedValue>
+                            <X>179</X>
+                            <Y>237</Y>
+                            <Z>255</Z>
+                            <R>179</R>
+                            <G>237</G>
+                            <B>255</B>
+                            <A>255</A>
+                          </ScriptForegroundColor>
+                          <Sprites>
+                            <Length>0</Length>
+                          </Sprites>
+                          <UpdateStartOfFirstTexture>1446560</UpdateStartOfFirstTexture>
+                        </MySerializedTextPanelData>
+                      </TextPanelsContents>
                     </Component>
                   </ComponentData>
-                </Components>
+                  </Components>
               </ComponentContainer>
-              <CustomName>Button Panel - Station ShipyardConfirm</CustomName>
+              <CustomName>Button Panel - Book Shipyard</CustomName>
               <ShowOnHUD>false</ShowOnHUD>
               <ShowInTerminal>true</ShowInTerminal>
               <ShowInToolbarConfig>true</ShowInToolbarConfig>
               <ShowInInventory>true</ShowInInventory>
-              <NumberInGrid>24</NumberInGrid>
-              <IsSurvivalModeForced>true</IsSurvivalModeForced>
+              <NumberInGrid>1</NumberInGrid>
               <Enabled>true</Enabled>
               <Toolbar>
                 <ToolbarType>Character</ToolbarType>
@@ -20801,12 +20964,24 @@ Name0:Confirm Shipyard Order
                 <Slots />
                 <SlotsGamepad />
               </Toolbar>
-              <AnyoneCanUse>true</AnyoneCanUse>
+              <AnyoneCanUse>false</AnyoneCanUse>
               <CustomButtonNames>
                 <dictionary>
                   <item>
                     <Key>0</Key>
-                    <Value>Confirm Shipyard Order</Value>
+                    <Value>Build</Value>
+                  </item>
+                  <item>
+                    <Key>1</Key>
+                    <Value>Repair</Value>
+                  </item>
+                  <item>
+                    <Key>2</Key>
+                    <Value>Hack</Value>
+                  </item>
+                  <item>
+                    <Key>3</Key>
+                    <Value>Grind</Value>
                   </item>
                 </dictionary>
               </CustomButtonNames>
@@ -23575,7 +23750,7 @@ for Physical SC!</Text>
             </MyObjectBuilder_CubeBlock>
             <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_LCDPanelsBlock">
               <SubtypeName>LargeBlockBillboard</SubtypeName>
-              <EntityId>108213502866376256</EntityId>
+              <EntityId>113092526492788534</EntityId>
               <Min x="5" y="7" z="0" />
               <BlockOrientation Forward="Left" Up="Up" />
               <ColorMaskHSV x="0.7777778" y="0.2" z="-0.08" />
@@ -23598,9 +23773,23 @@ for Physical SC!</Text>
                           <ChangeInterval>0</ChangeInterval>
                           <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
                           <FontSize>0.75</FontSize>
-                          <Text>Press the button to confirm build!
+                          <Text>Book the shipyard here.
 
-Ordered ship details...</Text>
+Buttons from the left:
+1. Build
+2. Repair
+3. Hack
+4. Grind
+
+Before pressing build
+load a blueprint into
+the holo table.
+
+You can book only one
+action at a time.
+
+Press the button again
+to cancel. Max 6 entires.</Text>
                           <ShowText>NONE</ShowText>
                           <FontColor>
                             <PackedValue>4285909247</PackedValue>
@@ -23649,26 +23838,29 @@ Ordered ship details...</Text>
                           <Sprites>
                             <Length>0</Length>
                           </Sprites>
-                          <UpdateStartOfFirstTexture>8245488</UpdateStartOfFirstTexture>
+                          <UpdateStartOfFirstTexture>1073040</UpdateStartOfFirstTexture>
                         </MySerializedTextPanelData>
                         <MySerializedTextPanelData>
                           <ChangeInterval>0</ChangeInterval>
                           <Font Type="MyObjectBuilder_FontDefinition" Subtype="Debug" />
-                          <FontSize>1.2</FontSize>
-                          <Text>Load a blueprint into
-the holo table in its
-terminal, then check
-the parts list. Press
-the button to order,
-press it again to
-cancel the build.
+                          <FontSize>1</FontSize>
+                          <Text>Book the shipyard here.
 
-Press without a
-blueprint to queue
-a repair time slot.
+Buttons from the left:
+1. Build
+2. Repair
+3. Hack
+4. Grind
 
-The queue holds at
-most 6 entries.</Text>
+Before pressing build
+load a blueprint into
+the holo table.
+
+You can book only one
+action at a time.
+
+Press the button again
+to cancel. Max 6 entires.</Text>
                           <ShowText>NONE</ShowText>
                           <FontColor>
                             <PackedValue>4285909247</PackedValue>
@@ -23717,7 +23909,7 @@ most 6 entries.</Text>
                           <Sprites>
                             <Length>0</Length>
                           </Sprites>
-                          <UpdateStartOfFirstTexture>8245488</UpdateStartOfFirstTexture>
+                          <UpdateStartOfFirstTexture>1073040</UpdateStartOfFirstTexture>
                         </MySerializedTextPanelData>
                       </TextPanelsContents>
                     </Component>

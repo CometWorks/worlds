@@ -191,7 +191,9 @@ Dashboard, **Create Cluster**, **Create and deploy**:
    file on every update. On a cluster the server list (`MasterOres`) is set in
    this editor, not with `!ore master add`, which reaches one node at most.
    The Performance plugin takes `config/performance.cfg`, which runs programmable
-   block scripts on worker threads: Deploy Octahedron stages it on every update,
+   block scripts on worker threads and turns on the PB time limits: 10 ms soft and
+   100 ms hard per PB, and the same per player in Enforce mode (needs Performance
+   1.17.0). Deploy Octahedron stages it on every update,
    and its smoke check fails on a node that doesn't report the per-thread
    instruction counter.
 5. **Start.** Watch the nodes come up on the cluster page.
