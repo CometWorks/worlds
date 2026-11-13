@@ -19,8 +19,8 @@ namespace OctahedronMod
     [MyTextSurfaceScript("OctahedronRadar", "Octahedron Radar")]
     public class StationRadar : MyTSSCommon
     {
-        // Arthur's Lcd Mod radar the screen ran before was set to 6 km
-        const double Range = 6000;
+        // 2 km since 2026-11-13; Arthur's Lcd Mod radar the screen ran before was set to 6 km
+        const double Range = 2000;
         const int MaxContacts = 40;
         const int MaxListed = 4;
 
@@ -187,7 +187,7 @@ namespace OctahedronMod
                 );
                 Text(
                     frame,
-                    $"{Range / 3000 * i:0} km",
+                    $"{Range / 3000 * i:0.#} km",
                     middle + new Vector2(r - 30 * scale, 2 * scale),
                     dim,
                     0.6f * scale
