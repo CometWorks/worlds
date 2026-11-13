@@ -200,7 +200,6 @@ def repair(a) -> None:
 
 def grind(a, b) -> None:
     """The player's ship in the volume is ground into their docked ship; nothing else is"""
-    scrap = place(a, "Scrap Me", "me", "in", "Component/SteelPlate=30")
     keep = place(a, "Keep Me", "me", "out")
     kept = info(a, keep)
     with Second():
@@ -216,8 +215,9 @@ def grind(a, b) -> None:
     check(docked is not None, f"the player's cargo ship at a connector: {docked}")
     hauler = docked[1] if docked else "0"
     check(st.wait_docked(a, hauler), "it docks")
-    # It comes with one plate; the slot may end, and fill it, before it docks
-    plates = 1.0
+    plates = float(info(a, hauler).get("plates", 0))
+    # The scrap comes in once the hauler is docked: 24 deconstructors grind it in seconds
+    scrap = place(a, "Scrap Me", "me", "in", "Component/SteelPlate=30")
     yard_id = rs.shipyard_id(a)
     check(
         wait_for(
@@ -266,12 +266,13 @@ def grind(a, b) -> None:
 
 def hack(a, b) -> None:
     """An NPC ship in the volume becomes the player's; an online player's and one sticking out don't"""
-    npc = place(a, "Pirate", "npc", "in:25")
-    across = place(a, "Too Long", "npc", "across:-25")
+    # Booked before the ships come in: an idle shipyard's sweep (SE-1383) clears NPC ships
     mark = sa.so_latest(a)
     reply = book(a, "hack")
     check("booked a Hack slot" in reply, f"booked: {reply}")
     check(wait_for(lambda: slot(a, "hack") is not None, 30), "it runs")
+    npc = place(a, "Pirate", "npc", "in:25")
+    across = place(a, "Too Long", "npc", "across:-25")
     told = sa.wait_chat(a, "sticks out of", 30, mark)
     check(told is not None, f"a ship sticking out is named: {told}")
     hacked = sa.wait_chat(a, slot_end("hack") + " 'Pirate' is yours", 60, mark)
@@ -289,11 +290,11 @@ def hack(a, b) -> None:
     remove(a, "Pirate", "Too Long")
 
     # Another player's ship, its owner online: not hacked
+    mark = sa.so_latest(a)
+    check("booked a Hack slot" in book(a, "hack"), "another hack slot")
     with Second():
         online = place(b, "Online Owner", "me", "in")
         theirs = me(b)
-    mark = sa.so_latest(a)
-    check("booked a Hack slot" in book(a, "hack"), "another hack slot")
     told = sa.wait_chat(a, "while its owner OctOther is online", 40, mark)
     check(told is not None, f"an online player's ship isn't hacked: {told}")
     time.sleep(CONFIG["ShipyardHackSeconds"] + 12)
