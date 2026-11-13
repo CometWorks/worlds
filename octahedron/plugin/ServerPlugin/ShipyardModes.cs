@@ -212,21 +212,24 @@ internal static partial class ShipyardOrders
                 }
                 break;
             case SlotKind.Grind:
-                // ToolCore's deconstructors don't always name their inventory to the grinding
-                // patch, so what they ground counts as work too
-                if (CollectGround(shipyard))
+                // ToolCore's deconstructors grind without naming their inventory to the grinding
+                // patch and put what they grind into the conveyors, so less left to grind in the
+                // volume is the work
+                var left = LeftToGrind(shipyard, volume, slot.Player);
+                if (CollectGround(shipyard) | (slot.Left >= 0 && left < slot.Left))
                 {
                     slot.LastWork = DateTime.UtcNow;
                     slot.Worked = true;
                     idle = false;
                 }
+                slot.Left = left;
                 if (idle)
                     EndGrind(
                         shipyard,
                         slot,
                         $"nothing was ground for {Config.ShipyardRepairIdleMinutes} min"
                     );
-                else if (slot.Worked && !LeftToGrind(shipyard, volume, slot.Player))
+                else if (slot.Worked && left <= 0)
                     EndGrind(shipyard, slot, "nothing is left to grind in its build volume");
                 else
                     Deconstruct(shipyard, true);
@@ -389,9 +392,13 @@ internal static partial class ShipyardOrders
         return any;
     }
 
-    private static bool LeftToGrind(MyCubeGrid shipyard, BuildVolume volume, long player) =>
+    // The integrity of what the player may grind in the volume
+    private static float LeftToGrind(MyCubeGrid shipyard, BuildVolume volume, long player) =>
         GridsInVolume(shipyard, volume)
-            .Any(g => Grindable(g, player) && g.GetBlocks().Any(b => Contains(volume, b)));
+            .Where(g => Grindable(g, player))
+            .SelectMany(g => g.GetBlocks())
+            .Where(b => Contains(volume, b))
+            .Sum(b => b.Integrity);
 
     // What was ground goes into the player's docked ships, the rest is sold for them as a turn's end does
     private static void EndGrind(

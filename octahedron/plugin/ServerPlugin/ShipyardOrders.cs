@@ -190,6 +190,9 @@ internal static partial class ShipyardOrders
         // A grind slot ground something: once nothing is left it ends
         public bool Worked;
 
+        // A grind slot: the integrity left to grind in the volume at the last check, -1 before it
+        public float Left = -1;
+
         // A hack slot: since when each ship qualifies, by its group's smallest grid id, and the
         // ships the player was told about once
         public readonly Dictionary<long, DateTime> Seen = [];
