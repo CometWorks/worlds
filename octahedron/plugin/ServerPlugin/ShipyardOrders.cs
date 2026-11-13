@@ -643,7 +643,9 @@ internal static partial class ShipyardOrders
         );
     }
 
-    // The button gets a toolbar item, its own On switch, so that clients let players press it
+    // The button gets a toolbar item, its own On switch, so that clients let players press it.
+    // The game names a button after the item put on it ("<panel> - Toggle block On"), which
+    // would lose the mode names ModeOf reads (SE-1409), so the button keeps its own name.
     private static void ArmButton(MyButtonPanel button)
     {
         var armed = false;
@@ -651,9 +653,12 @@ internal static partial class ShipyardOrders
         {
             if (button.Toolbar.GetItemAtIndex(i) != null)
                 continue;
+            var name = button.HasCustomButtonName(i) ? button.GetCustomButtonName(i) : null;
             var item = MyToolbarItemFactory.TerminalBlockObjectBuilderFromBlock(button);
             item._Action = "OnOff_On";
             button.Toolbar.SetItemAtIndex(i, MyToolbarItemFactory.CreateToolbarItem(item));
+            if (name != null)
+                button.SetCustomButtonName(name, i);
             armed = true;
         }
         if (armed)
