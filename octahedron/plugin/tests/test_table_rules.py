@@ -195,7 +195,7 @@ def first_order(a, b, oct_owner: str) -> None:
     check("Need" in parts and "Steel Plate" in parts, "billboard lists the parts")
     check("Order Test" in parts, "billboard names the ship")
     check(
-        "a repair time slot" in shown["how"] and "most 6 entries" in shown["how"],
+        "Book the shipyard here." in shown["how"] and "4. Grind" in shown["how"],
         f"the how-to screen shows the blueprint's text: {shown['how']!r}",
     )
     sector = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
@@ -229,6 +229,8 @@ def first_order(a, b, oct_owner: str) -> None:
     check("Repair slot" in reply, f"their press books a repair slot, no order: {reply}")
     text = settled(a, "queue", "OctOther (repair)")
     check("OctOther (repair)" in text, f"the slot is on the queue panel: {text!r}")
+    # The booking's confirmation holds the billboard for 5 s, then the parts list is back
+    settled(a, "details", "Order Test", 15)
     shown = screens(a)
     check(
         shown["holder"] == "OctTester"
