@@ -2086,10 +2086,24 @@ public sealed class ProbeCommands : CommandModule
             normal = -normal;
         if (flags.Contains("owned"))
         {
-            // The same ship again with the container on the gear's back
-            var back = Vector3I.Round(
+            // The same ship again with the container behind the gear, past its cells (a large
+            // gear is 1x2x3)
+            var d = Vector3I.Round(
                 Vector3D.TransformNormal(-normal, grid.PositionComp.WorldMatrixNormalizedInv)
             );
+            var back = gear.Min;
+            back.X =
+                d.X > 0 ? gear.Max.X + 1
+                : d.X < 0 ? gear.Min.X - 1
+                : gear.Min.X;
+            back.Y =
+                d.Y > 0 ? gear.Max.Y + 1
+                : d.Y < 0 ? gear.Min.Y - 1
+                : gear.Min.Y;
+            back.Z =
+                d.Z > 0 ? gear.Max.Z + 1
+                : d.Z < 0 ? gear.Min.Z - 1
+                : gear.Min.Z;
             grid.Close();
             ship.CubeBlocks.Add(
                 Block<MyObjectBuilder_CargoContainer>("LargeBlockSmallContainer", back, owner)
@@ -2130,7 +2144,7 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "gearstate",
-        "The ship's landing gear: GEARSTATE grid-id mode=Unlocked|ReadyToLock|Locked auto=yes|no to=entity-id|none",
+        "The ship's landing gear: GEARSTATE grid-id mode=Unlocked|ReadyToLock|Locked auto=yes|no to=entity-id|none owners=the grid's big owners",
         "!sprobe gearstate <grid-id>"
     )]
     [Permission(MyPromoteLevel.Admin)]
@@ -2141,7 +2155,8 @@ public sealed class ProbeCommands : CommandModule
             return $"NOGEAR {id}";
         var to = ((SpaceEngineers.Game.ModAPI.IMyLandingGear)gear).GetAttachedEntity();
         return $"GEARSTATE {id} mode={gear.LockMode} auto={(gear.AutoLock ? "yes" : "no")} "
-            + $"to={(to == null ? "none" : to.EntityId.ToString())}";
+            + $"to={(to == null ? "none" : to.EntityId.ToString())} "
+            + $"owners={string.Join(",", gear.CubeGrid.BigOwners)}";
     }
 
     [Command(
