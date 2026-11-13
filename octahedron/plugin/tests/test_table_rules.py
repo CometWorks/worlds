@@ -34,7 +34,6 @@ from se_remote import CallOp  # noqa: E402
 from test_client import log, ship_reply, tables, with_config  # noqa: E402
 
 SHOTS = os.environ.get("OCT_SHOTS")
-FIRST_LINE = "Press the button to confirm build!"
 # OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
 STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 CONFIG = {"FreeBuildCooldownMinutes": 0, "ShipyardTableMinutes": 600}
@@ -190,13 +189,13 @@ def first_order(a, b, oct_owner: str) -> None:
     check(shown["holder"] == "OctTester", f"the loader holds it: {shown['holder']}")
     parts = settled(a, "details", "Steel Plate")
     check(
-        parts.startswith(FIRST_LINE + "\n"),
-        f"billboard keeps its first line: {parts!r}",
+        parts.startswith("'Order Test'"),
+        f"the billboard starts with the ship (SE-1386): {parts!r}",
     )
     check("Need" in parts and "Steel Plate" in parts, "billboard lists the parts")
     check("Order Test" in parts, "billboard names the ship")
     check(
-        "a repair time slot" in shown["how"] and "most 6 entries" in shown["how"],
+        "Book the shipyard here." in shown["how"] and "4. Grind" in shown["how"],
         f"the how-to screen shows the blueprint's text: {shown['how']!r}",
     )
     sector = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
@@ -230,6 +229,8 @@ def first_order(a, b, oct_owner: str) -> None:
     check("Repair slot" in reply, f"their press books a repair slot, no order: {reply}")
     text = settled(a, "queue", "OctOther (repair)")
     check("OctOther (repair)" in text, f"the slot is on the queue panel: {text!r}")
+    # The booking's confirmation holds the billboard for 5 s, then the parts list is back
+    settled(a, "details", "Order Test", 15)
     shown = screens(a)
     check(
         shown["holder"] == "OctTester"
@@ -244,10 +245,10 @@ def first_order(a, b, oct_owner: str) -> None:
 
     reply = press(a)
     check("is in the queue" in reply, f"one press queues the ship: {reply}")
-    parts = settled(a, "details", "Ordered ship details")
+    parts = settled(a, "details", "Book the shipyard here.")
     check(
-        "Steel Plate" not in parts and parts.startswith(FIRST_LINE),
-        f"the parts list is gone: {parts!r}",
+        "Steel Plate" not in parts and "Book the shipyard here." in parts,
+        f"the parts list is gone, the instructions are back after the confirmation: {parts!r}",
     )
     shown = screens(a)
     check(shown["blueprint"] == "False", "the blueprint is off the table")
@@ -472,6 +473,7 @@ def main() -> int:
         link = folder / f"{id_}.sbm"
         link.unlink(missing_ok=True)
         link.symlink_to(pl.WORKSHOP / str(id_))
+    rig.link_mods(folder, rig.STATION_MODS)
     try:
         rig.start_server()
         a = rig.start_client(render=bool(SHOTS))

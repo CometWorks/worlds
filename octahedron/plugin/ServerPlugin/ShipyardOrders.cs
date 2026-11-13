@@ -98,7 +98,16 @@ internal static partial class ShipyardOrders
     private const int QueueColumns = 46;
     private const int QueueEntryLines = 2;
     private const string TableIdle = "Project,\nthen press\nButton!";
-    private const string DetailsIdle = "Ordered ship details...";
+
+    // The billboard's screen at the button panel between bookings (SE-1386)
+    private static string DetailsIdle =>
+        "Book the shipyard here.\n\nButtons from the left:\n1. Build\n2. Repair\n3. Hack\n4. Grind\n\n"
+        + "Before pressing build\nload a blueprint into\nthe holo table.\n\nYou can book only one\naction at a time.\n\n"
+        + $"Press the button again\nto cancel. Max {Config.ShipyardQueueMax} entries.";
+
+    // A booking's confirmation stays on the billboard this long
+    private const int ConfirmSeconds = 5;
+    private static readonly Dictionary<long, DateTime> confirming = [];
 
     private sealed class Order
     {
@@ -176,6 +185,18 @@ internal static partial class ShipyardOrders
         public string Station;
         public long Player;
         public DateTime LastWork;
+        public SlotKind Kind;
+
+        // A grind slot ground something: once nothing is left it ends
+        public bool Worked;
+
+        // A grind slot: the integrity left to grind in the volume at the last check, -1 before it
+        public float Left = -1;
+
+        // A hack slot: since when each ship qualifies, by its group's smallest grid id, and the
+        // ships the player was told about once
+        public readonly Dictionary<long, DateTime> Seen = [];
+        public readonly HashSet<long> Told = [];
     }
 
     private static readonly Dictionary<long, RepairSlot> repairs = new();
@@ -513,7 +534,7 @@ internal static partial class ShipyardOrders
     private static class ButtonPress
     {
         [HarmonyPriority(Priority.First)]
-        private static bool Prefix(MyButtonPanel __instance)
+        private static bool Prefix(MyButtonPanel __instance, int index)
         {
             if (!Sync.IsServer || !Config.Enabled || !IsConfirmButton(__instance))
                 return true;
@@ -524,10 +545,16 @@ internal static partial class ShipyardOrders
                 var table = TableBy(__instance);
                 if (identity == 0)
                     return false;
+                var mode = ModeOf(__instance, index);
                 if (table == null)
                     Tell(identity, "This button has no hologram table next to it.");
+                else if (mode == null)
+                    Tell(
+                        identity,
+                        "This button books nothing: name it Build, Repair, Grind or Hack."
+                    );
                 else
-                    Press(identity, table, text => Tell(identity, text));
+                    Press(identity, table, text => Tell(identity, text), mode.Value);
             }
             catch (Exception e)
             {
@@ -537,13 +564,38 @@ internal static partial class ShipyardOrders
         }
     }
 
+    // The single button of stations from before the mode panel (SE-1386)
+    private const string LegacyConfirmButtonName = "Button Panel - Station ShipyardConfirm";
+
     private static bool IsConfirmButton(MyTerminalBlock block) =>
-        !string.IsNullOrWhiteSpace(Config.ShipyardConfirmButtonName)
-        && string.Equals(
-            block.CustomName?.ToString(),
-            Config.ShipyardConfirmButtonName,
-            StringComparison.OrdinalIgnoreCase
+        block.CustomName?.ToString() is { } name
+        && (
+            !string.IsNullOrWhiteSpace(Config.ShipyardConfirmButtonName)
+                && string.Equals(
+                    name,
+                    Config.ShipyardConfirmButtonName,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            || string.Equals(name, LegacyConfirmButtonName, StringComparison.OrdinalIgnoreCase)
         );
+
+    /// <summary>What a button of the panel books: on a panel of several buttons the first word of the button's name says, a single button is the one of old.</summary>
+    internal static PressMode? ModeOf(MyButtonPanel panel, int index)
+    {
+        if (panel.BlockDefinition.ButtonCount <= 1)
+            return PressMode.Any;
+        var name = panel.HasCustomButtonName(index) ? panel.GetCustomButtonName(index) : "";
+        var word = new string((name ?? "").TrimStart().TakeWhile(char.IsLetter).ToArray());
+        return Enum.TryParse<PressMode>(word, true, out var mode) && mode != PressMode.Any
+            ? mode
+            : null;
+    }
+
+    // The station has the mode panel, so the messages name its buttons
+    private static bool Modes(MyProjectorBase table) =>
+        Grids(table.CubeGrid)
+            .SelectMany(g => g.GetFatBlocks<MyButtonPanel>())
+            .Any(b => IsConfirmButton(b) && b.BlockDefinition.ButtonCount > 1);
 
     // The station hologram table nearest the button, within the table reach
     private static MyProjectorBase TableBy(MyCubeBlock button)
@@ -594,16 +646,22 @@ internal static partial class ShipyardOrders
     // The button gets a toolbar item, its own On switch, so that clients let players press it
     private static void ArmButton(MyButtonPanel button)
     {
-        if (button.Toolbar.GetItemAtIndex(0) != null)
-            return;
-        var item = MyToolbarItemFactory.TerminalBlockObjectBuilderFromBlock(button);
-        item._Action = "OnOff_On";
-        button.Toolbar.SetItemAtIndex(0, MyToolbarItemFactory.CreateToolbarItem(item));
-        Plugin.Log.Info($"Shipyard button {button.EntityId} armed");
+        var armed = false;
+        for (var i = 0; i < button.BlockDefinition.ButtonCount; i++)
+        {
+            if (button.Toolbar.GetItemAtIndex(i) != null)
+                continue;
+            var item = MyToolbarItemFactory.TerminalBlockObjectBuilderFromBlock(button);
+            item._Action = "OnOff_On";
+            button.Toolbar.SetItemAtIndex(i, MyToolbarItemFactory.CreateToolbarItem(item));
+            armed = true;
+        }
+        if (armed)
+            Plugin.Log.Info($"Shipyard button {button.EntityId} armed");
     }
 
     // !oct order presses the button of the nearest table for an admin
-    public static string Request(long identityId, string tableName)
+    public static string Request(long identityId, string tableName, PressMode mode = PressMode.Any)
     {
         var character = MySession.Static.Players.TryGetIdentity(identityId)?.Character;
         if (character == null || character.IsDead || character.MarkedForClose)
@@ -622,7 +680,8 @@ internal static partial class ShipyardOrders
                     answers.Add(text);
                 else
                     Tell(identityId, text);
-            }
+            },
+            mode
         );
         synchronous = false;
         return answers.Count > 0 ? string.Join("\n", answers) : "The shipyard answers in chat.";
@@ -688,7 +747,12 @@ internal static partial class ShipyardOrders
     }
 
     /// <summary>A press of the table's button. Who presses decides what it means: the presser's own queue entry or running build is canceled (a running build on the second press), else the blueprint they hold is ordered, ending their repair slot first, else their paid build's turn starts the build (a second press right after a refused start gives the turn up), else they get a repair slot. Nobody else's blueprint or queue entry is touched.</summary>
-    public static void Press(long identityId, MyProjectorBase table, Action<string> tell)
+    public static void Press(
+        long identityId,
+        MyProjectorBase table,
+        Action<string> tell,
+        PressMode mode = PressMode.Any
+    )
     {
         if (Config.ShipyardOrderMinutes <= 0)
         {
@@ -726,6 +790,19 @@ internal static partial class ShipyardOrders
                 var holder = Holder(table);
                 var hasBlueprint =
                     TableHologram.Blueprint(table) != null && (holder == 0 || holder == identityId);
+                if (
+                    PressedMode(
+                        mode,
+                        identityId,
+                        mine,
+                        hasBlueprint,
+                        station,
+                        shipyard,
+                        table,
+                        tell
+                    )
+                )
+                    return;
                 if (mine?.Phase == BuildPhase.Loading && CancelConfirmed(identityId, mine))
                     // Its start was just refused: the second press gives the turn up
                     CancelTurn(shipyard, mine, tell);
@@ -782,6 +859,64 @@ internal static partial class ShipyardOrders
                     BookRepair(identityId, station, table, tell);
             }
         );
+    }
+
+    // A button of the mode panel: a slot button books its slot, cancels it, or swaps the
+    // player's waiting entry for it; Build without a blueprint asks for one. False: the press
+    // goes on as the single button's of old.
+    private static bool PressedMode(
+        PressMode mode,
+        long player,
+        BuildOrder mine,
+        bool hasBlueprint,
+        string station,
+        MyCubeGrid shipyard,
+        MyProjectorBase table,
+        Action<string> tell
+    )
+    {
+        if (mode == PressMode.Any)
+            return false;
+        if (mode == PressMode.Build)
+        {
+            if (hasBlueprint || mine?.Repair == false || mine?.Phase == BuildPhase.After)
+                return false;
+            tell(
+                mine == null
+                    ? "Load a blueprint into the holo table first, then press Build."
+                    : $"You have a {mine.Slot.ToString().ToLowerInvariant()} slot: load a blueprint into the holo table first to build instead, or press {mine.Slot} to cancel it."
+            );
+            return true;
+        }
+        var kind = mode switch
+        {
+            PressMode.Grind => SlotKind.Grind,
+            PressMode.Hack => SlotKind.Hack,
+            _ => SlotKind.Repair,
+        };
+        if (mine == null)
+            BookRepair(player, station, table, tell, kind);
+        else if (mine.Phase == BuildPhase.After)
+            tell(
+                $"Your turn at this shipyard ends in {Left(mine.TurnEnds)}: take what is in its containers, or end it with !oct shipyard done, then book again."
+            );
+        else if (mine.Repair && mine.Slot == kind)
+            Cancel(mine, station, shipyard, tell);
+        else if (mine.Repair || mine.Phase == BuildPhase.Waiting)
+            Cancel(
+                mine,
+                station,
+                shipyard,
+                tell,
+                () => BookRepair(player, station, table, tell, kind)
+            );
+        else if (mine.Phase == BuildPhase.Loading)
+            tell(
+                $"It is your turn for '{mine.Ship}': press Build to start it, or end the turn with !oct shipyard done."
+            );
+        else
+            tell($"'{mine.Ship}' is being built for you: press Build to cancel it first.");
+        return true;
     }
 
     // True when the player's last press asked to cancel this build, within CancelConfirmSeconds
@@ -865,12 +1000,17 @@ internal static partial class ShipyardOrders
         long player,
         string station,
         MyProjectorBase table,
-        Action<string> tell
+        Action<string> tell,
+        SlotKind kind = SlotKind.Repair
     )
     {
         if (Config.ShipyardRepairIdleMinutes <= 0)
         {
-            tell("Load a blueprint into the hologram table first.");
+            tell(
+                kind == SlotKind.Repair
+                    ? "Load a blueprint into the hologram table first."
+                    : "Shipyard slots are off on this server."
+            );
             return;
         }
         Builds.Execute(
@@ -880,8 +1020,9 @@ internal static partial class ShipyardOrders
                 Verb = BuildVerb.Order,
                 Station = station,
                 Player = player,
-                Ship = RepairName,
+                Ship = kind.ToString(),
                 Repair = true,
+                Slot = kind,
             },
             (ok, message) =>
             {
@@ -891,10 +1032,13 @@ internal static partial class ShipyardOrders
                     return;
                 }
                 tell(
-                    "You have booked a Repair slot in this station's shipyard queue, as you have no "
-                        + "blueprint on the hologram table. Press the button again to cancel it."
+                    kind != SlotKind.Repair || Modes(table)
+                        ? $"You have booked a {kind} slot in this station's shipyard queue. Press {kind} again to cancel it."
+                        : "You have booked a Repair slot in this station's shipyard queue, as you have no "
+                            + "blueprint on the hologram table. Press the button again to cancel it."
                 );
                 placed[table.EntityId] = player;
+                Confirm(table, $"{kind} slot booked for {Name(player)}.");
                 Refresh(station);
             }
         );
@@ -921,17 +1065,36 @@ internal static partial class ShipyardOrders
                 starting.Remove(shipyard.EntityId);
                 if (!ok)
                 {
-                    Plugin.Log.Warning($"Repair slot {next.Id} did not start: {message}");
+                    Plugin.Log.Warning($"{next.Slot} slot {next.Id} did not start: {message}");
                     return;
                 }
                 ClearForTurn(shipyard);
                 RunRepair(station, shipyard, next);
+                var idle = Config.ShipyardRepairIdleMinutes;
                 Tell(
                     next.Player,
-                    $"{shipyard.DisplayName} is yours and your faction's now: dock your ship with its "
-                        + "repair projector and components to one of its connectors. The slot ends after "
-                        + $"{Config.ShipyardRepairIdleMinutes} min without building or welding, or when you "
-                        + "press the button again."
+                    next.Slot switch
+                    {
+                        SlotKind.Grind =>
+                            $"Your grind slot at {shipyard.DisplayName} starts: fly or tow the ship to scrap into its build volume, "
+                                + "the cylinder inside the frame. What is ground is sold for you at the end, or goes into your ship "
+                                + $"docked at its connectors. The slot ends when nothing is left to grind, after {idle} min "
+                                + "without grinding, or when you press Grind again.",
+                        SlotKind.Hack =>
+                            $"Your hack slot at {shipyard.DisplayName} starts: fly or tow the ship into its build volume, the "
+                                + $"cylinder inside the frame, and keep it there for {Config.ShipyardHackSeconds} s. The slot ends "
+                                + $"with the hack, after {idle} min without a ship, or when you press Hack again.",
+                        _ =>
+                            $"{shipyard.DisplayName} is yours and your faction's now: fly the ship to repair, with its "
+                                + "repair projector, into the build volume, the cylinder inside the frame. A ship docked at "
+                                + "its connectors can bring the components."
+                                + (
+                                    Config.ShipyardRepairBuy
+                                        ? " What the welders lack is bought from the station for you."
+                                        : ""
+                                )
+                                + $" The slot ends after {idle} min without building or welding, or when you press Repair again.",
+                    }
                 );
             }
         );
@@ -940,18 +1103,26 @@ internal static partial class ShipyardOrders
     // Also picks a running slot up after a restart or a move of the station to this node
     private static void RunRepair(string station, MyCubeGrid shipyard, BuildOrder entry)
     {
-        ShipyardTurn.Give(shipyard, entry.Player);
-        repairs[shipyard.EntityId] = new RepairSlot
+        // A hack slot needs no blocks of the shipyard: it stays off
+        if (entry.Slot != SlotKind.Hack)
+            ShipyardTurn.Give(shipyard, entry.Player, entry.Slot == SlotKind.Grind);
+        var slot = new RepairSlot
         {
             Id = entry.Id,
             Station = station,
             Player = entry.Player,
             LastWork = DateTime.UtcNow,
+            Kind = entry.Slot,
         };
+        repairs[shipyard.EntityId] = slot;
+        slotVolumes[shipyard.EntityId] = (Volume(shipyard), slot.Kind, slot.Player);
         lost.Remove(shipyard.EntityId);
-        Welders(shipyard, true);
+        if (slot.Kind == SlotKind.Repair)
+            Welders(shipyard, true);
+        else if (slot.Kind == SlotKind.Grind)
+            Deconstruct(shipyard, true);
         Plugin.Log.Info(
-            $"Repair slot {entry.Id} of {Name(entry.Player)} runs at {shipyard.DisplayName}"
+            $"{slot.Kind} slot {entry.Id} of {Name(entry.Player)} runs at {shipyard.DisplayName}"
         );
     }
 
@@ -963,7 +1134,10 @@ internal static partial class ShipyardOrders
             && (tool as MyCubeBlock)?.CubeGrid is { } grid
             && repairs.TryGetValue(grid.EntityId, out var slot)
         )
+        {
             slot.LastWork = DateTime.UtcNow;
+            slot.Worked = true;
+        }
     }
 
     // As a build's end: the player has their window to take what is in the shipyard
@@ -974,7 +1148,18 @@ internal static partial class ShipyardOrders
         Action then = null
     )
     {
+        if (slot.Kind == SlotKind.Grind)
+        {
+            EndGrind(shipyard, slot, why, then);
+            return;
+        }
+        if (slot.Kind == SlotKind.Hack)
+        {
+            EndHack(shipyard, slot, why, then);
+            return;
+        }
         repairs.Remove(shipyard.EntityId);
+        slotVolumes.Remove(shipyard.EntityId);
         Welders(shipyard, false);
         ending.Add(slot.Id);
         Plugin.Log.Info(
@@ -1072,6 +1257,10 @@ internal static partial class ShipyardOrders
                     );
                     placed[plan.Table.EntityId] = plan.Player;
                     ClearTable(plan.Table);
+                    Confirm(
+                        plan.Table,
+                        $"Build slot booked for {Name(plan.Player)}: '{plan.Ship}'."
+                    );
                     // In the player's turn: the shipyard is theirs, so it starts at once
                     if (order?.Phase == BuildPhase.Loading)
                         Begin(plan.Table, order, tell);
@@ -1313,19 +1502,55 @@ internal static partial class ShipyardOrders
             .FirstOrDefault();
     }
 
-    // The billboard's first line stays what the blueprint has; false when the station has no billboard
+    // The billboard's screen facing the button panel: the instructions, a blueprint's bill of
+    // materials, or a booking's confirmation, which nothing overwrites for ConfirmSeconds. False
+    // when the station has no billboard.
     private static bool ShowDetails(MyProjectorBase table, string text, int columns = FreeColumns)
     {
         var panel = DetailsPanel(table);
         if (panel == null)
             return false;
-        var provider = (IMyTextSurfaceProvider)panel;
-        // GetText only has what a script wrote since the world's load
-        var shown = ((MyTextPanelComponent)provider.GetSurface(0)).Text;
-        var first = (shown ?? "").Split('\n')[0].TrimEnd();
-        // Not wrapped: the first line has to stay one for the next write to find it
-        Write(provider, 0, $"{first}\n\n{PanelText.Wrap(text, columns)}", 0.7f);
+        if (confirming.TryGetValue(table.EntityId, out var until) && DateTime.UtcNow < until)
+            return true;
+        Write((IMyTextSurfaceProvider)panel, 0, PanelText.Wrap(text, columns), 0.7f);
         return true;
+    }
+
+    // After a booking: what was booked, and where the queue is
+    private static void Confirm(MyProjectorBase table, string text)
+    {
+        confirming.Remove(table.EntityId);
+        if (
+            ShowDetails(
+                table,
+                $"{text}\n\nYour booked slot is on the screen above the holo table, in the shipyard's queue."
+            )
+        )
+            confirming[table.EntityId] = DateTime.UtcNow.AddSeconds(ConfirmSeconds);
+    }
+
+    // A confirmation's time is up: the instructions, or the quote of a blueprint loaded since
+    private static void EndConfirmations()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var (tableId, until) in confirming.ToList())
+        {
+            if (now < until)
+                continue;
+            confirming.Remove(tableId);
+            if (
+                !MyEntities.TryGetEntityById(tableId, out MyProjectorBase table)
+                || table.MarkedForClose
+            )
+                continue;
+            if (
+                TableHologram.Blueprint(table) != null
+                && quotes.TryGetValue(tableId, out var shown)
+            )
+                Quote(MakePlan(shown.Player, table), _ => { });
+            else
+                ShowDetails(table, DetailsIdle);
+        }
     }
 
     private static void WriteTable(MyProjectorBase table, string text) =>
@@ -1371,6 +1596,8 @@ internal static partial class ShipyardOrders
             WatchTrials();
         if (refused.Count > 0)
             ClearRefused();
+        if (confirming.Count > 0)
+            EndConfirmations();
         if (ticks % QuoteTicks == 0 && loaded.Count > 0)
         {
             foreach (var (tableId, player) in loaded.ToList())
@@ -1574,6 +1801,7 @@ internal static partial class ShipyardOrders
         {
             orders.Remove(shipyard.EntityId);
             repairs.Remove(shipyard.EntityId);
+            slotVolumes.Remove(shipyard.EntityId);
             queued.Remove(shipyard.EntityId);
             return;
         }
@@ -1581,19 +1809,10 @@ internal static partial class ShipyardOrders
             return;
         if (repairs.TryGetValue(shipyard.EntityId, out var slot))
         {
-            if (
-                DateTime.UtcNow - slot.LastWork
-                >= TimeSpan.FromMinutes(Config.ShipyardRepairIdleMinutes)
-            )
-                EndRepair(
-                    shipyard,
-                    slot,
-                    $"no building or welding for {Config.ShipyardRepairIdleMinutes} min"
-                );
-            else
-                Welders(shipyard, true);
+            CheckSlot(shipyard, slot);
             return;
         }
+        slotVolumes.Remove(shipyard.EntityId);
         orders.TryGetValue(shipyard.EntityId, out var order);
         var projector = ShipyardArm
             .Rotors(shipyard)
@@ -1817,7 +2036,13 @@ internal static partial class ShipyardOrders
             var state =
                 place > 1 ? ""
                 : o.Repair
-                    ? o.Started ? "repairing"
+                    ? o.Started
+                            ? o.Slot switch
+                            {
+                                SlotKind.Grind => "grinding",
+                                SlotKind.Hack => "hacking",
+                                _ => "repairing",
+                            }
                         : o.Active ? "taking parts"
                         : "waiting"
                 : o.Phase switch
@@ -1836,7 +2061,9 @@ internal static partial class ShipyardOrders
                     place++,
                     state,
                     Name(o.Player),
-                    o.Repair ? "(repair)" : $"'{o.Ship}' ({o.Pcu:N0} PCU)",
+                    o.Repair
+                        ? $"({o.Slot.ToString().ToLowerInvariant()})"
+                        : $"'{o.Ship}' ({o.Pcu:N0} PCU)",
                     QueueColumns,
                     QueueEntryLines
                 )
@@ -2403,7 +2630,7 @@ internal static partial class ShipyardOrders
             if (docks.TryGetValue(shipyard.EntityId, out var dock))
                 yield return $"  '{dock.Order.Name}' docking, {dock.Ticks} ticks left";
             if (repairs.TryGetValue(shipyard.EntityId, out var slot))
-                yield return $"  repair slot of {Name(slot.Player)}, "
+                yield return $"  {slot.Kind.ToString().ToLowerInvariant()} slot of {Name(slot.Player)}, "
                     + $"{(DateTime.UtcNow - slot.LastWork).TotalSeconds:0} s since the last work";
             if (!orders.TryGetValue(shipyard.EntityId, out var order))
                 continue;
@@ -4479,4 +4706,14 @@ internal static partial class ShipyardOrders
     }
 
     private static string Meters(Vector3D size) => $"{size.X:0} x {size.Y:0} x {size.Z:0} m";
+}
+
+/// <summary>What a button of the station's shipyard panel books (SE-1386). Any: the single button of old, which orders, cancels or books a repair by what the player has.</summary>
+public enum PressMode
+{
+    Any,
+    Build,
+    Repair,
+    Grind,
+    Hack,
 }

@@ -131,6 +131,7 @@ def main() -> int:
         link = folder / f"{id_}.sbm"
         link.unlink(missing_ok=True)
         link.symlink_to(pl.WORKSHOP / str(id_))
+    rig.link_mods(folder, rig.STATION_MODS)
     try:
         rig.start_server()
         a = rig.start_client()

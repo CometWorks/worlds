@@ -161,7 +161,9 @@ internal static partial class ShipyardOrders
     private static IEnumerable<MyInventory> TurnInventories(MyCubeGrid shipyard) =>
         Containers(shipyard)
             .Concat(Beams(shipyard).Select(b => b.GetInventory()))
-            .Concat(shipyard.GetFatBlocks<MyShipConnector>().Select(c => c.GetInventory()));
+            .Concat(Deconstructors(shipyard).Select(b => b.GetInventory()))
+            .Concat(shipyard.GetFatBlocks<MyShipConnector>().Select(c => c.GetInventory()))
+            .Where(i => i != null);
 
     // What the bill lacks in the shipyard, raw; the ice is always asked for, it isn't loaded
     private static Dictionary<string, long> Lacking(MyCubeGrid shipyard, BuildOrder order)
@@ -621,7 +623,7 @@ internal static partial class ShipyardOrders
                 foreach (var entry in queue)
                 {
                     var what = entry.Repair
-                        ? $"the repair slot of {Name(entry.Player)}"
+                        ? $"the {entry.Slot.ToString().ToLowerInvariant()} slot of {Name(entry.Player)}"
                         : $"'{entry.Ship}' of {Name(entry.Player)}";
                     if (!entry.Active)
                     {

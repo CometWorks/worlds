@@ -151,6 +151,22 @@ public sealed class Commands : CommandModule
         );
 
     [Command(
+        "shipyard book",
+        "Presses a button of the shipyard panel by the nearest station hologram table for you",
+        "!oct shipyard book <build|repair|grind|hack> [table name]: stand by a station's hologram table. Books that slot, "
+            + "cancels it when you have it, or swaps your waiting entry for it, as the Build, Repair, Grind and Hack buttons do."
+    )]
+    [Permission(MyPromoteLevel.None)]
+    public string ShipyardBook(string mode, params string[] table) =>
+        Enum.TryParse<PressMode>(mode, true, out var pressed) && pressed != PressMode.Any
+            ? ShipyardOrders.Request(
+                Context.Caller.IdentityId,
+                table.Length == 0 ? null : string.Join(" ", table),
+                pressed
+            )
+            : "Book build, repair, grind or hack.";
+
+    [Command(
         "shipyard done",
         "Ends your turn at a shipyard now: what is left in its containers is sold to the station for you",
         "!oct shipyard done: your turn would otherwise end by itself at its deadline, or once the containers are empty. "

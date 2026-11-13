@@ -788,9 +788,9 @@ The station safe zones allow no welding, and each one holds the station's
 shipyard. Its OmniArc welders run on ToolCore, which obeys the zone like the
 game's tools do. The plugin lets a shipyard grid, a grid named `<station>
 Shipyard` and owned by the Octahedron Authority NPC, weld and build projected
-blocks in a zone. Every other tool stays bound by the zone: hand tools, ship
-welders, ToolCore tools on players' grids, and grinding with any tool, the
-shipyard's included.
+blocks in a zone, and its deconstructors grind in a grind slot's build volume (Shipyard
+orders). Every other tool stays bound by the zone: hand tools, ship
+welders, ToolCore tools on players' grids, and grinding with any other tool.
 
 The game asks a zone either about an entity, sometimes naming who acts on it, or
 about a box, naming nobody. The plugin allows welding when the entity is a
@@ -828,10 +828,12 @@ A player loads a blueprint into a station's hologram table (`Console Block -
 Station ShipyardProjection`). The table's large screen (`ShipyardQuoteSurface`, 1)
 shows the main message: free or paid, what is wrong if anything, and to press the
 button. The first screen of the billboard next to it (`ShipyardDetailsPanelName`,
-`Billboard LCD Ship Build Details`) keeps its first line and lists the ship's bill
-of materials under it; a station from before the billboard shows the list on the
-table's screen until the world is wiped. The billboard's second screen, how to
-order, is the blueprint's own text, as are the station's other signs.
+`Billboard LCD Ship Build Details`), the one facing the button panel, shows how to
+book the shipyard between bookings, the ship's bill of materials while a blueprint
+is loaded, and for 5 s after a booking what was booked and that the queue is on the
+screen above the table. A station from before the billboard shows the list on the
+table's screen until the world is wiped. The billboard's second screen is the
+blueprint's own text, as are the station's other signs.
 
 A player who loads a blueprint holds the table: it is their block, shared with
 nobody, so nobody else can load over it or remove the blueprint. Loading another
@@ -842,9 +844,23 @@ log-off, or a handover to another node on a cluster). A blueprint found on an op
 table after a restart or a move of the station to this node has no known loader:
 the first player to press gets it.
 
-The first button of the button panel next to the table
-(`ShipyardConfirmButtonName`, `Button Panel - Station ShipyardConfirm`) acts by who
-presses it, whoever holds the table:
+The button panel next to the table (`ShipyardConfirmButtonName`, `Button Panel -
+Book Shipyard`) books the shipyard (SE-1386). Its four buttons, from the left Build,
+Repair, Hack and Grind, each book their mode; the first word of a button's name says
+which, so the order and the rest of the name, the tooltip, are the blueprint's:
+
+- Build orders the blueprint on the table as below. Without one it asks for one.
+- Repair, Grind and Hack book that slot (below). Pressed again, the same button cancels
+  the slot; another of them, or Build with a blueprint, swaps the player's waiting order
+  or running slot for the new booking. In the window of a turn they only say when it
+  ends, and during a build they ask for Build to cancel it first.
+
+`!oct shipyard book <build|repair|grind|hack> [table name]` presses a button for a
+player by the table, for bots and tests.
+
+A station from before the mode panel has a single button, `Button Panel - Station
+ShipyardConfirm`, which the plugin also takes. It acts by who presses it, whoever
+holds the table, and so does Build:
 
 - In a window of their turn (below) the press starts the build: the blueprint they hold
   if any, else their queued paid order. Without either, in the last part of a turn, it
@@ -876,26 +892,60 @@ can cancel it when back.
 their own limit, as `Station name=minutes` separated by `;`: the Moon Shipyard builds
 the big ships.
 
-A repair slot is an entry "Repair" in the shipyard's queue, without a blueprint or a
-payment. It takes a place in the queue, and a player has one entry at a time at any
-shipyard, a build or a slot. When its turn comes the shipyard's welders go on, and its containers, welders
-and connectors become the player's, shared with their faction unless that is OCT
-(`ShipyardTurn`).
-The reactors and everything else stay OCT's, and the connectors are not in trading
-mode. The player docks a ship with the components to one of the connectors, which are
-on the outside of the frame, and the welders take them through the conveyors to weld
-what is in the frame, projected blocks of the player's own repair projector too. Prepare
-the ship, components and projector before booking.
+A slot is an entry "Repair", "Grind" or "Hack" in the shipyard's queue, without a
+blueprint or a payment. It takes a place in the queue, and a player has one entry at a
+time at any shipyard, a build or a slot. A slot works only in the shipyard's build
+volume: the largest cylinder in the free space (below) around its center line, its
+longest side, as long as the free space. The ship docked at the connectors outside the
+frame, and a ship towing another in, are out of it, so the shipyard never welds, grinds
+or hacks them. The ToolCore filter (`ShipyardOwnBlocks`) drops every block whose center
+is outside it.
 
-The slot ends when no building or welding happened for `ShipyardRepairIdleMinutes` (5;
-0 turns slots off), or at the player's next press. It ends like a build: the welders go
-off and the player has the last window of their turn (below) to take what is in the
-containers and welders, which is over at once if they are empty. The running slot
-is known from the queue, so a restart or a move of the station to another node picks it
-up, with the idle time starting over.
+- **Repair.** When its turn comes the shipyard's welders go on, and its containers,
+  welders and connectors become the player's, shared with their faction unless that is
+  OCT (`ShipyardTurn`). The reactors and everything else stay OCT's, and the connectors
+  are not in trading mode. The player docks a ship with the components to one of the
+  connectors, which are on the outside of the frame, and the welders take them through
+  the conveyors to weld the player's blocks in the volume, projected blocks of the
+  player's own repair projector too. With `ShipyardRepairBuy` (on), every 10 s check
+  buys what the welders still lack for those blocks, less what the shipyard and the
+  player's docked ships hold, from the station's Store at the build quote's prices into
+  the containers: as much as the stock, the containers' room and the player's account
+  allow, with no labor fee. The player gets a chat message for each purchase. The slot
+  ends like a build: the welders go off and the player has the last window of their
+  turn (below) to take what is in the containers and welders, which is over at once if
+  they are empty.
+- **Grind.** The containers, welders, connectors and the deconstructors become the
+  player's, and the deconstructors go on; the welders stay off. They take apart what in
+  the volume belongs to the player or their faction, to nobody, or to a wreck faction
+  (`ContractSalvageFactionTags`), judged by the big owners of its mechanical group;
+  another player's ship stays. The safe zone forbids grinding, and the plugin lets only
+  these deconstructors grind, only in the volume (`ShipyardZoneWelding`). What they
+  take, the ship's cargo included, goes into the containers at each check. The slot ends
+  once nothing is left to grind after something was ground. Then what is in the shipyard
+  goes into the player's ships docked at its connectors, as far as it fits, and the
+  rest is sold for the player as at the end of a turn.
+- **Hack.** The shipyard stays off. A ship that stays in the volume for
+  `ShipyardHackSeconds` (60) becomes the player's, with its subgrids, as a towed
+  contract grid does: owner and `BuiltBy`, so it counts toward their PCU. Its whole
+  mechanical group must be in the volume, and it is not hacked when the player is its
+  big owner, when its big owner is in the player's faction (OCT not counting), or when
+  its big owner is a player online anywhere on the cluster. NPC ships and nobody's
+  wrecks always qualify. A ship over the player's PCU limit, by more than 10 %, or over
+  `GroupPcuLimit` isn't taken. The player is told once per ship why it isn't hacked.
+  The slot ends with the hack.
 
-The plugin gives the button a toolbar item (its own On switch) so that clients
-offer it; the item never runs. `!oct order [table name]` (admin) presses the button
+Book the slot before the ship comes in: an idle shipyard sweeps grids no player owns, and
+players' wrecks, out of its build space (`ShipyardSweepIdle`, below), and a waiting slot
+doesn't stop that.
+
+A slot ends when no welding, grinding or ship to hack came for
+`ShipyardRepairIdleMinutes` (5; 0 turns slots off), at the press of its button, or with
+`!oct shipyard done`. The running slot is known from the queue, so a restart or a move
+of the station to another node picks it up, with the idle time starting over.
+
+The plugin gives every button a toolbar item (the panel's own On switch) so that
+clients offer it; the item never runs. `!oct order [table name]` (admin) presses the button
 of the nearest table, `!oct table remove [table name]` (admin) removes the blueprint
 of a table nobody else holds and `!oct table show [table name]` (admin) prints its screens.
 
@@ -2103,6 +2153,13 @@ with the zones holding every test grid from the start, and off.
 one of another player's in the shipyard, each with a damaged block and a projection: the
 welders repair the slot's player's ship and leave the other alone until that player joins
 their faction.
+`tests/test_shipyard_modes.py` books each mode with two players at a station shipyard
+(SE-1386): the billboard's instructions and a booking's confirmation, swapping and
+canceling slots, a repair whose components the station sells while a damaged ship out of
+the build volume stays as it is, a grind into the player's docked ship and one sold for
+them, with the player's ship out of the volume and another player's in it left alone, and a
+hack of an NPC ship in the volume, not of one sticking out of it nor of a ship whose owner
+is online. The probe's `yardvol` places the ships against the volume.
 `tests/test_shipyard_tool_speed.py` runs the server alone, with OmniArc and ToolCore, and
 measures how much an OmniArc welder and deconstructor weld and grind in a minute on rigs far
 from the stations: a shipyard grid of OCT's, one in a player's turn, a player's grid, a

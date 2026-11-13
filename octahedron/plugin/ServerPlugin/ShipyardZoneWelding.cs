@@ -21,7 +21,8 @@ namespace ServerPlugin;
 // The station safe zones forbid welding, and each one holds the station's shipyard, whose
 // OmniArc beam welders (ToolCore) obey the zone like the game's tools. This lets the shipyard
 // grids, named "<station> Shipyard" and owned by the Octahedron Authority, weld and build
-// projections in them. Every other tool stays bound by the zone, and grinding stays forbidden.
+// projections in them. Every other tool stays bound by the zone, and grinding stays forbidden
+// except for the shipyard's deconstructors in a grind slot, in its build volume (SE-1386).
 //
 // The game asks a zone either about an entity, sometimes naming who acts on it, or about a
 // box, naming nobody:
@@ -57,6 +58,10 @@ internal static class ShipyardZoneWelding
     // The inventory of the welder in an IncreaseMountLevel call on this thread
     [ThreadStatic]
     private static MyInventoryBase weldingFrom;
+
+    // The inventory of the grinder in a DecreaseMountLevel call on this thread
+    [ThreadStatic]
+    private static MyInventoryBase grindingFrom;
 
     // A mod asks a projector whether it can build a block, on this thread
     [ThreadStatic]
@@ -254,11 +259,18 @@ internal static class ShipyardZoneWelding
             long sourceEntityId
         )
         {
-            if (
-                __result
-                || action is not (MySafeZoneAction.Welding or MySafeZoneAction.BuildingProjections)
-                || !Plugin.Config.Enabled
-            )
+            if (__result || !Plugin.Config.Enabled)
+                return;
+            // A grind slot's deconstructors: ToolCore asks about their grid (SE-1386)
+            if (action == MySafeZoneAction.Grinding)
+            {
+                __result =
+                    (entity as MyCubeGrid ?? (entity as MyCubeBlock)?.CubeGrid) is { } grid
+                    && IsShipyard(grid)
+                    && ShipyardOrders.Grinding(grid);
+                return;
+            }
+            if (action is not (MySafeZoneAction.Welding or MySafeZoneAction.BuildingProjections))
                 return;
 
             __result =
@@ -289,6 +301,56 @@ internal static class ShipyardZoneWelding
             )
                 __result = true;
         }
+    }
+
+    // Grinding a block asks the zone about the block's center, naming nobody: the deconstructor
+    // whose inventory takes the components may grind in its slot's volume (SE-1386)
+    [HarmonyPatch(
+        typeof(MySessionComponentSafeZones),
+        nameof(MySessionComponentSafeZones.IsActionAllowed),
+        typeof(Vector3D),
+        typeof(MySafeZoneAction),
+        typeof(long),
+        typeof(ulong)
+    )]
+    private static class PointCheck
+    {
+        private static void Postfix(ref bool __result, Vector3D point, MySafeZoneAction action)
+        {
+            if (
+                !__result
+                && action == MySafeZoneAction.Grinding
+                && grindingFrom?.Entity is MyEntity tool
+                && Plugin.Config.Enabled
+            )
+                __result = ShipyardOrders.GrindsHere(tool, point);
+        }
+    }
+
+    [HarmonyPatch(typeof(MySlimBlock), nameof(MySlimBlock.DecreaseMountLevel))]
+    private static class Grinding
+    {
+        private static void Prefix(
+            MySlimBlock __instance,
+            MyInventoryBase outputInventory,
+            out float __state
+        )
+        {
+            grindingFrom = outputInventory;
+            __state = __instance.Integrity;
+        }
+
+        private static void Postfix(
+            MySlimBlock __instance,
+            MyInventoryBase outputInventory,
+            float __state
+        )
+        {
+            if (__instance.Integrity < __state)
+                ShipyardOrders.Worked(outputInventory?.Entity as MyEntity);
+        }
+
+        private static void Finalizer() => grindingFrom = null;
     }
 
     [HarmonyPatch(typeof(MySlimBlock), nameof(MySlimBlock.IncreaseMountLevel))]

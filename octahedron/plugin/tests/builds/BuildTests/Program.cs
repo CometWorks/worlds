@@ -1097,6 +1097,139 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
     );
 }
 
+// Slot kinds (SE-1386): saved and sent with the queue, and booked like a repair slot
+{
+    var (w, m, market, b) = Setup();
+    foreach (var kind in new[] { SlotKind.Repair, SlotKind.Grind, SlotKind.Hack })
+    {
+        var wire = BuildBook.DecodeOrder(
+            BuildBook.EncodeOrder(
+                new BuildOrder
+                {
+                    Id = "b1",
+                    Station = A,
+                    Player = 1,
+                    Ship = kind.ToString(),
+                    Repair = true,
+                    Slot = kind,
+                },
+                blueprint: false
+            )
+        );
+        Check(wire.Repair && wire.Slot == kind, $"slots: {kind} on the wire");
+        var request = BuildRequest.Decode(
+            new BuildRequest
+            {
+                Verb = BuildVerb.Order,
+                Repair = true,
+                Slot = kind,
+            }.Encode()
+        );
+        Check(request.Repair && request.Slot == kind, $"slots: {kind} request on the wire");
+    }
+    Check(
+        BuildBook
+            .DecodeOrder(BuildBook.EncodeOrder(new BuildOrder { Slot = SlotKind.Hack }, false))
+            .Slot == SlotKind.Repair,
+        "slots: a kind without a slot is no slot"
+    );
+    var old = new BuildRequest { Verb = BuildVerb.Order, Repair = true }.Encode();
+    var fields = old.Split('\n');
+    fields[0] = string.Join("\t", fields[0].Split('\t').Take(17));
+    Check(
+        BuildRequest.Decode(string.Join("\n", fields)).Slot == SlotKind.Repair,
+        "slots: an older node's request is a repair"
+    );
+    var answer = new BuildRequest
+    {
+        Verb = BuildVerb.Order,
+        Station = A,
+        Player = 1,
+        Ship = "Grind",
+        Repair = true,
+        Slot = SlotKind.Grind,
+    }.Run(b, w, market, s);
+    Check(
+        answer.StartsWith("1") && b.Queue(A).Single().Slot == SlotKind.Grind,
+        "slots: a grind slot is booked: " + answer
+    );
+    Check(
+        BuildBook.Deserialize(b.Serialize()).Queue(A).Single().Slot == SlotKind.Grind,
+        "slots: saved with the book"
+    );
+}
+
+// A repair slot buys what its welders lack: as far as the stock and the account go
+{
+    var (w, m, market, b) = Setup();
+    var start = w.Total();
+    var stock = m.Stock(A, Motor);
+    var answer = new BuildRequest
+    {
+        Verb = BuildVerb.Buy,
+        Station = A,
+        Player = P1,
+        Needed = Needs((Plate, 10 * U), (Motor, 150 * U)),
+    }.Run(b, w, market, s);
+    var bought = BuildBook.DecodeOrder(answer.Split('\n')[1]);
+    // 25,000 SC: 10 plates for 510, then 240 motors would cost more than the 24,490 left
+    Check(bought.Items[Plate] == 10 * U, "buy: the plates");
+    Check(
+        bought.Items[Motor] > 0 && bought.Items[Motor] <= 100 * U && bought.Items[Motor] % U == 0,
+        "buy: whole motors, at most the stock: " + bought.Items[Motor]
+    );
+    Check(w.Balance(P1) >= 0 && w.Balance(P1) < 25_000, "buy: paid: " + w.Balance(P1));
+    Check(m.Stock(A, Motor) == stock - bought.Items[Motor], "buy: out of the stock");
+    Check(w.Total() == start, "buy: no money made or lost");
+    Check(b.Orders.Count() == 0, "buy: nothing queued");
+    w.Balances[P2] = 0;
+    var broke = new BuildRequest
+    {
+        Verb = BuildVerb.Buy,
+        Station = A,
+        Player = P2,
+        Needed = Needs((Plate, U)),
+    }.Run(b, w, market, s);
+    Check(
+        broke.StartsWith("1") && BuildBook.DecodeOrder(broke.Split('\n')[1]).Items.Count == 0,
+        "buy: no money, nothing bought"
+    );
+}
+
+// The build volume: a cylinder around the free space's longest side
+{
+    var x = new double[] { 1, 0, 0 };
+    var y = new double[] { 0, 1, 0 };
+    var z = new double[] { 0, 0, 1 };
+    var v = BuildVolume.OfBox([0, 0, 0], [x, y, z], [10, 30, 20]);
+    Check(
+        v.HalfLength == 30 && v.Radius == 10 && v.Axis == y,
+        "volume: along the longest side, as wide as the narrowest"
+    );
+    Check(
+        v.Contains(0, 29, 0) && v.Contains(9.9, 0, 0) && v.Contains(0, -30, 9.9),
+        "volume: inside"
+    );
+    Check(
+        !v.Contains(0, 31, 0) && !v.Contains(0, 0, 10.1) && !v.Contains(8, 0, 8),
+        "volume: outside, the box's corners too"
+    );
+    var tilted = BuildVolume.OfBox(
+        [100, 0, 0],
+        [
+            [0.6, 0.8, 0],
+            [-0.8, 0.6, 0],
+            z,
+        ],
+        [50, 5, 5]
+    );
+    Check(
+        tilted.Contains(100 + 0.6 * 49, 0.8 * 49, 0)
+            && !tilted.Contains(100 + 0.6 * 51, 0.8 * 51, 0),
+        "volume: a turned box"
+    );
+}
+
 Console.WriteLine($"{checks - failures}/{checks} checks passed");
 return failures == 0 ? 0 : 1;
 
