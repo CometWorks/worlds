@@ -48,6 +48,8 @@ from test_table_rules import (
 )  # noqa: E402
 
 STATION = rs.STATION
+# The end of a slot, not its start message: "Your grind slot at Alpha Station Shipyard ended: ..."
+ENDED = f"{STATION} Station Shipyard ended:"
 CONFIG = {
     **tr.CONFIG,
     "ShipyardHackSeconds": 10,
@@ -193,6 +195,16 @@ def repair(a) -> None:
 
 def grind(a, b) -> None:
     """The player's ship in the volume is ground into their docked ship; nothing else is"""
+    scrap = place(a, "Scrap Me", "me", "in", "Component/SteelPlate=30")
+    keep = place(a, "Keep Me", "me", "out")
+    kept = info(a, keep)
+    with Second():
+        theirs = place(b, "Not Yours", "me", "in:25")
+    mark = sa.so_latest(a)
+    reply = book(a, "grind")
+    check("booked a Grind slot" in reply, f"booked: {reply}")
+    check(wait_for(lambda: slot(a, "grind") is not None, 30), "it runs")
+    # The shipyard's connectors are on only during a slot
     docked = re.search(
         r"SHIP (\d+)", probe(a, f"yardship {STATION} Component/SteelPlate=1")
     )
@@ -200,14 +212,6 @@ def grind(a, b) -> None:
     hauler = docked[1] if docked else "0"
     check(st.wait_docked(a, hauler), "it docks")
     plates = float(info(a, hauler).get("plates", 0))
-    scrap = place(a, "Scrap Me", "me", "in", "Component/SteelPlate=30")
-    keep = place(a, "Keep Me", "me", "out")
-    with Second():
-        theirs = place(b, "Not Yours", "me", "in:25")
-    mark = sa.so_latest(a)
-    reply = book(a, "grind")
-    check("booked a Grind slot" in reply, f"booked: {reply}")
-    check(wait_for(lambda: slot(a, "grind") is not None, 30), "it runs")
     yard_id = rs.shipyard_id(a)
     check(
         wait_for(lambda: rs.yard(a).get("destroshoot", "0") != "0", 30),
@@ -217,7 +221,7 @@ def grind(a, b) -> None:
         wait_for(lambda: gone(a, scrap), 300, 5),
         f"the ship in the volume is ground: {info(a, scrap)}",
     )
-    ended = sa.wait_chat(a, "Your grind slot at", 90, mark)
+    ended = sa.wait_chat(a, ENDED, 90, mark)
     check(
         ended is not None and "nothing is left" in ended,
         f"the slot ends by itself: {ended}",
@@ -232,7 +236,7 @@ def grind(a, b) -> None:
         f"its cargo and parts are in the docked ship: {plates} -> {got}",
     )
     check(not gone(a, keep), "a ship of theirs out of the volume stays")
-    check(info(a, keep).get("blocks") == "6", f"untouched: {info(a, keep)}")
+    check(info(a, keep) == kept, f"untouched: {kept} -> {info(a, keep)}")
     check(not gone(a, theirs), "another player's ship in the volume stays")
     check(wait_for(lambda: rs.octs(rs.yard(a)), 25), "OCT's again")
     check(wait_for(lambda: sa.shoots(a, yard_id) is False, 20), "the tools are off")
@@ -262,7 +266,7 @@ def hack(a, b) -> None:
     check(wait_for(lambda: slot(a, "hack") is not None, 30), "it runs")
     told = sa.wait_chat(a, "sticks out of", 30, mark)
     check(told is not None, f"a ship sticking out is named: {told}")
-    hacked = sa.wait_chat(a, "Your hack slot at", 60, mark)
+    hacked = sa.wait_chat(a, ENDED, 60, mark)
     check(
         hacked is not None and "'Pirate' is yours now" in hacked,
         f"the NPC ship is hacked: {hacked}",
