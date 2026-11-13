@@ -1693,14 +1693,16 @@ public class OctahedronConfig : PluginConfig
     } = 50;
 
     [StringOption(
-        description: "Reference prices for items the game has none for, SC per unit: Type/Subtype=price, comma separated.",
+        description: "Reference prices in SC per unit, fractions allowed, in place of the game's minimal price / 10: "
+            + "Type/Subtype=price, comma separated. A Store still shows whole SC per unit, at least 1, and buys only "
+            + "below what it sells for, so an item under 1 SC is sold at 1 SC and not bought there.",
         Parent = "market"
     )]
     public string MarketPrices
     {
         get;
         set => SetField(ref field, value);
-    } = "";
+    } = "Ore/Ice=0.01";
 
     [DoubleOption(
         0,

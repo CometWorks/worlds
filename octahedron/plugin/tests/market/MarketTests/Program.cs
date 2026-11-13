@@ -63,6 +63,13 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
         "under 1 SC: sold at 1 SC, not bought"
     );
     Check(m.OctAsk(w, s, A, Gold) == 0 && m.OctBid(w, s, A, Gold) == 0, "gold: not in the catalog");
+    // SE-1469: MarketPrices "Ore/Ice=0.01" is 10 milli-SC per kg, as Market.Prices converts it
+    var ice = MarketBook.ParseAmounts("Ore/Ice=0.01").Single();
+    Check(
+        ice.Key == "Ore/Ice" && ice.Value / (U / 1000) == 10,
+        "ice: 0.01 SC per kg: " + ice.Value
+    );
+    Check(MarketBook.Cost(10_000 * U, 10, up: true) == 100, "ice: 10,000 kg at 0.01 SC is 100 SC");
 
     var tax = new MarketSettings { DriftKg = 0, TaxPercent = 6 };
     Check(m.OctAsk(w, tax, B, Motor) == 106_000, "the tax is a setting");

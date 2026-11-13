@@ -99,7 +99,7 @@ that hydrogen at the station's Store price:
 
 with 20 L of H2 per kg of ice, the vanilla H2/O2 generator's ratio, and the ice
 price OCT asks at that station's Store, in whole SC per kg. A full small H2 tank
-of a large grid, 1,000,000 L, is 50,000 kg of ice: 150,000 SC at 3 SC per kg. The
+of a large grid, 1,000,000 L, is 50,000 kg of ice: 50,000 SC at 1 SC per kg. The
 owner of the ship's biggest grid pays OCT and gets a chat message. Short of money,
 the tanks get what the balance buys, the whole balance, and the owner hears so
 once per docking. Without ice for sale at the Store there is no hydrogen. Only the
@@ -1459,7 +1459,7 @@ stock as long as its entry keeps the name.
 - OCT (`MoneyAuthorityFactionTag`) is the only seller and buyer. Its catalog is the
   same at every station: the items matching `MarketCatalog` but not
   `MarketCatalogExcluded` with a reference price, the game's minimal price / 10
-  (`MarketPrices` sets one where the game has none). The Inhibitor Chip
+  unless `MarketPrices` sets one. The Inhibitor Chip
   (`Component/InhibitorChip`, MES loot worth 1,000,000 SC by its minimal price) is
   excluded, so no Store sells or buys it and a paid build can't buy one: a blueprint
   that needs it is refused as more than the station has for sale. The value is in
@@ -1481,6 +1481,13 @@ stock as long as its entry keeps the name.
   SC: rounded to the nearest, at least 1 SC, a bid at least 1 SC below the ask, so
   on a very cheap item the rounding costs more than the tax. An item worth under
   about 1 SC is sold but not bought.
+- Ice is such an item (SE-1469): `MarketPrices` sets its reference to 0.01 SC per
+  kg, 1 SC per 100 kg, against the game's 5 SC. The vanilla Store prices a unit
+  of an item, and ice's unit is 1 kg, in whole SC, so every Store sells ice at
+  1 SC per kg and buys none. Paid builds buy ice on the Store's terms and docked
+  ships pay for hydrogen at its price, so both pay 1 SC per kg too.
+  What the plugin settles itself goes by the reference: acquisition contracts,
+  what a shipyard pays for leftover ice, grid values.
 - The stock is real: it goes down with each purchase and up with each sale, and
   what the Store shows is what is there. Once an hour, on the UTC hour, OCT brings
   every item that is completely out back to the station's minimum: `MarketMinStock`
