@@ -851,6 +851,18 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = true;
 
+    [StringOption(
+        description: "Steam IDs of bots whose repair slots are free and unlimited, comma separated; first-last is a range: "
+            + "what the welders lack is given, as for an admin who ignores PCU limits, whatever their account, the Store's "
+            + "stock and ShipyardRepairBuy. The police and janitor bots on the Octahedron.",
+        Parent = "shipyard"
+    )]
+    public string ShipyardFreeRepairSteamIds
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "";
+
     [IntOption(
         1,
         description: "A hack slot gives the player a ship that stays this many seconds in the shipyard's build volume: one they "

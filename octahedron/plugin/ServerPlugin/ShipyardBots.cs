@@ -26,6 +26,24 @@ internal static partial class ShipyardOrders
     internal static bool IsBot(long player) =>
         Bots.Contains(MySession.Static.Players.TryGetSteamId(player));
 
+    // The police and janitor bots repair for free (SE-1468)
+    private static readonly SteamIdRanges FreeRepairBots = new(
+        nameof(OctahedronConfig.ShipyardFreeRepairSteamIds),
+        () => Config.ShipyardFreeRepairSteamIds
+    );
+
+    // A repair slot this player books is free and unlimited: an admin who ignores PCU limits
+    // (SE-1467) or a bot of ShipyardFreeRepairSteamIds (SE-1468)
+    internal static bool FreeRepair(long player) =>
+        FreePrints.Exempt(player)
+        || FreeRepairBots.Contains(MySession.Static.Players.TryGetSteamId(player));
+
+    // Why the player's repair is free, for the chat: "Free repair: <name> <why>"
+    internal static string FreeRepairWhy(long player) =>
+        FreeRepairBots.Contains(MySession.Static.Players.TryGetSteamId(player))
+            ? "is a station's bot"
+            : "ignores PCU limits";
+
     private static void Bump(MyCubeGrid shipyard, BuildOrder entry)
     {
         var told =
