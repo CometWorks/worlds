@@ -776,7 +776,7 @@ block) is part of it; Multigrid Projector doesn't reserve on the grid.
 
 Blocks built by nobody or by an NPC, like the stations' blocks, and admins with
 "Ignore PCU limit" on are not capped, nor is the ship a shipyard builds for such
-an admin, on whichever node builds it. A group already over the cap, pasted by an
+an admin or repaired in their free Repair slot, on whichever node builds it. A group already over the cap, pasted by an
 admin for example, keeps what it has. The game reattaches the top parts it
 already had, after a load for example, without the check. 0 turns the cap off.
 
@@ -926,6 +926,13 @@ is outside it.
   like a build: the welders go off and the player has the last window of their turn
   (below) to take what is in the containers and welders, which is over at once if they
   are empty.
+  An admin with the game's "Ignore PCU limits" on (Alt+F10) when booking the slot
+  repairs for free (SE-1467): each check puts what the welders lack into the containers
+  for nothing, whatever their account and the Store's stock, even with
+  `ShipyardRepairBuy` off, and says "Free repair: <name> ignores PCU limits" in the chat.
+  Only the containers' room limits a batch, and the next check tops it up. The welded
+  and projected blocks aren't capped by `GroupPcuLimit` either. The booking node checks
+  the flag and the queue entry keeps it, so it holds on whichever node runs the slot.
 - **Grind.** The containers, welders, connectors and the deconstructors become the
   player's, and the deconstructors go on; the welders stay off. They take apart what in
   the volume belongs to the player or their faction, to nobody, or to a wreck faction
@@ -991,6 +998,7 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   containers. The server that takes the order checks the flag, on a cluster the
   node the player is on, and the order keeps it in the queue and the build's
   projector: the node building the ship may not have the admin's settings.
+  Their Repair slots are free and unlimited too (SE-1467, Repair below).
 - Any other ship is a paid build, paid from the player's own account. The quote
   lists each component of every block, bought from OCT's stock at the station on
   the Store's terms. On top comes the labor fee, `ShipyardLaborFeePer100Pcu` (0) SC

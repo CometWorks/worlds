@@ -190,6 +190,10 @@ internal static partial class ShipyardOrders
         public DateTime LastWork;
         public SlotKind Kind;
 
+        // A repair slot booked by an admin who ignores PCU limits: what the welders lack is given,
+        // not bought, and the PCU limit doesn't apply (SE-1467)
+        public bool Exempt;
+
         // A grind slot ground something: once nothing is left it ends
         public bool Worked;
 
@@ -1064,6 +1068,8 @@ internal static partial class ShipyardOrders
                 Ship = kind.ToString(),
                 Repair = true,
                 Slot = kind,
+                // Free, unlimited repair for an admin who ignores PCU limits (SE-1467)
+                Exempt = kind == SlotKind.Repair && FreePrints.Exempt(player),
             },
             (ok, message) =>
             {
@@ -1136,10 +1142,13 @@ internal static partial class ShipyardOrders
                             $"{shipyard.DisplayName} is yours and your faction's now: fly the ship to repair, with its "
                                 + "repair projector, into the build volume, the cylinder inside the frame."
                                 + (
-                                    Config.ShipyardRepairBuy
+                                    next.Exempt
+                                        ? $" Free repair: {Name(next.Player)} ignores PCU limits, so what the welders "
+                                            + "lack is given for nothing and the PCU limits don't apply."
+                                    : Config.ShipyardRepairBuy
                                         ? " What the welders lack is bought from the station for you, so you need no ship with "
                                             + "parts. One docked at the shipyard's connectors can still bring them."
-                                        : " A ship docked at its connectors brings the components."
+                                    : " A ship docked at its connectors brings the components."
                                 )
                                 + $" The slot ends when nothing is left to weld, after {idle} min without building or "
                                 + "welding, or when you press Repair again.",
@@ -1162,6 +1171,7 @@ internal static partial class ShipyardOrders
             Player = entry.Player,
             LastWork = DateTime.UtcNow,
             Kind = entry.Slot,
+            Exempt = entry.Exempt && entry.Slot == SlotKind.Repair,
         };
         repairs[shipyard.EntityId] = slot;
         var volume = Volume(shipyard);
@@ -3262,11 +3272,13 @@ internal static partial class ShipyardOrders
     }
 
     /// <summary>
-    /// True while the shipyard on this node builds a ship for an admin who ignores PCU limits, so
-    /// GroupPcuLimit lets its blocks be welded on a node that has no copy of their admin settings.
+    /// True while the shipyard on this node builds a ship or runs a repair slot for an admin who
+    /// ignores PCU limits, so GroupPcuLimit lets its blocks be welded on a node that has no copy of
+    /// their admin settings.
     /// </summary>
     internal static bool Exempt(long player) =>
-        orders.Values.Any(o => o.Exempt && o.Player == player);
+        orders.Values.Any(o => o.Exempt && o.Player == player)
+        || repairs.Values.Any(r => r.Exempt && r.Player == player);
 
     /// <summary>The PCU of the support arms on the grid, which the cap of a ship leaves out.</summary>
     internal static int ArmPcu(MyCubeGrid grid)

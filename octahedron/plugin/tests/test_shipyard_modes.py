@@ -8,6 +8,9 @@ working only in the shipyard's build volume, the cylinder around its center line
 - Repair: the welders weld the player's damaged ship and build its projection with components the
   station sells them, as none are brought, only those of the blocks still to build (SE-1431); a
   ship out of the volume stays damaged. Once nothing is left to weld, the slot ends (SE-1430).
+- Free repair (SE-1467): with "Ignore PCU limits" on, an empty account and the Store's components
+  at 0, the same damaged and projected ship is welded with components given for nothing; the
+  account and the Store's stock stay as they were.
 - A waiting repair slot: the idle shipyard's sweep leaves its player's unpowered wreck in the
   build space and removes another player's (SE-1430).
 - Grind: the player's ship in the volume is ground and its parts go into the player's ship docked
@@ -216,6 +219,67 @@ def repair(a) -> None:
     rig.chat(a, "!oct shipyard done", 4)
     check(wait_for(lambda: rs.octs(rs.yard(a)), 25), "OCT's again")
     remove(a, "Repair Target", "Out Of Reach")
+
+
+def free_repair(a) -> None:
+    """An admin who ignores PCU limits repairs for nothing, whatever the account and stock (SE-1467)"""
+    items = [i for i in sa.STOCK if i.startswith("Component/")]
+    for item in items:
+        sa.admin(a, f"!oct market set {STATION} {item} 0", 3)
+    stock_before = {i: st.stock(a, STATION, i)[0] for i in items}
+    probe(a, f"balance {-balance(a)}")
+    before = balance(a)
+    a.set_admin_flag("ignorePcu", True)
+    time.sleep(3)  # the server gets the flag with the admin menu's event
+    try:
+        target = re.search(r"TARGET (\d+)", probe(a, f"yardtarget {STATION} 4"))
+        check(target is not None, f"a damaged ship with a repair projector: {target}")
+        damaged = target[1] if target else "0"
+        reply = book(a, "repair")
+        check("booked a Repair slot" in reply, f"booked: {reply}")
+        check(wait_for(lambda: slot(a, "repair") is not None, 30), "it runs")
+        bought = rig.server_game_log().count(" bought ")
+        mark = sa.so_latest(a)
+        given = sa.wait_chat(a, "got what it lacked for nothing", 60, mark)
+        check(
+            given is not None
+            and "ignores PCU limits" in given
+            and "Steel Plate" in given,
+            f"what the welders lack is given, not sold: {given}",
+        )
+
+        def repaired():
+            got = info(a, damaged)
+            return got.get("full") == "7" and got.get("blocks") == "7"
+
+        check(
+            wait_for(repaired, 240, 5),
+            f"welded and built from the projection: {info(a, damaged)}",
+        )
+        after = balance(a)
+        check(after == before, f"the account is untouched: {before} -> {after}")
+        stock_after = {i: st.stock(a, STATION, i)[0] for i in items}
+        check(
+            stock_after == stock_before,
+            f"the Store's stock is untouched: {stock_before} -> {stock_after}",
+        )
+        log_text = rig.server_game_log()
+        check(
+            log_text.count(" bought ") == bought,
+            "nothing was bought: no purchase in the server log",
+        )
+        check(
+            "free repair: OctTester ignores PCU limits, gave" in log_text,
+            "the server log names the free repair",
+        )
+        ended = sa.wait_chat(a, "ended: nothing is left to weld", 40, mark)
+        check(ended is not None, f"ends once nothing is left to weld: {ended}")
+        rig.chat(a, "!oct shipyard done", 4)
+        check(wait_for(lambda: rs.octs(rs.yard(a)), 25), "OCT's again")
+    finally:
+        a.set_admin_flag("ignorePcu", False)
+        remove(a, "Repair Target")
+        probe(a, "balance 200000")
 
 
 def waiting_wreck(a, b) -> None:
@@ -499,6 +563,7 @@ def main() -> int:
             "billboard": lambda: billboard(a),
             "switching": lambda: switching(a),
             "repair": lambda: repair(a),
+            "free_repair": lambda: free_repair(a),
             "waiting_wreck": lambda: waiting_wreck(a, b),
             "grind": lambda: grind(a, b),
             "hack": lambda: hack(a, b),
