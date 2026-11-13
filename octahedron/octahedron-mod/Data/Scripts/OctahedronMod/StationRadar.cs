@@ -173,9 +173,11 @@ namespace OctahedronMod
             var radius = Math.Min(area.X * 0.4f, area.Y * 0.24f / Tilt);
             var middle = origin + new Vector2(area.X / 2f, area.Y * 0.4f);
 
-            for (var i = 1; i <= 3; i++)
+            // One ring per kilometer
+            var rings = (int)(Range / 1000);
+            for (var i = 1; i <= rings; i++)
             {
-                var r = radius * i / 3f;
+                var r = radius * i / rings;
                 frame.Add(
                     new MySprite(
                         SpriteType.TEXTURE,
@@ -187,7 +189,7 @@ namespace OctahedronMod
                 );
                 Text(
                     frame,
-                    $"{Range / 3000 * i:0.#} km",
+                    $"{i} km",
                     middle + new Vector2(r - 30 * scale, 2 * scale),
                     dim,
                     0.6f * scale
