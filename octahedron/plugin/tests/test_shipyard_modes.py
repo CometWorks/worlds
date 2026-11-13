@@ -104,7 +104,7 @@ def balance(remote) -> int:
 
 def me(remote) -> str:
     """The client's own identity id"""
-    return re.search(r"ME (\d+)", probe(remote, f"yardvol {STATION}"))[1]
+    return re.search(r"\bME (\d+)", probe(remote, f"yardvol {STATION}"))[1]
 
 
 def remove(remote, *names: str) -> None:
@@ -226,7 +226,7 @@ def grind(a, b) -> None:
         wait_for(lambda: gone(a, scrap), 300, 5),
         f"the ship in the volume is ground: {info(a, scrap)}",
     )
-    ended = sa.wait_chat(a, slot_end("grind"), 90, mark)
+    ended = sa.wait_chat(a, slot_end("grind") + " nothing is left", 90, mark)
     check(
         ended is not None and "nothing is left" in ended,
         f"the slot ends by itself: {ended}",
@@ -271,7 +271,7 @@ def hack(a, b) -> None:
     check(wait_for(lambda: slot(a, "hack") is not None, 30), "it runs")
     told = sa.wait_chat(a, "sticks out of", 30, mark)
     check(told is not None, f"a ship sticking out is named: {told}")
-    hacked = sa.wait_chat(a, slot_end("hack"), 60, mark)
+    hacked = sa.wait_chat(a, slot_end("hack") + " 'Pirate' is yours", 60, mark)
     check(
         hacked is not None and "'Pirate' is yours now" in hacked,
         f"the NPC ship is hacked: {hacked}",
