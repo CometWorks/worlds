@@ -216,10 +216,13 @@ def grind(a, b) -> None:
     check(docked is not None, f"the player's cargo ship at a connector: {docked}")
     hauler = docked[1] if docked else "0"
     check(st.wait_docked(a, hauler), "it docks")
-    plates = float(info(a, hauler).get("plates", 0))
+    # It comes with one plate; the slot may end, and fill it, before it docks
+    plates = 1.0
     yard_id = rs.shipyard_id(a)
     check(
-        wait_for(lambda: rs.yard(a).get("destroshoot", "0") != "0", 30),
+        wait_for(
+            lambda: rs.yard(a).get("destroshoot", "0") != "0" or gone(a, scrap), 30
+        ),
         f"the deconstructors work: {rs.yard(a).get('destroshoot')}",
     )
     check(
