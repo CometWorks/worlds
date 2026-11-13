@@ -40,10 +40,11 @@ internal static partial class ShipyardOrders
         "OmniArcDestro",
     ];
 
-    // The volume of each shipyard with a slot running, kept by Check for ToolCore's threads
+    // The volume of each shipyard with a slot running, kept by Check for ToolCore's threads; a
+    // grind slot's grids found in it, a new set each time
     private static readonly Dictionary<
         long,
-        (BuildVolume Volume, SlotKind Kind, long Player)
+        (BuildVolume Volume, SlotKind Kind, long Player, HashSet<long> Found)
     > slotVolumes = [];
 
     // A repair slot's purchase on its way
@@ -140,6 +141,7 @@ internal static partial class ShipyardOrders
             !Contains(slot.Volume, block)
             || block.CubeGrid is not MyCubeGrid grid
             || grid.Projector != null
+            || slot.Found?.Contains(grid.EntityId) != true
             || !Grindable(grid, slot.Player);
     }
 
@@ -192,7 +194,14 @@ internal static partial class ShipyardOrders
     private static void CheckSlot(MyCubeGrid shipyard, RepairSlot slot)
     {
         var volume = Volume(shipyard);
-        slotVolumes[shipyard.EntityId] = (volume, slot.Kind, slot.Player);
+        if (slot.Kind == SlotKind.Grind)
+            Find(shipyard, slot, volume);
+        slotVolumes[shipyard.EntityId] = (
+            volume,
+            slot.Kind,
+            slot.Player,
+            slot.Found.Keys.ToHashSet()
+        );
         var idle =
             DateTime.UtcNow - slot.LastWork
             >= TimeSpan.FromMinutes(Config.ShipyardRepairIdleMinutes);
@@ -368,6 +377,48 @@ internal static partial class ShipyardOrders
 
     // --- grind ---
 
+    // What the slot may grind, as it was before the tools started on it: the deconstructors take
+    // only grids found here
+    private static void Find(MyCubeGrid shipyard, RepairSlot slot, BuildVolume volume)
+    {
+        foreach (var grid in GridsInVolume(shipyard, volume))
+            if (!slot.Found.ContainsKey(grid.EntityId) && Grindable(grid, slot.Player))
+                slot.Found[grid.EntityId] = (Integrity(grid), ContractGrids.Parts([grid]));
+    }
+
+    // The deconstructors leave a ground block at no integrity rather than remove it
+    private static float Integrity(MyCubeGrid grid) => grid.GetBlocks().Sum(b => b.Integrity);
+
+    // The parts the slot took off each grid it found, and whether it is done with the grid: gone,
+    // or ground down to ContractBook.DoneShare of its integrity, as a contract counts a wreck ground down
+    private static Dictionary<
+        long,
+        (Dictionary<MyDefinitionId, MyFixedPoint> Parts, bool Done)
+    > Ground(RepairSlot slot)
+    {
+        var ground = new Dictionary<long, (Dictionary<MyDefinitionId, MyFixedPoint>, bool)>();
+        foreach (var (id, found) in slot.Found)
+        {
+            var grid =
+                MyEntities.TryGetEntityById(id, out var entity)
+                && entity is MyCubeGrid { MarkedForClose: false } g
+                    ? g
+                    : null;
+            var done = grid == null || Integrity(grid) <= found.Integrity * ContractBook.DoneShare;
+            // Done: all of it counts, a ground block at no integrity still holds a component
+            var left = done ? [] : ContractGrids.Parts([grid]);
+            var parts = found
+                .Parts.Select(p =>
+                    (p.Key, Amount: p.Value - (left.TryGetValue(p.Key, out var l) ? l : 0))
+                )
+                .Where(p => p.Amount > 0)
+                .ToDictionary(p => p.Key, p => p.Amount);
+            if (parts.Count > 0)
+                ground[id] = (parts, done);
+        }
+        return ground;
+    }
+
     // ToolCore puts what it grinds into the deconstructor; the containers keep it for the end
     // True if the deconstructors held anything
     private static bool CollectGround(MyCubeGrid shipyard)
@@ -400,7 +451,9 @@ internal static partial class ShipyardOrders
             .Where(b => Contains(volume, b))
             .Sum(b => b.Integrity);
 
-    // What was ground goes into the player's docked ships, the rest is sold for them as a turn's end does
+    // A contract wreck's parts go into OCT's stock, its contract pays the player instead (SE-1408).
+    // What else was ground goes into the player's docked ships, the rest is sold for them as a
+    // turn's end does.
     private static void EndGrind(
         MyCubeGrid shipyard,
         RepairSlot slot,
@@ -413,6 +466,59 @@ internal static partial class ShipyardOrders
         Deconstruct(shipyard, false);
         CollectGround(shipyard);
         ending.Add(slot.Id);
+        var ground = Ground(slot);
+        Contracts.Settle(
+            false,
+            slot.Player,
+            ground.ToDictionary(g => g.Key, g => g.Value.Done),
+            settled =>
+                EndGrind(
+                    shipyard,
+                    slot,
+                    why,
+                    then,
+                    ground.Where(g => settled.Contains(g.Key)).Select(g => g.Value.Parts).ToList()
+                )
+        );
+    }
+
+    private static void EndGrind(
+        MyCubeGrid shipyard,
+        RepairSlot slot,
+        string why,
+        Action then,
+        List<Dictionary<MyDefinitionId, MyFixedPoint>> contracted
+    )
+    {
+        var toOct = 0;
+        foreach (var parts in contracted)
+        foreach (var (item, amount) in parts)
+        {
+            var left = amount;
+            foreach (var inventory in TurnInventories(shipyard))
+            {
+                var items = inventory.GetItems();
+                for (var i = items.Count - 1; i >= 0 && left > 0; i--)
+                {
+                    if (items[i].Content.GetObjectId() != item)
+                        continue;
+                    var take = MyFixedPoint.Min(left, items[i].Amount);
+                    inventory.RemoveItemsAt(i, take);
+                    left -= take;
+                    Market.AddStock(
+                        Guid.NewGuid(),
+                        slot.Station,
+                        Stations.ItemName(item),
+                        take.RawValue
+                    );
+                    toOct++;
+                }
+            }
+        }
+        if (contracted.Count > 0)
+            Plugin.Log.Info(
+                $"Grind slot {slot.Id}: {contracted.Count} contract wrecks, {toOct} stacks of their parts to OCT's stock at {slot.Station}"
+            );
         var moved = 0L;
         var into = new List<string>();
         if (StationTables().TryGetValue(slot.Station, out var tables))
@@ -450,6 +556,11 @@ internal static partial class ShipyardOrders
                 Slot = SlotKind.Grind,
             },
             $"Your grind slot at {shipyard.DisplayName} ended: {why}."
+                + (
+                    contracted.Count > 0
+                        ? $" Contracts paid you for {contracted.Count} of the wrecks, so their parts went to the station instead of being sold for you."
+                        : ""
+                )
                 + (
                     moved > 0
                         ? $" What was ground went into {string.Join(", ", into.Distinct())} as far as it fit."
@@ -534,6 +645,20 @@ internal static partial class ShipyardOrders
                 $"Hack slot {slot.Id}: '{name}' ({main.EntityId}, {pcu} PCU) of {Name(owner)} goes to {Name(player)}"
             );
             ContractGrids.Give(main.EntityId, player);
+            // A contract wreck: kept, the contract pays as for a tow-in
+            Contracts.Settle(
+                true,
+                player,
+                grids.ToDictionary(g => g.EntityId, _ => true),
+                settled =>
+                {
+                    if (settled.Count > 0)
+                        Tell(
+                            player,
+                            $"'{name}' was a contract wreck: you kept it, and the contract paid you for it."
+                        );
+                }
+            );
             EndHack(shipyard, slot, $"'{name}' is yours now");
             return;
         }

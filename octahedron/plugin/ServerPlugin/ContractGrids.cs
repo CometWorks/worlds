@@ -390,24 +390,7 @@ internal static class ContractGrids
                 return $"'{grid.DisplayName}' is not yours any more.";
             if (group.Any(g => g.OccupiedBlocks.Count > 0))
                 return $"Someone sits in '{grid.DisplayName}'.";
-            var parts = new Dictionary<VRage.Game.MyDefinitionId, VRage.MyFixedPoint>();
-            void Count(VRage.Game.MyDefinitionId item, VRage.MyFixedPoint amount) =>
-                parts[item] = (parts.TryGetValue(item, out var had) ? had : 0) + amount;
-            foreach (var block in group.SelectMany(g => g.GetBlocks()))
-            {
-                var stack = block.ComponentStack;
-                for (var i = 0; i < stack.GroupCount; i++)
-                    if (stack.GetGroupInfo(i).MountedCount is var mounted and > 0)
-                        Count(block.BlockDefinition.Components[i].DeconstructItem.Id, mounted);
-                if (!block.StockpileEmpty)
-                    foreach (var item in block.GetObjectBuilder().ConstructionStockpile.Items)
-                        Count(item.PhysicalContent.GetObjectId(), item.Amount);
-                if (block.FatBlock == null)
-                    continue;
-                for (var i = 0; i < block.FatBlock.InventoryCount; i++)
-                    foreach (var item in block.FatBlock.GetInventory(i).GetItems())
-                        Count(item.Content.GetObjectId(), item.Amount);
-            }
+            var parts = Parts(group);
             var name = grid.DisplayName;
             foreach (var member in group)
                 member.Close();
@@ -422,6 +405,32 @@ internal static class ContractGrids
             return $"{station}'s shipyard took '{name}' apart. Your reward stays yours.";
         }
         return "Your wreck isn't here: stand near it at the shipyard.";
+    }
+
+    /// <summary>What taking the grids apart yields: their mounted and stockpiled components, and what they hold.</summary>
+    internal static Dictionary<VRage.Game.MyDefinitionId, VRage.MyFixedPoint> Parts(
+        IEnumerable<MyCubeGrid> grids
+    )
+    {
+        var parts = new Dictionary<VRage.Game.MyDefinitionId, VRage.MyFixedPoint>();
+        void Count(VRage.Game.MyDefinitionId item, VRage.MyFixedPoint amount) =>
+            parts[item] = (parts.TryGetValue(item, out var had) ? had : 0) + amount;
+        foreach (var block in grids.SelectMany(g => g.GetBlocks()))
+        {
+            var stack = block.ComponentStack;
+            for (var i = 0; i < stack.GroupCount; i++)
+                if (stack.GetGroupInfo(i).MountedCount is var mounted and > 0)
+                    Count(block.BlockDefinition.Components[i].DeconstructItem.Id, mounted);
+            if (!block.StockpileEmpty)
+                foreach (var item in block.GetObjectBuilder().ConstructionStockpile.Items)
+                    Count(item.PhysicalContent.GetObjectId(), item.Amount);
+            if (block.FatBlock == null)
+                continue;
+            for (var i = 0; i < block.FatBlock.InventoryCount; i++)
+                foreach (var item in block.FatBlock.GetInventory(i).GetItems())
+                    Count(item.Content.GetObjectId(), item.Amount);
+        }
+        return parts;
     }
 
     // Scrapped, with its rotor and piston parts; a tug's connector lets go of it

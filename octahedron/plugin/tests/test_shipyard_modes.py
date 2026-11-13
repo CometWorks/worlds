@@ -12,6 +12,9 @@ working only in the shipyard's build volume, the cylinder around its center line
   grind with nothing docked sells what was ground for the player.
 - Hack: an NPC ship in the volume is the player's after ShipyardHackSeconds (10 s here); another
   player's ship while they are online, and a ship sticking out of the volume, are not.
+- Contracts (SE-1408): a wreck whose contract the player took, ground in a grind slot, pays the
+  contract's reward and none of its parts are sold; one hacked in a hack slot is theirs and pays
+  the reward as a tow-in. A tiny ContractSalvageRadius keeps the contracts' own tow-in check out.
 
 On a world built by build_world.py:
 
@@ -305,6 +308,98 @@ def hack(a, b) -> None:
     remove(a, "Online Owner")
 
 
+AWAY = 6000
+
+
+def take_contract(a, name: str) -> tuple | None:
+    """A contract on an ownerless ship, taken by a, then the ship in the volume. The contract is
+    posted with the ship out of the station's safe zone and of the players' sync range: a wreck
+    in either gets none."""
+    ship = place(a, name, "none", "in")
+    grid = name.replace(" ", "_")
+    probe(a, f"movegrid {grid} {AWAY}")
+    log(" | ".join(rig.chat(a, "!oct contracts post", 4)))
+    # The chat list is too long for the client's history: the server log names the contract
+    pattern = rf"Contract (\d+) posted at \S+ Station: wreck '{name}' \(\d+\), (\d+) SC"
+    # The log is flushed a while after the line is written
+    wait_for(lambda: re.search(pattern, rig.server_game_log()), 30)
+    posted = re.findall(pattern, rig.server_game_log())
+    contract = (
+        (int(posted[-1][0]), "wreck", "Inactive", int(posted[-1][1]), name)
+        if posted
+        else None
+    )
+    check(
+        contract is not None and contract[3] > 0,
+        f"a wreck contract on '{name}': {contract}",
+    )
+    if contract:
+        reply = " | ".join(rig.chat(a, f"!oct contract accept {contract[0]}", 4))
+        check("Success" in reply, f"taken: {reply}")
+    probe(a, f"movegrid {grid} {-AWAY}")
+    return (ship, contract) if contract else None
+
+
+def contracts(a, b) -> None:
+    """A contract wreck ground pays the contract instead of its parts; one hacked is kept and paid"""
+    with_config(
+        a,
+        **CONFIG,
+        ShipyardSweepIdle="false",
+        ContractSalvageMinBlocks=1,
+        ContractWreckMinReward=1,
+        ContractSalvageRadius=1,
+    )
+    taken = take_contract(a, "Contract Scrap")
+    if taken:
+        ship, contract = taken
+        before = balance(a)
+        mark = sa.so_latest(a)
+        check("booked a Grind slot" in book(a, "grind"), "a grind slot for the wreck")
+        check(
+            wait_for(lambda: float(info(a, ship).get("integrity", 0)) == 0, 300, 5),
+            f"the contract wreck is ground: {info(a, ship)}",
+        )
+        # Not the slot's end alone: the HUD keeps the earlier grind's end, whatever the mark
+        ended = sa.wait_chat(a, "Contracts paid you for", 120, mark)
+        check(
+            ended is not None and "Contracts paid you for 1 of the wrecks" in ended,
+            f"the slot says the contract paid: {ended}",
+        )
+        check(
+            ended is not None and "was sold for" not in ended,
+            f"nothing was sold for the player: {ended}",
+        )
+        after = balance(a)
+        check(
+            after - before == contract[3],
+            f"paid the contract's {contract[3]:,} SC and no sale: {before:,} -> {after:,}",
+        )
+        check(wait_for(lambda: rs.octs(rs.yard(a)), 25), "OCT's again")
+        remove(a, "Contract Scrap")
+
+    taken = take_contract(a, "Contract Keep")
+    if taken:
+        ship, contract = taken
+        before = balance(a)
+        mark = sa.so_latest(a)
+        check("booked a Hack slot" in book(a, "hack"), "a hack slot for the wreck")
+        hacked = sa.wait_chat(a, "you kept it, and the contract paid you", 90, mark)
+        check(hacked is not None, f"the hacked wreck counts as kept: {hacked}")
+        if hacked is None:
+            log(f"chat: {[m['Text'] for m in a.get_chat_messages()['messages'][-12:]]}")
+        mine = me(a)
+        owners = info(a, ship).get("owners", "")
+        check(owners == mine, f"it is the player's: {owners} ({mine})")
+        after = balance(a)
+        check(
+            after - before == contract[3],
+            f"paid the contract's {contract[3]:,} SC: {before:,} -> {after:,}",
+        )
+        remove(a, "Contract Keep")
+    with_config(a, **CONFIG)
+
+
 def main() -> int:
     rig.stop_client()
     with Second():
@@ -338,11 +433,19 @@ def main() -> int:
         probe(
             a, "balance 200000"
         )  # past 1,000,000 SC the game unlocks an achievement, which crashes a client without Steam
-        billboard(a)
-        switching(a)
-        repair(a)
-        grind(a, b)
-        hack(a, b)
+        # OCT_SECTIONS=contracts,... runs only those
+        only = os.environ.get("OCT_SECTIONS", "").split(",")
+        sections = {
+            "billboard": lambda: billboard(a),
+            "switching": lambda: switching(a),
+            "repair": lambda: repair(a),
+            "grind": lambda: grind(a, b),
+            "hack": lambda: hack(a, b),
+            "contracts": lambda: contracts(a, b),
+        }
+        for name, run in sections.items():
+            if only == [""] or name in only:
+                run()
     finally:
         rig.stop_client()
         with Second():

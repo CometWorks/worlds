@@ -52,6 +52,7 @@ internal static class Contracts
     private const string BreakdownsVariableName = "Octahedron-Contract-Breakdowns";
     private const string SeenVariableName = "Octahedron-Contract-Seen";
     private const string ReportTopic = "contracts/report";
+    private const string SlotTopic = "contracts/slot";
     private const double WitnessMeters = 5_000;
     private const double ShipyardSearchMeters = 3_000;
     private const int RowsPerReport = 500;
@@ -95,6 +96,7 @@ internal static class Contracts
     private static int reportsInFlight;
     private static HashSet<long> watched = [];
     private static IDisposable reportRegistration;
+    private static IDisposable slotRegistration;
     private static ContractBook book;
     private static MySession bookSession;
 
@@ -363,6 +365,124 @@ internal static class Contracts
         )
             return;
         reportRegistration = Plugin.Cluster.RegisterHandler(ReportTopic, ServeReport);
+        slotRegistration = Plugin.Cluster.RegisterHandler(
+            SlotTopic,
+            message =>
+            {
+                var lines = Encoding.UTF8.GetString(message.Payload ?? []).Split('\n');
+                var settled = SettleHere(
+                    lines[0] == "keep",
+                    long.Parse(lines[1], CultureInfo.InvariantCulture),
+                    lines
+                        .Skip(2)
+                        .Select(l => l.Split(':'))
+                        .ToDictionary(
+                            p => long.Parse(p[0], CultureInfo.InvariantCulture),
+                            p => p[1] == "1"
+                        )
+                );
+                return Task.FromResult(Encoding.UTF8.GetBytes(string.Join(",", settled)));
+            }
+        );
+    }
+
+    /// <summary>
+    /// A shipyard slot settles the wreck contracts on the grids it ground or hacked (SE-1408), for
+    /// the player who took them. keep: hacked, paid as a tow-in. Not keep: ground, paid as posted
+    /// once done (gone, or ground down to ContractBook.DoneShare), grid id -> done. A grid whose
+    /// contract paid the player already counts too. done gets, on the game thread, the grids
+    /// settled: none of their parts are the player's.
+    /// </summary>
+    internal static void Settle(
+        bool keep,
+        long player,
+        Dictionary<long, bool> grids,
+        Action<HashSet<long>> done
+    )
+    {
+        if (!On || grids.Count == 0)
+            done([]);
+        else if (Authority)
+            done(SettleHere(keep, player, grids));
+        else
+            Stations.Ask(
+                SlotTopic,
+                string.Join(
+                    "\n",
+                    grids
+                        .Select(g => $"{g.Key}:{(g.Value ? 1 : 0)}")
+                        .Prepend(player.ToString(CultureInfo.InvariantCulture))
+                        .Prepend(keep ? "keep" : "scrap")
+                ),
+                (answer, error) =>
+                {
+                    if (error != null)
+                        Plugin.Log.Warning($"Contracts: a slot's grids not settled: {error}");
+                    done(
+                        (answer ?? "")
+                            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(id => long.Parse(id, CultureInfo.InvariantCulture))
+                            .ToHashSet()
+                    );
+                }
+            );
+    }
+
+    private static HashSet<long> SettleHere(bool keep, long player, Dictionary<long, bool> grids)
+    {
+        var settled = new HashSet<long>();
+        if (Oct == null)
+            return settled;
+        var system = System;
+        var state = Book;
+        var now = DateTime.UtcNow;
+        foreach (var (id, target) in state.Targets.ToList())
+        {
+            if (
+                target.Kind is not ('w' or 's')
+                || !grids.TryGetValue(target.Grid, out var ground)
+                || (!keep && !ground)
+                || system.GetContractState(id) != MyCustomContractStateEnum.Active
+                || (system.GetContractById(id) as MyContract)?.Owners.FirstOrDefault() != player
+                || Theirs(player, target)
+            )
+                continue;
+            // Hacked: as a tow-in, what is left of it, at most what it was worth when posted
+            if (
+                keep
+                && target.Kind == 'w'
+                && target.Value > 0
+                && state.Grids.TryGetValue(target.Grid, out var row)
+            )
+                Reward(
+                    id,
+                    ContractMath.WreckReward(
+                        Math.Min(target.Value, state.Value(row)),
+                        Config.ContractWreckValuePercent
+                    )
+                );
+            if (!system.TryFinishCustomContract(id))
+                continue;
+            state.Targets.Remove(id);
+            if (keep)
+                state.Give(target.Grid, player);
+            else
+                state.Scrap(target.Grid, now);
+            state.Paid[target.Grid] = (player, now + ContractBook.PaidFor);
+            Plugin.Log.Info(
+                $"Contract {id}: grid {target.Grid} {(keep ? "hacked" : "ground")} in a shipyard slot by {player}"
+            );
+        }
+        foreach (var id in grids.Keys)
+            if (state.Paid.TryGetValue(id, out var paid) && paid.Player == player)
+            {
+                settled.Add(id);
+                // Ground: !oct scrap has nothing left to take apart
+                if (!keep)
+                    state.Scrappable.Remove(id);
+            }
+        SaveBook();
+        return settled;
     }
 
     private static Task<byte[]> ServeReport(PluginMessage message)
@@ -629,6 +749,9 @@ internal static class Contracts
             );
             if (!Add(system, contract, station, out var id))
                 continue;
+            Plugin.Log.Info(
+                $"Contract {id} posted at {station.Name}: {(hunt.Kind == 'a' ? "area" : "wreck")} '{grid.Name}' ({grid.Id}), {reward} SC"
+            );
             if (hunt.Kind == 'a')
             {
                 state.Targets[id] = new ContractTarget(
@@ -736,11 +859,15 @@ internal static class Contracts
                     Plugin.Log.Info($"Contract {id} withdrawn: its target is gone");
                     break;
                 case ContractVerdict.Finish:
-                    system.TryFinishCustomContract(id);
+                    if (system.TryFinishCustomContract(id) && target.Kind is 'w' or 's')
+                        state.Paid[target.Grid] = (hunter, now + ContractBook.PaidFor);
                     break;
                 case ContractVerdict.Scrap:
                     if (system.TryFinishCustomContract(id))
+                    {
                         state.Scrap(target.Grid, now);
+                        state.Paid[target.Grid] = (hunter, now + ContractBook.PaidFor);
+                    }
                     break;
                 case ContractVerdict.Give:
                     var row = state.Grids[target.Grid];
@@ -755,6 +882,7 @@ internal static class Contracts
                         );
                     if (system.TryFinishCustomContract(id))
                     {
+                        state.Paid[target.Grid] = (hunter, now + ContractBook.PaidFor);
                         if (
                             Hand(oct, state, row, hunter, now)
                             && target.Kind == 'w'
