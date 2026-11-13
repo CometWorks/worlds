@@ -1000,6 +1000,30 @@ BuildResult Ok(FakeWorld w, string what, Func<BuildResult> act)
             .Repair,
         "request: repair on the wire"
     );
+    // A free repair slot of an admin who ignores PCU limits keeps Exempt on the wire and in the
+    // queue other nodes read (SE-1467)
+    var (w3, _, market3, b3) = Setup();
+    BuildRequest
+        .Decode(
+            new BuildRequest
+            {
+                Verb = BuildVerb.Order,
+                Station = A,
+                Player = 3,
+                Ship = "Repair",
+                Repair = true,
+                Slot = SlotKind.Repair,
+                Exempt = true,
+            }.Encode()
+        )
+        .Run(b3, w3, market3, s);
+    var freeRepair = BuildBook.DecodeOrder(
+        new BuildRequest { Verb = BuildVerb.Next, Station = A }.Run(b3, w3, market3, s)
+    );
+    Check(
+        freeRepair.Repair && freeRepair.Slot == SlotKind.Repair && freeRepair.Exempt,
+        "request: a free repair slot keeps Exempt in the queue"
+    );
     var slots = new BuildBook();
     var slotWorld = new FakeWorld();
     BuildResult Slot(long player, string station = A) =>

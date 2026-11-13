@@ -24,7 +24,8 @@ namespace ServerPlugin;
 //
 // - Repair: the welders are the player's, and what they lack for the player's blocks in the
 //   volume, damaged or projected, is bought from the station's Store, as far as its stock, the
-//   container room and the player's account go.
+//   container room and the player's account go. An admin who ignores PCU limits gets it for
+//   nothing, as far as the container room goes (SE-1467).
 // - Grind: the deconstructors are the player's and take apart what in the volume is the player's,
 //   their faction's, nobody's or a wreck faction's. At the end what they took goes into the
 //   player's ship docked at the shipyard's connectors, and the rest is sold for them.
@@ -303,11 +304,12 @@ internal static partial class ShipyardOrders
     }
 
     // The components the welders lack for the player's blocks in the volume, damaged or still to
-    // build from a projection, are bought, less what the shipyard and the player's docked ships hold
+    // build from a projection, are bought, less what the shipyard and the player's docked ships hold.
+    // An exempt slot's are given: no account, no Store stock and no ShipyardRepairBuy needed.
     private static void BuyForRepair(MyCubeGrid shipyard, RepairSlot slot, BuildVolume volume)
     {
         if (
-            !Config.ShipyardRepairBuy
+            !(Config.ShipyardRepairBuy || slot.Exempt)
             || buying.Contains(slot.Id)
             || !StationTables().TryGetValue(slot.Station, out var tables)
         )
@@ -363,6 +365,11 @@ internal static partial class ShipyardOrders
         }
         if (lack.Count == 0)
             return;
+        if (slot.Exempt)
+        {
+            Give(shipyard, slot, lack);
+            return;
+        }
         buying.Add(slot.Id);
         Builds.Execute(
             Guid.NewGuid(),
@@ -400,6 +407,31 @@ internal static partial class ShipyardOrders
                 );
                 Tell(player, $"The station sold your repair what it lacked: {what}. {message}");
             }
+        );
+    }
+
+    // An exempt repair slot's components, into the shipyard's containers for nothing
+    private static void Give(MyCubeGrid shipyard, RepairSlot slot, Dictionary<string, long> lack)
+    {
+        var containers = Containers(shipyard).ToList();
+        foreach (var (item, raw) in lack)
+            Put(
+                containers,
+                (MyObjectBuilder_PhysicalObject)
+                    MyObjectBuilderSerializer.CreateNewObject(ItemId(item)),
+                new MyFixedPoint { RawValue = raw }
+            );
+        var what = string.Join(
+            ", ",
+            lack.Select(i => $"{i.Value / Amounts.Unit} {Market.ItemTitle(i.Key)}")
+        );
+        slot.LastWork = DateTime.UtcNow;
+        Plugin.Log.Info(
+            $"Repair slot {slot.Id}: free repair: {Name(slot.Player)} ignores PCU limits, gave {what}"
+        );
+        Tell(
+            slot.Player,
+            $"Free repair: {Name(slot.Player)} ignores PCU limits, your repair got what it lacked for nothing: {what}."
         );
     }
 
