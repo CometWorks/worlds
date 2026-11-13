@@ -1029,7 +1029,7 @@ internal static partial class ShipyardOrders
                     return;
                 }
                 tell(
-                    Modes(table)
+                    kind != SlotKind.Repair || Modes(table)
                         ? $"You have booked a {kind} slot in this station's shipyard queue. Press {kind} again to cancel it."
                         : "You have booked a Repair slot in this station's shipyard queue, as you have no "
                             + "blueprint on the hologram table. Press the button again to cancel it."

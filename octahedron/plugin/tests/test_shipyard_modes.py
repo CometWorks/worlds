@@ -120,7 +120,7 @@ def billboard(a) -> None:
     check("Book the shipyard here." in screens(a)["details"], "and books nothing")
     reply = book(a, "repair")
     check("booked a Repair slot" in reply, f"Repair books a slot: {reply}")
-    details = screens(a)["details"]
+    details = " ".join(screens(a)["details"].split())
     check(
         "Repair slot booked for OctTester" in details
         and "above the holo table" in details,
@@ -141,7 +141,7 @@ def switching(a) -> None:
         "booked a Grind slot" in reply, f"Grind swaps the running repair slot: {reply}"
     )
     check(wait_for(lambda: slot(a, "grind") is not None, 30), "the grind slot runs")
-    text = settled(a, "queue", "(grind)")
+    text = settled(a, "queue", "grinding OctTester")
     check("grinding OctTester (grind)" in text, f"on the queue panel: {text!r}")
     reply = book(a, "grind")
     check("you canceled it" in reply, f"Grind again cancels it: {reply}")
@@ -150,6 +150,10 @@ def switching(a) -> None:
 
 def repair(a) -> None:
     """The welders weld the player's ship with components the station sells"""
+    # The test world's market holds no components until the rig stocks them
+    for item, count in sa.STOCK.items():
+        if item.startswith("Component/"):
+            st.admin(a, f"!oct market set {STATION} {item} {count}", 3)
     before = balance(a)
     target = re.search(r"TARGET (\d+)", probe(a, f"yardtarget {STATION} 4"))
     check(
