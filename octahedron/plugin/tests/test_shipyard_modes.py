@@ -153,7 +153,7 @@ def repair(a) -> None:
     # The test world's market holds no components until the rig stocks them
     for item, count in sa.STOCK.items():
         if item.startswith("Component/"):
-            st.admin(a, f"!oct market set {STATION} {item} {count}", 3)
+            sa.admin(a, f"!oct market set {STATION} {item} {count}", 3)
     before = balance(a)
     target = re.search(r"TARGET (\d+)", probe(a, f"yardtarget {STATION} 4"))
     check(
