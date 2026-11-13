@@ -142,7 +142,10 @@ def new_cell(grid: str) -> tuple[float, float, float]:
         (c for c in cells if c not in old and c[0] == x),
         key=lambda c: abs(c[1]) + abs(c[2]),
     )
-    return tuple(p[i] + 2.5 * (cell[0] * r[i] + cell[1] * u[i]) for i in range(3))
+    return tuple(
+        p[i] + 2.5 * (cell[0] * r[i] + cell[1] * u[i] - cell[2] * f[i])
+        for i in range(3)
+    )
 
 
 def build_character_probe() -> str:
@@ -198,10 +201,13 @@ def run(bench) -> None:
 
     def status(grid: str) -> dict | None:
         """The fields of the grid's last Station patch STATUS line"""
-        lines = re.findall(rf"Station patch STATUS {grid} (\d+) (.*)", logs())
+        # The newest line by its time: the processes' logs come one after the other
+        lines = re.findall(
+            rf"^(\S+ \S+) .*Station patch STATUS {grid} (\d+) (.*)$", logs(), re.M
+        )
         if not lines:
             return None
-        entity, rest = lines[-1]
+        _, entity, rest = max(lines)
         return {
             "entity": entity,
             **dict(f.split("=", 1) for f in rest.split() if "=" in f),
@@ -422,7 +428,7 @@ def run(bench) -> None:
     time.sleep(10)
     moon = until(lambda: has("Moon Station", "howto-entries"), 240)
     note("moon-before", moon)
-    reply = chat("!sprobe dock Moon mine BAT=0,AT=-13;0;0", 6)
+    reply = chat("!sprobe dock Moon mine BAT=0", 6)
     docked = re.search(r"SHIP (\d+)", reply)
     check(
         "a ship docked to Moon Station",
@@ -439,7 +445,7 @@ def run(bench) -> None:
     cprobe(api, f"seatin {seat[1]}", "SEAT")
     check(
         "the client sits in it",
-        f"PILOT {seat[1]}" in cprobe(api, f"pilot {seat[1]}", "PILOT")[0],
+        f"PILOT {body}" in cprobe(api, f"pilot {seat[1]}", "PILOT")[0],
     )
 
     # ============================== Moon: staged, stopped, started ==============================
