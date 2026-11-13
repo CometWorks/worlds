@@ -272,7 +272,7 @@ def free_build(remote) -> None:
     armed = st.probe(remote, "buttons Alpha")
     check(
         re.search(
-            r"'Button Panel - Station ShipyardConfirm' MyToolbarItemTerminalBlock",
+            r"'Button Panel - Book Shipyard' MyToolbarItemTerminalBlock",
             armed,
         )
         is not None,

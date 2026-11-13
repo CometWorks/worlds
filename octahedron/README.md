@@ -55,6 +55,14 @@ three read the game's content from the Steam folder on Linux
 (`~/.steam/steam/steamapps`), so Steam must have the game downloaded. The
 station and shipyard blueprints are in `blueprints/`.
 
+The stations' shipyard mode panel (SE-1390) shows textures the game has, so it
+needs no mod. From left to right: Build shows the Unknown faction logo
+`Textures\FactionLogo\Unknown.dds`, Repair the welder's item icon, Hack the Core
+Systems DLC logo `Textures\FactionLogo\DLC\CoreSystems.dds` and Grind the
+grinder's item icon. The game makes an LCD texture of every item and faction icon,
+which a screen shows when its blueprint names it, though the terminal doesn't
+offer them.
+
 ## The world
 
 `build_world.py` starts from a copy of the Star System scenario:
