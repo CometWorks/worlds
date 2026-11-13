@@ -214,7 +214,8 @@ on the station's name. `--stations` makes one for every station built from the s
 blueprint, the id ending in the station's first word (`2026-12-station-v2-beta`). A
 grid named `<station> Shipyard` is that station's shipyard. Both files keep only the
 main grid and the blocks that differ between them, which is all the plugin compares,
-so a pair is a few kB. `config/storage` goes into a new world's `Storage` folder, and
+so a pair is a few kB. A whole new station is megabytes: `--gz` writes the pair gzipped,
+`-from.sbc.gz` and `-to.sbc.gz`, and the plugin reads a name ending in `.gz` that way. `config/storage` goes into a new world's `Storage` folder, and
 Deploy Octahedron stages it into a kept world's (SE-1235), where the plugin finds the
 pair.
 
@@ -262,9 +263,25 @@ After a wipe the stations are built from the new blueprint, and the staged pairs
 rebuild their blocks to what they already are. Entries can be dropped from the list
 once every kept world they were for has been wiped.
 
+A patch waits while something is where it builds (SE-1449). A block of another grid in
+a cell it builds or builds again makes it log `WAITING <id> on <grid>: <ship> is where it
+builds` and try again a minute later; Deploy Octahedron clears the station's safe zone
+for it. A character standing in such a cell, or sitting in a seat the patch takes away,
+is taken out the way an offline character is (see Offline characters), at once and
+whether its player is online or not. A grid's patches also wait for its staged grid
+moves.
+
+The Octahedron Large Station (SE-1406) replaced every station of the live world this
+way: the staged pairs `2026-11-14-large-station-*` rebuild the old station in place,
+about 4,800 ops each. The grid keeps its entity id, name, owner, storage and ledger, so
+the faction station entry, its Store offers, contracts, safe zone and GPS stay as they
+were. A block at the same cell and of the same type keeps its inventory. The game looks
+for split grids only after the frame, so the whole swap runs in one call and only the
+end state has to be in one piece.
+
 Patches don't change grid ids, partitions or names the plugin keys on: don't
 rename a station's hologram tables, buttons, panels or arm rotors with them.
-Moving grids, and new or removed stations, still need a wipe (see SE-1238). New
+New or removed stations still need a wipe (see SE-1238), moving grids a grid move. New
 grids that aren't stations, like lane computers, go in through world patches.
 
 ### World patches
@@ -314,11 +331,13 @@ Authority. Deploy Octahedron reports from those lines.
 
 ### Grid moves
 
-A grid move turns and moves a station's shipyard of a kept world to where a world
+A grid move turns and moves a station or its shipyard of a kept world to where a world
 built now has it, once (SE-1369). Neither a station patch, which changes blocks, nor a
 world patch, which adds grids, can do that. The first ones turn the shipyards of Alpha,
 Gamma, North and South Station about their center line, so a bottom beam no longer
-hides the middle of the build space from the lobby.
+hides the middle of the build space from the lobby. `2026-11-14-large-station-moon-move`
+moves Moon Station 20 m further from its shipyard, for the Large Station's longer
+docking connectors (SE-1449). A station's safe zone stays where it is.
 
 `world_patch.py` writes a `GridMoveEntry` for each shipyard that has another place or
 facing in the world built from the working tree than in the one built from `--since`,
@@ -342,7 +361,9 @@ python world_patch.py 2026-11-13-shipyard-turns --since 70fcefb --seed 2
 
 The process that simulates the shipyard teleports it, with its rotor heads, once it
 is idle: no job running or coming, no grid in its build space, none docked to it,
-nobody in its bounds or where it goes, and no other grid where it goes. Until then it
+nobody in its bounds or where it goes, and no other grid where it goes. A station
+moves once nothing is docked to it and no other grid is where it goes; a character on
+board is taken out first, the way an offline character is, and seated ones move with it. Until then it
 logs `Grid move WAITING <id> on <grid>: <why>` and tries again a minute later. The id
 goes into the grid's station patch ledger, so a grid moves once wherever it goes. A
 shipyard that is where its entry puts it already, as in a world built with the move,
@@ -1435,6 +1456,11 @@ restarts and a player can come back on any node.
   they left; the node goes by the sphere and leaves a body outside it where it is. Bodies
   already there when this first runs have no such record: they wait for their partition
   to load for another reason, or for their player.
+
+A station patch or a station's grid move takes a character out of its way the same way
+(SE-1449), at once and whether its player is online or not: the inventory is kept and
+the body removed once a save holds it. A player in that body gets the respawn screen,
+and the next body gets the inventory.
 
 `!oct offline` (admin) shows on the server or the World Authority who was last online
 when, and every kept inventory.
