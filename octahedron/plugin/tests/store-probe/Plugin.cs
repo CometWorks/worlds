@@ -22,6 +22,10 @@ namespace StoreProbe;
 //   /store buy <item> <amount>    BUY result, into the character's inventory
 //   /store sell <item> <amount>   SELL result, from the character's inventory
 //   /store have <item>            HAVE amount
+//   /store ships                  SHIPS the inventories of ships docked at the station's trading
+//                                 connectors, as the Store screen lists them: entity ids
+//   /store buyship <item> <amount>   BUY result, into the first of those
+//   /store sellship <item> <amount>  SELL result, from the first of those
 // ReSharper disable once UnusedType.Global
 public class Plugin : IPlugin
 {
@@ -98,15 +102,45 @@ public class Plugin : IPlugin
             return;
         }
         int amount = args.Length > 3 ? int.Parse(args[3], CultureInfo.InvariantCulture) : 0;
+        if (verb is "ships" or "buyship" or "sellship")
+        {
+            store.CreateGetConnectedGridInventoriesRequest(ships =>
+            {
+                MyDefinitionId.TryParse("MyObjectBuilder_" + item, out var id);
+                // Buys go into a cargo container, sales come from the inventory that has the items
+                var ship = ships
+                    .Select(e => MyEntities.GetEntityById(e))
+                    .FirstOrDefault(e =>
+                        verb == "buyship"
+                            ? e is MyCargoContainer
+                            : e?.GetInventory()?.GetItemAmount(id) >= amount
+                    );
+                if (verb == "ships" || ship == null)
+                {
+                    Say("SHIPS " + string.Join(",", ships));
+                    return;
+                }
+                store.CreateGetStoreItemsRequest(
+                    (items, tick, _, _, _) =>
+                    {
+                        if (verb == "buyship")
+                            Buy(store, Find(items, item, StoreItemTypes.Offer), amount, ship.EntityId, tick);
+                        else
+                            Sell(store, Find(items, item, StoreItemTypes.Order), amount, ship.EntityId, tick);
+                    }
+                );
+            });
+            return;
+        }
         store.CreateGetStoreItemsRequest(
             (items, tick, offers, orders, npc) =>
             {
                 if (verb == "list")
                     List(items, item, offers, orders, npc);
                 else if (verb == "buy")
-                    Buy(store, Find(items, item, StoreItemTypes.Offer), amount, character, tick);
+                    Buy(store, Find(items, item, StoreItemTypes.Offer), amount, character.EntityId, tick);
                 else if (verb == "sell")
-                    Sell(store, Find(items, item, StoreItemTypes.Order), amount, character, tick);
+                    Sell(store, Find(items, item, StoreItemTypes.Order), amount, character.EntityId, tick);
                 else
                     Say("NOVERB " + verb);
             }
@@ -144,7 +178,7 @@ public class Plugin : IPlugin
         MyStoreBlock store,
         MyStoreItem item,
         int amount,
-        MyCharacter character,
+        long target,
         double tick
     )
     {
@@ -158,7 +192,7 @@ public class Plugin : IPlugin
                 [
                     item.Id,
                     amount,
-                    character.EntityId,
+                    target,
                     tick,
                     (Action<MyStoreBuyItemResult>)(r => Say("BUY " + r.Result)),
                 ]
@@ -169,7 +203,7 @@ public class Plugin : IPlugin
         MyStoreBlock store,
         MyStoreItem item,
         int amount,
-        MyCharacter character,
+        long source,
         double tick
     )
     {
@@ -177,7 +211,7 @@ public class Plugin : IPlugin
             store.CreateSellItemRequest(
                 item.Id,
                 amount,
-                character.EntityId,
+                source,
                 tick,
                 r => Say("SELL " + r.Result)
             );

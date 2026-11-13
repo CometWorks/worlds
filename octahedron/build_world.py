@@ -46,6 +46,10 @@ SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/omni-arc-beam-shipyard.
 # the rock around it as the game saved it (SE-986, SE-1118)
 MOON_SHIPYARD_BLUEPRINT = Path(__file__).parent / "blueprints/alien-shipyard.sbc"
 MOON_SHIPYARD_ROCK = Path(__file__).parent / "blueprints/alien-shipyard-rock.vx2"
+# More docking connectors, refill stations and batteries, merged into each station (SE-1388)
+STATION_EXTENDER_BLUEPRINT = Path(__file__).parent / "blueprints/station-extender.sbc"
+# The grid storage key of the Octahedron plugin's station patch ledger (StationPatches.cs)
+STATION_PATCH_LEDGER = "c4d21234-6b0e-4f3a-9e57-2e8b1238a0f1"
 MES_MODS = CONFIG / "mes-mods.xml"
 MES_STORAGE = CONFIG / "storage"
 RELATIVE_TOP_SPEED = CONFIG / "relative-top-speed.xml"
@@ -214,6 +218,17 @@ SHIPYARD_EXTRA_ROLL_DEGREES = {
 }
 # The pair's block bounds stay this far inside the safe zone's edge
 SAFE_ZONE_MARGIN = 10.0
+# The visitor connectors a Station Extender replaces (SE-1388), by cell: the two of the four on
+# the station's arms whose outward side points most away from its shipyard. main() checks them.
+STATION_EXTENDERS = {
+    "North Station": ((0, 0, -13), (-13, 0, 0)),
+    "South Station": ((0, 0, -13), (-13, 0, 0)),
+    "Alpha Station": ((13, 0, 0), (0, 0, -13)),
+    "Beta Station": ((0, 0, -13), (-13, 0, 0)),
+    "Gamma Station": ((0, 0, -13), (-13, 0, 0)),
+    "Delta Station": ((0, 0, -13), (-13, 0, 0)),
+    "Moon Station": ((-13, 0, 0), (0, 0, 13)),
+}
 # Moon Station has the Alien Shipyard instead (make_moon_shipyard.py, SE-986, SE-1118), in a
 # Uraninite rock of its own, where Viktor placed the Moon Shipyard in the design world "Octahedron
 # Design Moon Shipyard" (SE-1069): the Alien Shipyard's block bounds have the same center. In the
@@ -783,8 +798,114 @@ def clear_program(block):
     set_child(block, "Enabled", "false")
 
 
+DIRECTIONS = {
+    "Forward": (0, 0, -1),
+    "Backward": (0, 0, 1),
+    "Left": (-1, 0, 0),
+    "Right": (1, 0, 0),
+    "Up": (0, 1, 0),
+    "Down": (0, -1, 0),
+}
+
+
+def block_cell(block):
+    m = block.find("Min")
+    return tuple(int(m.get(k, 0)) if m is not None else 0 for k in "xyz")
+
+
+def block_facing(block):
+    """(Forward, Up) direction names of a block, the defaults a blueprint leaves out filled in."""
+    o = block.find("BlockOrientation")
+    get = (lambda k: k) if o is None else (lambda k: o.get(k, k))
+    return get("Forward"), get("Up")
+
+
+def place_block(block, cell, forward, up):
+    for old in block.findall("Min") + block.findall("BlockOrientation"):
+        block.remove(old)
+    at = list(block).index(block.find("EntityId")) + 1
+    orientation = ET.Element("BlockOrientation", Forward=forward, Up=up)
+    block.insert(at, orientation)
+    block.insert(at, ET.Element("Min", {k: str(v) for k, v in zip("xyz", cell)}))
+
+
+def connector_out(block):
+    return DIRECTIONS[block_facing(block)[0]]
+
+
+def merge_extenders(grid, name, ids):
+    """Merges a Station Extender into the station grid at each connector of STATION_EXTENDERS
+    (SE-1388). That connector and the pipe end behind it become the reinforced conveyor tube the
+    extender has behind its "Inset Connector to Station", and that inset connector a T tube, so
+    the tube up to the extender's top connector keeps its link. Its connectors get the replaced
+    connector's name; station() makes them trade like the others."""
+    extender = ET.parse(STATION_EXTENDER_BLUEPRINT).getroot().find(".//CubeGrid")
+    parts = {block_cell(b): b for b in extender.find("CubeBlocks")}
+    tube, tee = parts[(0, 0, 1)], parts[(0, 0, 6)]
+    assert parts[(0, 0, 0)].findtext("CustomName") == "Inset Connector to Station"
+    blocks = grid.find("CubeBlocks")
+    cells = {block_cell(b): b for b in blocks}
+    # Ids of their own, so every grid after the stations keeps the ids it had before them
+    own = Ids(random.Random(f"{name} extenders"))
+    own.used = ids.used
+    names = {v: k for k, v in DIRECTIONS.items()}
+    for at in STATION_EXTENDERS[name]:
+        connector = cells[at]
+        assert connector.findtext("SubtypeName") == "Connector", (name, at)
+        out = connector_out(connector)
+        behind = cells[sub(at, out)]
+        assert behind.findtext("SubtypeName") == "LargeBlockConveyorPipeEnd", (name, at)
+        # The extender's z axis points out of the station, its catwalks' side (its -y) up
+        down = (0, -1, 0)
+        axes = (cross(down, out), down, out)
+
+        def turn(v):
+            return tuple(sum(v[i] * axes[i][k] for i in range(3)) for k in range(3))
+
+        def put(source, cell, facing):
+            block = copy.deepcopy(source)
+            for node in block.iter("EntityId"):
+                if node.text and node.text != "0":
+                    node.text = str(own.new())
+            forward, up = (names[turn(DIRECTIONS[d])] for d in facing)
+            place_block(block, cell, forward, up)
+            if block.get(XSI_TYPE) == "MyObjectBuilder_ShipConnector":
+                set_child(block, "CustomName", connector.findtext("CustomName"))
+            blocks.append(block)
+
+        for old in (connector, behind):
+            blocks.remove(old)
+            put(tube, block_cell(old), block_facing(tube))
+        start = add(at, out)
+        for cell, part in parts.items():
+            target = add(start, turn(cell))
+            assert target not in cells, (name, target)
+            if cell == (0, 0, 0):
+                # Through along z, the branch up the extender's +y
+                put(tee, target, ("Right", "Down"))
+            else:
+                put(part, target, block_facing(part))
+
+
+def check_extenders(template, name, center, forward, up, yard):
+    """Fails unless STATION_EXTENDERS names the two arm connectors of the station whose outward
+    side points most away from its shipyard's center yard."""
+    away = norm(sub(yard, center))
+    local = (dot(away, cross(forward, up)), dot(away, up), -dot(away, forward))
+    arms = sorted(
+        (dot(connector_out(b), local), block_cell(b))
+        for b in template.find("CubeBlocks")
+        if b.findtext("SubtypeName") == "Connector"
+    )
+    wanted = {cell for _, cell in arms[:2]}
+    assert wanted == set(
+        STATION_EXTENDERS[name]
+    ), f"{name}: extenders belong on {wanted}"
+
+
 def station(template, ids, name, center, forward, up, owner):
     grid = clone_grid(template, ids)
+    merge_extenders(grid, name, ids)
     place_grid(grid, center, forward, up)
     set_child(grid, "DisplayName", name)
     set_child(grid, "IsStatic", "true")
@@ -1698,6 +1819,34 @@ def world_patch_ledger(checkpoint):
     value.set(XSI_TYPE, "xsd:string")
 
 
+def station_patch_ledgers(objects):
+    """The plugin's station patch ledger (StationPatches.cs LedgerKey, a grid storage key) on each
+    grid a patch of config/octahedron.cfg changes, listing those patches: a world built here has
+    their changes already, and the plugin would find the cells of a patch's From changed.
+    """
+    config = ET.parse(CONFIG / "octahedron.cfg").getroot()
+    patches = defaultdict(list)
+    for entry in config.iterfind("StationPatches/StationPatchEntry"):
+        patches[entry.findtext("Grid")].append(entry.findtext("Id"))
+    for grid in objects:
+        ids = patches.get(grid.findtext("DisplayName"))
+        # Not the station's safe zone, which has its name too
+        if not ids or grid.get(XSI_TYPE) != "MyObjectBuilder_CubeGrid":
+            continue
+        storage = next(
+            (
+                data.find("Component/Storage/dictionary")
+                for data in grid.iterfind("ComponentContainer/Components/ComponentData")
+                if data.findtext("TypeId") == "MyModStorageComponent"
+            ),
+            None,
+        )
+        assert storage is not None, f"{grid.findtext('DisplayName')} has no mod storage"
+        item = el(storage, "item")
+        el(item, "Key", STATION_PATCH_LEDGER)
+        el(item, "Value", ",".join(ids))
+
+
 def write_xml(tree, path):
     tree.write(path, encoding="utf-8", xml_declaration=True)
     # xsi:type values name xsd types, so the root needs xsd declared even where ElementTree sees no use for it
@@ -1825,6 +1974,7 @@ def main():
                 SHIPYARD_EXTRA_ROLL_DEGREES.get(name, 0.0),
             )
         shipyards[name] = yard
+        check_extenders(template, name, station_center, forward, up, yard[0])
         grid = station(template, ids, name, station_center, forward, up, owner)
         objects.append(grid)
         trade_stations[name] = (grid.findtext("EntityId"), station_center, forward, up)
@@ -1872,6 +2022,7 @@ def main():
     for lane in elevators:
         add_lane(*lane)
     world_patch_ledger(checkpoint)
+    station_patch_ledgers(objects)
 
     for tree, name in (
         (sector_tree, "SANDBOX_0_0_0_.sbs"),
