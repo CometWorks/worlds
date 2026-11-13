@@ -27,7 +27,7 @@ namespace ServerPlugin;
 // generator, and pays every reward from its account:
 // - hauling: a package to another station, the game's delivery contract;
 // - acquisition: items OCT's stock at the station lacks (the station's profile and
-//   ContractAcquisitionStock), delivered at the station's contract block into OCT's stock there,
+//   MarketTargetStock), delivered at the station's contract block into OCT's stock there,
 //   paying more the further below its target the stock is;
 // - bounty: an NPC grid near the station, done when its threat score drops to a quarter or it is
 //   gone while the hunter is near;
@@ -598,7 +598,7 @@ internal static class Contracts
             .Where(i => i != null)
             .ToList();
         var posted = 0;
-        // The market's profile and ContractAcquisitionStock are OCT's targets at every station
+        // The market's targets: MarketTargetStock and the station's profile
         foreach (var (item, missing, target) in Market.Missing(station.Name))
         {
             if (!Stations.TryItemId(item, out var id) || open.Any(c => Items(c)?.ItemType == id))

@@ -530,8 +530,8 @@ internal static class Market
     private static Dictionary<string, List<(Regex Items, long Percent)>> stationPrices = new();
     private static string pricesKey;
     private static Dictionary<string, long> prices = new();
-    private static string acquisitionKey;
-    private static List<KeyValuePair<string, long>> acquisition = new();
+    private static string targetsKey;
+    private static List<KeyValuePair<string, long>> targetStock = new();
 
     /// <summary>The items OCT trades at every station.</summary>
     public static IReadOnlyList<string> Catalog()
@@ -663,26 +663,32 @@ internal static class Market
     }
 
     /// <summary>
+    /// The station's target stock, raw: MarketTargetStock, and its profile for the rest. OCT's
+    /// prices there follow it, and its acquisition contracts ask for what it lacks.
+    /// </summary>
+    public static List<KeyValuePair<string, long>> Targets(string station)
+    {
+        var targets = Parsed(
+                Config.MarketTargetStock,
+                ref targetsKey,
+                ref targetStock,
+                MarketBook.ParseAmounts,
+                "MarketTargetStock"
+            )
+            .Where(t => Catalog().Contains(t.Key))
+            .ToList();
+        return targets
+            .Concat(Profile(station).Where(p => targets.All(t => t.Key != p.Key)))
+            .ToList();
+    }
+
+    /// <summary>
     /// For OCT's acquisition contracts, on the authority: the items OCT holds less of at the station
-    /// than its target, with the amount missing and the target (raw). The targets are the station's
-    /// profile and ContractAcquisitionStock, where the profile wins: Moon Station asks for no
-    /// more uranium ingots than its own 10.
+    /// than its target, with the amount missing and the target (raw).
     /// </summary>
     public static List<(string Item, long Missing, long Target)> Missing(string station)
     {
-        var profile = Profile(station);
-        var targets = profile
-            .Concat(
-                Parsed(
-                        Config.ContractAcquisitionStock,
-                        ref acquisitionKey,
-                        ref acquisition,
-                        MarketBook.ParseAmounts,
-                        "ContractAcquisitionStock"
-                    )
-                    .Where(a => Catalog().Contains(a.Key) && profile.All(p => p.Key != a.Key))
-            )
-            .ToList();
+        var targets = Targets(station);
         return Book.Missing(station, targets)
             .Select(m => (m.Key, m.Value, targets.First(t => t.Key == m.Key).Value))
             .ToList();
@@ -793,7 +799,7 @@ internal static class Market
         public long BasePrice(string item) => ReferencePrice(item);
 
         public long Target(string station, string item) =>
-            Profile(station).FirstOrDefault(p => p.Key == item).Value;
+            Targets(station).FirstOrDefault(p => p.Key == item).Value;
 
         public IEnumerable<string> Catalog(string station) =>
             Market.Catalog().Where(i => ReferencePrice(i) > 0);

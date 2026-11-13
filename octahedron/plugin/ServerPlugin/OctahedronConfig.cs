@@ -1594,7 +1594,7 @@ public class OctahedronConfig : PluginConfig
     [StringOption(
         description: "Metals players must mine, comma separated: OCT never restocks their ores and ingots, nor the components "
             + "made from those ingots, whatever MarketMinStock says; only a station's own MarketStationStock entry restocks one "
-            + "there. It still buys them from players and sells what it bought, and ContractAcquisitionStock asks players for them.",
+            + "there. It still buys them from players and sells what it bought, and MarketTargetStock sets their target stock.",
         Parent = "market"
     )]
     public string MarketPlayerMinedMetals
@@ -1624,6 +1624,22 @@ public class OctahedronConfig : PluginConfig
         + "North Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
         + "South Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
         + "Moon Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000,Ore/Ice=200000,Ingot/Uranium=10";
+
+    [StringOption(
+        description: "Each station's target stock of items OCT doesn't top up, as Type/Subtype=units, comma separated, at every "
+            + "station: players and traders bring them. Below the target an item's price there is higher, up to MarketScarcityPercent "
+            + "when the station is out, and OCT's acquisition contracts ask for the rest. It wins over the station's profile amount "
+            + "for prices and contracts; OCT still tops up only to the profile amount.",
+        Parent = "market"
+    )]
+    public string MarketTargetStock
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "Ore/Uranium=10000,Ingot/Uranium=1000,Ore/Gold=100000,Ingot/Gold=10000,Ore/Silver=100000,Ingot/Silver=10000,"
+        + "Ore/Platinum=1000,Ingot/Platinum=100,"
+        + "Component/Superconductor=200,Component/Thrust=200,Component/Reactor=200,Component/GravityGenerator=20,Component/Medical=20";
 
     [StringOption(
         description: "Each station's specialties, which OCT buys at MarketSpecialtyPercent: Station name=Type/Subtype,..., stations separated by ;.",
@@ -1885,21 +1901,6 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 240;
-
-    [StringOption(
-        description: "What OCT asks for in acquisition contracts at every station besides its market profile, as Type/Subtype=units, "
-            + "comma separated: the target stock of each, MarketPlayerMinedMetals items included. OCT never restocks these, players "
-            + "bring them. A station's profile amount wins.",
-        Parent = "contracts"
-    )]
-    public string ContractAcquisitionStock
-    {
-        get;
-        set => SetField(ref field, value);
-    } =
-        "Ore/Gold=20000,Ore/Silver=20000,Ore/Platinum=10000,Ore/Uranium=10000,"
-        + "Ingot/Gold=500,Ingot/Silver=1000,Ingot/Platinum=200,Ingot/Uranium=200,"
-        + "Component/Superconductor=200,Component/Thrust=200,Component/Reactor=200,Component/GravityGenerator=20,Component/Medical=20";
 
     [IntOption(
         0,
