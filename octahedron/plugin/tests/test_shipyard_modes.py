@@ -266,12 +266,13 @@ def grind(a, b) -> None:
 
 def hack(a, b) -> None:
     """An NPC ship in the volume becomes the player's; an online player's and one sticking out don't"""
-    npc = place(a, "Pirate", "npc", "in:25")
-    across = place(a, "Too Long", "npc", "across:-25")
+    # Booked before the ships come in: an idle shipyard's sweep (SE-1383) clears NPC ships
     mark = sa.so_latest(a)
     reply = book(a, "hack")
     check("booked a Hack slot" in reply, f"booked: {reply}")
     check(wait_for(lambda: slot(a, "hack") is not None, 30), "it runs")
+    npc = place(a, "Pirate", "npc", "in:25")
+    across = place(a, "Too Long", "npc", "across:-25")
     told = sa.wait_chat(a, "sticks out of", 30, mark)
     check(told is not None, f"a ship sticking out is named: {told}")
     hacked = sa.wait_chat(a, slot_end("hack") + " 'Pirate' is yours", 60, mark)
@@ -289,11 +290,11 @@ def hack(a, b) -> None:
     remove(a, "Pirate", "Too Long")
 
     # Another player's ship, its owner online: not hacked
+    mark = sa.so_latest(a)
+    check("booked a Hack slot" in book(a, "hack"), "another hack slot")
     with Second():
         online = place(b, "Online Owner", "me", "in")
         theirs = me(b)
-    mark = sa.so_latest(a)
-    check("booked a Hack slot" in book(a, "hack"), "another hack slot")
     told = sa.wait_chat(a, "while its owner OctOther is online", 40, mark)
     check(told is not None, f"an online player's ship isn't hacked: {told}")
     time.sleep(CONFIG["ShipyardHackSeconds"] + 12)
