@@ -206,6 +206,8 @@ def main() -> int:
     # Out of sync range of the test's grids: a wreck near a player gets no contract
     away = (sx, sy - 30_000, sz)
     remote.character_teleport(*away)
+    # A reload first, as the cluster rig does: the options it doesn't name keep their defaults
+    set_options(remote, ContractBountyMinThreat=1)
 
     found = contracts(remote, post=True)
     others = found.pop("others")

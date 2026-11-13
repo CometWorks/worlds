@@ -942,7 +942,12 @@ internal static class Contracts
         var debris = state
             .Grids.Values.Where(r => r.Flags.HasFlag(ContractGridFlags.Debris))
             .ToList();
-        yield return $"Debris pieces: {debris.Count}, worth {debris.Sum(r => r.Value):N0} SC; areas to post: "
+        var targeted = state.Targets.Values.SelectMany(t => t.Grids).ToHashSet();
+        yield return $"Debris pieces: {debris.Count} (taken {debris.Count(r => targeted.Contains(r.Id))}, "
+            + $"given {debris.Count(r => state.Given.ContainsKey(r.Id))}, in zones {debris.Count(state.InActiveSafeZone)}, "
+            + $"offline {debris.Count(r => state.Offline?.ContainsKey(r.Id) == true)}; link {state.Rules.DebrisLink:0} m, "
+            + $"{state.Rules.DebrisMinPieces} pieces, radius {state.Rules.DebrisMaxRadius:0} m, least {state.Rules.MinValue:N0} SC), "
+            + $"worth {debris.Sum(r => r.Value):N0} SC; areas to post: "
             + string.Join(
                 ", ",
                 state.Areas().Select(a => $"{a.Members.Length} pieces worth {a.Value:N0} SC")
