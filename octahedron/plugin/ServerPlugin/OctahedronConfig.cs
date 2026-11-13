@@ -1713,7 +1713,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = "Ore/Ice=1000";
+    } = "Ore/Ice=1000,Ore/Stone=1000";
 
     [DoubleOption(
         0,
