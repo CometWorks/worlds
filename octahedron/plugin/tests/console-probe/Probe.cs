@@ -21,9 +21,10 @@ namespace ConsoleProbe;
 /// CONSOLEPROBE_OUT as "STEP\tTEXT", STEP counting the plan's command lines from 0; replies of a command
 /// that answers later (a change on the World Authority) come when they come.
 ///   wait SECONDS     let the game run
-///   clock DAYS       moves the clock that ages offline partitions in the contracts, a test's week
+///   away DAYS        moves the clock players are away by in the contracts, a test's month
 ///   anything else    a chat command line, for example "!oct market show Alpha"
 ///   pculimit N       sets the player's PCU limit in the contracts, so a test needn't own a million PCU
+/// Grid ids in the file CONSOLEPROBE_PLAN.strip are closed on the process holding them (CONSOLEPROBE_PLAN.stripped).
 /// Grid ids in the file CONSOLEPROBE_PLAN.convert become ships on the process holding them, as the game's
 /// Convert to Ship does, and are written to CONSOLEPROBE_PLAN.converted; on every process it is loaded on.
 /// Lines "tug grid player" in CONSOLEPROBE_PLAN.tow give the tug to the player and join it to the grid as a
@@ -89,6 +90,7 @@ public class Probe : IPlugin, ICommandResponder
         }
         Convert();
         Tow();
+        Strip();
         if (planPath == null || MySession.Static is not { Ready: true })
             return;
         if (line >= plan.Length)
@@ -120,9 +122,13 @@ public class Probe : IPlugin, ICommandResponder
                 .SetValue(null, int.Parse(next.Substring(9), CultureInfo.InvariantCulture));
             return;
         }
-        if (next.StartsWith("clock "))
+        if (next.StartsWith("away "))
         {
-            ShiftContractClock(double.Parse(next.Substring(6), CultureInfo.InvariantCulture));
+            ContractsField("AwayClockShift")
+                .SetValue(
+                    null,
+                    TimeSpan.FromDays(double.Parse(next.Substring(5), CultureInfo.InvariantCulture))
+                );
             return;
         }
         replying = step++;
@@ -169,6 +175,25 @@ public class Probe : IPlugin, ICommandResponder
             }
     }
 
+    // Grid ids in CONSOLEPROBE_PLAN.strip are closed where they are, a grid on a rotor too (the cluster's
+    // grid-delete refuses one), and written to CONSOLEPROBE_PLAN.stripped
+    private void Strip()
+    {
+        var path = planPathAll + ".strip";
+        if (planPathAll == null || !File.Exists(path) || MySession.Static is not { Ready: true })
+            return;
+        foreach (var text in File.ReadAllLines(path))
+            if (
+                long.TryParse(text, out var id)
+                && MyEntities.TryGetEntityById(id, out var entity)
+                && entity is MyCubeGrid { MarkedForClose: false } grid
+            )
+            {
+                grid.Close();
+                File.AppendAllText(path + "ped", $"{id}\n");
+            }
+    }
+
     private readonly System.Collections.Generic.HashSet<string> towed = [];
 
     private void Tow()
@@ -194,9 +219,6 @@ public class Probe : IPlugin, ICommandResponder
             File.AppendAllText(planPathAll + ".towed", text + "\n");
         }
     }
-
-    private static void ShiftContractClock(double days) =>
-        ContractsField("OfflineClockShift").SetValue(null, TimeSpan.FromDays(days));
 
     private static FieldInfo ContractsField(string name) =>
         AppDomain

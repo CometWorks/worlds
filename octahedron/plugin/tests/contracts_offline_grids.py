@@ -9,8 +9,10 @@ partitions went offline before the plugin ran and never woke since.
 
 - The rows: at rest and on a drain offer, the blocks' mass of movable and static grids, the group of a grid on a
   rotor. A row read back from a Final save has only what a save can tell.
-- The armor wrecks at once. The hulls without power, and the group on a rotor as one contract, at 7.01 days.
-  Rewards by the rows' mass. Never the live hull, a lane computer, a station or the row from a Final.
+- The armor wrecks, the NPC's hulls without power and the ownerless group on a rotor as one contract, at
+  once (SE-1385: an NPC counts as away). A row has no components: rewards by the rows' mass at what the
+  reported grids are worth per kg, the same rate for all. Never the live hull, a lane computer, a station or
+  the row from a Final.
 - A graceful stop and warm start: the same contracts, nothing posted twice.
 - The zone a row can't tell: its node reports it once it wakes, and the contract is withdrawn.
 - A taken wreck: the player near it wakes it, it stays taken, gone with them near is done and paid. Nobody
@@ -24,7 +26,6 @@ Run on polaris on 2026-11-01: 43/43 checks. Most of the time is the 5 minute imp
 from __future__ import annotations
 
 import json
-import math
 import os
 import re
 import sys
@@ -55,7 +56,6 @@ from wa_economy_cluster import (
 from test_contracts import HEADER, LINE, position
 
 WITHOUT_ROWS = os.environ.get("OCT_CLUSTER_WITHOUT_ROWS") == "1"
-PER_TONNE = 100
 STATOR, ROTOR = LARGE_ID + 22, LARGE_ID + 23
 GRIDS |= {
     "Rotor Hull": LARGE_ID + 20,
@@ -185,12 +185,6 @@ def run(bench) -> None:
             c[0]: c[2] for list_ in found.values() for c in list_ if c[1] == "wreck"
         }
 
-    def shift_clock(days: float) -> None:
-        # The probe's own line, with no reply to wait for; the next command runs after it
-        with wa.lc.PLAN.open("a") as plan:
-            plan.write(f"clock {days}\n")
-        time.sleep(12)
-
     def owner(name: str) -> tuple[str, int] | None:
         found = bench.entity_owner(bench.diag(), GRIDS[name])
         return found[0] if found else None
@@ -254,9 +248,17 @@ def run(bench) -> None:
         cluster.wait_ready(nodes=processes)
         configure(offline_enabled="false")
 
-    def reward(*names: str) -> int:
+    # A row has no components: SC per kg of what the nodes reported, the same for every row posted together
+    rate = []
+
+    def priced(found: dict, *names: str) -> bool:
+        """The contract on names[0] pays the group's row mass at the rate"""
         have = rows()
-        return math.ceil(sum(have[n]["m"] for n in names) / 1000 * PER_TONNE)
+        mass = sum(have[n]["m"] for n in names)
+        paid = [c[3] for c in named(found, names[0], "wreck")]
+        if not rate and paid:
+            rate.append(paid[0] / mass)
+        return len(paid) == 1 and abs(paid[0] - mass * rate[0]) <= 2
 
     cluster.kill()
     cluster.prepare(wipe=True)
@@ -382,51 +384,31 @@ def run(bench) -> None:
         check("graceful stop at the end", cluster.stop(grace=240))
         return
 
-    # --- at once: the armor wrecks ---
-    found = wait_until(
-        lambda: (f := post()) and ARMOR_ONLY <= wreck_names(f) and f,
+    # --- at once: the armor wrecks and the hulls without power ---
+    wait_until(
+        lambda: (f := post()) and ARMOR_ONLY | WITHOUT_POWER <= wreck_names(f) and f,
         300,
-        "the armor wrecks",
+        "the wrecks",
         15,
     )
     print(contracts()[1], flush=True)
-    check(
-        "a wreck contract for each armor wreck no report named",
-        wreck_names(found) == ARMOR_ONLY,
-        wreck_names(found),
-    )
-    for name in ARMOR_ONLY:
-        check(
-            f"{name}: pays by the row's mass",
-            [c[3] for c in named(found, name, "wreck")] == [reward(name)],
-            (named(found, name), reward(name)),
-        )
-
-    shift_clock(6.9)
     found = post()
     check(
-        "6.9 days offline: not the hulls without power",
-        wreck_names(found) == ARMOR_ONLY,
-        wreck_names(found),
-    )
-    shift_clock(7.01)
-    found = post()
-    check(
-        "7.01 days: the hulls without power, static too, and no other of the far grids",
+        "the armor wrecks and the hulls without power, static too, and no other far grid",
         wreck_names(found) == ARMOR_ONLY | WITHOUT_POWER,
         wreck_names(found),
     )
+    check("a rate per kg", priced(found, "Wreck Big") and rate[0] > 0, rate)
+    for name in ARMOR_ONLY | {"Dead Hull", "Static Hull"}:
+        check(
+            f"{name}: pays by the row's mass, at the same rate",
+            priced(found, name),
+            (named(found, name), rate),
+        )
     check(
         "the group on a rotor: one contract, on its bigger grid, paying for both",
-        [c[3] for c in named(found, "Rotor Hull", "wreck")]
-        == [reward("Rotor Hull", "Rotor Arm")]
-        and not named(found, "Rotor Arm"),
-        (named(found, "Rotor"), reward("Rotor Hull", "Rotor Arm")),
-    )
-    check(
-        "the static hull pays by its blocks' mass",
-        [c[3] for c in named(found, "Static Hull", "wreck")] == [reward("Static Hull")],
-        named(found, "Static Hull"),
+        priced(found, "Rotor Hull", "Rotor Arm") and not named(found, "Rotor Arm"),
+        named(found, "Rotor"),
     )
     check("no lane computer", not named(found, "TL "), named(found, "TL "))
     check("no station", not named(found, "Station Shipyard"), "")
@@ -444,7 +426,6 @@ def run(bench) -> None:
 
     # --- a restart ---
     warm_start()
-    shift_clock(7.01)
     found = wait_until(
         lambda: (f := post()) and wrecks(f) and f, 240, "the contracts back", 15
     )
@@ -453,7 +434,6 @@ def run(bench) -> None:
         wrecks(found) == posted,
         f"{posted} -> {wrecks(found)}",
     )
-    shift_clock(0)
 
     # --- awake: what the row couldn't tell ---
     wake("Zone Wreck")
@@ -557,13 +537,11 @@ def main() -> int:
         ContractsEnabled="false",
         MoneyEnabled="true",
         ContractSalvageMinBlocks=1,
-        ContractSalvageRewardPerTonne=PER_TONNE,
         # The hourly split would change the balances the test compares
         MoneySubsidyPerActivePlayer=0,
-        ContractWreckContracts=30,
-        ContractWreckPool=30,
+        ContractHuntPerStation=30,
+        ContractWreckMinReward=0,
         ContractBountiesPerStation=0,
-        ContractSalvagePerStation=0,
         MarketEnabled="false",
     )
     results = bench_module.HOST.results / datetime.now(timezone.utc).strftime(

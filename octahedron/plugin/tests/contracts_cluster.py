@@ -1,41 +1,43 @@
-"""Bounties, salvage and wreck salvage on a local test cluster (SE-702), through the cluster's own scenario
+"""Bounties and the wreck hunt on a local test cluster (SE-702, SE-1385), through the cluster's own scenario
 bench. Same bench and world as wa_economy_cluster.py; read its docstring for host.env. The nodes report the
 grids, the World Authority posts and decides; the console probe on the WA runs !oct contracts there, and its
-`clock` line moves the clock that ages offline partitions.
+`away` line moves the clock players are away by.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/contracts_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 
-Near Alpha: an NPC ship, a derelict with an arm on a rotor, and another derelict already at the shipyard. Far
-from every station, each in its own partition once the bench takes them offline: three armor-only wrecks of
-different sizes, a hull without power, a hull with a charged battery and a static hull without power. The minimum blocks is one,
-so the world's Trade Lane Computers would count.
+Near Alpha: an NPC ship, a derelict with an arm on a rotor, another derelict already at the shipyard, and two more
+derelicts. Far from every station: three armor-only wrecks of different sizes, an NPC's hulls without power,
+static or not, an NPC's hull with a charged battery, a hull of a player long gone, a wreck in a safe zone, a
+wreck the player is near, and a field of five debris pieces. The minimum blocks is one, so the world's Trade Lane
+Computers would count; debris is the pieces under two blocks.
 
 - With no target anywhere a node reports once a minute, the full scan; with targets every 30 seconds.
-- A bounty and a salvage contract from the nodes' reports, none on the derelict already at the shipyard. A
-  larger salvage radius stands in for the tow: the taken derelict and its arm then belong to the player on the
-  node holding them, the World Authority having decided, and it stays out of later contracts. A completed
-  bounty is paid by OCT.
+- A bounty and wreck contracts from the nodes' reports, anywhere, each at the nearest station: the derelict near
+  Alpha, the armor wrecks paying by their components (60:40:25 armor blocks), an area cleanup on the debris. None
+  on the derelict already at the shipyard, the safe zone's, the live hull's, the lane computers', the wreck the
+  player is within sync range of, the NPC's hulls before ContractNpcWreckMinutes, or the hull of a player who is
+  around. The player leaves, the NPC time passes, the player is 31 days away: those are posted too. The player
+  "back": the open contract on their hull is withdrawn.
+- The wrecks stay posted while their partitions sleep.
+- The derelict towed in (a larger radius stands in for the tow) without its arm, which was cut off: paid what is
+  left, less than posted, and the player's, with !oct scrap offered in chat. A second one towed in and scrapped
+  with !oct scrap: gone, the reward kept. A third over the player's limit: paid and broken down at once.
 - A block the player built and left ownerless gets a contract, which they can't take for pay.
-- The one biggest wreck with a pool of one, at the nearest station, then the other two.
-- The hulls without power, static or not: not at 6.9 days offline, yes at 7.01, paying for the static one's
-  mass too. The live one and the lane computers never.
-- Taken wreck with the player there: its partition waking changes nothing; deleted, it counts as done.
-  Taken with the player away: fails. Nobody took it: withdrawn.
-- A taken static wreck stays taken when converted to a ship; deleted, it counts as done.
-- A node restart keeps the contracts, and so does a graceful cluster stop and warm start, with the player's
-  ownership and the memory of the given grid.
-
-- A derelict more than 10% over the player's limit at the shipyard: the contract pays and the grid is broken
-  down at once.
 - NPC ships held by a player's tug at the shipyard, with no contract: over a ship's PCU limit, with the turn from
   that derelict still running, one is sold at once; more than 10% over the player's, with the shipyard free,
   one is broken down; 5% over, the third is the player's with a warning, unpaid. The test's probe gives the
   tug and joins the grids as a connector would, and sets the player's limit.
+- Taken wreck with the player there: its partition waking changes nothing; deleted, it counts as done.
+  Taken with the player away: fails. Nobody took it: withdrawn.
+- The debris area: its pieces deleted with the player near, done and paid.
+- A taken static wreck stays taken when converted to a ship; deleted, it counts as done.
+- A node restart keeps the contracts, and so does a graceful cluster stop and warm start, with the player's
+  ownership and the memory of the given grid.
 
-Grinding down, repairing a wreck and the seated and claimed rules are checked in
-tests/contracts/ContractTests.
+Grinding down, repairing a wreck, the seated and claimed rules, the most valuable first and the area geometry are
+checked in tests/contracts/ContractTests.
 
-Takes about an hour, most of it waiting out the 5 minute import grace on grid deletes.
+Takes over an hour, most of it waiting out the 5 minute import grace on grid deletes.
 
 """
 
@@ -89,6 +91,18 @@ GRIDS = {
     "Scrap Derelict": LARGE_ID + 30,
     "Big Pirate": LARGE_ID + 31,
     "Over Pirate": LARGE_ID + 32,
+    "Over Derelict": LARGE_ID + 33,
+    "Gone Hull": LARGE_ID + 34,
+    "Near Wreck": LARGE_ID + 35,
+    **{f"Debris {i}": LARGE_ID + 40 + i for i in range(1, 6)},
+}
+# A player of the world who hasn't been on since the plugin started recording
+GONE_PLAYER = 144115188075855777
+# Their own spots: far_point's crowd together past index 6
+EXTRA_AT = {
+    "Gone Hull": (-40_000.0, 40_000.0, -480_000.0),
+    "Near Wreck": (40_000.0, -40_000.0, -480_000.0),
+    **{f"Debris {i}": (0.0, 60_000.0 + 100 * i, -470_000.0) for i in range(1, 6)},
 }
 NEAR = (
     "Bounty Target",
@@ -100,8 +114,9 @@ NEAR = (
     "Scrap Derelict",
     "Big Pirate",
     "Over Pirate",
+    "Over Derelict",
 )
-FAR = [name for name in GRIDS if name not in NEAR]
+FAR = [name for name in GRIDS if name not in NEAR and name not in EXTRA_AT]
 STATOR, ROTOR = LARGE_ID + 12, LARGE_ID + 13
 # Ten stations' worth of room between them: a partition each, none near another
 SPACING = 40_000
@@ -119,8 +134,8 @@ def armor(count: int, start_z: int = 0) -> list[str]:
     ]
 
 
-def hull(stored_mwh: float) -> list[str]:
-    own = f"<Owner>{SPRT_MEMBER}</Owner><BuiltBy>{SPRT_MEMBER}</BuiltBy>"
+def hull(stored_mwh: float, owner: int = SPRT_MEMBER) -> list[str]:
+    own = f"<Owner>{owner}</Owner><BuiltBy>{owner}</BuiltBy>"
     return [
         rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 0, 0), own),
         rig.block(
@@ -181,6 +196,9 @@ def add_grids() -> None:
         "Live Hull": hull(1),
         "Static Hull": hull(0),
         "Zone Wreck": armor(10),
+        "Gone Hull": hull(0, GONE_PLAYER),
+        "Near Wreck": armor(10),
+        **{f"Debris {i}": [rig.block(*ARMOR, (0, 0, 0))] for i in range(1, 6)},
     }
     grids = [
         rig.grid(
@@ -254,6 +272,15 @@ def add_grids() -> None:
             position=(sx, sy - 2000, sz),
         ),
         rig.grid(
+            "Over Derelict",
+            GRIDS["Over Derelict"],
+            [
+                rig.block("MyObjectBuilder_Cockpit", "LargeBlockCockpit", (0, 1, 0)),
+                *armor(30),
+            ],
+            position=(sx, sy - 2200, sz),
+        ),
+        rig.grid(
             "Yard Derelict",
             GRIDS["Yard Derelict"],
             [
@@ -278,9 +305,22 @@ def add_grids() -> None:
             if name in ("Static Hull", "Zone Wreck")
             else xml
         )
+    for name, at in EXTRA_AT.items():
+        grids.append(rig.grid(name, GRIDS[name], blocks[name], position=at))
     grids.append(zone_around(zone_point(where)))
     text = text.replace("</SectorObjects>", "".join(grids) + "</SectorObjects>", 1)
     sector.write_text(text, encoding="utf-8")
+    sandbox = rig.WORLD / "Sandbox.sbc"
+    sandbox.write_text(
+        sandbox.read_text(encoding="utf-8").replace(
+            "<Identities>",
+            "<Identities><MyObjectBuilder_Identity>"
+            f"<IdentityId>{GONE_PLAYER}</IdentityId><DisplayName>Gone Player</DisplayName>"
+            "<CharacterEntityId>0</CharacterEntityId></MyObjectBuilder_Identity>",
+            1,
+        ),
+        encoding="utf-8",
+    )
 
 
 def run(bench) -> None:
@@ -318,6 +358,8 @@ def run(bench) -> None:
                 found[current].append((int(m[1]), m[2], m[3], number(m[4]), m[5]))
             elif KNOWN_LINE.search(line):
                 known = line
+            elif line.startswith("Debris pieces"):
+                print(line, flush=True)
         return found, known
 
     def post() -> dict[str, list[tuple]]:
@@ -333,16 +375,16 @@ def run(bench) -> None:
         ]
 
     def wreck_names(found: dict) -> set[str]:
-        return {name for name in FAR for c in named(found, name, "wreck")}
+        return {name for name in [*FAR, *EXTRA_AT] if named(found, name, "wreck")}
 
     def reconfigure(**values) -> None:
         set_config(**values)
         command("!oct reload")
 
-    def shift_clock(days: float) -> None:
+    def away(days: float) -> None:
         # The probe's own line, with no reply to wait for; the next command runs after it
         with wa.lc.PLAN.open("a") as plan:
-            plan.write(f"clock {days}\n")
+            plan.write(f"away {days}\n")
         time.sleep(12)
 
     def owner(name: str) -> tuple[str, int] | None:
@@ -467,116 +509,7 @@ def run(bench) -> None:
     # Three minutes on two nodes: 3 full reports each, one more at the edges of the window
     idle = reports_in(180)
     check("no target anywhere: only the full reports", idle <= 8, idle)
-    reconfigure(ContractBountiesPerStation=5, ContractSalvagePerStation=2)
-    found = post()
-    bounty = named(found, "Bounty Target", "bounty")
-    salvage = named(found, "Test Derelict", "salvage")
-    check(
-        "a bounty on the NPC grid",
-        len(bounty) == 1 and bounty[0][3] > 0,
-        found.get("Alpha Station"),
-    )
-    check(
-        "a salvage contract on the derelict",
-        len(salvage) == 1 and salvage[0][3] > 0,
-        found.get("Alpha Station"),
-    )
-    check(
-        "a derelict already at the shipyard gets no contract",
-        not named(found, "Yard Derelict"),
-        found.get("Alpha Station"),
-    )
-    check(
-        "both at Alpha",
-        bounty[0] in found["Alpha Station"] and salvage[0] in found["Alpha Station"],
-    )
-    check(
-        "hauling still posted",
-        any(c[1] == "hauling" for list_ in found.values() for c in list_),
-    )
-    check(
-        "no wreck contract while no partition is offline",
-        not wreck_names(found),
-        wreck_names(found),
-    )
-
-    # A node learns of its target from its next full report, then reports every 30 seconds
-    busy = reports_in(180)
-    check("with targets: short reports too", busy >= 9, busy)
-
-    # --- wrecks ---
-    cluster.handover_config(
-        {"offline.minOnlineSeconds": "0", "offline.graceSeconds": "0"}
-    )
-    wait_until(
-        lambda: all(any(GRIDS[n] in m for m in offline().values()) for n in FAR),
-        420,
-        "the far grids offline",
-    )
-    # The World Authority reads the table once a minute
-    wait_until(
-        lambda: (m := KNOWN_LINE.search(contracts()[1]))
-        and m[3].isdigit()
-        and int(m[3]) >= 3,
-        150,
-        "the wrecks known",
-    )
-    print(contracts()[1], flush=True)
-    reconfigure(ContractWreckContracts=1, ContractWreckPool=1)
-    found = post()
-    check(
-        "the one biggest with a pool of one",
-        wreck_names(found) == {"Wreck Big"},
-        wreck_names(found),
-    )
-    where = stations()
-    big = next(
-        s for s, list_ in found.items() if any("Wreck Big" in c[4] for c in list_)
-    )
-    sector = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
-    at = position("Wreck Big", sector)
-    distance = lambda name: sum((a - b) ** 2 for a, b in zip(at, where[name])) ** 0.5
-    check("posted at the nearest station", big == min(where, key=distance), big)
-
-    reconfigure(ContractWreckContracts=9, ContractWreckPool=9)
-    found = post()
-    armor_only = {"Wreck Big", "Wreck Mid", "Wreck Small"}
-    check(
-        "all the armor wrecks, at once",
-        wreck_names(found) == armor_only,
-        wreck_names(found),
-    )
-
-    check(
-        "a wreck in an active safe zone, asleep with it: no contract",
-        offline_partition("Zone Wreck") is not None and not named(found, "Zone Wreck"),
-        named(found, "Zone Wreck"),
-    )
-
-    shift_clock(6.9)
-    found = post()
-    check(
-        "6.9 days offline: not the hull without power",
-        wreck_names(found) == armor_only,
-        wreck_names(found),
-    )
-    shift_clock(7.01)
-    found = post()
-    check(
-        "7.01 days offline: the hulls without power, static too, and nothing else",
-        wreck_names(found) == armor_only | {"Dead Hull", "Static Hull"},
-        wreck_names(found),
-    )
-    check(
-        "no lane computer, ownerless and without power as they are",
-        not named(found, "TL "),
-        named(found, "TL "),
-    )
-    static = named(found, "Static Hull", "wreck")
-    check("the static hull pays by its mass", static and static[0][3] > 0, static)
-    shift_clock(0)
-
-    # --- a player takes them ---
+    # The player first, within sync range of one wreck
     link_mods(
         Client(
             bench.run_root,
@@ -591,14 +524,153 @@ def run(bench) -> None:
     identity = api.get_faction()["identityId"]
     check("the client has an identity", identity, identity)
     Path(f"{wa.lc.PLAN}.air").touch()
+    sector = (rig.WORLD / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    near_wreck = position("Near Wreck", sector)
+    api.character_teleport(near_wreck[0] + 300, near_wreck[1], near_wreck[2])
+    wait_until(lambda: owner("Near Wreck"), 180, "the near wreck awake")
+    # Past a full report with the player there
+    time.sleep(70)
 
-    # Beside the derelict, so its partition is awake
+    reconfigure(ContractBountiesPerStation=5, ContractHuntPerStation=30)
+    found = post()
+    bounty = named(found, "Bounty Target", "bounty")
+    salvage = named(found, "Test Derelict", "wreck")
+    check(
+        "a bounty on the NPC grid",
+        len(bounty) == 1 and bounty[0][3] > 0,
+        found.get("Alpha Station"),
+    )
+    check(
+        "a wreck contract on the derelict near Alpha",
+        len(salvage) == 1
+        and salvage[0][3] > 0
+        and salvage[0] in found["Alpha Station"],
+        found.get("Alpha Station"),
+    )
+    check(
+        "a derelict already at the shipyard gets no contract",
+        not named(found, "Yard Derelict"),
+        found.get("Alpha Station"),
+    )
+    check("the bounty at Alpha", bounty[0] in found["Alpha Station"])
+    check(
+        "hauling still posted",
+        any(c[1] == "hauling" for list_ in found.values() for c in list_),
+    )
+    armor_only = {"Wreck Big", "Wreck Mid", "Wreck Small"}
+    check(
+        "the armor wrecks anywhere, online, and none of the others yet",
+        wreck_names(found) == armor_only,
+        wreck_names(found),
+    )
+    where = stations()
+    big = next(
+        s for s, list_ in found.items() if any("Wreck Big" in c[4] for c in list_)
+    )
+    at = position("Wreck Big", sector)
+    distance = lambda name: sum((a - b) ** 2 for a, b in zip(at, where[name])) ** 0.5
+    check("posted at the nearest station", big == min(where, key=distance), big)
+    pay = {n: named(found, n, "wreck")[0][3] for n in armor_only}
+    check(
+        "paying by their components: 60, 40 and 25 armor blocks",
+        abs(pay["Wreck Big"] / 60 - pay["Wreck Small"] / 25) <= 1
+        and abs(pay["Wreck Mid"] / 40 - pay["Wreck Small"] / 25) <= 1,
+        pay,
+    )
+    check(
+        "a wreck in an active safe zone: no contract",
+        not named(found, "Zone Wreck"),
+        named(found, "Zone Wreck"),
+    )
+    check("not the live hull", not named(found, "Live Hull"), "")
+    check(
+        "no lane computer, ownerless and without power as they are",
+        not named(found, "TL "),
+        named(found, "TL "),
+    )
+    check(
+        "not the wreck the player is within sync range of",
+        not named(found, "Near Wreck"),
+        named(found, "Near Wreck"),
+    )
+    check(
+        "not the NPC's hulls before ContractNpcWreckMinutes",
+        not named(found, "Dead Hull") and not named(found, "Static Hull"),
+        "",
+    )
+    check(
+        "not the hull of a player who isn't away yet",
+        not named(found, "Gone Hull"),
+        "",
+    )
+    area = named(found, "Debris", "area")
+    check(
+        "an area cleanup on the debris field",
+        len(area) == 1 and "and 4 more" in area[0][4] and area[0][3] > 0,
+        named(found, "Debris"),
+    )
+
     shipyard = position("Alpha Station Shipyard", sector)
+    api.character_teleport(shipyard[0], shipyard[1] - 900, shipyard[2])
+    time.sleep(40)
+    found = post()
+    check(
+        "the player gone: the near wreck posted",
+        named(found, "Near Wreck", "wreck"),
+        wreck_names(found),
+    )
+    reconfigure(ContractNpcWreckMinutes=0)
+    found = post()
+    check(
+        "the NPC's hulls without power, static too, once their time is up",
+        named(found, "Dead Hull", "wreck") and named(found, "Static Hull", "wreck"),
+        wreck_names(found),
+    )
+    check("the live hull still not", not named(found, "Live Hull"), "")
+    away(31)
+    found = post()
+    gone = named(found, "Gone Hull", "wreck")
+    check("the player 31 days away: their hull posted", gone, wreck_names(found))
+    away(0)
+    check(
+        "the player back: the open contract on their hull withdrawn",
+        wait_until(
+            lambda: not named(contracts()[0], "Gone Hull"), 120, "the withdrawal", 10
+        ),
+        named(contracts()[0], "Gone Hull"),
+    )
+
+    # A node learns of its targets from its next full report, then reports every 30 seconds
+    busy = reports_in(180)
+    check("with targets: short reports too", busy >= 9, busy)
+
+    # --- asleep ---
+    cluster.handover_config(
+        {"offline.minOnlineSeconds": "0", "offline.graceSeconds": "0"}
+    )
+    sleepers = ["Wreck Big", "Wreck Mid", "Wreck Small", "Dead Hull", "Static Hull"]
+    wait_until(
+        lambda: all(any(GRIDS[n] in m for m in offline().values()) for n in sleepers),
+        420,
+        "the far grids offline",
+    )
+    # Past a check with the gateway's table read
+    time.sleep(90)
+    found = post()
+    check(
+        "the wrecks stay posted while their partitions sleep",
+        {"Wreck Big", "Wreck Mid", "Wreck Small", "Dead Hull", "Static Hull"}
+        <= wreck_names(found),
+        wreck_names(found),
+    )
+
+    # --- a player takes them ---
+    bench.wait_spawned(CLIENT_ID)
     api.character_teleport(shipyard[0], shipyard[1] - 900, shipyard[2])
     holder = wait_until(lambda: owner("Test Derelict"), 180, "the derelict awake")
     before = balances(api)
     reply = " ".join(command(f"!oct contract accept {salvage[0][0]} {identity}"))
-    check("take the salvage contract", "Success" in reply, reply)
+    check("take the wreck contract on the derelict", "Success" in reply, reply)
     # Past a check: a taken derelict waits for the tow
     time.sleep(40)
     check(
@@ -606,10 +678,26 @@ def run(bench) -> None:
         balances(api) == before and not grid_owner("Test Derelict"),
         f"{balances(api)} owner {grid_owner('Test Derelict')}",
     )
+    # Stripped before the tow: its arm on the rotor cut off (grid-delete refuses a grid on a rotor)
+    Path(f"{wa.lc.PLAN}.strip").write_text(f"{GRIDS['Derelict Arm']}\n")
+    check(
+        "the arm cut off on its node",
+        wait_until(lambda: Path(f"{wa.lc.PLAN}.stripped").exists(), 60, "the arm gone"),
+    )
+    time.sleep(70)
     # The radius grows instead of the grid moving
     reconfigure(ContractSalvageRadius=1500)
-    now = paid(api, before, salvage[0][3])
-    still_paid("salvage at the shipyard", before, now, salvage[0][3])
+    end = time.monotonic() + 120
+    now = balances(api)
+    while time.monotonic() < end and now[1] == before[1]:
+        time.sleep(5)
+        now = balances(api)
+    got = now[1] - before[1]
+    check(
+        "towed in without its arm: paid what is left, less than posted, by OCT",
+        0 < got < salvage[0][3] and now[0] == before[0] - got,
+        f"{before} -> {now}, posted {salvage[0][3]:,}",
+    )
     holder = owner("Test Derelict")
     check(
         f"the derelict is the player's on {holder[0]}, not scrapped",
@@ -617,11 +705,8 @@ def run(bench) -> None:
         and holder[0] in nodes,
         grid_owner("Test Derelict"),
     )
-    check(
-        "and so is its arm",
-        wait_until(lambda: grid_owner("Derelict Arm") == identity, 60, "the arm"),
-        grid_owner("Derelict Arm"),
-    )
+    offer = chat("say !oct scrap within", 90)
+    check("chat offers to scrap it instead", offer and "Test Derelict" in offer, offer)
     found = post()
     check(
         "the given derelict gets no new contract",
@@ -629,27 +714,62 @@ def run(bench) -> None:
         found.get("Alpha Station"),
     )
 
-    # The same, too much for the player: the contract pays and the shipyard breaks the grid down
-    scrap = named(found, "Scrap Derelict", "salvage")
-    check(
-        "a salvage contract on the second derelict", scrap, found.get("Alpha Station")
-    )
+    # The second one: towed in, then scrapped at the player's word
+    scrap = named(found, "Scrap Derelict", "wreck")
+    check("a wreck contract on the second derelict", scrap, found.get("Alpha Station"))
+    reconfigure(ContractSalvageRadius=500)
     api.character_teleport(shipyard[0], shipyard[1] - 1900, shipyard[2])
     wait_until(lambda: owner("Scrap Derelict"), 180, "the second derelict awake")
     before = balances(api)
     reply = " ".join(command(f"!oct contract accept {scrap[0][0]} {identity}"))
-    check("take the second salvage contract", "Success" in reply, reply)
+    check("take the second one", "Success" in reply, reply)
+    reconfigure(ContractSalvageRadius=2500)
+    now = paid(api, before, scrap[0][3])
+    still_paid("the second one towed in", before, now, scrap[0][3])
+    wait_until(lambda: grid_owner("Scrap Derelict") == identity, 90, "the owner")
+    reply = " ".join(rig.chat(api, "!oct scrap", 15))
+    check(
+        "!oct scrap: the shipyard takes it apart",
+        "took 'Scrap Derelict' apart" in reply
+        and wait_until(lambda: not owner("Scrap Derelict"), 90, "the grid gone"),
+        reply,
+    )
+    time.sleep(20)
+    check("and the reward stays the player's", balances(api) == now, balances(api))
+    check(
+        "the nearest one only: the first derelict, farther away, stays the player's",
+        grid_owner("Test Derelict") == identity,
+        grid_owner("Test Derelict"),
+    )
+
+    # The third, too much for the player: the contract pays and the shipyard breaks the grid down
+    reconfigure(ContractSalvageRadius=500)
+    found = post()
+    over_contract = named(found, "Over Derelict", "wreck")
+    check(
+        "a wreck contract on the third derelict",
+        over_contract,
+        found.get("Alpha Station"),
+    )
+    api.character_teleport(shipyard[0], shipyard[1] - 2100, shipyard[2])
+    wait_until(lambda: owner("Over Derelict"), 180, "the third derelict awake")
+    before = balances(api)
+    reply = " ".join(command(f"!oct contract accept {over_contract[0][0]} {identity}"))
+    check("take the third", "Success" in reply, reply)
     set_pcu_limit(1)
     reconfigure(ContractSalvageRadius=2500)
-    over = chat('"Scrap Derelict" is too big to keep: with its', 150)
+    over = chat('"Over Derelict" is too big to keep: with its', 150)
     check("more than 10% over the player's limit: in chat", over, over)
     still_paid(
-        "salvage broken down", before, paid(api, before, scrap[0][3]), scrap[0][3]
+        "the third broken down",
+        before,
+        paid(api, before, over_contract[0][3]),
+        over_contract[0][3],
     )
-    done = chat("'Scrap Derelict'", 90)
+    done = chat("'Over Derelict'", 90)
     check(
         "the shipyard breaks it down at once, the player's turn starts",
-        done and wait_until(lambda: not owner("Scrap Derelict"), 90, "the grid gone"),
+        done and wait_until(lambda: not owner("Over Derelict"), 90, "the grid gone"),
         done,
     )
     set_pcu_limit(1_000_000)
@@ -666,10 +786,17 @@ def run(bench) -> None:
     )
     api.set_admin_flag("creativeTools", False)
     check("the player builds an armor block", built.get("reply") is True, built)
+    # Out of sync range of it, or it gets no contract
+    api.character_teleport(shipyard[0], shipyard[1] - 20_000, shipyard[2])
     time.sleep(70)
     found = post()
-    own = named(found, "Grid", "salvage")
-    check("their ownerless block gets a contract", own, found.get("Alpha Station"))
+    # The game names it "Large Grid NNN"
+    own = [c for c in named(found, "Cleanup: ", "area") if "Debris" not in c[4]]
+    check(
+        "their ownerless block, debris, gets an area contract",
+        own,
+        found.get("Alpha Station"),
+    )
     if own:
         before = balances(api)
         reply = " ".join(command(f"!oct contract accept {own[0][0]} {identity}"))
@@ -678,8 +805,9 @@ def run(bench) -> None:
         check("their own ship: not paid", balances(api) == before, balances(api))
         check(
             "and the contract is over",
-            not any(c[0] == own[0][0] for c in named(contracts()[0], "Grid")),
+            not any(c[0] == own[0][0] for c in named(contracts()[0], "Cleanup: ")),
         )
+    api.character_teleport(shipyard[0], shipyard[1] - 900, shipyard[2])
     found = post()
 
     before = balances(api)
@@ -809,6 +937,30 @@ def run(bench) -> None:
         "withdrawn when nobody took it", "withdrawn: its target is gone" in log("wa-1")
     )
 
+    # The debris field, cleared with the player there: done when no piece is left in it
+    cleanup = named(contracts()[0], "Debris", "area")[0]
+    before = balances(api)
+    debris = position("Debris 3", sector)
+    bench.wait_spawned(CLIENT_ID)
+    api.character_teleport(debris[0] + 300, debris[1], debris[2])
+    reply = " ".join(command(f"!oct contract accept {cleanup[0]} {identity}"))
+    check("take the area cleanup", "Success" in reply, reply)
+    for i in range(1, 5):
+        delete(f"Debris {i}")
+    time.sleep(70)
+    check(
+        "a piece left: still Active",
+        [c[2] for c in named(contracts()[0], "Debris", "area")] == ["Active"],
+        named(contracts()[0], "Debris"),
+    )
+    delete("Debris 5")
+    still_paid(
+        "the area cleared with the hunter near",
+        before,
+        paid(api, before, cleanup[3], 360),
+        cleanup[3],
+    )
+
     # The static hull, converted to a ship with the player there: the same contract, on the same grid
     static = named(contracts()[0], "Static Hull", "wreck")[0]
     before = balances(api)
@@ -927,6 +1079,8 @@ def main() -> int:
     os.environ["CLUSTER_EXTRA_PLUGINS"] = os.environ["CLUSTER_EXTRA_PLUGINS"].replace(
         f"wa:{wa.lc.PLUGINS / 'ConsoleProbe'}", str(wa.lc.PLUGINS / "ConsoleProbe")
     )
+    Path(f"{wa.lc.PLAN}.strip").unlink(missing_ok=True)
+    Path(f"{wa.lc.PLAN}.stripped").unlink(missing_ok=True)
     Path(f"{wa.lc.PLAN}.convert").unlink(missing_ok=True)
     Path(f"{wa.lc.PLAN}.converted").unlink(missing_ok=True)
     Path(f"{wa.lc.PLAN}.tow").unlink(missing_ok=True)
@@ -936,13 +1090,15 @@ def main() -> int:
         ContractsEnabled="true",
         MoneyEnabled="true",
         ContractBountyMinThreat=1,
-        ContractSalvageMinBlocks=1,
+        # Debris is the grids under 3 blocks: the lane computers, and the test's pieces
+        ContractSalvageMinBlocks=3,
+        ContractWreckMinReward=1,
+        ContractNpcWreckMinutes=600,
         # The hourly split would change the balances the test compares
         MoneySubsidyPerActivePlayer=0,
         ContractSalvageRadius=500,
-        ContractWreckContracts=0,
+        ContractHuntPerStation=0,
         ContractBountiesPerStation=0,
-        ContractSalvagePerStation=0,
         MarketEnabled="false",
     )
     results = bench_module.HOST.results / datetime.now(timezone.utc).strftime(
@@ -952,7 +1108,7 @@ def main() -> int:
     outcome = bench_module.run_scenario(
         run,
         "P2-OCT-CONTRACTS",
-        "SE-702: bounties, salvage and wrecks on a cluster",
+        "SE-702, SE-1385: bounties and the wreck hunt on a cluster",
         "3",
         results,
     )

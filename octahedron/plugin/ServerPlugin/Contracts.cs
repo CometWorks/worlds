@@ -33,9 +33,10 @@ namespace ServerPlugin;
 // - salvage: an unowned or wrecked grid near the station, done when the player who took it has
 //   towed it to the station's shipyard; it is then theirs, and the reward is paid too;
 //   (any NPC grid towed to a shipyard becomes the player's too, without a contract and unpaid)
-// - wreck: on a cluster, a wreck left in an offline partition anywhere, static or not, picked at
-//   random from the biggest ones, posted at the nearest station with a shipyard; done when towed
-//   there too and then theirs as well, or when it is ground down or gone with them near.
+// - wreck: a wreck anywhere, static or not, posted at the nearest station with a shipyard, the
+//   most valuable first; done when towed there and then theirs as well (or scrapped there at their
+//   word), or when it is ground down or gone with them near. Pays its components' value.
+// - area: a cluster of debris pieces, done when none is left in it with the player near.
 //
 // The contracts are station contracts, without a start block: the game shows them at every contract
 // block of the station and keeps them in its contract system, which is the World Authority's on a
@@ -49,6 +50,7 @@ internal static class Contracts
     private const string GridsVariableName = "Octahedron-Contract-Grids";
     private const string GivenVariableName = "Octahedron-Contract-Given";
     private const string BreakdownsVariableName = "Octahedron-Contract-Breakdowns";
+    private const string SeenVariableName = "Octahedron-Contract-Seen";
     private const string ReportTopic = "contracts/report";
     private const double WitnessMeters = 5_000;
     private const double ShipyardSearchMeters = 3_000;
@@ -80,6 +82,10 @@ internal static class Contracts
         typeof(MySessionComponentContractSystem),
         "FinishContract"
     );
+    private static readonly MethodInfo SetReward = AccessTools.PropertySetter(
+        typeof(MyContract),
+        nameof(MyContract.RewardMoney)
+    );
 
     private static readonly Random Random = new();
     private static DateTime nextPost;
@@ -92,9 +98,10 @@ internal static class Contracts
     private static ContractBook book;
     private static MySession bookSession;
 
-    // Tests only, set by reflection (tests/console-probe): moves the clock that ages offline
-    // partitions, so a test doesn't wait a week
-    internal static TimeSpan OfflineClockShift = TimeSpan.Zero;
+    // When each identity was last on, for a wreck's owner being away; Start: when this was first
+    // recorded, which counts for anyone not seen since
+    private static Dictionary<long, DateTime> seen = [];
+    private static DateTime seenStart;
 
     // Tests only, set by reflection: the player's PCU limit, so a test needn't own a million PCU
     internal static int? PcuLimitForTests;
@@ -173,6 +180,17 @@ internal static class Contracts
             book.Offline = PluginCluster.IsClusterProcess
                 ? ContractOffline.Grids(DateTime.UtcNow)
                 : [];
+            book.Rules.MinValue =
+                Config.ContractWreckMinReward
+                * 100.0
+                / Math.Max(1, Config.ContractWreckValuePercent);
+            book.Rules.NpcDown = TimeSpan.FromMinutes(Config.ContractNpcWreckMinutes);
+            book.Rules.BotDown = TimeSpan.FromMinutes(Config.ContractBotWreckMinutes);
+            book.Rules.DebrisLink = Config.ContractDebrisLinkMeters;
+            book.Rules.DebrisMinPieces = Config.ContractDebrisMinPieces;
+            book.Rules.DebrisMaxRadius = Config.ContractDebrisMaxRadius;
+            book.Rules.OwnerAway = OwnerAway;
+            book.Rules.PlayerNear = p => AnyoneNear(p, MySession.Static.Settings.SyncDistance);
             return book;
         }
     }
@@ -180,6 +198,9 @@ internal static class Contracts
     private static ContractBook LoadBook()
     {
         var loaded = new ContractBook(GoneAfter);
+        // Unreadable or absent, everyone counts as seen now: nobody's grid is a wreck for a while
+        seen = [];
+        seenStart = DateTime.UtcNow;
         try
         {
             if (MyAPIGateway.Utilities.GetVariable<string>(VariableName, out var targets))
@@ -195,6 +216,8 @@ internal static class Contracts
                 )
             )
                 loaded.LoadBreakdowns(breakdowns);
+            if (MyAPIGateway.Utilities.GetVariable<string>(SeenVariableName, out var text))
+                (seenStart, seen) = ParseSeen(text);
         }
         catch (Exception e) when (e is FormatException or IndexOutOfRangeException)
         {
@@ -211,6 +234,56 @@ internal static class Contracts
         MyAPIGateway.Utilities.SetVariable(GridsVariableName, book.SerializeGrids());
         MyAPIGateway.Utilities.SetVariable(GivenVariableName, book.SerializeGiven());
         MyAPIGateway.Utilities.SetVariable(BreakdownsVariableName, book.SerializeBreakdowns());
+        MyAPIGateway.Utilities.SetVariable(
+            SeenVariableName,
+            string.Join(
+                ";",
+                seen.Select(s => $"{s.Key}:{s.Value.Ticks}")
+                    .Prepend(seenStart.Ticks.ToString(CultureInfo.InvariantCulture))
+            )
+        );
+    }
+
+    // start;identity:ticks;...
+    private static (DateTime, Dictionary<long, DateTime>) ParseSeen(string text)
+    {
+        var parts = text.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var start = new DateTime(
+            long.Parse(parts[0], CultureInfo.InvariantCulture),
+            DateTimeKind.Utc
+        );
+        var found = new Dictionary<long, DateTime>();
+        foreach (var part in parts.Skip(1))
+        {
+            var p = part.Split(':');
+            found[long.Parse(p[0], CultureInfo.InvariantCulture)] = new DateTime(
+                long.Parse(p[1], CultureInfo.InvariantCulture),
+                DateTimeKind.Utc
+            );
+        }
+        return (start, found);
+    }
+
+    // Who is on now, anywhere in the cluster
+    private static IEnumerable<long> Online() =>
+        Plugin.Cluster?.PlayerPositions()?.Select(p => p.IdentityId)
+        ?? MySession.Static.Players.GetOnlinePlayers().Select(p => p.Identity.IdentityId);
+
+    // Tests only, set by reflection (tests/console-probe): moves the clock players are away by, so
+    // a test doesn't wait a month; whoever is on is seen at the moved time
+    internal static TimeSpan AwayClockShift = TimeSpan.Zero;
+
+    // The owner and their faction have been away for ContractWreckOwnerAwayDays; an NPC always is
+    private static bool OwnerAway(long owner)
+    {
+        if (MySession.Static.Players.IdentityIsNpc(owner))
+            return true;
+        var members = OctFaction.Team(owner)?.Members.Keys.ToList() ?? [owner];
+        var now = DateTime.UtcNow + AwayClockShift;
+        return members.All(m =>
+            now - seen.GetValueOrDefault(m, seenStart)
+            >= TimeSpan.FromDays(Config.ContractWreckOwnerAwayDays)
+        );
     }
 
     // --- the grids: nodes report, the authority answers ---
@@ -268,7 +341,9 @@ internal static class Contracts
 
     private static void Apply(string answer)
     {
-        (watched, var close, var give, var tell, var breakDown) = ContractBook.ParseAnswer(answer);
+        (watched, var close, var give, var tell, var breakDown, var scrappable) =
+            ContractBook.ParseAnswer(answer);
+        ContractGrids.Scrappable(scrappable.ToDictionary(s => s.Grid, s => (s.Player, s.Station)));
         foreach (var id in close)
             ContractGrids.Close(id);
         foreach (var (grid, player) in give)
@@ -316,8 +391,7 @@ internal static class Contracts
         int hauling = 0,
             acquisitions = 0,
             bounties = 0,
-            salvage = 0,
-            wrecks = 0;
+            wrecks;
         foreach (var station in stations)
         {
             var open = system
@@ -328,13 +402,12 @@ internal static class Contracts
             hauling += Haul(system, station, stations, open);
             acquisitions += Acquire(system, station, open, active);
             bounties += Bounties(system, station, state);
-            salvage += Salvage(system, station, state);
         }
-        wrecks = Wrecks(system, stations, state);
+        wrecks = Hunt(system, stations, state);
         SaveBook();
         var text =
-            $"Contracts posted: {hauling} hauling, {acquisitions} acquisitions, {bounties} bounties, {salvage} salvage, {wrecks} wrecks";
-        if (hauling + acquisitions + bounties + salvage + wrecks > 0)
+            $"Contracts posted: {hauling} hauling, {acquisitions} acquisitions, {bounties} bounties, {wrecks} wrecks and areas";
+        if (hauling + acquisitions + bounties + wrecks > 0)
             Plugin.Log.Info(text);
         return text + ".";
     }
@@ -455,9 +528,9 @@ internal static class Contracts
             p.Z
         );
 
-    private static int Open(ContractBook state, char kind, long? station = null) =>
+    private static int Open(ContractBook state, string kinds, long? station = null) =>
         state.Targets.Count(t =>
-            t.Value.Kind == kind
+            kinds.Contains(t.Value.Kind)
             && (station == null || t.Value.Station == station)
             && System.GetContractState(t.Key) == MyCustomContractStateEnum.Inactive
         );
@@ -473,7 +546,7 @@ internal static class Contracts
             at,
             Config.ContractBountyRangeKm * 1000,
             Config.ContractBountyMinThreat,
-            Config.ContractBountiesPerStation - Open(state, 'b', station.Id)
+            Config.ContractBountiesPerStation - Open(state, "b", station.Id)
         );
         var posted = 0;
         foreach (var grid in targets)
@@ -506,53 +579,8 @@ internal static class Contracts
         return posted;
     }
 
-    private static int Salvage(
-        MySessionComponentContractSystem system,
-        IMyFactionStation station,
-        ContractBook state
-    )
-    {
-        var at = At(station.Position);
-        if (state.Shipyard(at, ShipyardSearchMeters) == null)
-            return 0;
-        var derelicts = state.Derelicts(
-            at,
-            Config.ContractBountyRangeKm * 1000,
-            Config.ContractSalvagePerStation - Open(state, 's', station.Id),
-            ShipyardSearchMeters,
-            Config.ContractSalvageRadius
-        );
-        var posted = 0;
-        foreach (var grid in derelicts)
-        {
-            var contract = new Api.MyContractCustom(
-                SalvageType,
-                0,
-                ContractMath.SalvageReward(grid.MassKg, Config.ContractSalvageRewardPerTonne),
-                0,
-                Config.ContractSalvageMinutes,
-                $"Salvage: {grid.Name}",
-                $"Tow the derelict \"{grid.Name}\" ({grid.MassKg / 1000:0} t) to {station.Name}'s shipyard, "
-                    + $"within {Config.ContractSalvageRadius:0} m of it, and it is yours. Stay near it, with "
-                    + $"nobody in its seats. {Gps(grid.Name, grid.Position)}",
-                0,
-                0,
-                null
-            );
-            if (!Add(system, contract, station, out var id))
-                continue;
-            state.Targets[id] = new ContractTarget('s', grid.Id, station.Id, 0, grid.Position)
-            {
-                Owner = grid.Owner,
-                Builder = grid.Builder,
-            };
-            posted++;
-        }
-        return posted;
-    }
-
-    // Wrecks in offline partitions, wherever they are: the stations have no range for these
-    private static int Wrecks(
+    // Wrecks and debris areas anywhere, each at the nearest station with a shipyard
+    private static int Hunt(
         MySessionComponentContractSystem system,
         List<IMyFactionStation> stations,
         ContractBook state
@@ -561,61 +589,84 @@ internal static class Contracts
         var yards = stations
             .Where(s => state.Shipyard(At(s.Position), ShipyardSearchMeters) != null)
             .ToList();
-        if (yards.Count == 0)
-            return 0;
         state.OfflineRows = OfflineRows();
-        var wrecks = state.Wrecks(
-            DateTime.UtcNow + OfflineClockShift,
-            TimeSpan.FromDays(Config.ContractWreckOfflineDays),
-            Config.ContractWreckPool,
-            Config.ContractWreckContracts - Open(state, 'w'),
-            Random
+        var hunts = state.Hunts(
+            yards.Select(s => (s.Id, At(s.Position))).ToList(),
+            station => Config.ContractHuntPerStation - Open(state, "swa", station),
+            ShipyardSearchMeters,
+            Config.ContractSalvageRadius,
+            DateTime.UtcNow
         );
         var posted = 0;
-        foreach (var grid in wrecks)
+        foreach (var (hunt, stationId) in hunts)
         {
-            var station = yards.OrderBy(s => grid.Position.Distance(At(s.Position))).First();
-            // Already at the shipyard: nobody would have to tow it to own it
-            if (
-                state.InReach(
-                    grid.Position,
-                    At(station.Position),
-                    ShipyardSearchMeters,
-                    Config.ContractSalvageRadius
-                )
-            )
-                continue;
-            var km = grid.Position.Distance(At(station.Position)) / 1000;
+            var station = yards.First(s => s.Id == stationId);
+            var grid = hunt.Grid;
+            var km = hunt.Position.Distance(At(station.Position)) / 1000;
+            var reward = ContractMath.WreckReward(hunt.Value, Config.ContractWreckValuePercent);
             var contract = new Api.MyContractCustom(
                 SalvageType,
                 0,
-                ContractMath.SalvageReward(grid.MassKg, Config.ContractSalvageRewardPerTonne),
+                reward,
                 0,
                 ContractMath.HaulingMinutes(km, Config.ContractSalvageMinutes),
-                $"Wreck: {grid.Name}",
-                $"Clear away the wreck \"{grid.Name}\" ({grid.MassKg / 1000:0} t, {grid.Blocks} blocks), "
-                    + $"{km:0.#} km from {station.Name}: tow it to the station's shipyard and it is "
-                    + $"yours, or grind it down on the spot. Stay near it, with nobody in its seats. A "
-                    + $"static one can be cut free and converted to a ship. {Gps(grid.Name, grid.Position)}",
+                hunt.Kind == 'a'
+                    ? hunt.Members.Length > 1
+                        ? $"Cleanup: {grid.Name} and {hunt.Members.Length - 1} more"
+                        : $"Cleanup: {grid.Name}"
+                    : $"Wreck: {grid.Name}",
+                hunt.Kind == 'a'
+                    ? $"Clear the {hunt.Members.Length} pieces of debris within {hunt.Radius:0} m of this point, "
+                        + $"{km:0.#} km from {station.Name}: grind them down, or tow them away. Done once none is "
+                        + $"left there, with you near. {Gps("Debris", hunt.Position)}"
+                    : $"Clear away the wreck \"{grid.Name}\" ({grid.Blocks} blocks), {km:0.#} km from "
+                        + $"{station.Name}: tow it to the station's shipyard and keep it, or have the shipyard "
+                        + $"scrap it there, or grind it down on the spot. Stay near it, with nobody in its seats. "
+                        + $"A static one can be cut free and converted to a ship. {Gps(grid.Name, grid.Position)}",
                 0,
                 0,
                 null
             );
             if (!Add(system, contract, station, out var id))
                 continue;
-            // From a gateway's row: the book needs it now, a node reports it once its partition wakes
-            state.Grids.TryAdd(grid.Id, grid);
-            state.Targets[id] = new ContractTarget(
-                'w',
-                grid.Id,
-                station.Id,
-                grid.Blocks,
-                grid.Position
-            )
+            if (hunt.Kind == 'a')
             {
-                Owner = grid.Owner,
-                Builder = grid.Builder,
-            };
+                state.Targets[id] = new ContractTarget(
+                    'a',
+                    grid.Id,
+                    station.Id,
+                    hunt.Radius,
+                    hunt.Position
+                )
+                {
+                    Value = hunt.Value,
+                    Members = hunt.Members,
+                    // Who built most of the pieces: they can't be paid to clear them
+                    Builder = hunt
+                        .Members.Select(m => state.Grids[m].Builder)
+                        .GroupBy(b => b)
+                        .OrderByDescending(b => b.Count())
+                        .First()
+                        .Key,
+                };
+            }
+            else
+            {
+                // From a gateway's row: the book needs it now, a node reports it once its partition wakes
+                state.Grids.TryAdd(grid.Id, grid);
+                state.Targets[id] = new ContractTarget(
+                    'w',
+                    grid.Id,
+                    station.Id,
+                    grid.Blocks,
+                    grid.Position
+                )
+                {
+                    Owner = grid.Owner,
+                    Builder = grid.Builder,
+                    Value = hunt.Value,
+                };
+            }
             posted++;
         }
         return posted;
@@ -645,6 +696,8 @@ internal static class Contracts
         var system = System;
         var state = Book;
         var now = DateTime.UtcNow;
+        foreach (var identity in Online())
+            seen[identity] = now + AwayClockShift;
         state.Forget(now);
         var taken = new Dictionary<ContractTarget, long>();
         foreach (var (id, target) in state.Targets.ToList())
@@ -690,9 +743,35 @@ internal static class Contracts
                         state.Scrap(target.Grid, now);
                     break;
                 case ContractVerdict.Give:
+                    var row = state.Grids[target.Grid];
+                    // A tow-in pays what is left of it, at most what it was worth when posted
+                    if (target.Kind == 'w' && target.Value > 0)
+                        Reward(
+                            id,
+                            ContractMath.WreckReward(
+                                Math.Min(target.Value, state.Value(row)),
+                                Config.ContractWreckValuePercent
+                            )
+                        );
                     if (system.TryFinishCustomContract(id))
                     {
-                        Hand(oct, state, state.Grids[target.Grid], hunter, now);
+                        if (
+                            Hand(oct, state, row, hunter, now)
+                            && target.Kind == 'w'
+                            && station != null
+                        )
+                        {
+                            state.Scrappable[row.Id] = (
+                                hunter,
+                                station.Name,
+                                now + TimeSpan.FromMinutes(Config.ShipyardTowGraceMinutes)
+                            );
+                            state.Tell(
+                                hunter,
+                                $"If you don't want \"{row.Name}\", say !oct scrap within {Config.ShipyardTowGraceMinutes} min and {station.Name}'s shipyard takes it apart, with whatever it holds. Your reward stays yours.",
+                                now
+                            );
+                        }
                         Plugin.Log.Info($"Contract {id}: grid {target.Grid} goes to {hunter}");
                     }
                     break;
@@ -731,7 +810,18 @@ internal static class Contracts
 
     // The player gets the grid, or over their PCU limit, counted over the whole cluster, or a ship's,
     // the nearest station breaks it down for them
-    private static void Hand(
+    // The game pays a contract's reward as it was posted; a tow-in pays what the wreck is worth now
+    private static void Reward(long contractId, int reward)
+    {
+        if (
+            System.GetContractById(contractId) is MyContract contract
+            && reward < contract.RewardMoney
+        )
+            SetReward.Invoke(contract, [(long)reward]);
+    }
+
+    // True when the player keeps it
+    private static bool Hand(
         MyFaction oct,
         ContractBook state,
         ContractGrid grid,
@@ -743,24 +833,23 @@ internal static class Contracts
         var used = identity == null ? 0 : StarterShip.BuiltPcu(identity);
         var limit = PcuLimitForTests ?? (identity == null ? 0 : MyBlockLimits.GetMaxPCU(identity));
         var after = used + grid.Pcu;
-        void BreakDown(string why)
+        bool BreakDown(string why)
         {
             var station = oct.Stations.OrderBy(s => grid.Position.Distance(At(s.Position))).First();
             state.Tell(player, $"\"{grid.Name}\" is too big to keep: {why}.", now);
             state.BreakDown(grid.Id, player, station.Name);
+            return false;
         }
         switch (ContractMath.Tow(grid.Pcu, used, limit, Config.GroupPcuLimit))
         {
             case ContractMath.TowResult.TooBig:
-                BreakDown(
+                return BreakDown(
                     $"it has {grid.Pcu:N0} PCU, and a ship may have at most {Config.GroupPcuLimit:N0}"
                 );
-                break;
             case ContractMath.TowResult.OverLimit:
-                BreakDown(
+                return BreakDown(
                     $"with its {grid.Pcu:N0} PCU you would have {after:N0}, more than 10% over your limit of {limit:N0}"
                 );
-                break;
             case ContractMath.TowResult.TakeOverLimit:
                 state.Tell(
                     player,
@@ -768,11 +857,11 @@ internal static class Contracts
                     now
                 );
                 state.Give(grid.Id, player);
-                break;
+                return true;
             default:
                 state.Tell(player, $"\"{grid.Name}\" is yours.", now);
                 state.Give(grid.Id, player);
-                break;
+                return true;
         }
     }
 
@@ -784,6 +873,20 @@ internal static class Contracts
             other != 0
             && (other == identity || (faction != null && OctFaction.Team(other) == faction));
         return Same(target.Owner) || Same(target.Builder);
+    }
+
+    // Any player within meters of the point, anywhere in the cluster
+    private static bool AnyoneNear(ContractPoint position, double meters)
+    {
+        var positions = Plugin.Cluster?.PlayerPositions();
+        if (positions != null)
+            return positions.Any(p => At(p.Position).Distance(position) <= meters);
+        return MySession
+            .Static.Players.GetOnlinePlayers()
+            .Any(p =>
+                p.Character is { } character
+                && At(character.PositionComp.GetPosition()).Distance(position) <= meters
+            );
     }
 
     // Anywhere in the cluster: the World Authority has the merged positions, not the characters
@@ -829,21 +932,26 @@ internal static class Contracts
                 yield return $"  {c.Id} {Kind(c, state)} {c.State} "
                     + $"{c.RewardMoney.ToString("N0", CultureInfo.InvariantCulture)} SC{Detail(c)}";
         }
-        var now = DateTime.UtcNow + OfflineClockShift;
-        var days = TimeSpan.FromDays(Config.ContractWreckOfflineDays);
+        var now = DateTime.UtcNow;
         state.OfflineRows = OfflineRows();
-        var wrecks =
-            state.Offline == null
-                ? "unknown"
-                : state
-                    .Grids.Values.Concat(state.Unreported())
-                    .Count(r =>
-                        state.Offline.TryGetValue(r.Id, out var since)
-                        && ContractBook.IsWreck(r.Flags, now - since, days)
-                        && !state.InActiveSafeZone(r)
-                    )
-                    .ToString(CultureInfo.InvariantCulture);
+        var wrecks = state
+            .Grids.Values.Concat(state.Unreported())
+            .Count(r => state.IsTarget(r, now))
+            .ToString(CultureInfo.InvariantCulture);
         yield return $"Known grids: {state.Grids.Count}, in offline partitions {state.Offline?.Count.ToString(CultureInfo.InvariantCulture) ?? "unknown"}, wrecks {wrecks}, reports {state.Reports}, gateway rows {ContractOffline.Rows.Count}, partitions unread {ContractOffline.Unread}";
+        var debris = state
+            .Grids.Values.Where(r => r.Flags.HasFlag(ContractGridFlags.Debris))
+            .ToList();
+        var targeted = state.Targets.Values.SelectMany(t => t.Grids).ToHashSet();
+        yield return $"Debris pieces: {debris.Count} (taken {debris.Count(r => targeted.Contains(r.Id))}, "
+            + $"given {debris.Count(r => state.Given.ContainsKey(r.Id))}, in zones {debris.Count(state.InActiveSafeZone)}, "
+            + $"offline {debris.Count(r => state.Offline?.ContainsKey(r.Id) == true)}; link {state.Rules.DebrisLink:0} m, "
+            + $"{state.Rules.DebrisMinPieces} pieces, radius {state.Rules.DebrisMaxRadius:0} m, least {state.Rules.MinValue:N0} SC), "
+            + $"worth {debris.Sum(r => r.Value):N0} SC; areas to post: "
+            + string.Join(
+                ", ",
+                state.Areas().Select(a => $"{a.Members.Length} pieces worth {a.Value:N0} SC")
+            );
     }
 
     private static string Kind(MyContract contract, ContractBook state) =>
@@ -855,6 +963,7 @@ internal static class Contracts
             {
                 'b' => "bounty",
                 's' => "salvage",
+                'a' => "area",
                 _ => "wreck",
             },
             _ => contract.GetType().Name,

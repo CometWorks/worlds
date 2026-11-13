@@ -1,13 +1,13 @@
 """Checks OCT's contracts on the test server with the headless client, through the admin
 commands (!oct contracts, !oct contract ...): three hauling contracts posted at every
 station and none of the game's own, an acquisition at each station for the stock OCT
-lacks, a bounty on an NPC grid and a salvage contract on a derelict placed near
-Alpha Station. Then the client takes and hands in a hauling and an acquisition
+lacks, a bounty on an NPC grid and a wreck contract on a derelict placed near
+Alpha Station, posted with the player out of sync range of it. Then the client takes and hands in a hauling and an acquisition
 contract (paid by OCT, the items in OCT's stock at Alpha, no new acquisition for them),
-takes the salvage contract and completes the bounty. A larger salvage radius stands in for the tow:
+takes the wreck contract and completes the bounty. A larger salvage radius stands in for the tow:
 the derelict is the player's once it is in reach, and the reward is paid. A derelict already
-at the shipyard gets no contract, and a ship the player built and left ownerless can't be
-sold to OCT. After a save and restart the open contracts must be the same ones, not posted
+at the shipyard gets no contract, and a block the player built and left ownerless, debris,
+gets an area cleanup they can't be paid for. After a save and restart the open contracts must be the same ones, not posted
 again, and the save shows the derelict's new owner. Prints one line per check
 and a pass/fail summary; exit code 0 = all passed.
 
@@ -33,6 +33,8 @@ OPTIONS = {
     "ContractAcquisitionMaxAmount": 10,
     "ContractBountyMinThreat": 1,
     "ContractSalvageRadius": 500,
+    # A single armor block is worth a contract: the test's own debris
+    "ContractWreckMinReward": 1,
     # The hourly split would change the balances the test compares
     "MoneySubsidyPerActivePlayer": 0,
 }
@@ -92,7 +94,18 @@ def test_grids() -> list[str]:
             for z in range(5)
         ),
     ]
+    # Five single armor blocks of nobody's, 100 m apart: debris, an area cleanup
+    debris = [
+        rig.grid(
+            f"Debris {i}",
+            None,
+            [rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, 0))],
+            position=(sx + 100 * i, sy - 20_000, sz),
+        )
+        for i in range(1, 6)
+    ]
     return [
+        *debris,
         target,
         rig.grid("Test Derelict", None, derelict, position=(sx, sy - 1000, sz)),
         rig.grid("Yard Derelict", None, derelict, position=(sx, sy - 400, sz)),
@@ -131,6 +144,8 @@ def contracts(remote, post: bool = False) -> dict[str, list[tuple]]:
     others: dict[str, int] = {}
     current = None
     for line in "\n".join(lines).splitlines():
+        if "Known grids" in line or "Debris pieces" in line:
+            log(line.strip())
         if m := HEADER.match(line.strip()):
             current = m[1]
             stations[current] = []
@@ -186,6 +201,13 @@ def main() -> int:
     rig.start_server()
     remote = rig.start_client()
     log("joined")
+    sbs = (rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
+    sx, sy, sz = position("Alpha Station Shipyard", sbs)
+    # Out of sync range of the test's grids: a wreck near a player gets no contract
+    away = (sx, sy - 30_000, sz)
+    remote.character_teleport(*away)
+    # A reload first, as the cluster rig does: the options it doesn't name keep their defaults
+    set_options(remote, ContractBountyMinThreat=1)
 
     found = contracts(remote, post=True)
     others = found.pop("others")
@@ -210,19 +232,31 @@ def main() -> int:
         bounty is not None and "Bounty Target" in bounty[4] and bounty[3] > 0,
         f"a bounty on the NPC grid: {bounty}",
     )
-    salvage = one(found, "Alpha Station", "salvage")
+    salvage = next(
+        (
+            c
+            for c in found["Alpha Station"]
+            if c[1] == "wreck" and "Test Derelict" in c[4]
+        ),
+        None,
+    )
     check(
-        salvage is not None and "Test Derelict" in salvage[4] and salvage[3] > 0,
-        f"salvage of the derelict: {salvage}",
+        salvage is not None and salvage[3] > 0,
+        f"a wreck contract on the derelict: {salvage}",
+    )
+    area = [c for c in found["Alpha Station"] if c[1] == "area" and "Debris" in c[4]]
+    check(
+        len(area) == 1 and "and 4 more" in area[0][4] and area[0][3] > 0,
+        f"an area cleanup on the five debris pieces: {area}",
     )
     check(
         all(
-            c[1] not in ("bounty", "salvage")
+            c[1] != "bounty" and "Derelict" not in c[4]
             for s, l in found.items()
             if s != "Alpha Station"
             for c in l
         ),
-        "no bounty or salvage at the other stations",
+        "no bounty and nothing on the test's grids at the other stations",
     )
 
     # Hauling: the package comes with the contract and is handed in
@@ -247,13 +281,11 @@ def main() -> int:
         "a derelict already at the shipyard gets no contract",
     )
 
-    # Salvage: taken, with the player beside the derelict, it waits for the tow
+    # The wreck: taken, with the player beside the derelict, it waits for the tow
     identity = remote.get_faction()["identityId"]
-    sbs = (rig.WORLD_SOURCE / "SANDBOX_0_0_0_.sbs").read_text(encoding="utf-8")
-    sx, sy, sz = position("Alpha Station Shipyard", sbs)
     remote.character_teleport(sx, sy - 900, sz)
     before = balances(remote)
-    act(remote, f"accept {salvage[0]}", "Success", "take the salvage contract")
+    act(remote, f"accept {salvage[0]}", "Success", "take the wreck contract")
     run_check(remote)
     check(balances(remote) == before, "not at the shipyard yet: not paid")
     # The radius grows instead of the grid moving: it is in reach now. The plugin's own
@@ -262,7 +294,7 @@ def main() -> int:
     rig.wait_until(
         lambda: balances(remote)[1] != before[1], 60, "the plugin's check to pay"
     )
-    paid_for(remote, salvage, before, "salvage finished by the plugin, paid by OCT")
+    paid_for(remote, salvage, before, "wreck finished by the plugin, paid by OCT")
 
     # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
     set_options(remote, ContractSalvageRadius=500)
@@ -273,35 +305,26 @@ def main() -> int:
     )
     remote.set_admin_flag("creativeTools", False)
     check(built.get("reply") is True, f"the player builds an armor block: {built}")
+    remote.character_teleport(*away)
+    run_check(remote)
+    alpha = contracts(remote, post=True)["Alpha Station"]
     check(
-        not any(
-            c[1] == "salvage" and "Grid" in c[4]
-            for c in contracts(remote, post=True)["Alpha Station"]
-        ),
-        "under the minimum blocks: no contract",
+        not any(c[1] == "wreck" and "Grid" in c[4] for c in alpha),
+        "under the minimum blocks: no wreck contract",
     )
-    set_options(remote, ContractSalvageMinBlocks=1)
-    own = next(
-        (
-            c
-            for c in contracts(remote, post=True)["Alpha Station"]
-            if c[1] == "salvage" and "Grid" in c[4]
-        ),
-        None,
+    own = next((c for c in alpha if c[1] == "area" and "Grid" in c[4]), None)
+    check(
+        own is not None, f"their ownerless block, debris, gets an area cleanup: {own}"
     )
-    check(own is not None, f"their ownerless block gets a contract: {own}")
     if own:
         before = balances(remote)
         act(remote, f"accept {own[0]}", "Success", "they take it")
         run_check(remote)
-        check(balances(remote) == before, "their own ship: not paid")
+        check(balances(remote) == before, "their own debris: not paid")
         check(
             not any(c[0] == own[0] for c in contracts(remote)["Alpha Station"]),
             "and the contract is over",
         )
-    # Back to the default: past a scan and a check, its next contract is withdrawn
-    set_options(remote, ContractSalvageMinBlocks=20)
-    run_check(remote)
 
     before = balances(remote)
     act(remote, f"accept {bounty[0]}", "Success", "take the bounty")
@@ -320,14 +343,22 @@ def main() -> int:
         f"no acquisition at Alpha while OCT holds its magnesium: {alpha}",
     )
     check(
-        not any(c[1] == "salvage" for c in alpha),
+        not any("Test Derelict" in c[4] for c in alpha),
         "the towed derelict gets no new contract",
     )
     check(
         any(c[1] == "bounty" for c in alpha),
         "the bounty target is still there, so it gets a new bounty",
     )
-    open_before = {s: sorted(c[0] for c in l) for s, l in found.items()}
+    # Wrecks and areas can be added after a restart (the NPC and player clocks start anew), never
+    # posted again
+    open_before = {
+        s: sorted(c[0] for c in l if c[1] not in ("wreck", "area"))
+        for s, l in found.items()
+    }
+    wrecks_before = {
+        c[0] for l in found.values() for c in l if c[1] in ("wreck", "area")
+    }
 
     rig.stop_client()
     rig.stop_server()
@@ -356,9 +387,15 @@ def main() -> int:
     remote = rig.start_client()
     found = contracts(remote, post=True)
     found.pop("others")
-    open_after = {s: sorted(c[0] for c in l) for s, l in found.items()}
+    open_after = {
+        s: sorted(c[0] for c in l if c[1] not in ("wreck", "area"))
+        for s, l in found.items()
+    }
+    wrecks_after = [c for l in found.values() for c in l if c[1] in ("wreck", "area")]
     check(
-        open_after == open_before,
+        open_after == open_before
+        and wrecks_before <= {c[0] for c in wrecks_after}
+        and len({c[4] for c in wrecks_after}) == len(wrecks_after),
         "after the restart: the same contracts, none posted again",
     )
     if open_after != open_before:
