@@ -1,10 +1,10 @@
 """OCT never restocks what players must mine (SE-982): the ores and ingots of MarketPlayerMinedMetals
 (gold, silver, platinum, uranium) and the components whose blueprint needs those ingots, whatever
 MarketMinStock names. Iron, in the same list, comes back as before. A station's own
-MarketStationStock entry does restock one there, at most up to MarketStationMaxStock, and a restock
-drops what is over the cap: Moon Station keeps about 10 uranium ingots (SE-1429). Its Store buys
-no more than the cap. OCT's acquisition contracts ask players for the ContractAcquisitionStock
-items it lacks, player-mined ones included, never over a station's cap.
+MarketStationStock entry does restock one there: Moon Station tops up to 10 uranium ingots
+(SE-1429), and what players sold it on top stays. OCT's acquisition contracts ask players for the
+ContractAcquisitionStock items it lacks, player-mined ones included, where a station's own amount
+wins.
 
     OCT_TASK=SE-1429 OCT_WORLD_SOURCE=<world from build_world.py> \\
         uv run --no-project --with httpx python tests/test_player_mined.py
@@ -31,7 +31,7 @@ MINED = [
     ("Alpha", "Component/Thrust"),
     ("Alpha", "Component/Superconductor"),
 ]
-# Moon Station's own entries, Ingot/Uranium=30 under the config's cap of 10
+# Moon Station's own entries, uranium as in the world's config
 OWN = [("Moon", "Ingot/Uranium", 10), ("Moon", "Ingot/Silver", 5)]
 URANIUM = "Ingot/Uranium"
 # Short lists, so the contracts posted at the start fit into one chat reply; an hour's restock in one
@@ -39,7 +39,7 @@ URANIUM = "Ingot/Uranium"
 OPTIONS = dict(
     MarketMinStock=f"{IRON}=100,Ingot/Gold=50,Ore/Platinum=20,Component/Thrust=10,"
     "Component/Superconductor=5",
-    MarketStationStock="Moon Station=Ingot/Uranium=30,Ingot/Silver=5",
+    MarketStationStock="Moon Station=Ingot/Uranium=10,Ingot/Silver=5",
     MarketRestockMinutes=60,
     ContractAcquisitionStock="Ingot/Gold=50,Component/Thrust=10,Ingot/Uranium=1000",
 )
@@ -73,18 +73,19 @@ def main() -> int:
                 f"{station}: its own {item} entry restocks {amount}: {have}",
             )
 
-        # The cap: the Store buys up to it, and a restock drops the rest
-        check(stock(remote, "Moon", URANIUM)[3] == 0, "Moon buys no uranium at the cap")
+        # OCT tops up to 10 and stops; what players sold on top stays, and the Store still buys
         admin(remote, f"!oct market set Moon {URANIUM} 4")
-        wanted = stock(remote, "Moon", URANIUM)[3]
-        check(wanted == 6, f"Moon buys 6 uranium ingots up to the cap: {wanted}")
-        admin(remote, f"!oct market set Moon {URANIUM} 5000")
         admin(remote, "!oct market tick force")
         have = stock(remote, "Moon", URANIUM)[0]
-        check(have == 10, f"a restock drops Moon's uranium to the cap: {have}")
+        check(have == 10, f"Moon's uranium topped up from 4 to 10: {have}")
+        admin(remote, f"!oct market set Moon {URANIUM} 1000")
+        admin(remote, "!oct market tick force")
+        have, _, _, wanted = stock(remote, "Moon", URANIUM)
+        check(have == 1000, f"1000 uranium ingots players sold stay at Moon: {have}")
+        check(wanted > 0, f"Moon's Store still buys uranium: {wanted}")
 
         # Acquisitions of what players must mine, most posted at the start with the stock empty;
-        # Moon's uranium only up to its cap
+        # Moon's uranium only up to its own 10
         admin(remote, f"!oct market set Moon {URANIUM} 0")
         found = contracts(remote, post=True)
         found.pop("others")
@@ -112,7 +113,7 @@ def main() -> int:
         got = asked["Moon Station"].get(URANIUM)
         check(
             got is not None and got[0] == 10,
-            f"Moon asks for its cap of uranium ingots, 10: {got}",
+            f"Moon asks for its own 10 uranium ingots: {got}",
         )
     finally:
         rig.stop_client()

@@ -1626,20 +1626,6 @@ public class OctahedronConfig : PluginConfig
         + "Moon Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000,Ore/Ice=200000,Ingot/Uranium=10";
 
     [StringOption(
-        description: "The most OCT holds of an item at a station, as Station name=Type/Subtype=units,..., stations separated by ;. "
-            + "It buys no more there, and each restock drops what is over. Below MarketOctMaxStockTonnes, it keeps a station "
-            + "from selling enough of a player-mined item that nobody has to mine it.",
-        Parent = "market"
-    )]
-    public string MarketStationMaxStock
-    {
-        get;
-        set => SetField(ref field, value);
-    } =
-        // A few for the bots' reactors (SE-1423 buys ~5 a trip), not enough to make mining uranium pointless
-        "Moon Station=Ingot/Uranium=10";
-
-    [StringOption(
         description: "Each station's specialties, which OCT buys at MarketSpecialtyPercent: Station name=Type/Subtype,..., stations separated by ;.",
         Parent = "market"
     )]
@@ -1903,7 +1889,7 @@ public class OctahedronConfig : PluginConfig
     [StringOption(
         description: "What OCT asks for in acquisition contracts at every station besides its market profile, as Type/Subtype=units, "
             + "comma separated: the target stock of each, MarketPlayerMinedMetals items included. OCT never restocks these, players "
-            + "bring them. A profile amount wins, and MarketStationMaxStock caps it.",
+            + "bring them. A station's profile amount wins.",
         Parent = "contracts"
     )]
     public string ContractAcquisitionStock

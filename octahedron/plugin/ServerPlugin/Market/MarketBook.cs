@@ -38,12 +38,6 @@ public sealed class MarketSettings
     // kept topped up to FixedStock (raw): the zone chips
     public Dictionary<(string Station, string Item), long> FixedAsks = new();
     public long FixedStock;
-
-    // The most OCT holds of an item at a station (raw): it buys no more, and a restock drops the rest
-    public Dictionary<(string Station, string Item), long> MaxStock = new();
-
-    public long Cap(string station, string item) =>
-        MaxStock.TryGetValue((station, item), out long raw) ? raw : long.MaxValue;
 }
 
 /// <summary>What the market needs from the game: time, items, prices and accounts.</summary>
@@ -305,10 +299,7 @@ public sealed class MarketBook
             if (!w.Item(item, out double massKg, out bool integral))
                 continue;
             long have = Stock(station, item);
-            long room = Math.Min(
-                Raw(s.OctMaxStockKg - massKg * have / Amounts.Unit, massKg, integral),
-                Math.Max(0, s.Cap(station, item) - have)
-            );
+            long room = Raw(s.OctMaxStockKg - massKg * have / Amounts.Unit, massKg, integral);
             bool special =
                 w.Specialty(station, item) && SpecialtyBoughtKg(station) < s.SpecialtyDailyKg;
             long bid = OctBid(w, s, station, item, special);
@@ -447,8 +438,7 @@ public sealed class MarketBook
     /// Every RestockMinutes, every item of a station's profile: what the station produces OCT tops up toward the
     /// profile's amount, at most its stock limit, by that share of an hour's production (the amount an hour), and
     /// of the rest the station uses up that share of UsePercent of the amount. Without <paramref name="produced"/>
-    /// an item comes back whole once it is completely out. Stock over a station's MaxStock goes. A new UTC day starts
-    /// the specialty purchases again.
+    /// an item comes back whole once it is completely out. A new UTC day starts the specialty purchases again.
     /// Null when it is not time yet or nothing changed, else what did. Force does it now and also starts a new day.
     /// </summary>
     public string Restock(
@@ -492,10 +482,7 @@ public sealed class MarketBook
                 used++;
                 continue;
             }
-            long want = Math.Min(
-                Math.Min(raw, s.Cap(station, item)),
-                Raw(s.OctMaxStockKg, massKg, integral)
-            );
+            long want = Math.Min(raw, Raw(s.OctMaxStockKg, massKg, integral));
             if (want <= 0 || (produced == null ? have > 0 : have >= want))
                 continue;
             long add =
@@ -508,13 +495,6 @@ public sealed class MarketBook
             SetStock(station, item, have + add);
             added++;
         }
-        // What players, shipyards or contracts brought over a station's cap goes
-        foreach (var ((station, item), cap) in s.MaxStock.Where(c => names.Contains(c.Key.Station)))
-            if (Stock(station, item) > cap)
-            {
-                SetStock(station, item, cap);
-                used++;
-            }
         return added == 0 && used == 0
             ? null
             : $"OCT restocked {added} items and the stations used {used} at {names.Count} stations.";

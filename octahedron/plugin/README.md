@@ -1479,10 +1479,9 @@ stock as long as its entry keeps the name.
   still buys them from players and sells what it bought, and asks players for them
   in acquisition contracts (`ContractAcquisitionStock`). Free shipyard builds need
   no components, so the rule doesn't touch them, nor the Free Tools boxes.
-- `MarketStationMaxStock` caps what OCT holds of an item at a station: the Store
-  buys no more, and each restock drops what players, shipyards or contracts
-  brought over it. Moon Station holds at most 10 uranium ingots, so taxis and
-  other support ships can buy a few, and everyone else has to mine uranium.
+- OCT tops an item up only to its profile amount; what players sell on top of it
+  stays in the Store. Moon Station's 10 uranium ingots let taxis and other
+  support ships buy a few, and everyone else has to mine uranium.
 - `MarketSpecialties` names what each station buys at `MarketSpecialtyPercent`
   (120 %) less the tax, up to `MarketSpecialtyDailyTonnes` (50 t) a UTC day per
   station; past that OCT pays its normal price. Such an item sells there at no less,
@@ -1657,7 +1656,8 @@ Every minute the plugin fills each station up again:
   them) and `ContractAcquisitionStock`: gold, silver, platinum and uranium ores and
   ingots and the components made from them (Superconductor, Thrust, Reactor,
   Gravity Generator, Medical), which OCT never restocks, so only players bring
-  them. `MarketStationMaxStock` caps a target. Each item pays
+  them. A station's profile amount wins, so Moon asks for at most 10 uranium
+  ingots. Each item pays
   `ContractAcquisitionPricePercent` (100 %) of the market's reference price, plus
   up to `ContractAcquisitionShortagePercent` (100 %) more by how far below the
   target the stock is: double when the station is out. The player delivers the items at the

@@ -83,15 +83,6 @@ internal static class Market
                     _ => Config.ZoneChipPrice * MarketBook.MilliPerSc
                 ),
             FixedStock = Config.ZoneChipStock * Amounts.Unit,
-            MaxStock = Parsed(
-                    Config.MarketStationMaxStock,
-                    ref maxStockKey,
-                    ref maxStock,
-                    MarketBook.ParseProfiles,
-                    "MarketStationMaxStock"
-                )
-                .SelectMany(p => p.Value.Select(e => (Key: (p.Key, e.Key), e.Value)))
-                .ToDictionary(e => e.Key, e => e.Value),
         };
 
     /// <summary>The market, on the authority only, loaded from the world on first use.</summary>
@@ -539,8 +530,6 @@ internal static class Market
     private static Dictionary<string, List<(Regex Items, long Percent)>> stationPrices = new();
     private static string pricesKey;
     private static Dictionary<string, long> prices = new();
-    private static string maxStockKey;
-    private static Dictionary<string, List<KeyValuePair<string, long>>> maxStock = new();
     private static string acquisitionKey;
     private static List<KeyValuePair<string, long>> acquisition = new();
 
@@ -676,12 +665,12 @@ internal static class Market
     /// <summary>
     /// For OCT's acquisition contracts, on the authority: the items OCT holds less of at the station
     /// than its target, with the amount missing and the target (raw). The targets are the station's
-    /// profile and ContractAcquisitionStock, at most MarketStationMaxStock.
+    /// profile and ContractAcquisitionStock, where the profile wins: Moon Station asks for no
+    /// more uranium ingots than its own 10.
     /// </summary>
     public static List<(string Item, long Missing, long Target)> Missing(string station)
     {
         var profile = Profile(station);
-        var cap = Settings;
         var targets = profile
             .Concat(
                 Parsed(
@@ -693,10 +682,6 @@ internal static class Market
                     )
                     .Where(a => Catalog().Contains(a.Key) && profile.All(p => p.Key != a.Key))
             )
-            .Select(t => new KeyValuePair<string, long>(
-                t.Key,
-                Math.Min(t.Value, cap.Cap(station, t.Key))
-            ))
             .ToList();
         return Book.Missing(station, targets)
             .Select(m => (m.Key, m.Value, targets.First(t => t.Key == m.Key).Value))
