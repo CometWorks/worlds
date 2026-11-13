@@ -623,7 +623,7 @@ internal static partial class ShipyardOrders
                 foreach (var entry in queue)
                 {
                     var what = entry.Repair
-                        ? $"the repair slot of {Name(entry.Player)}"
+                        ? $"the {entry.Slot.ToString().ToLowerInvariant()} slot of {Name(entry.Player)}"
                         : $"'{entry.Ship}' of {Name(entry.Player)}";
                     if (!entry.Active)
                     {

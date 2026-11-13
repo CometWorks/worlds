@@ -2623,7 +2623,7 @@ internal static partial class ShipyardOrders
             if (docks.TryGetValue(shipyard.EntityId, out var dock))
                 yield return $"  '{dock.Order.Name}' docking, {dock.Ticks} ticks left";
             if (repairs.TryGetValue(shipyard.EntityId, out var slot))
-                yield return $"  repair slot of {Name(slot.Player)}, "
+                yield return $"  {slot.Kind.ToString().ToLowerInvariant()} slot of {Name(slot.Player)}, "
                     + $"{(DateTime.UtcNow - slot.LastWork).TotalSeconds:0} s since the last work";
             if (!orders.TryGetValue(shipyard.EntityId, out var order))
                 continue;

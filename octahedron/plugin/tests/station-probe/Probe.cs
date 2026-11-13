@@ -950,6 +950,116 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "yardvol",
+        "The shipyard's build volume (SE-1386), and a ship placed against it: in its middle, out (in the build space but outside the cylinder, outdamaged with its armor at 30%) or across it (a row of armor sticking out); :meters shifts it along the center line. Owner: me, npc (a non-OCT NPC), none, or a player's name. Its container gets the items: VOLUME radius half-length ME caller-identity SHIP grid-id",
+        "!sprobe yardvol <station> [name] [me|npc|none|<player>] [in|out|outdamaged|across][:meters] [Type/Subtype=amount,...]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string YardVol(
+        string station,
+        string name = "",
+        string who = "me",
+        string where = "in",
+        string items = "Component/SteelPlate=20"
+    )
+    {
+        var yard = Yard(station);
+        var volume = AppDomain
+            .CurrentDomain.GetAssemblies()
+            .Select(a => a.GetType("ServerPlugin.ShipyardOrders"))
+            .First(t => t != null)
+            .GetMethod("Volume", BindingFlags.NonPublic | BindingFlags.Static)
+            .Invoke(null, [yard]);
+        double[] V(string field) => (double[])volume.GetType().GetField(field).GetValue(volume);
+        double D(string field) => (double)volume.GetType().GetField(field).GetValue(volume);
+        var center = new Vector3D(V("Center")[0], V("Center")[1], V("Center")[2]);
+        var axis = new Vector3D(V("Axis")[0], V("Axis")[1], V("Axis")[2]);
+        var radius = D("Radius");
+        var reply = $"VOLUME {radius:0.0} {D("HalfLength"):0.0} ME {Context.Caller.IdentityId}";
+        if (name == "")
+            return reply;
+        name = name.Replace('_', ' ');
+        var parts = where.Split(':');
+        where = parts[0];
+        center +=
+            axis * (parts.Length > 1 ? double.Parse(parts[1], CultureInfo.InvariantCulture) : 0);
+        var damaged = where == "outdamaged";
+        if (damaged)
+            where = "out";
+        long owner = who switch
+        {
+            "me" => Context.Caller.IdentityId,
+            "none" => 0,
+            "npc" => MySession
+                .Static.Factions.Select(f => f.Value)
+                .Where(f => f.Tag != "OCT" && f.Tag != "WRECKS" && f.IsEveryoneNpc())
+                .SelectMany(f => f.Members.Keys)
+                .First(),
+            _ => MySession
+                .Static.Players.GetAllIdentities()
+                .First(i => i.DisplayName == who)
+                .IdentityId,
+        };
+        // Across the center line: the diagonal between the two shipyard axes most across it
+        var across = new[] { yard.WorldMatrix.Forward, yard.WorldMatrix.Right, yard.WorldMatrix.Up }
+            .OrderBy(x => Math.Abs(Vector3D.Dot(x, axis)))
+            .Take(2)
+            .ToList();
+        var diagonal = Vector3D.Normalize(across[0] + across[1]);
+        var blocks = Power(Vector3I.Zero, owner);
+        var cargo = Block<MyObjectBuilder_CargoContainer>(
+            "LargeBlockSmallContainer",
+            new Vector3I(0, 0, 2),
+            owner
+        );
+        blocks.Add(cargo);
+        var length = where == "across" ? (int)(2 * radius / 2.5) + 6 : 2;
+        for (var i = 0; i < length; i++)
+            blocks.Add(
+                new MyObjectBuilder_CubeBlock
+                {
+                    SubtypeName = "LargeBlockArmorBlock",
+                    Min = new Vector3I(0, 0, 3 + i),
+                    BlockOrientation = new SerializableBlockOrientation(
+                        Base6Directions.Direction.Forward,
+                        Base6Directions.Direction.Up
+                    ),
+                    BuiltBy = owner,
+                    IntegrityPercent = damaged ? 0.3f : 1,
+                    BuildPercent = damaged ? 0.3f : 1,
+                }
+            );
+        // The grid's +Z (Backward) along the center line, or across it
+        var back = where == "across" ? diagonal : axis;
+        var position =
+            where == "out" ? center + diagonal * (radius + 6)
+            : where == "across" ? center - back * (length * 2.5 / 2)
+            : center;
+        var grid = Ship(
+            name,
+            position,
+            -back,
+            Vector3D.Normalize(Vector3D.Cross(back, across[where == "across" ? 0 : 1])),
+            blocks
+        );
+        var entity = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(grid);
+        var inventory = entity.GetFatBlocks<MyCargoContainer>().First().GetInventory();
+        foreach (var pair in items.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f = pair.Split('=');
+            if (!MyDefinitionId.TryParse("MyObjectBuilder_" + f[0], out var id))
+                return $"BADITEM {f[0]}";
+            inventory.AddItems(
+                (MyFixedPoint)decimal.Parse(f[1], CultureInfo.InvariantCulture),
+                MyObjectBuilderSerializer.CreateNewObject(id)
+            );
+        }
+        if (owner != 0)
+            entity.ChangeGridOwnership(owner, MyOwnershipShareModeEnum.Faction);
+        return $"{reply} SHIP {entity.EntityId}";
+    }
+
+    [Command(
         "yardtarget",
         "Builds the caller a ship to repair in the middle of the station's shipyard, or shifted along it by the given meters: a projector, a battery, an armor block at 30% and two more, or the given number, only in the projection: TARGET grid-id",
         "!kprobe yardtarget <station> [projected blocks] [shift m]"
