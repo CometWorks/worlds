@@ -517,8 +517,9 @@ screen offers "Create GPS" for it) of the center of the voxel map with that
 storage name, read from the loaded world, so it always matches the world the
 server runs. A pad whose voxel map the world doesn't have is never given out,
 and the missing map is logged once. Octahedron's Free Tools boxes keep one pad
-each, with scraps of the rare ore distribution and the 4 ice asteroids of the
-ring, and a taken pad is replaced after 10 minutes (a second Free Tools rule).
+each: scraps of the rare ore distribution, the 4 ice asteroids of the ring, and
+players' notes on the elevators, taxis, janitor and police bots, wreck and area
+cleanup contracts and the shipyard's modes (SE-1426). A taken pad is replaced after 10 minutes (a second Free Tools rule).
 
 ### World edge
 
