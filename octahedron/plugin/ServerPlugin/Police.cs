@@ -38,7 +38,7 @@ namespace ServerPlugin;
 // weapons raises no alert.
 //
 // A police ship of an officer on duty, docked at a station's connector (where they park), gets its
-// hydrogen tanks filled and its guns and cargo (PoliceCargoAmmo of the volume) filled with the guns' ammo,
+// hydrogen and oxygen tanks filled and its guns and cargo (PoliceCargoAmmo of the volume) filled with the guns' ammo,
 // for free, every second it stays there. A later service station is to do this instead.
 //
 // Officers and targets live in this process: on a cluster each node knows the officers who said
@@ -388,14 +388,12 @@ internal static class Police
     {
         var filled = new List<string>();
         foreach (var tank in ship.GetFatBlocks<MyGasTank>())
-            if (
-                tank.BlockDefinition.StoredGasId.SubtypeName == "Hydrogen"
-                && tank.IsFunctional
-                && tank.FilledRatio < 0.999
-            )
+            if (tank.IsFunctional && tank.FilledRatio < 0.999)
             {
                 ((IMyGasTank)tank).ChangeFilledRatio(1, true);
-                filled.Add("H2");
+                filled.Add(
+                    tank.BlockDefinition.StoredGasId.SubtypeName == "Hydrogen" ? "H2" : "O2"
+                );
             }
 
         var ammo = new Dictionary<MyDefinitionId, int>();

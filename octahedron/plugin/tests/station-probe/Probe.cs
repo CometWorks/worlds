@@ -2787,6 +2787,51 @@ public sealed class ProbeCommands : CommandModule
         return $"ITEM {entityId} {(double)block.GetInventory().GetItemAmount(id)}";
     }
 
+    [Command(
+        "drain",
+        "Sets how full a ship's H2 tanks, O2 tanks and batteries are (0 to 1, - leaves one as it is) and, with noammo, empties its guns and cargo of ammo: DRAINED grid-id tanks batteries magazines",
+        "!sprobe drain <grid id> <h2> <o2> <batteries> [noammo]"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Drain(long gridId, string h2, string o2, string batteries, string ammo = "")
+    {
+        if (!MyEntities.TryGetEntityById(gridId, out MyCubeGrid grid))
+            return $"NOGRID {gridId}";
+        static float? Level(string text) =>
+            text == "-" ? null : float.Parse(text, CultureInfo.InvariantCulture);
+        int tanks = 0,
+            cells = 0;
+        double magazines = 0;
+        foreach (var tank in grid.GetFatBlocks<MyGasTank>())
+        {
+            var level = Level(tank.BlockDefinition.StoredGasId.SubtypeName == "Hydrogen" ? h2 : o2);
+            if (level == null)
+                continue;
+            ((IMyGasTank)tank).ChangeFilledRatio(level.Value, true);
+            tanks++;
+        }
+        if (Level(batteries) is { } charge)
+            foreach (var battery in grid.GetFatBlocks<MyBatteryBlock>())
+            {
+                battery.CurrentStoredPower = battery.MaxStoredPower * charge;
+                cells++;
+            }
+        if (ammo == "noammo")
+            foreach (var block in grid.GetFatBlocks())
+            {
+                if (block is not (MyUserControllableGun or MyCargoContainer))
+                    continue;
+                var inventory = block.GetInventory();
+                foreach (var item in inventory.GetItems().ToList())
+                    if (item.Content is MyObjectBuilder_AmmoMagazine)
+                    {
+                        magazines += (double)item.Amount;
+                        inventory.RemoveItems(item.ItemId, item.Amount);
+                    }
+            }
+        return $"DRAINED {gridId} {tanks} {cells} {magazines}";
+    }
+
     private static IEnumerable<MyCubeGrid> StationGrids(string station)
     {
         foreach (var faction in MySession.Static.Factions)
