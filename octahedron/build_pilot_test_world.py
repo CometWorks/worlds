@@ -919,6 +919,29 @@ def add_player(checkpoint: ET.Element, ids: bw.Ids, steam_id: str) -> int:
     return identity_id
 
 
+def meet_station_faction(checkpoint: ET.Element, identity_id: int):
+    """Makes the Pilot neutral to the station faction, as a player is to a trader. Without a
+    relation the game makes every NPC faction an enemy (MyPerGameSettings.DefaultFactionRelationship),
+    and a connector locks only to a block whose owner is no enemy."""
+    collection = checkpoint.find("Factions")
+    faction_id = next(
+        f.findtext("FactionId")
+        for f in collection.find("Factions")
+        if f.findtext("Tag") == bw.NPC_TAG
+    )
+    relations = collection.find("RelationsWithPlayers")
+    if relations is None:
+        relations = ET.Element("RelationsWithPlayers")
+        collection.insert(
+            list(collection).index(collection.find("Relations")) + 1, relations
+        )
+    relation = bw.el(relations, "MyObjectBuilder_PlayerFactionRelation")
+    bw.el(relation, "PlayerId", identity_id)
+    bw.el(relation, "FactionId", faction_id)
+    bw.el(relation, "Relation", "Neutral")
+    bw.el(relation, "Reputation", 0)
+
+
 def used_ids(*roots: ET.Element) -> set[int]:
     return {
         int(node.text)
@@ -955,6 +978,7 @@ def build(saves: Path, seed: int, steam_id: str, folders: list[Path]):
     ids = bw.Ids(random.Random(f"{seed} pilot test"))
     ids.used = used_ids(sector, checkpoint)
     owner = add_player(checkpoint, ids, steam_id)
+    meet_station_faction(checkpoint, owner)
 
     definitions = block_definitions()
     names = dict(bts.load_ships(bts.HERE / "trader_ships.txt"))
@@ -1100,6 +1124,27 @@ def check(saves: Path) -> bool:
     report.line(
         rts.exists() and rts.read_bytes() == bw.RELATIVE_TOP_SPEED.read_bytes(),
         f"{RELATIVE_TOP_SPEED} equals config/{bw.RELATIVE_TOP_SPEED.name}",
+    )
+    pilot = next(
+        i.findtext("IdentityId")
+        for i in checkpoint.find("Identities")
+        if i.findtext("DisplayName") == "Pilot"
+    )
+    station_faction = next(
+        f.findtext("FactionId")
+        for f in checkpoint.find("Factions/Factions")
+        if f.findtext("Tag") == bw.NPC_TAG
+    )
+    relations = [
+        r.findtext("Relation")
+        for r in checkpoint.iterfind(
+            "Factions/RelationsWithPlayers/MyObjectBuilder_PlayerFactionRelation"
+        )
+        if (r.findtext("PlayerId"), r.findtext("FactionId")) == (pilot, station_faction)
+    ]
+    report.line(
+        relations == ["Neutral"],
+        f"the Pilot is neutral to {bw.NPC_TAG}, so the station connectors lock: {relations}",
     )
     mods = [
         (m.get("FriendlyName"), m.findtext("PublishedFileId"))
