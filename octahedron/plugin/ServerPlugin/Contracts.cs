@@ -198,6 +198,9 @@ internal static class Contracts
     private static ContractBook LoadBook()
     {
         var loaded = new ContractBook(GoneAfter);
+        // Unreadable or absent, everyone counts as seen now: nobody's grid is a wreck for a while
+        seen = [];
+        seenStart = DateTime.UtcNow;
         try
         {
             if (MyAPIGateway.Utilities.GetVariable<string>(VariableName, out var targets))
@@ -213,8 +216,6 @@ internal static class Contracts
                 )
             )
                 loaded.LoadBreakdowns(breakdowns);
-            seen = [];
-            seenStart = DateTime.UtcNow;
             if (MyAPIGateway.Utilities.GetVariable<string>(SeenVariableName, out var text))
                 (seenStart, seen) = ParseSeen(text);
         }
