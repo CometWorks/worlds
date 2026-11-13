@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using HarmonyLib;
 using Sandbox.Game.Entities;
 using SpaceEngineers.Game.Entities.Blocks;
@@ -8,9 +9,10 @@ using VRageMath;
 namespace ServerPlugin;
 
 // The station safe zones forbid landing gear and magnetic plate locks (SE-974), which kept the
-// janitor bots from towing garbage away from inside a zone. A gear owned by a bot
-// (ShipyardBotSteamIds) locks in them anyway (SE-1466). Players' gears stay forbidden: the bot
-// list goes by the owner's Steam ID, so naming a grid like a janitor's gets a player nothing.
+// janitor bots from towing garbage away from inside a zone. A gear on a bot's ship locks in them
+// anyway (SE-1466): one whose owner, or, as gears have no computer and so no owner, whose grid's
+// owners are all bots (ShipyardBotSteamIds). Players' gears stay forbidden: the bot list goes by
+// Steam ID, so naming a grid like a janitor's gets a player nothing.
 //
 // The server checks a lock in AttachRequest, asking the zones about the gear's grid box without
 // naming the gear. A client's lock request and the server's own autolock both go through it, so
@@ -25,9 +27,17 @@ internal static class BotGearLocks
     private static class Request
     {
         private static void Prefix(MyLandingGear __instance, bool enable) =>
-            botLocks = enable && Plugin.Config.Enabled && ShipyardOrders.IsBot(__instance.OwnerId);
+            botLocks = enable && Plugin.Config.Enabled && IsBots(__instance);
 
         private static void Finalizer() => botLocks = false;
+    }
+
+    internal static bool IsBots(MyLandingGear gear)
+    {
+        if (gear.OwnerId != 0)
+            return ShipyardOrders.IsBot(gear.OwnerId);
+        var owners = gear.CubeGrid.BigOwners;
+        return owners.Count > 0 && owners.All(ShipyardOrders.IsBot);
     }
 
     [HarmonyPatch(

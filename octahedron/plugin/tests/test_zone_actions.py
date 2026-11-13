@@ -9,8 +9,9 @@ which allows no action since SE-974; both still work outside it.
   hand, the two outside lock and the two inside don't.
 - Auto lock: the same with auto lock on, the game's other way to lock.
 - Bots' gears (SE-1466): with the test client's Steam ID in ShipyardBotSteamIds the gears and
-  plates it owns lock in the zone, by hand and by auto lock, and outside it too. Taken off the
-  list again, its new ones in the zone don't.
+  plates on its ships (a gear has no owner: a cargo container of its makes the ship its) lock in
+  the zone, by hand and by auto lock, and outside it too. Taken off the list again, its new ones
+  in the zone don't.
 - Locked before: with the zone set back to allow locks, a gear and a plate in it lock; the
   zone then forbids locks, as the admin menu would. They stay locked, and after a server
   restart they load locked. Released, they don't lock again.
@@ -124,17 +125,17 @@ def auto_lock(a) -> None:
 def bot_gears(a) -> None:
     with_config(a, ShipyardBotSteamIds=rig.CLIENT_ID)
     for kind in KINDS:
-        ships = {where: spawn(a, where, kind) for where in ("in", "out")}
+        ships = {where: spawn(a, where, kind, "owned") for where in ("in", "out")}
         for where, ship in ships.items():
             ready(a, ship, f"the bot's {kind} {where} the zone")
             probe(a, f"gearlock {ship} on")
         for where, ship in ships.items():
             check(locks(a, ship), f"the bot's {kind} {where} the zone locks")
-        ship = spawn(a, "in", kind, "auto")
+        ship = spawn(a, "in", kind, "auto,owned")
         check(locks(a, ship), f"the bot's {kind} in the zone auto locks")
     with_config(a)
     for kind in KINDS:
-        ship = spawn(a, "in", kind)
+        ship = spawn(a, "in", kind, "owned")
         ready(a, ship, f"the {kind} off the bot list")
         probe(a, f"gearlock {ship} on")
         time.sleep(SETTLE)

@@ -2045,11 +2045,12 @@ public sealed class ProbeCommands : CommandModule
     // Connectors lock once the new grid's physics is in
     [Command(
         "gear",
-        "A ship of one landing gear or magnetic plate with its lock face on a static armor block, 60% of the radius into the station's safe zone or 100 m out of it: GEAR grid-id inzone=yes|no gravity=m/s2",
-        "!sprobe gear <station> <in|out> <LargeBlockLandingGear|LargeBlockMagneticPlate> [auto]"
+        "A ship of one landing gear or magnetic plate with its lock face on a static armor block, 60% of the radius into the station's safe zone or 100 m out of it: GEAR grid-id inzone=yes|no gravity=m/s2. "
+            + "auto: auto lock on; owned: a cargo container of the caller's behind the gear, so the caller owns the ship (a gear has no owner)",
+        "!sprobe gear <station> <in|out> <LargeBlockLandingGear|LargeBlockMagneticPlate> [auto][,owned]"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string Gear(string station, string where, string subtype, string auto = "")
+    public string Gear(string station, string where, string subtype, string flags = "")
     {
         var zone = StationZone(station);
         if (zone == null)
@@ -2074,7 +2075,7 @@ public sealed class ProbeCommands : CommandModule
             ),
         };
         var block = Block<MyObjectBuilder_LandingGear>(subtype, Vector3I.Zero, owner);
-        block.AutoLock = auto == "auto";
+        block.AutoLock = flags.Contains("auto");
         ship.CubeBlocks.Add(block);
         var grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(ship);
         var gear = grid.GetFatBlocks<MyLandingGear>().First();
@@ -2083,6 +2084,20 @@ public sealed class ProbeCommands : CommandModule
         var normal = Vector3D.Transform(Vector3D.Up, turn);
         if (Vector3D.Dot(normal, pivot - gear.PositionComp.WorldAABB.Center) < 0)
             normal = -normal;
+        if (flags.Contains("owned"))
+        {
+            // The same ship again with the container on the gear's back
+            var back = Vector3I.Round(
+                Vector3D.TransformNormal(-normal, grid.PositionComp.WorldMatrixNormalizedInv)
+            );
+            grid.Close();
+            ship.CubeBlocks.Add(
+                Block<MyObjectBuilder_CargoContainer>("LargeBlockSmallContainer", back, owner)
+            );
+            grid = (MyCubeGrid)MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(ship);
+            gear = grid.GetFatBlocks<MyLandingGear>().First();
+            gear.GetBoxFromMatrix(gear.LockPositions[0], out half, out pivot, out turn);
+        }
         var pad = new MyObjectBuilder_CubeGrid
         {
             EntityId = 0,
