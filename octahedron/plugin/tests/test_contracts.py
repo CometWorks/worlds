@@ -94,7 +94,18 @@ def test_grids() -> list[str]:
             for z in range(5)
         ),
     ]
+    # Five single armor blocks of nobody's, 100 m apart: debris, an area cleanup
+    debris = [
+        rig.grid(
+            f"Debris {i}",
+            None,
+            [rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (0, 0, 0))],
+            position=(sx + 100 * i, sy - 20_000, sz),
+        )
+        for i in range(1, 6)
+    ]
     return [
+        *debris,
         target,
         rig.grid("Test Derelict", None, derelict, position=(sx, sy - 1000, sz)),
         rig.grid("Yard Derelict", None, derelict, position=(sx, sy - 400, sz)),
@@ -133,6 +144,8 @@ def contracts(remote, post: bool = False) -> dict[str, list[tuple]]:
     others: dict[str, int] = {}
     current = None
     for line in "\n".join(lines).splitlines():
+        if "Known grids" in line or "Debris pieces" in line:
+            log(line.strip())
         if m := HEADER.match(line.strip()):
             current = m[1]
             stations[current] = []
@@ -228,6 +241,11 @@ def main() -> int:
     check(
         salvage is not None and salvage[3] > 0,
         f"a wreck contract on the derelict: {salvage}",
+    )
+    area = [c for c in found["Alpha Station"] if c[1] == "area" and "Debris" in c[4]]
+    check(
+        len(area) == 1 and "and 4 more" in area[0][4] and area[0][3] > 0,
+        f"an area cleanup on the five debris pieces: {area}",
     )
     check(
         all(

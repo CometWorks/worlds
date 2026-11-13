@@ -939,6 +939,14 @@ internal static class Contracts
             .Count(r => state.IsTarget(r, now))
             .ToString(CultureInfo.InvariantCulture);
         yield return $"Known grids: {state.Grids.Count}, in offline partitions {state.Offline?.Count.ToString(CultureInfo.InvariantCulture) ?? "unknown"}, wrecks {wrecks}, reports {state.Reports}, gateway rows {ContractOffline.Rows.Count}, partitions unread {ContractOffline.Unread}";
+        var debris = state
+            .Grids.Values.Where(r => r.Flags.HasFlag(ContractGridFlags.Debris))
+            .ToList();
+        yield return $"Debris pieces: {debris.Count}, worth {debris.Sum(r => r.Value):N0} SC; areas to post: "
+            + string.Join(
+                ", ",
+                state.Areas().Select(a => $"{a.Members.Length} pieces worth {a.Value:N0} SC")
+            );
     }
 
     private static string Kind(MyContract contract, ContractBook state) =>
