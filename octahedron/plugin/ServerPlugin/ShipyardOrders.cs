@@ -197,6 +197,13 @@ internal static partial class ShipyardOrders
         // ships the player was told about once
         public readonly Dictionary<long, DateTime> Seen = [];
         public readonly HashSet<long> Told = [];
+
+        // A grind slot: each grid it may grind, as it was when first seen in the volume, before
+        // any of it was ground: its integrity and parts. A contract wreck's parts aren't sold.
+        public readonly Dictionary<
+            long,
+            (float Integrity, Dictionary<MyDefinitionId, MyFixedPoint> Parts)
+        > Found = [];
     }
 
     private static readonly Dictionary<long, RepairSlot> repairs = new();
@@ -1142,7 +1149,15 @@ internal static partial class ShipyardOrders
             Kind = entry.Slot,
         };
         repairs[shipyard.EntityId] = slot;
-        slotVolumes[shipyard.EntityId] = (Volume(shipyard), slot.Kind, slot.Player);
+        var volume = Volume(shipyard);
+        if (slot.Kind == SlotKind.Grind)
+            Find(shipyard, slot, volume);
+        slotVolumes[shipyard.EntityId] = (
+            volume,
+            slot.Kind,
+            slot.Player,
+            slot.Found.Keys.ToHashSet()
+        );
         lost.Remove(shipyard.EntityId);
         if (slot.Kind == SlotKind.Repair)
             Welders(shipyard, true);

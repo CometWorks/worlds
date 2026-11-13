@@ -280,6 +280,12 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     public readonly Dictionary<long, (long Player, string Station, DateTime Until)> Scrappable =
         new();
 
+    // Wrecks whose contract paid their player, until when: a shipyard slot that grinds one
+    // after that sells none of its parts for them (SE-1408). Not saved, as Scrappable.
+    public readonly Dictionary<long, (long Player, DateTime Until)> Paid = new();
+
+    public static readonly TimeSpan PaidFor = TimeSpan.FromHours(1);
+
     // NPC and bot grids without power or control, since when; not saved, a restart starts anew
     private readonly Dictionary<long, DateTime> downSince = new();
 
@@ -463,6 +469,8 @@ internal sealed class ContractBook(TimeSpan goneAfter)
             downSince.Remove(id);
         foreach (var id in Scrappable.Keys.Where(g => now >= Scrappable[g].Until).ToList())
             Scrappable.Remove(id);
+        foreach (var id in Paid.Keys.Where(g => now >= Paid[g].Until).ToList())
+            Paid.Remove(id);
     }
 
     public ContractGrid Shipyard(ContractPoint station, double searchMeters) =>

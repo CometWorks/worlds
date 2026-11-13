@@ -931,6 +931,12 @@ is outside it.
   once nothing is left to grind after something was ground. Then what is in the shipyard
   goes into the player's ships docked at its connectors, as far as it fits, and the
   rest is sold for the player as at the end of a turn.
+  A wreck whose contract the player took (SE-1408) is settled instead: once it is gone or
+  ground down to a quarter of its blocks, the contract pays what it was worth when posted,
+  and the parts ground off it go into OCT's stock at the station, not into the player's
+  ship or the sale. So does a wreck whose contract paid the player already, a tow-in
+  ground before `!oct scrap`. The deconstructors start on a grid only once a check has
+  seen it, so the slot knows what it was before.
 - **Hack.** The shipyard stays off. A ship that stays in the volume for
   `ShipyardHackSeconds` (60) becomes the player's, with its subgrids, as a towed
   contract grid does: owner and `BuiltBy`, so it counts toward their PCU. Its whole
@@ -939,7 +945,8 @@ is outside it.
   its big owner is a player online anywhere on the cluster. NPC ships and nobody's
   wrecks always qualify. A ship over the player's PCU limit, by more than 10 %, or over
   `GroupPcuLimit` isn't taken. The player is told once per ship why it isn't hacked.
-  The slot ends with the hack.
+  The slot ends with the hack. A hacked wreck whose contract the player took counts as
+  kept: the contract pays as for a tow-in.
 
 Book the slot before the ship comes in: an idle shipyard sweeps grids no player owns, and
 players' wrecks, out of its build space (`ShipyardSweepIdle`, below), and a waiting slot
@@ -2165,7 +2172,9 @@ canceling slots, a repair whose components the station sells while a damaged shi
 the build volume stays as it is, a grind into the player's docked ship and one sold for
 them, with the player's ship out of the volume and another player's in it left alone, and a
 hack of an NPC ship in the volume, not of one sticking out of it nor of a ship whose owner
-is online. The probe's `yardvol` places the ships against the volume.
+is online. Then a wreck with a contract the player took, ground in a grind slot, pays the
+contract and nothing is sold, and one hacked in a hack slot is theirs and paid (SE-1408).
+The probe's `yardvol` places the ships against the volume.
 `tests/test_shipyard_tool_speed.py` runs the server alone, with OmniArc and ToolCore, and
 measures how much an OmniArc welder and deconstructor weld and grind in a minute on rigs far
 from the stations: a shipyard grid of OCT's, one in a player's turn, a player's grid, a
