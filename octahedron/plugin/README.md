@@ -1597,45 +1597,64 @@ Every minute the plugin fills each station up again:
   grid, or it is gone while the player who took the bounty is within 5 km of where
   it was last seen; gone otherwise, it fails. A bounty nobody took is withdrawn when
   its target is gone. `ContractBountyMinutes` (120) to do it.
-- Salvage: up to `ContractSalvagePerStation` (2) on derelicts within the bounty
-  range: movable grids of at least `ContractSalvageMinBlocks` (20) blocks that belong
-  to nobody or to a wreck faction (`ContractSalvageFactionTags`, `WRECKS`). It pays
-  `ContractSalvageRewardPerTonne` (100 SC) per tonne. Delivered when the derelict is
-  within `ContractSalvageRadius` (150 m) of the station's shipyard grid, center to
-  center, with the player who took it within 5 km and nobody in its seats. The plugin
-  then finishes the contract and gives the player the derelict, with its rotor and
-  piston parts, on top of the reward. A tug on a connector stays as it was, and so does
-  another player's ship on a rotor. A grid with no block that can have an owner, armor
-  only, stays ownerless until the player adds one. `ContractSalvageMinutes` (180) to
-  tow it. A derelict already in that radius gets no contract: there is nothing to tow.
+- Wrecks: up to `ContractHuntPerStation` (10) wreck and area cleanup contracts at each
+  station with a shipyard, on targets anywhere in the world, each posted at the nearest such
+  station with a GPS, the most valuable first. A target is a grid of at least
+  `ContractSalvageMinBlocks` (20) blocks that is:
+  - nobody's or a wreck faction's (`ContractSalvageFactionTags`, `WRECKS`): a movable one at
+    once, a static one when it has no power or nothing on it works;
+  - an NPC's of another faction (MES wrecks after a battle) without power, or a ship without a
+    working cockpit or remote control, for `ContractNpcWreckMinutes` (10);
+  - a bot's (`ShipyardBotSteamIds`) without power for `ContractBotWreckMinutes` (60);
+  - a player's without power, once its owner and everyone in their faction have been away for
+    `ContractWreckOwnerAwayDays` (30). The World Authority records when each player was last on,
+    from the cluster's player positions (`Octahedron-Contract-Seen`); a player it has never seen
+    counts from when it started recording. Static or not: a base too.
 
-- Wrecks, on a cluster: `ContractWreckContracts` (5) open salvage contracts on wrecks
-  left in offline partitions, wherever they are, each picked at random from the
-  `ContractWreckPool` (10) biggest by blocks and posted at the nearest station with a
-  shipyard. A wreck is a grid that belongs to nobody with no working terminal block
-  (armor and decor), at once, or any grid without power once its partition has been
-  offline for `ContractWreckOfflineDays` (7); a visit brings the partition online and
-  starts that time anew. No power means no battery with charge, no reactor or engine
-  with fuel, and no working solar panel or wind turbine. That includes a player's ship
-  or base, static or not. Stations, OCT's grids, Trade Lane Computers and a grid someone
-  sits in are never wrecks.
-  The plugin knows them from what nodes reported and, for a partition that went offline
-  without a report, from the rows the gateway keeps of it, by physical group, as they
-  were at the freeze (a cluster newer than 0.1.25; an older one has only the reports). A
-  row read back from a partition's save has too little to tell, so it is no wreck until
-  the partition has been online again. A row can't tell a seat in use, a safe zone or who
-  built the grid: the node's report tells once the partition wakes, and the contract is
-  withdrawn or, if it is the hunter's own disowned ship, fails.
-  A wreck from a row pays by the mass of its blocks, without cargo or tank fill.
-  A static wreck pays by the mass of its blocks. It is done like a ship: ground
-  down, or cut free of the voxels, converted to a ship and towed; only its big owner can
-  convert a grid, so a static wreck that still has an owner needs that first.
-  Done when towed to the shipyard as above, which also gives the player the grid, or
-  ground down to a quarter of its blocks with the player within 5 km (the plugin scraps
-  the rest), or gone with them within 5 km. Its owner powering it up fails the contract,
-  or withdraws it if nobody took it; the player who took it may repair it themselves.
-  It pays per tonne as above; the time limit is `ContractSalvageMinutes` plus a minute
-  for every 3 km.
+  No power means no battery with charge, no reactor or engine with fuel, and no working solar
+  panel or wind turbine. Stations, OCT's grids, Trade Lane Computers and a grid someone sits in
+  are never targets, and nor is anything with a player within the world's sync range when it
+  would be posted. A target already at its station's shipyard gets no contract: there is nothing
+  to tow.
+
+  It pays what its blocks' components are worth at the market's reference prices, at
+  `ContractWreckValuePercent` (100 %): the mounted components and those waiting in the blocks'
+  stockpiles, never cargo or tank fill. A contract worth less than `ContractWreckMinReward`
+  (2,000 SC) isn't posted. A wreck in an offline partition is known only from the gateway's row,
+  which has the mass of its blocks: it is priced at what the grids the nodes report are worth per
+  kg, until its partition wakes.
+
+  Done when towed within `ContractSalvageRadius` (150 m) of the station's shipyard grid, center
+  to center, with the player who took it within 5 km and nobody in its seats. The player keeps it,
+  with its rotor and piston parts, on top of the reward. The reward is what the wreck is worth
+  then, at most what it was worth when posted, so stripping it first pays less. Chat offers
+  `!oct scrap` for `ShipyardTowGraceMinutes` (10): the station takes the wreck apart instead, its
+  components and whatever it holds go into OCT's stock there, and the reward stays the player's.
+  Keeping it pays the same and gives the grid too. A tug on a connector stays as it was, and so
+  does another player's ship on a rotor. A grid with no block that can have an owner, armor only,
+  stays ownerless until the player adds one.
+  It is also done when ground down to a quarter of its blocks with the player within 5 km (the
+  plugin scraps the rest), or gone with them within 5 km; that pays what it was worth when posted.
+  A static wreck can be cut free of the voxels, converted to a ship and towed; only its big owner
+  can convert a grid, so a static wreck that still has an owner needs that first.
+  An owner coming back withdraws a contract nobody took: the target is no wreck any more. Once
+  taken, its owner powering it up fails it; the player who took it may repair it themselves.
+  `ContractSalvageMinutes` (180) plus a minute for every 3 km to do it.
+
+  The rows the gateway keeps of offline partitions, by physical group, as they were at the freeze
+  (a cluster newer than 0.1.25), count too. A row read back from a partition's save has too
+  little to tell, so it is no target until the partition has been online again. A row can't tell
+  a seat in use, a safe zone or who built the grid: the node's report tells once the partition
+  wakes, and the contract is withdrawn or, if it is the hunter's own disowned ship, fails.
+- Area cleanup: debris, grids of nobody or a wreck faction smaller than a wreck, within
+  `ContractDebrisLinkMeters` (300 m) of each other make a cluster. One of
+  `ContractDebrisMinPieces` (5) pieces, or worth `ContractWreckMinReward`, gets an area contract
+  among the station's wreck contracts: clear the pieces within a radius of a GPS point, 50 m past
+  the farthest piece and at most `ContractDebrisMaxRadius` (2 km), which leaves pieces farther
+  out to another area. Done when none of those pieces is left within the radius, ground down or
+  towed out, with the player who took it within 5 km; it pays their value as above. Pieces that
+  drift in later don't count. Floating objects are no debris here: they are the Janitor bots'
+  job. A contract nobody took is withdrawn once its area is empty.
 - A grid given to a player, with a contract or without, has Target Neutrals off on its
   weapons from then on.
 - Any movable NPC grid, of any faction but OCT and no station, joined by a connector or
@@ -1651,18 +1670,19 @@ Every minute the plugin fills each station up again:
   but the nearest station breaks the grid down at once, as told under [A player's
   turn](#a-players-turn), and chat says why. A grid given by a tow is safe from the
   shipyard's clearing for `ShipyardTowGraceMinutes` (10), and chat tells them to move it.
-- A grid in an enabled safe zone gets no bounty, salvage or wreck contract, and an open
+- A grid in an enabled safe zone gets no bounty or wreck contract, and an open
   contract nobody took on it is withdrawn. A contract someone took goes on, because a
   shipyard is inside its station's zone. In an offline partition the zone counts as it
   was when the partition went offline.
-- Against abuse, for salvage and wrecks: a contract on a grid its taker or their faction
+- Against abuse, for wrecks: a contract on a grid its taker or their faction
   (not OCT) owned or mostly built when it was posted fails at once, unpaid, so nobody sells their
   own ship to OCT by disowning it. It also fails when a third player comes to own the
   target. A grid once given away never gets another contract. The given grid's blocks
   count against the new owner's limits, not the old owner's.
 
 The targets, the grids last reported and the grids given away are world variables
-(`Octahedron-Contracts`, `Octahedron-Contract-Grids`, `Octahedron-Contract-Given`); the
+(`Octahedron-Contracts`, `Octahedron-Contract-Grids`, `Octahedron-Contract-Given`,
+`Octahedron-Contract-Seen`); the
 contracts themselves are saved by the game. The plugin checks them every 30 seconds.
 
 The contract system is kept on the World Authority of a cluster, so the plugin posts
@@ -1683,11 +1703,11 @@ silent for 15: a handover or a node restart doesn't end a contract. A partition 
 went offline before it ran this plugin isn't known until it wakes once.
 
 `!oct contracts` (admin) lists OCT's contracts at every station and counts the
-others, the grids and wrecks it knows and the reports served; `!oct contracts post` checks and posts at once
+others, the grids and wreck targets it knows and the reports served; `!oct contracts post` checks and posts at once
 (run on the World Authority of a cluster). `!oct contract accept <id> [identity]`,
 `deliver <id> [fill]` and `complete <id>` take, hand in (from the caller's
-inventory; `fill` adds an acquisition's items first) and complete (a bounty or
-salvage) a contract as the caller, for tests and support.
+inventory; `fill` adds an acquisition's items first) and complete (a bounty, wreck or
+area) a contract as the caller, for tests and support.
 
 ### Leaderboard
 
