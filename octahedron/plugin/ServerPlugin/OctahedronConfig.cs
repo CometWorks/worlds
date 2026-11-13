@@ -1593,8 +1593,8 @@ public class OctahedronConfig : PluginConfig
 
     [StringOption(
         description: "Metals players must mine, comma separated: OCT never restocks their ores and ingots, nor the components "
-            + "made from those ingots, and asks for none of them in its acquisition contracts, whatever MarketMinStock and "
-            + "MarketStationStock say. It still buys them from players and sells what it bought.",
+            + "made from those ingots, whatever MarketMinStock says; only a station's own MarketStationStock entry restocks one "
+            + "there. It still buys them from players and sells what it bought, and ContractAcquisitionStock asks players for them.",
         Parent = "market"
     )]
     public string MarketPlayerMinedMetals
@@ -1607,7 +1607,7 @@ public class OctahedronConfig : PluginConfig
         description: "What each station produces, besides or instead of MarketMinStock, as Station name=Type/Subtype=units,..., "
             + "stations separated by ;. Once an hour OCT tops these up to the amount; a station named here uses up "
             + "MarketUsePercent of the rest of its MarketMinStock instead. A station not named here restocks all of "
-            + "MarketMinStock once it is completely out.",
+            + "MarketMinStock once it is completely out. An entry here restocks even a MarketPlayerMinedMetals item.",
         Parent = "market"
     )]
     public string MarketStationStock
@@ -1623,7 +1623,21 @@ public class OctahedronConfig : PluginConfig
         + "Gamma Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
         + "North Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
         + "South Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000;"
-        + "Moon Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000,Ore/Ice=200000";
+        + "Moon Station=Ingot/Iron=150000,Ingot/Nickel=50000,Ingot/Silicon=50000,Ingot/Cobalt=30000,Ore/Ice=200000,Ingot/Uranium=10";
+
+    [StringOption(
+        description: "The most OCT holds of an item at a station, as Station name=Type/Subtype=units,..., stations separated by ;. "
+            + "It buys no more there, and each restock drops what is over. Below MarketOctMaxStockTonnes, it keeps a station "
+            + "from selling enough of a player-mined item that nobody has to mine it.",
+        Parent = "market"
+    )]
+    public string MarketStationMaxStock
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        // A few for the bots' reactors (SE-1423 buys ~5 a trip), not enough to make mining uranium pointless
+        "Moon Station=Ingot/Uranium=10";
 
     [StringOption(
         description: "Each station's specialties, which OCT buys at MarketSpecialtyPercent: Station name=Type/Subtype,..., stations separated by ;.",
@@ -1885,6 +1899,34 @@ public class OctahedronConfig : PluginConfig
         get;
         set => SetField(ref field, value);
     } = 240;
+
+    [StringOption(
+        description: "What OCT asks for in acquisition contracts at every station besides its market profile, as Type/Subtype=units, "
+            + "comma separated: the target stock of each, MarketPlayerMinedMetals items included. OCT never restocks these, players "
+            + "bring them. A profile amount wins, and MarketStationMaxStock caps it.",
+        Parent = "contracts"
+    )]
+    public string ContractAcquisitionStock
+    {
+        get;
+        set => SetField(ref field, value);
+    } =
+        "Ore/Gold=20000,Ore/Silver=20000,Ore/Platinum=10000,Ore/Uranium=10000,"
+        + "Ingot/Gold=500,Ingot/Silver=1000,Ingot/Platinum=200,Ingot/Uranium=200,"
+        + "Component/Superconductor=200,Component/Thrust=200,Component/Reactor=200,Component/GravityGenerator=20,Component/Medical=20";
+
+    [IntOption(
+        0,
+        1_000,
+        description: "An acquisition contract pays this much more per item when the station is out of it, less the closer its stock "
+            + "is to the target (%).",
+        Parent = "contracts"
+    )]
+    public int ContractAcquisitionShortagePercent
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 100;
 
     [IntOption(
         0,

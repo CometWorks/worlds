@@ -42,6 +42,25 @@ Check(
 Check(ContractMath.AcquisitionReward(5_000, 10_000, 60) == 30_000, "at 60 %");
 Check(ContractMath.AcquisitionReward(1, 1, 100) == 1, "a thousandth of a credit rounds up");
 
+// The further below its target the stock is, the more each item pays: SE-1429
+Check(
+    ContractMath.AcquisitionReward(5_000, 10_000, 100, 20_000, 20_000, 100) == 100_000,
+    "out of it: double at 100 % shortage"
+);
+Check(
+    ContractMath.AcquisitionReward(5_000, 10_000, 100, 5_000, 20_000, 100) == 62_500,
+    "a quarter short: 25 % more"
+);
+Check(
+    ContractMath.AcquisitionReward(5_000, 10_000, 100, 20_000, 20_000, 0) == 50_000,
+    "no shortage premium at 0 %"
+);
+Check(
+    ContractMath.AcquisitionReward(5_000, 10_000, 100, 5_000, 0, 100) == 50_000,
+    "no target: no premium"
+);
+Check(ContractMath.Shortage(30, 20) == 1, "never more than out of it");
+
 Check(ContractMath.BountyReward(250.4, 20) == 5_008, "bounty by threat");
 Check(ContractMath.WreckReward(12_500, 100) == 12_500, "a wreck pays its components' value");
 Check(ContractMath.WreckReward(12_500.2, 50) == 6_251, "at half, rounded up");

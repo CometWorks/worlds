@@ -222,6 +222,27 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
         "missing: what OCT lacks of the profile"
     );
 
+    // A station's cap (SE-1429): the Store buys no more, a restock tops up to it at most and drops the rest
+    var capped = new MarketSettings
+    {
+        DriftKg = 0,
+        MaxStock = new() { [(A, Iron)] = 10 * U },
+    };
+    var c = new MarketBook();
+    c.SetStock(A, Iron, 4 * U);
+    Check(Row(c, w, capped, A, Iron).Wanted == 6 * U, "the Store buys up to the cap");
+    Check(Row(c, w, capped, B, Iron).Wanted > 6 * U, "the cap is per station");
+    c.SetStock(A, Iron, 0);
+    c.Restock(w, capped, [A], _ => [new(Iron, 30 * U)], force: true);
+    Check(c.Stock(A, Iron) == 10 * U, "restocked to the cap, not the profile: " + c.Stock(A, Iron));
+    c.SetStock(A, Iron, 5_000 * U);
+    Check(Row(c, w, capped, A, Iron).Wanted == 0, "over the cap: buys none");
+    Check(c.Restock(w, capped, [A], _ => [], force: true) != null, "dropping is a change");
+    Check(c.Stock(A, Iron) == 10 * U, "a restock drops what is over the cap: " + c.Stock(A, Iron));
+    c.SetStock(A, Iron, 3 * U);
+    c.Restock(w, capped, [A], _ => [], force: true);
+    Check(c.Stock(A, Iron) == 3 * U, "under the cap: left alone");
+
     // A new UTC day starts the specialty purchases again, the hour's check or not
     var d = new MarketBook();
     d.Restock(w, s, [A], _ => []);
