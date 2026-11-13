@@ -559,7 +559,7 @@ if (System.IO.File.Exists(stationFile))
     );
     ops = BlueprintDiff.Diff(original, rewritten, out diffError);
     Check(
-        BlueprintDiff.Blocks(original).Count == 1984 && ops?.Count == 0,
+        BlueprintDiff.Blocks(original).Count == 3890 && ops?.Count == 0,
         $"the station blueprint written another way: {ops?.Count} ops {diffError}"
     );
 }
@@ -567,8 +567,8 @@ else
     Check(false, "the station blueprint is at " + stationFile);
 
 // The staged blueprint pairs of config/octahedron.cfg, trimmed by station_patch.py to the blocks
-// they change (SE-1235): each pair is in config/storage/Octahedron and diffs to ops that change
-// blocks in place, at cells both blueprints have
+// they change (SE-1235): each pair is in config/storage/Octahedron and diffs to ops at cells one of the
+// blueprints has. Since the extenders (SE-1388) a pair also adds and removes blocks.
 var configFolder = System.IO.Path.Combine(AppContext.BaseDirectory, "../../../../../../../config");
 var stagedPairs = XDocument
     .Load(System.IO.Path.Combine(configFolder, "octahedron.cfg"))
@@ -585,17 +585,26 @@ foreach (var entry in stagedPairs)
         Check(false, $"staged pair {id}: both files in config/storage/Octahedron");
         continue;
     }
-    var from = BlueprintDiff.MainGrid(XDocument.Load(File("From")));
-    var to = BlueprintDiff.MainGrid(XDocument.Load(File("To")));
-    ops = BlueprintDiff.Diff(from, to, out diffError);
-    var cells = BlueprintDiff.Blocks(from).Select(b => b.Min).ToHashSet();
-    Check(
-        ops is { Count: > 0 }
-            && ops.All(o =>
-                o.Kind is PatchOpKind.Rebuild or PatchOpKind.Set && cells.Contains(o.At)
+    XDocument Load(string tag) =>
+        File(tag).EndsWith(".gz")
+            ? XDocument.Load(
+                new System.IO.Compression.GZipStream(
+                    System.IO.File.OpenRead(File(tag)),
+                    System.IO.Compression.CompressionMode.Decompress
+                )
             )
-            && cells.SetEquals(BlueprintDiff.Blocks(to).Select(b => b.Min)),
-        $"staged pair {id}: {ops?.Count} ops in place {diffError}"
+            : XDocument.Load(File(tag));
+    var from = BlueprintDiff.MainGrid(Load("From"));
+    var to = BlueprintDiff.MainGrid(Load("To"));
+    ops = BlueprintDiff.Diff(from, to, out diffError);
+    var cells = BlueprintDiff
+        .Blocks(from)
+        .Concat(BlueprintDiff.Blocks(to))
+        .Select(b => b.Min)
+        .ToHashSet();
+    Check(
+        ops is { Count: > 0 } && ops.All(o => o.Kind == PatchOpKind.Grid || cells.Contains(o.At)),
+        $"staged pair {id}: {ops?.Count} ops at the pair's cells {diffError}"
     );
 }
 Check(stagedPairs.Count > 0, "octahedron.cfg stages blueprint pairs");
