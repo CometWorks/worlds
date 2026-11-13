@@ -199,6 +199,13 @@ def run(bench) -> None:
             if p.is_file()
         )
 
+    def log(process: str) -> str:
+        return "\n".join(
+            p.read_text(errors="replace")
+            for p in (bench.run_root / f"{process}-data").rglob("*.log")
+            if p.is_file()
+        )
+
     def status(grid: str) -> dict | None:
         """The fields of the grid's last Station patch STATUS line"""
         # The newest line by its time: the processes' logs come one after the other
@@ -504,12 +511,25 @@ def run(bench) -> None:
         move and abs(float(move[1]) - 20) < 0.5,
         move and move[0],
     )
+    # Its faction station entry, which the game makes its GPS from, moves with it on every process
+    gps = "20350.08,122087.01,-110668.32"
+    for process in PROCESSES:
+        line = re.search(
+            rf"Grid move STATION {MOVE}: Moon Station's faction station from \S+ to (\S+)",
+            log(process),
+        )
+        check(
+            f"{process}: Moon's faction station moves to {gps}",
+            line and line[1] == gps,
+            line and line[0],
+        )
     swapped("Moon Station", moon and moon["entity"], ids("Moon Station", MOVE))
     api = sx_join(bench, cluster)
     came_back("Moon", body)
 
     # ============================== nothing again ==============================
     applied = len(re.findall(r"Station patch APPLIED", logs()))
+    placed = len(re.findall(r"Grid move STATION", log("wa-1")))
     check("the cluster stops gracefully again", stop("again"))
     start()
     api = sx_join(bench, cluster)
@@ -519,6 +539,10 @@ def run(bench) -> None:
     check(
         "no patch applies again",
         len(re.findall(r"Station patch APPLIED", logs())) == applied,
+    )
+    check(
+        "the World Authority saved the faction station where it moved",
+        len(re.findall(r"Grid move STATION", log("wa-1"))) == placed,
     )
 
 

@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
+using HarmonyLib;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.EntityComponents;
@@ -29,7 +31,13 @@ internal static class GridMoves
     private const double SamePosition = 0.5;
     private const double SameDirection = 0.9999;
 
-    private record Move(string Id, string Grid, MatrixD Target);
+    private record Move(string Id, string Grid, MatrixD Target, Vector3D? Station);
+
+    private static readonly MethodInfo SetStationPosition = AccessTools.Method(
+        typeof(MyFactionStation),
+        "SetPosition",
+        [typeof(Vector3D)]
+    );
 
     private static DateTime nextCheck;
     private static bool reported;
@@ -47,6 +55,7 @@ internal static class GridMoves
             Parse(Plugin.Config);
         if (staged.Count == 0)
             return;
+        PlaceStations();
 
         var names = staged.Select(m => m.Grid).ToHashSet();
         var grids = MyEntities
@@ -98,6 +107,29 @@ internal static class GridMoves
             waiting[key] = (now.AddSeconds(RetrySeconds), result);
             // The grid's later moves wait for this one
             break;
+        }
+    }
+
+    // A moved station's faction station entry, which the game makes its GPS from, where the move puts it (SE-1449).
+    // On a cluster the World Authority keeps the factions and hands them to the nodes, so every process sets its own
+    // copy, whenever it differs: also after a snapshot from a World Authority that hadn't set it yet.
+    private static void PlaceStations()
+    {
+        foreach (var move in staged.Where(m => m.Station != null))
+        foreach (
+            var station in MySession
+                .Static.Factions.SelectMany(f => f.Value.Stations)
+                .OfType<MyFactionStation>()
+                .Where(s => s.Name == move.Grid)
+        )
+        {
+            var from = station.Position;
+            if (Vector3D.Distance(from, move.Station.Value) < SamePosition)
+                continue;
+            SetStationPosition.Invoke(station, [move.Station.Value]);
+            Plugin.Log.Info(
+                $"Grid move STATION {move.Id}: {move.Grid}'s faction station from {Format(from)} to {Format(station.Position)}"
+            );
         }
     }
 
@@ -262,8 +294,18 @@ internal static class GridMoves
             || Math.Abs(Vector3D.Dot(forward, up)) > 0.001
         )
             error = "Forward and Up must be unit vectors at right angles";
+        else if (
+            !string.IsNullOrWhiteSpace(entry.StationPosition)
+            && !TryVector(entry.StationPosition, out _)
+        )
+            error = "StationPosition must be three numbers: X,Y,Z";
         else
-            return new Move(entry.Id, entry.Grid, MatrixD.CreateWorld(position, forward, up));
+            return new Move(
+                entry.Id,
+                entry.Grid,
+                MatrixD.CreateWorld(position, forward, up),
+                TryVector(entry.StationPosition, out var station) ? station : null
+            );
         return null;
     }
 

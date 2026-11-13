@@ -2357,7 +2357,7 @@ public class OctahedronConfig : PluginConfig
     } = new();
 
     [StructOption(
-        "Grid moves: a station's shipyard of a kept world moved where a world built now has it, once, when idle "
+        "Grid moves: a station or its shipyard of a kept world moved where a world built now has it, once, when idle "
             + "(SE-1369). The grid's ledger keeps the id; a grid already there only gets the id. Empty by default.",
         Parent = "patches"
     )]
@@ -2498,4 +2498,10 @@ public struct GridMoveEntry
 
     [StructMember("The grid's new up, a unit vector X,Y,Z at right angles to Forward.")]
     public string Up { get; set; }
+
+    [StructMember(
+        "A station's move only: where its faction station entry, which the game makes the station's GPS from, "
+            + "goes, X,Y,Z (m). Every process sets it there. Empty for a shipyard."
+    )]
+    public string StationPosition { get; set; }
 }

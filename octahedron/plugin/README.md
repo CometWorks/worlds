@@ -337,7 +337,10 @@ world patch, which adds grids, can do that. The first ones turn the shipyards of
 Gamma, North and South Station about their center line, so a bottom beam no longer
 hides the middle of the build space from the lobby. `2026-11-14-large-station-moon-move`
 moves Moon Station 20 m further from its shipyard, for the Large Station's longer
-docking connectors (SE-1449). A station's safe zone stays where it is.
+docking connectors (SE-1449). A station's safe zone stays where it is. Its entry's
+`StationPosition` is where the station's faction station entry goes, which the game makes
+the station's GPS from: every process, the World Authority too, sets its copy there
+whenever it differs and logs `Grid move STATION <id>`.
 
 `world_patch.py` writes a `GridMoveEntry` for each shipyard that has another place or
 facing in the world built from the working tree than in the one built from `--since`,
