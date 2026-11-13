@@ -17,7 +17,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `make_moon_shipyard.py` | generates the Moon Shipyard (SE-986): a static grid with the conveyor double helix and its OmniArc tools, and the Uraninite asteroid around it (`asteroid.bin`); `--variant alien` makes the Alien Shipyard (SE-1118), the same with 50 % more welders and deconstructors, `blueprints/alien-shipyard.sbc` and `alien-shipyard-rock.vx2` |
 | `moon-shipyard-asteroid/` | mod that builds the Moon Shipyard's asteroid in a world from `asteroid.bin` and `place.txt`; saving the world then writes the asteroid's `.vx2` |
 | `place_moon_shipyard.py` | puts the Moon Shipyard and its asteroid into a copy of a world in place of the Omni Arc Beam Shipyard, centered with the Moon Station in its safe zone, in view of its lounge; `build_world.py` places it in the Octahedron world as Viktor's design world has it (SE-1069) |
-| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Hangar plugin's options (`hangar.cfg`); the Performance plugin's options that differ from its defaults (`performance.cfg`); OreYeeter's (`oreyeeter.cfg`) |
+| `config/` | inputs of the world: MES mod list and settings, Relative Top Speed config; the Octahedron server plugin's config (`octahedron.cfg`); the Hangar plugin's options (`hangar.cfg`); the Performance plugin's options (`performance.cfg`); OreYeeter's (`oreyeeter.cfg`) |
 | `plugin/` | the Octahedron server plugin, which servers load from this folder (see its `README.md`) |
 | `server/` | the server's world, seed 42 |
 | `ORES.md` | ore statistics of `server/` |
