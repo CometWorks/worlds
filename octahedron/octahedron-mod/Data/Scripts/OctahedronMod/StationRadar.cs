@@ -19,8 +19,9 @@ namespace OctahedronMod
     [MyTextSurfaceScript("OctahedronRadar", "Octahedron Radar")]
     public class StationRadar : MyTSSCommon
     {
-        // Arthur's Lcd Mod radar the screen ran before was set to 6 km
-        const double Range = 6000;
+        // 2 km since 2026-11-13; Arthur's Lcd Mod radar the screen ran before was set to 6 km
+        const double Range = 2000;
+        static readonly double[] Rings = { 500, 1000, 2000 };
         const int MaxContacts = 40;
         const int MaxListed = 4;
 
@@ -173,9 +174,10 @@ namespace OctahedronMod
             var radius = Math.Min(area.X * 0.4f, area.Y * 0.24f / Tilt);
             var middle = origin + new Vector2(area.X / 2f, area.Y * 0.4f);
 
-            for (var i = 1; i <= 3; i++)
+            // Range rings at 500 m, 1 km and 2 km
+            foreach (var ring in Rings)
             {
-                var r = radius * i / 3f;
+                var r = (float)(radius * ring / Range);
                 frame.Add(
                     new MySprite(
                         SpriteType.TEXTURE,
@@ -187,7 +189,7 @@ namespace OctahedronMod
                 );
                 Text(
                     frame,
-                    $"{Range / 3000 * i:0} km",
+                    ring < 1000 ? $"{ring:0} m" : $"{ring / 1000:0} km",
                     middle + new Vector2(r - 30 * scale, 2 * scale),
                     dim,
                     0.6f * scale

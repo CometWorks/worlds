@@ -370,7 +370,7 @@ blocks from the OmniArc welder and deconstructor definitions of the Workshop cop
 The stations' radar (SE-1380) is the `OctahedronRadar` LCD
 script of `octahedron-mod/Data/Scripts/OctahedronMod/StationRadar.cs`, which
 the station blueprint's "LCD Panel - Station Lounge big map" runs. It shows the grids
-within 6 km of the screen, one marker per group of grids joined by connectors,
+within 2 km of the screen, one marker per group of grids joined by connectors,
 rotors or pistons, above or below the station's deck plane, and leaves out the
 station's own installations: groups with a static grid that the station's owner or
 nobody owns, which are the shipyard and the lane computers. Arthur's Lcd Mod radar
