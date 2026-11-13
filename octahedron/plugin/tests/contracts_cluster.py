@@ -790,7 +790,8 @@ def run(bench) -> None:
     api.character_teleport(shipyard[0], shipyard[1] - 20_000, shipyard[2])
     time.sleep(70)
     found = post()
-    own = named(found, "Cleanup: Grid", "area")
+    # The game names it "Large Grid NNN"
+    own = [c for c in named(found, "Cleanup: ", "area") if "Debris" not in c[4]]
     check(
         "their ownerless block, debris, gets an area contract",
         own,
@@ -804,7 +805,7 @@ def run(bench) -> None:
         check("their own ship: not paid", balances(api) == before, balances(api))
         check(
             "and the contract is over",
-            not any(c[0] == own[0][0] for c in named(contracts()[0], "Grid")),
+            not any(c[0] == own[0][0] for c in named(contracts()[0], "Cleanup: ")),
         )
     api.character_teleport(shipyard[0], shipyard[1] - 900, shipyard[2])
     found = post()
