@@ -13,6 +13,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `build_trader_ships.py` | builds the offline "Octahedron Trader Ships" showcase save of the SE-948 cargo ships listed in `trader_ships.txt` (SE-985); see its docstring |
+| `build_pilot_test_world.py` | builds the offline "Octahedron Pilot Test" save for autopilot tests (SE-1425): the world with 13 parked test ships PT-01 to PT-13, a walking platform with gravity, and `pilot-test-sites.json`, the test sites in world coordinates; `--check` checks a written save; see its docstring |
 | `make_helix_shipyard.py` | generates the double helix shipyard blueprint (SE-952), not used by the world yet |
 | `make_moon_shipyard.py` | generates the Moon Shipyard (SE-986): a static grid with the conveyor double helix and its OmniArc tools, and the Uraninite asteroid around it (`asteroid.bin`); `--variant alien` makes the Alien Shipyard (SE-1118), the same with 50 % more welders and deconstructors, `blueprints/alien-shipyard.sbc` and `alien-shipyard-rock.vx2` |
 | `moon-shipyard-asteroid/` | mod that builds the Moon Shipyard's asteroid in a world from `asteroid.bin` and `place.txt`; saving the world then writes the asteroid's `.vx2` |

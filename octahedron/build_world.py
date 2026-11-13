@@ -1861,7 +1861,7 @@ def write_xml(tree, path):
         path.write_text(text, encoding="utf-8")
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -1881,7 +1881,7 @@ def main():
         type=int,
         help="Workshop id of OctahedronMod, 0 = local mod; the Moon Shipyard gets its filament tools",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.octahedron_mod is not None:
         MOON_SHIPYARD_TOOLS.update(FILAMENT_TOOLS)
