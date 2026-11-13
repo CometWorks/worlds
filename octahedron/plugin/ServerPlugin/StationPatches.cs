@@ -268,6 +268,10 @@ internal static class StationPatches
                         if ((market == null || queue == null) && !last)
                             return;
                         asked[id] = AnswerTries;
+                        // The Store gets the market's rows on the next 15 s refresh. Fill it now,
+                        // so the count is what players see and not an empty Store right after load
+                        if (market != null)
+                            Market.Show(station, market);
                         var rows =
                             market == null ? $"none ({marketError})"
                             : market.Length == 0 ? "closed"
