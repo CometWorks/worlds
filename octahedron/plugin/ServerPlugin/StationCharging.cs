@@ -205,7 +205,7 @@ internal static class StationCharging
                     price <= 0
                         ? $"{station.DisplayName} has no ice for sale: no hydrogen for {main.DisplayName}."
                         : $"{main.DisplayName} needs {wanted:N0} L of hydrogen for {Sc(Bill(wanted, price))} "
-                            + $"({price:N0} SC per kg of ice), you have {Sc(balance)}."
+                            + $"({PerTonne(price)} of ice), you have {Sc(balance)}."
                 );
             return;
         }
@@ -228,7 +228,7 @@ internal static class StationCharging
         }
 
         var text =
-            $"{main.DisplayName} got {liters:N0} L of hydrogen for {Sc(sc)} ({price:N0} SC per kg of ice)"
+            $"{main.DisplayName} got {liters:N0} L of hydrogen for {Sc(sc)} ({PerTonne(price)} of ice)"
             + (
                 liters < wanted - 0.5
                     ? $", all you could pay for of the {wanted:N0} L it needed."
@@ -240,13 +240,16 @@ internal static class StationCharging
         Tell(station, owner, text);
     }
 
-    private static long Bill(double liters, long price) =>
+    private static string PerTonne(double price) => $"{price * 1000:N0} SC per t";
+
+    private static long Bill(double liters, double price) =>
         DockHydrogenMath
             .Bill(liters, price, Plugin.Config.ShipyardHydrogenLitersPerIce, long.MaxValue)
             .Sc;
 
-    // What OCT sells a kg of ice for at the station's Store, in SC; 0 when it has none for sale
-    private static long IcePrice(IMyFactionStation entry)
+    // What OCT sells a kg of ice for at the station's Store, in SC: the price of a Store unit, a lot
+    // of MarketLots kg; 0 when it has none for sale
+    private static double IcePrice(IMyFactionStation entry)
     {
         if (entry is not MyFactionStation station || !Stations.TryItemId(Ice, out var id))
             return 0;
@@ -257,7 +260,7 @@ internal static class StationCharging
                     && i.Item.HasValue
                     && (MyDefinitionId)i.Item.Value == id
                 )
-                ?.PricePerUnit
+                ?.PricePerUnit / (double)Market.Settings.Lot(Ice)
             ?? 0;
     }
 

@@ -83,6 +83,7 @@ internal static class Market
                     _ => Config.ZoneChipPrice * MarketBook.MilliPerSc
                 ),
             FixedStock = Config.ZoneChipStock * Amounts.Unit,
+            Lots = Lots(),
         };
 
     /// <summary>The market, on the authority only, loaded from the world on first use.</summary>
@@ -389,14 +390,20 @@ internal static class Market
         if (station == null)
             return;
         var ids = new HashSet<long>();
+        var settings = Settings;
         void Put(string item, StoreItemTypes type, long raw, long price)
         {
-            int amount = (int)Math.Min(int.MaxValue, raw / Amounts.Unit);
+            long lot = settings.Lot(item);
+            int amount = (int)Math.Min(int.MaxValue, raw / Amounts.Unit / lot);
             if (amount <= 0 || price <= 0 || !Stations.TryItemId(item, out var itemId))
                 return;
             long id = StoreItemId(stationName, item, type);
             ids.Add(id);
-            int sc = (int)Math.Min(int.MaxValue, price / MarketBook.MilliPerSc);
+            int sc = (int)
+                Math.Min(
+                    int.MaxValue,
+                    (price * lot + MarketBook.MilliPerSc / 2) / MarketBook.MilliPerSc
+                );
             var shown = station.StoreItems.FirstOrDefault(i => i.Id == id);
             if (shown == null)
                 station.StoreItems.Add(
@@ -468,50 +475,91 @@ internal static class Market
     private static class StoreBuy
     {
         // ReSharper disable once UnusedMember.Local
-        private static void Prefix(MyStoreItem storeItem, out int __state) =>
+        private static void Prefix(long stationId, MyStoreItem storeItem, out int __state)
+        {
             __state = storeItem.Amount;
+            if (On && stationId != 0 && OctStation(stationId) != null)
+                StoreLots.Begin(storeItem.Item);
+        }
 
         // ReSharper disable once UnusedMember.Local
-        private static void Postfix(int amount, long stationId, MyStoreItem storeItem, int __state)
+        private static void Postfix(
+            int amount,
+            MyPlayer player,
+            long stationId,
+            MyStoreItem storeItem,
+            long totalPrice,
+            int __state
+        )
         {
             if (!On || stationId == 0 || storeItem.Amount != __state - amount)
                 return;
             string station = OctStation(stationId);
             if (station != null && storeItem.Item is { } item)
+            {
+                long lot = Settings.Lot(Stations.ItemName(item));
                 Change(
                     Guid.NewGuid(),
                     Verb.Bought,
                     station,
                     Stations.ItemName(item),
-                    amount * Amounts.Unit
+                    amount * lot * Amounts.Unit
                 );
+                StoreLots.Tell(player, "Bought", item, amount, lot, totalPrice);
+            }
         }
+
+        // ReSharper disable once UnusedMember.Local
+        private static void Finalizer() => StoreLots.End();
     }
 
     [HarmonyPatch(typeof(MyStoreBlock), "SellToStation")]
     private static class StoreSell
     {
         // ReSharper disable once UnusedMember.Local
-        private static void Prefix(long id, IMyFactionStation station, out int __state) =>
-            __state =
-                (station as MyFactionStation)?.StoreItems.FirstOrDefault(i => i.Id == id)?.Amount
-                ?? -1;
+        private static void Prefix(long id, IMyFactionStation station, out int __state)
+        {
+            var shown = (station as MyFactionStation)?.StoreItems.FirstOrDefault(i => i.Id == id);
+            __state = shown?.Amount ?? -1;
+            if (On && shown != null && OctStation(station.Id) != null)
+                StoreLots.Begin(shown.Item);
+        }
 
         // ReSharper disable once UnusedMember.Local
-        private static void Postfix(long id, int amount, IMyFactionStation station, int __state)
+        private static void Postfix(
+            long id,
+            int amount,
+            MyPlayer player,
+            IMyFactionStation station,
+            int __state
+        )
         {
             if (!On || station == null || OctStation(station.Id) == null)
                 return;
             var shown = (station as MyFactionStation)?.StoreItems.FirstOrDefault(i => i.Id == id);
             if (shown?.Item is { } item && shown.Amount == __state - amount)
+            {
+                long lot = Settings.Lot(Stations.ItemName(item));
                 Change(
                     Guid.NewGuid(),
                     Verb.Sold,
                     station.Name,
                     Stations.ItemName(item),
-                    amount * Amounts.Unit
+                    amount * lot * Amounts.Unit
                 );
+                StoreLots.Tell(
+                    player,
+                    "Sold",
+                    item,
+                    amount,
+                    lot,
+                    (long)shown.PricePerUnit * amount
+                );
+            }
         }
+
+        // ReSharper disable once UnusedMember.Local
+        private static void Finalizer() => StoreLots.End();
     }
 
     // --- the catalog ---
@@ -715,6 +763,22 @@ internal static class Market
             ),
             station,
             item
+        );
+
+    private static string lotsKey;
+    private static Dictionary<string, long> lots = new();
+
+    // MarketLots: units of an item in a Store unit
+    private static Dictionary<string, long> Lots() =>
+        Parsed(
+            Config.MarketLots,
+            ref lotsKey,
+            ref lots,
+            text =>
+                MarketBook
+                    .ParseAmounts(text)
+                    .ToDictionary(p => p.Key, p => Math.Max(1, p.Value / Amounts.Unit)),
+            "MarketLots"
         );
 
     private static Dictionary<string, long> Prices() =>

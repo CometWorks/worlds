@@ -7,12 +7,12 @@ public static class DockHydrogenMath
 {
     /// <summary>
     /// The liters to put into the tanks and the whole SC they cost: the wanted liters' ice at the
-    /// price (SC per kg, litersPerIce liters per kg), rounded up to a whole SC. With less money than
+    /// price (SC per kg, fractions allowed, litersPerIce liters per kg), rounded up to a whole SC. With less money than
     /// that, as many liters as the balance buys, for all of it. Nothing without a price or money.
     /// </summary>
     public static (double Liters, long Sc) Bill(
         double wanted,
-        long icePrice,
+        double icePrice,
         double litersPerIce,
         long balance
     )

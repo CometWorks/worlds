@@ -1693,14 +1693,27 @@ public class OctahedronConfig : PluginConfig
     } = 50;
 
     [StringOption(
-        description: "Reference prices for items the game has none for, SC per unit: Type/Subtype=price, comma separated.",
+        description: "Reference prices in SC per unit, fractions allowed, in place of the game's minimal price / 10: "
+            + "Type/Subtype=price, comma separated. A Store shows whole SC per unit (or per lot, MarketLots), at least 1, "
+            + "and buys only below what it sells for.",
         Parent = "market"
     )]
     public string MarketPrices
     {
         get;
         set => SetField(ref field, value);
-    } = "";
+    } = "Ore/Ice=0.01";
+
+    [StringOption(
+        description: "Items OCT's Stores trade in lots, priced in whole SC per lot: Type/Subtype=units per lot, "
+            + "comma separated. A Store unit of such an item is a lot; a lot of 1,000 kg of ice at 0.01 SC per kg costs 10 SC.",
+        Parent = "market"
+    )]
+    public string MarketLots
+    {
+        get;
+        set => SetField(ref field, value);
+    } = "Ore/Ice=1000";
 
     [DoubleOption(
         0,
