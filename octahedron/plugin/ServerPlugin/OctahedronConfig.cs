@@ -818,7 +818,7 @@ public class OctahedronConfig : PluginConfig
     [IntOption(
         0,
         description: "A repair, grind or hack slot ends after this many minutes without welding, grinding or a ship to hack; a press of "
-            + "its button ends it sooner. A repair slot's welders, containers and connectors are the player's meanwhile. 0: no slots.",
+            + "its button ends it sooner, and a repair or grind slot also ends once nothing is left to weld or grind. A repair slot's welders, containers and connectors are the player's meanwhile. 0: no slots.",
         Parent = "shipyard"
     )]
     public int ShipyardRepairIdleMinutes
@@ -829,7 +829,8 @@ public class OctahedronConfig : PluginConfig
 
     [BoolOption(
         "An idle shipyard clears the garbage out of its build space every 10 s: floating objects, and the grids its "
-            + "builds clear away anyway (no player's, or a wreck without power and controls). The bots' janitors bring it there (SE-1383).",
+            + "builds clear away anyway (no player's, or a wreck without power and controls). The bots' janitors bring it there (SE-1383). "
+            + "The grids of a player with a repair slot in the queue, and of their faction, stay.",
         Parent = "shipyard"
     )]
     public bool ShipyardSweepIdle

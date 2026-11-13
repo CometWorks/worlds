@@ -6,7 +6,10 @@ working only in the shipyard's build volume, the cylinder around its center line
   the instructions again; Build without a blueprint asks for one.
 - Switching: another mode's button swaps a waiting or running slot, the same button cancels it.
 - Repair: the welders weld the player's damaged ship and build its projection with components the
-  station sells them, as none are brought; a ship out of the volume stays damaged.
+  station sells them, as none are brought, only those of the blocks still to build (SE-1431); a
+  ship out of the volume stays damaged. Once nothing is left to weld, the slot ends (SE-1430).
+- A waiting repair slot: the idle shipyard's sweep leaves its player's unpowered wreck in the
+  build space and removes another player's (SE-1430).
 - Grind: the player's ship in the volume is ground and its parts go into the player's ship docked
   at the connectors; a ship of theirs out of the volume and another player's in it stay. A second
   grind with nothing docked sells what was ground for the player.
@@ -179,6 +182,15 @@ def repair(a) -> None:
     mark = sa.so_latest(a)
     sold = sa.wait_chat(a, "The station sold your repair", 60, mark)
     check(sold is not None, f"the station sells what the welders lack: {sold}")
+    # The projection's projector and battery are built: only the armor's plates (SE-1431)
+    check(
+        sold is not None
+        and "Steel Plate" in sold
+        and not any(
+            c in sold for c in ("Computer", "Construction", "Power Cell", "Motor")
+        ),
+        f"only what the missing armor needs: {sold}",
+    )
 
     def repaired():
         got = info(a, damaged)
@@ -194,11 +206,59 @@ def repair(a) -> None:
         info(a, outside).get("integrity") == out_before.get("integrity"),
         f"a ship out of the volume isn't welded: {out_before} -> {info(a, outside)}",
     )
+    # Nothing left to weld ends the slot at the next check, not after ShipyardRepairIdleMinutes (SE-1430)
+    done_at = time.monotonic()
+    ended = sa.wait_chat(a, "ended: nothing is left to weld", 40, mark)
+    check(
+        ended is not None and "nothing is left to weld" in ended,
+        f"ends once nothing is left to weld, {time.monotonic() - done_at:.0f} s after: {ended}",
+    )
+    rig.chat(a, "!oct shipyard done", 4)
+    check(wait_for(lambda: rs.octs(rs.yard(a)), 25), "OCT's again")
+    remove(a, "Repair Target", "Out Of Reach")
+
+
+def waiting_wreck(a, b) -> None:
+    """A player's wreck waits in the build space while their repair slot is in the queue (SE-1430)"""
+    reply = book(b, "repair")
+    check(
+        "booked a Repair slot" in reply,
+        f"the other player books a repair slot: {reply}",
+    )
+    check(wait_for(lambda: slot(a, "repair", "OctOther") is not None, 30), "it runs")
+    reply = book(a, "repair")
+    check(
+        "booked a Repair slot" in reply and "doesn't clear your ship away" in reply,
+        f"a repair slot waits behind it: {reply}",
+    )
+    # The plates keep the other player's take window open, in which the idle shipyard sweeps
+    probe(a, f"yardstash {STATION} 10")
+    reply = book(b, "repair")
+    check(
+        "Take what is in" in reply,
+        f"the other slot ends, its take window open: {reply}",
+    )
+    mine = place(a, "My Wreck", "me", "wreck:-10")
+    nobodys = place(a, "Nobodys Wreck", "none", "wreck:10")
+    check(
+        wait_for(lambda: gone(a, nobodys), 40, 5),
+        "the sweep removes nobody's wreck",
+    )
+    check(
+        not gone(a, mine),
+        "and leaves the wreck of the player with the waiting repair slot",
+    )
+    check(slot(a, "repair") is None, "whose slot still waits")
+    rig.chat(b, "!oct shipyard done", 4)
+    check(
+        wait_for(lambda: slot(a, "repair") is not None, 40), "the repair slot runs next"
+    )
+    check(not gone(a, mine), "with the wreck there")
     reply = book(a, "repair")
     check("you canceled it" in reply, f"Repair again ends it: {reply}")
     rig.chat(a, "!oct shipyard done", 4)
     check(wait_for(lambda: rs.octs(rs.yard(a)), 25), "OCT's again")
-    remove(a, "Repair Target", "Out Of Reach")
+    remove(a, "My Wreck")
 
 
 def grind(a, b) -> None:
@@ -439,6 +499,7 @@ def main() -> int:
             "billboard": lambda: billboard(a),
             "switching": lambda: switching(a),
             "repair": lambda: repair(a),
+            "waiting_wreck": lambda: waiting_wreck(a, b),
             "grind": lambda: grind(a, b),
             "hack": lambda: hack(a, b),
             "contracts": lambda: contracts(a, b),

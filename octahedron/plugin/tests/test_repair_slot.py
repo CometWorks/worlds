@@ -2,8 +2,8 @@
 without a blueprint books the slot; the shipyard's containers, welders and connectors are the
 player's and shared with nobody, since the players are in OCT (OctFaction), its reactors stay OCT's; a ship docked to a connector
 gives the welders the components to weld a ship in the shipyard from its repair projector; the
-slot ends after the real 5 minutes without building or welding, or at the player's next press or
-!oct shipyard done,
+slot doesn't end in its first 60 idle s, ends once nothing is left to weld (SE-1430), or at the
+player's next press or !oct shipyard done,
 and everything is back as before. Also: a slot waits for a running build, which its owner's press
 cancels, which hands the ship over as when its time runs out; a restart in the middle of a slot; and a build after a slot.
 On a world built by build_world.py. The presses are !oct order: see test_table_rules.py.
@@ -46,7 +46,6 @@ from test_table_rules import (
 # OCT_SHIPYARD_STATION=Moon runs the shipyard checks at the Moon Shipyard (SE-1069)
 STATION = os.environ.get("OCT_SHIPYARD_STATION", "Alpha")
 CONFIG = tr.CONFIG
-IDLE_SECONDS = 300
 OCT = "Octahedron_Authority"
 PLATES = 2000
 STASH = 50
@@ -131,7 +130,7 @@ def building(remote) -> bool:
 
 
 def book_and_idle_out(a, b) -> None:
-    """The whole of a slot: booked, worked in, and ended by the real 5 idle minutes"""
+    """The whole of a slot: booked, not ended by 60 idle s, worked in, and ended once nothing is left to weld"""
     home = yard(a)
     power_stays(home, "before")
     check(octs(home), f"before: the blocks are OCT's, not shared with players: {home}")
@@ -197,6 +196,11 @@ def book_and_idle_out(a, b) -> None:
     check(
         state["connected"] == "1" and state["trading"] == "0", f"not trading: {state}"
     )
+    # What a player leaves in the containers: displays, which the armor to build doesn't take.
+    # Stashed before the repair, which ends once nothing is left to weld (SE-1430).
+    probe(a, f"yardstash {STATION} {STASH} Component/Display")
+    held = float(yard(a)["items"])
+    check(held >= STASH, f"displays in the shipyard's container: {held}")
     target = re.search(r"TARGET (\d+)", probe(a, f"yardtarget {STATION}"))
     check(target is not None, f"a damaged ship with a repair projector: {target}")
     damaged = target[1] if target else "0"
@@ -215,22 +219,12 @@ def book_and_idle_out(a, b) -> None:
         PLATES - 100 <= left < PLATES,
         f"the components come from the docked ship: {PLATES} -> {left}",
     )
-    # What a player leaves in the containers; the welders may still hold a few
-    probe(a, f"yardstash {STATION} {STASH}")
-    held = float(yard(a)["items"])
-    check(held >= STASH, f"plates in the shipyard's container: {held}")
-    since = slot_runs(a)
+    # Nothing left to weld ends it at a check, not after the 5 idle minutes (SE-1430)
+    last = time.monotonic()
+    ended = sa.wait_chat(a, "nothing is left to weld", 40, mark)
     check(
-        since is not None and since < 45,
-        f"welding restarted the 5 minutes: {since} s since the last work",
-    )
-    last = time.monotonic() - (since or 0)
-    ended = sa.wait_chat(a, "no building or welding for 5 min", IDLE_SECONDS + 60, mark)
-    took = time.monotonic() - last
-    check(ended is not None, f"the slot ends: {ended}")
-    check(
-        IDLE_SECONDS - 20 <= took <= IDLE_SECONDS + 30,
-        f"after 5 idle minutes: {took:.0f} s",
+        ended is not None,
+        f"the slot ends once nothing is left to weld, {time.monotonic() - last:.0f} s after: {ended}",
     )
     # As a build's end: the window to take what is left, then the sale
     state = yard(a)

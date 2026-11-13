@@ -1020,8 +1020,8 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "yardvol",
-        "The shipyard's build volume (SE-1386), and a ship placed against it: in its middle, out (in the build space but outside the cylinder, outdamaged with its armor at 30%) or across it (a row of armor sticking out); :meters shifts it along the center line. Owner: me, npc (a non-OCT NPC), none, or a player's name. Its container gets the items: VOLUME radius half-length ME caller-identity SHIP grid-id",
-        "!sprobe yardvol <station> [name] [me|npc|none|<player>] [in|out|outdamaged|across][:meters] [Type/Subtype=amount,...]"
+        "The shipyard's build volume (SE-1386), and a ship placed against it: in its middle, out (in the build space but outside the cylinder, outdamaged with its armor at 30%) or across it (a row of armor sticking out), or a wreck in its middle (no cockpit or battery); :meters shifts it along the center line. Owner: me, npc (a non-OCT NPC), none, or a player's name. Its container gets the items: VOLUME radius half-length ME caller-identity SHIP grid-id",
+        "!sprobe yardvol <station> [name] [me|npc|none|<player>] [in|out|outdamaged|across|wreck][:meters] [Type/Subtype=amount,...]"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string YardVol(
@@ -1055,6 +1055,9 @@ public sealed class ProbeCommands : CommandModule
         var damaged = where == "outdamaged";
         if (damaged)
             where = "out";
+        var wreck = where == "wreck";
+        if (wreck)
+            where = "in";
         long owner = who switch
         {
             "me" => Context.Caller.IdentityId,
@@ -1075,7 +1078,7 @@ public sealed class ProbeCommands : CommandModule
             .Take(2)
             .ToList();
         var diagonal = Vector3D.Normalize(across[0] + across[1]);
-        var blocks = Power(Vector3I.Zero, owner);
+        var blocks = wreck ? [] : Power(Vector3I.Zero, owner);
         var cargo = Block<MyObjectBuilder_CargoContainer>(
             "LargeBlockSmallContainer",
             new Vector3I(0, 0, 2),
@@ -1369,13 +1372,14 @@ public sealed class ProbeCommands : CommandModule
 
     [Command(
         "yardstash",
-        "Puts steel plates into the shipyard's first container",
-        "!kprobe yardstash <station> <amount>"
+        "Puts steel plates, or the given item, into the shipyard's first container",
+        "!kprobe yardstash <station> <amount> [Type/Subtype]"
     )]
     [Permission(MyPromoteLevel.Admin)]
-    public string YardStash(string station, int amount)
+    public string YardStash(string station, int amount, string item = "Component/SteelPlate")
     {
-        var plate = new MyDefinitionId(typeof(MyObjectBuilder_Component), "SteelPlate");
+        if (!MyDefinitionId.TryParse("MyObjectBuilder_" + item, out var plate))
+            return $"BADITEM {item}";
         Yard(station)
             .GetFatBlocks<MyCargoContainer>()
             .First()
