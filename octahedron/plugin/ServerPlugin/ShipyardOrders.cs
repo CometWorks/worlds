@@ -1082,9 +1082,9 @@ internal static partial class ShipyardOrders
                                 + $"cylinder inside the frame, and keep it there for {Config.ShipyardHackSeconds} s. The slot ends "
                                 + $"with the hack, after {idle} min without a ship, or when you press Hack again.",
                         _ =>
-                            $"{shipyard.DisplayName} is yours and your faction's now: dock your ship with its "
-                                + "repair projector and components to one of its connectors, and bring what to repair "
-                                + "into the build volume, the cylinder inside the frame."
+                            $"{shipyard.DisplayName} is yours and your faction's now: fly the ship to repair, with its "
+                                + "repair projector, into the build volume, the cylinder inside the frame. A ship docked at "
+                                + "its connectors can bring the components."
                                 + (
                                     Config.ShipyardRepairBuy
                                         ? " What the welders lack is bought from the station for you."
