@@ -911,17 +911,21 @@ is outside it.
 - **Repair.** When its turn comes the shipyard's welders go on, and its containers,
   welders and connectors become the player's, shared with their faction unless that is
   OCT (`ShipyardTurn`). The reactors and everything else stay OCT's, and the connectors
-  are not in trading mode. The player docks a ship with the components to one of the
-  connectors, which are on the outside of the frame, and the welders take them through
-  the conveyors to weld the player's blocks in the volume, projected blocks of the
-  player's own repair projector too. With `ShipyardRepairBuy` (on), every 10 s check
-  buys what the welders still lack for those blocks, less what the shipyard and the
-  player's docked ships hold, from the station's Store at the build quote's prices into
-  the containers: as much as the stock, the containers' room and the player's account
-  allow, with no labor fee. The player gets a chat message for each purchase. The slot
-  ends like a build: the welders go off and the player has the last window of their
-  turn (below) to take what is in the containers and welders, which is over at once if
-  they are empty.
+  are not in trading mode. The welders weld the player's blocks in the volume, and the
+  blocks the player's own repair projector there still has to build. With
+  `ShipyardRepairBuy` (on), every 10 s check buys what the welders still lack for those
+  blocks, less what the shipyard and the player's docked ships hold, from the station's
+  Store at the build quote's prices into the containers: as much as the stock, the
+  containers' room and the player's account allow, with no labor fee. The player gets a
+  chat message for each purchase. A second ship with components is optional then: docked
+  at one of the connectors, which are on the outside of the frame, its components go
+  first, through the conveyors. A projected block counts only while the projector can
+  still build it, so the slot doesn't buy the components of the blocks already there
+  (SE-1431). The slot ends once the welders welded something and a check finds nothing of
+  the player's in the volume left to weld and no purchase on its way (SE-1430). It ends
+  like a build: the welders go off and the player has the last window of their turn
+  (below) to take what is in the containers and welders, which is over at once if they
+  are empty.
 - **Grind.** The containers, welders, connectors and the deconstructors become the
   player's, and the deconstructors go on; the welders stay off. They take apart what in
   the volume belongs to the player or their faction, to nobody, or to a wreck faction
@@ -950,10 +954,13 @@ is outside it.
   kept: the contract pays as for a tow-in.
 
 Book the slot before the ship comes in: an idle shipyard sweeps grids no player owns, and
-players' wrecks, out of its build space (`ShipyardSweepIdle`, below), and a waiting slot
-doesn't stop that.
+players' wrecks, out of its build space (`ShipyardSweepIdle`, below). A waiting grind or
+hack slot doesn't stop that. A repair slot in the queue does for the grids of its player
+and their faction, by big owner or `BuiltBy` of any block (SE-1430): a wreck flown in
+early waits there. A paid build before the slot finds it in its way and moves it out
+after `ShipyardClearMinutes`, as it does any other obstacle.
 
-A slot ends when no welding, grinding or ship to hack came for
+A slot also ends when no welding, grinding or ship to hack came for
 `ShipyardRepairIdleMinutes` (5; 0 turns slots off), at the press of its button, or with
 `!oct shipyard done`. The running slot is known from the queue, so a restart or a move
 of the station to another node picks it up, with the idle time starting over.
@@ -1104,7 +1111,8 @@ of a table nobody else holds and `!oct table show [table name]` (admin) prints i
   box that no player owns are removed too, and so are players' wrecks: grids with no power
   and no cockpit or remote control in their whole mechanical group. Characters,
   players' other grids and the shipyard's own grids stay; those still block the
-  next build until they leave. An idle shipyard, with no build, ship docking or
+  next build until they leave. Neither sweep removes the grids of a player with a
+  repair slot in the queue, or of their faction. An idle shipyard, with no build, ship docking or
   repair slot, does the same every 10 s (`ShipyardSweepIdle`, on): the sebot
   janitors (SE-1383) bring garbage grids and floating objects into its build
   space for it to clear away. A grid a bot (`ShipyardBotSteamIds`) tows to a
@@ -2169,8 +2177,10 @@ welders repair the slot's player's ship and leave the other alone until that pla
 their faction.
 `tests/test_shipyard_modes.py` books each mode with two players at a station shipyard
 (SE-1386): the billboard's instructions and a booking's confirmation, swapping and
-canceling slots, a repair whose components the station sells while a damaged ship out of
-the build volume stays as it is, a grind into the player's docked ship and one sold for
+canceling slots, a repair whose components the station sells, only those of the blocks still
+missing (SE-1431), while a damaged ship out of the build volume stays as it is, and which ends
+once nothing is left to weld (SE-1430), a player's wreck the idle shipyard's sweep leaves while
+their repair slot waits in the queue and another player's it removes, a grind into the player's docked ship and one sold for
 them, with the player's ship out of the volume and another player's in it left alone, and a
 hack of an NPC ship in the volume, not of one sticking out of it nor of a ship whose owner
 is online. Then a wreck with a contract the player took, ground in a grind slot, pays the

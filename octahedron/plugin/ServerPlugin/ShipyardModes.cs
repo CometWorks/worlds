@@ -214,6 +214,14 @@ internal static partial class ShipyardOrders
                         slot,
                         $"no building or welding for {Config.ShipyardRepairIdleMinutes} min"
                     );
+                // Done once the welders worked and nothing is left for them (SE-1430), not
+                // after the idle minutes: the shipyard goes to the next in the queue
+                else if (
+                    slot.Worked
+                    && !buying.Contains(slot.Id)
+                    && !ToWeld(shipyard, volume, slot.Player).Any()
+                )
+                    EndRepair(shipyard, slot, "nothing is left to weld");
                 else
                 {
                     Welders(shipyard, true);
@@ -258,8 +266,44 @@ internal static partial class ShipyardOrders
 
     // --- repair ---
 
-    // The components the welders lack for the player's blocks in the volume, built or projected,
-    // are bought, less what the shipyard and the player's docked ships hold
+    // The player's blocks in the volume the welders still have work on: their damaged or
+    // unfinished blocks, and what their projectors there still have to build. A projection's grid
+    // holds the blueprint's built blocks too, which the projector says are built (SE-1431).
+    private static IEnumerable<(MySlimBlock Block, bool Projected)> ToWeld(
+        MyCubeGrid shipyard,
+        BuildVolume volume,
+        long player
+    )
+    {
+        var faction = OctFaction.Team(player);
+        bool Theirs(long identity) =>
+            identity == player || faction != null && faction.IsMember(identity);
+        foreach (var grid in GridsInVolume(shipyard, volume))
+        {
+            foreach (var block in grid.GetBlocks())
+                if (
+                    (!block.IsFullIntegrity || block.HasDeformation)
+                    && Theirs(block.OwnerId != 0 ? block.OwnerId : block.BuiltBy)
+                    && Contains(volume, block)
+                )
+                    yield return (block, false);
+            foreach (var projector in grid.GetFatBlocks<MyProjectorBase>())
+            {
+                if (projector.ProjectedGrid == null || !Theirs(projector.OwnerId))
+                    continue;
+                foreach (var block in projector.ProjectedGrid.GetBlocks())
+                    if (
+                        Contains(volume, block)
+                        && ShipyardZoneWelding.Unzoned(() => projector.CanBuild(block, true))
+                            != BuildCheckResult.AlreadyBuilt
+                    )
+                        yield return (block, true);
+            }
+        }
+    }
+
+    // The components the welders lack for the player's blocks in the volume, damaged or still to
+    // build from a projection, are bought, less what the shipyard and the player's docked ships hold
     private static void BuyForRepair(MyCubeGrid shipyard, RepairSlot slot, BuildVolume volume)
     {
         if (
@@ -269,9 +313,6 @@ internal static partial class ShipyardOrders
         )
             return;
         var player = slot.Player;
-        var faction = OctFaction.Team(player);
-        bool Theirs(long identity) =>
-            identity == player || faction != null && faction.IsMember(identity);
 
         var needed = new Dictionary<string, long>();
         void Need(MyDefinitionId id, long count)
@@ -280,31 +321,18 @@ internal static partial class ShipyardOrders
             needed[name] = needed.GetValueOrDefault(name) + count * Amounts.Unit;
         }
         var missing = new Dictionary<string, int>();
-        foreach (var grid in GridsInVolume(shipyard, volume))
+        foreach (var (block, projected) in ToWeld(shipyard, volume, player))
         {
-            foreach (var block in grid.GetBlocks())
+            if (projected)
             {
-                if (
-                    !Theirs(block.OwnerId != 0 ? block.OwnerId : block.BuiltBy)
-                    || !Contains(volume, block)
-                )
-                    continue;
-                if (block.IsFullIntegrity && !block.HasDeformation)
-                    continue;
-                missing.Clear();
-                block.GetMissingComponents(missing);
-                foreach (var (subtype, count) in missing)
-                    Need(new MyDefinitionId(typeof(MyObjectBuilder_Component), subtype), count);
+                foreach (var component in block.BlockDefinition.Components)
+                    Need(component.Definition.Id, component.Count);
+                continue;
             }
-            foreach (var projector in grid.GetFatBlocks<MyProjectorBase>())
-            {
-                if (projector.ProjectedGrid == null || !Theirs(projector.OwnerId))
-                    continue;
-                foreach (var block in projector.ProjectedGrid.GetBlocks())
-                    if (Contains(volume, block))
-                        foreach (var component in block.BlockDefinition.Components)
-                            Need(component.Definition.Id, component.Count);
-            }
+            missing.Clear();
+            block.GetMissingComponents(missing);
+            foreach (var (subtype, count) in missing)
+                Need(new MyDefinitionId(typeof(MyObjectBuilder_Component), subtype), count);
         }
         if (needed.Count == 0)
             return;

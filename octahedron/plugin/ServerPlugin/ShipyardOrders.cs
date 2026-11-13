@@ -48,8 +48,9 @@ namespace ServerPlugin;
 //
 // A repair slot is a queue entry too. When its turn comes the shipyard's welders go on and
 // ShipyardTurn gives its blocks to the player, who docks a ship with a repair projector and the
-// components. It ends when no building or welding happened for ShipyardRepairIdleMinutes, or at
-// the player's next press, and goes on to the last part of the turn. The running slot's state is the queue's: a restart or a move of the
+// components, or lets ShipyardRepairBuy buy them. It ends once the welders worked and nothing of
+// the player's in the build volume is left to weld, when no building or welding happened for
+// ShipyardRepairIdleMinutes, or at the player's next press, and goes on to the last part of the turn. The running slot's state is the queue's: a restart or a move of the
 // station to another node picks it up from there.
 //
 // A ship is a free build for a player under FreeBuildPcuLimit, once FreeBuildCooldownMinutes
@@ -102,7 +103,9 @@ internal static partial class ShipyardOrders
     // The billboard's screen at the button panel between bookings (SE-1386)
     private static string DetailsIdle =>
         "Book the shipyard here.\n\nButtons from the left:\n1. Build\n2. Repair\n3. Hack\n4. Grind\n\n"
-        + "Before pressing build\nload a blueprint into\nthe holo table.\n\nYou can book only one\naction at a time.\n\n"
+        + "Before pressing build\nload a blueprint into\nthe holo table.\n\n"
+        + (Config.ShipyardRepairBuy ? "Repair buys the parts\nthe welders lack.\n\n" : "")
+        + "You can book only one\naction at a time.\n\n"
         + $"Press the button again\nto cancel. Max {Config.ShipyardQueueMax} entries.";
 
     // A booking's confirmation stays on the billboard this long
@@ -210,6 +213,10 @@ internal static partial class ShipyardOrders
 
     // Repair slots that ended and aren't out of the queue yet
     private static readonly HashSet<string> ending = new();
+
+    // The players with a repair slot in each shipyard's queue, waiting, running or in its last
+    // part: the sweep leaves their grids, a wreck flown in early (SE-1430)
+    private static readonly Dictionary<long, HashSet<long>> repairBooked = [];
 
     // A first press on a running build only asks: the order id and when, by player
     private static readonly Dictionary<long, (string Id, DateTime At)> cancelAsked = new();
@@ -1066,10 +1073,17 @@ internal static partial class ShipyardOrders
                     return;
                 }
                 tell(
-                    kind != SlotKind.Repair || Modes(table)
-                        ? $"You have booked a {kind} slot in this station's shipyard queue. Press {kind} again to cancel it."
-                        : "You have booked a Repair slot in this station's shipyard queue, as you have no "
-                            + "blueprint on the hologram table. Press the button again to cancel it."
+                    (
+                        kind != SlotKind.Repair || Modes(table)
+                            ? $"You have booked a {kind} slot in this station's shipyard queue. Press {kind} again to cancel it."
+                            : "You have booked a Repair slot in this station's shipyard queue, as you have no "
+                                + "blueprint on the hologram table. Press the button again to cancel it."
+                    )
+                        + (
+                            kind == SlotKind.Repair
+                                ? " The shipyard doesn't clear your ship away while you wait, but a build before yours moves it out of its frame."
+                                : ""
+                        )
                 );
                 placed[table.EntityId] = player;
                 Confirm(table, $"{kind} slot booked for {Name(player)}.");
@@ -1120,14 +1134,15 @@ internal static partial class ShipyardOrders
                                 + $"with the hack, after {idle} min without a ship, or when you press Hack again.",
                         _ =>
                             $"{shipyard.DisplayName} is yours and your faction's now: fly the ship to repair, with its "
-                                + "repair projector, into the build volume, the cylinder inside the frame. A ship docked at "
-                                + "its connectors can bring the components."
+                                + "repair projector, into the build volume, the cylinder inside the frame."
                                 + (
                                     Config.ShipyardRepairBuy
-                                        ? " What the welders lack is bought from the station for you."
-                                        : ""
+                                        ? " What the welders lack is bought from the station for you, so you need no ship with "
+                                            + "parts. One docked at the shipyard's connectors can still bring them."
+                                        : " A ship docked at its connectors brings the components."
                                 )
-                                + $" The slot ends after {idle} min without building or welding, or when you press Repair again.",
+                                + $" The slot ends when nothing is left to weld, after {idle} min without building or "
+                                + "welding, or when you press Repair again.",
                     }
                 );
             }
@@ -1988,6 +2003,10 @@ internal static partial class ShipyardOrders
                 if (text == null || shipyard.MarkedForClose)
                     return;
                 var queue = DecodeQueue(text);
+                repairBooked[shipyard.EntityId] = queue
+                    .Where(o => o.Repair && o.Slot == SlotKind.Repair)
+                    .Select(o => o.Player)
+                    .ToHashSet();
                 Inspect(shipyard, station, text);
                 if (queue.Count > 0)
                     queued.Add(shipyard.EntityId);
@@ -4660,6 +4679,7 @@ internal static partial class ShipyardOrders
                 )
                 || !Garbage(group)
                 || group.Any(Held)
+                || RepairBooked(shipyard, group)
             )
                 continue;
             foreach (var grid in group)
@@ -4673,6 +4693,22 @@ internal static partial class ShipyardOrders
                 $"Shipyard {shipyard.DisplayName}: removed {floating.Count} floating objects and "
                     + $"{removed.Count} grids: {string.Join(", ", removed.Select(g => g.DisplayName))}"
             );
+    }
+
+    // A grid of the group is owned or was built by a player with a repair slot in the shipyard's
+    // queue, or by one of their faction. A paid build ahead of the slot finds it an obstacle,
+    // which is moved out, not removed.
+    private static bool RepairBooked(MyCubeGrid shipyard, List<MyCubeGrid> group)
+    {
+        if (!repairBooked.TryGetValue(shipyard.EntityId, out var players) || players.Count == 0)
+            return false;
+        bool Booked(long identity) =>
+            identity != 0
+            && (
+                players.Contains(identity)
+                || players.Any(p => OctFaction.Team(p)?.IsMember(identity) == true)
+            );
+        return group.Any(g => g.BigOwners.Any(Booked) || g.GetBlocks().Any(b => Booked(b.BuiltBy)));
     }
 
     // Locked to a grid outside its own mechanical group: a landing gear or a connector holds it
