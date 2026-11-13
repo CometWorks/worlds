@@ -202,6 +202,23 @@ ContractVerdict Judge(
     );
     Check(areas.All(a => !a.Members.Contains(6)), "2 cheap pieces: none");
     Check(areas.Any(a => a.Members.SequenceEqual([8L])), "one piece worth the least reward");
+    foreach (var id in new long[] { 1, 2, 3, 4, 5 })
+        book.Offline[id] = t0;
+    Check(
+        book.Areas().Any(a => a.Members.Length == 5),
+        "asleep in an offline partition: still an area"
+    );
+    Check(
+        Judge(
+            book,
+            new ContractTarget('a', 1, 1, chain.Radius, chain.Position) { Members = chain.Members },
+            false,
+            false,
+            t0 + TimeSpan.FromDays(1)
+        ) == ContractVerdict.Keep,
+        "and its pieces aren't gone while they sleep"
+    );
+    book.Offline.Clear();
     book.Rules.DebrisMaxRadius = 300;
     book.Rules.DebrisMinPieces = 3;
     Check(

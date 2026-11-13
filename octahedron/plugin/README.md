@@ -1653,7 +1653,9 @@ Every minute the plugin fills each station up again:
   the farthest piece and at most `ContractDebrisMaxRadius` (2 km), which leaves pieces farther
   out to another area. Done when none of those pieces is left within the radius, ground down or
   towed out, with the player who took it within 5 km; it pays their value as above. Pieces that
-  drift in later don't count. Floating objects are no debris here: they are the Janitor bots'
+  drift in later don't count. A piece a node has reported counts while its partition is
+offline too; the gateway's rows of offline partitions don't list grids that small, so a field
+nobody has been near since this plugin ran gets its contract once it wakes. Floating objects are no debris here: they are the Janitor bots'
   job. A contract nobody took is withdrawn once its area is empty.
 - A grid given to a player, with a contract or without, has Target Neutrals off on its
   weapons from then on.

@@ -724,10 +724,11 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     public List<ContractHunt> Areas()
     {
         var pieces = Free()
+            // A piece a node reported stays one while its partition sleeps: far from players is
+            // where debris lies
             .Where(r =>
                 r.Flags.HasFlag(ContractGridFlags.Debris)
                 && !r.Flags.HasFlag(ContractGridFlags.Seated)
-                && Offline?.ContainsKey(r.Id) != true
             )
             .OrderBy(r => r.Id)
             .ToList();
