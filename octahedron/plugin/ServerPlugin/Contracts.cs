@@ -268,7 +268,8 @@ internal static class Contracts
         Plugin.Cluster?.PlayerPositions()?.Select(p => p.IdentityId)
         ?? MySession.Static.Players.GetOnlinePlayers().Select(p => p.Identity.IdentityId);
 
-    // Tests only, set by reflection: makes everyone not on now count as away that long already
+    // Tests only, set by reflection (tests/console-probe): moves the clock players are away by, so
+    // a test doesn't wait a month; whoever is on is seen at the moved time
     internal static TimeSpan AwayClockShift = TimeSpan.Zero;
 
     // The owner and their faction have been away for ContractWreckOwnerAwayDays; an NPC always is
@@ -609,7 +610,9 @@ internal static class Contracts
                 0,
                 ContractMath.HaulingMinutes(km, Config.ContractSalvageMinutes),
                 hunt.Kind == 'a'
-                    ? $"Cleanup: {grid.Name} and {hunt.Members.Length - 1} more"
+                    ? hunt.Members.Length > 1
+                        ? $"Cleanup: {grid.Name} and {hunt.Members.Length - 1} more"
+                        : $"Cleanup: {grid.Name}"
                     : $"Wreck: {grid.Name}",
                 hunt.Kind == 'a'
                     ? $"Clear the {hunt.Members.Length} pieces of debris within {hunt.Radius:0} m of this point, "
@@ -637,6 +640,13 @@ internal static class Contracts
                 {
                     Value = hunt.Value,
                     Members = hunt.Members,
+                    // Who built most of the pieces: they can't be paid to clear them
+                    Builder = hunt
+                        .Members.Select(m => state.Grids[m].Builder)
+                        .GroupBy(b => b)
+                        .OrderByDescending(b => b.Count())
+                        .First()
+                        .Key,
                 };
             }
             else
@@ -686,7 +696,7 @@ internal static class Contracts
         var state = Book;
         var now = DateTime.UtcNow;
         foreach (var identity in Online())
-            seen[identity] = now;
+            seen[identity] = now + AwayClockShift;
         state.Forget(now);
         var taken = new Dictionary<ContractTarget, long>();
         foreach (var (id, target) in state.Targets.ToList())

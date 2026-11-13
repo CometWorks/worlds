@@ -64,6 +64,7 @@ ContractGrid Row(long id, ContractGridFlags flags, int blocks = 100, double x = 
         Flags = flags,
         Blocks = blocks,
         MassKg = blocks * 1000,
+        Value = blocks * 10,
         Position = new ContractPoint(x, 0, 0),
         Name = "grid " + id,
     };
@@ -167,6 +168,7 @@ ContractVerdict Judge(
     // A gateway's row has no value: priced by its mass at what the reported grids are worth per kg
     var row = Row(9, Dead);
     row.MassKg = 2_000;
+    row.Value = 0;
     book = Book(Valued(1, 5_000, 0));
     book.Grids[1].MassKg = 1_000;
     Check(Math.Abs(book.Value(row) - 10_000) < 1e-6, "5 SC a kg: 10,000");
@@ -222,6 +224,10 @@ ContractVerdict Judge(
         "every piece is watched"
     );
     Check(Judge(book, target, true, true, t0) == ContractVerdict.Keep, "all there");
+    Check(
+        Judge(book, target, true, true, t0, owns: true) == ContractVerdict.Fail,
+        "their own debris: fails"
+    );
     var later = t0 + goneAfter;
     var moved = Piece(5, 12_000);
     book.Report("n1", [Piece(1, 10_000), moved], later);
@@ -995,6 +1001,8 @@ ContractVerdict Judge(
         },
         OfflineRows = Groups(Offline(1, 10, 1), Offline(2, 10, 2, owners: [5])),
     };
+    // A row has no value: it is priced by what a reported grid is worth per kg
+    book.Report("n1", [Row(50, ContractGridFlags.None, 10, 50_000)], t0);
     Check(
         Hunted(book, t0).Select(r => r.Id).SequenceEqual([1L]),
         "a row of nobody's is a wreck at once, a player's only once they are away"
@@ -1025,6 +1033,7 @@ ContractVerdict Judge(
         Offline = new() { [1] = t0 },
         OfflineRows = Groups(Offline(1, 10, 1, owners: [5])),
     };
+    book.Report("n1", [Row(50, ContractGridFlags.None, 10, 50_000)], t0);
     book.Rules.OwnerAway = _ => true;
     var posted = Hunted(book, t0).Single();
     book.Grids.TryAdd(posted.Id, posted);
@@ -1041,6 +1050,7 @@ ContractVerdict Judge(
     };
     restarted.LoadTargets(book.SerializeTargets());
     restarted.LoadGrids(book.SerializeGrids(), t0 + days);
+    restarted.Report("n1", [Row(50, ContractGridFlags.None, 10, 50_000)], t0);
     restarted.Rules.OwnerAway = _ => true;
     Check(!Hunted(restarted, t0).Any(), "nor after a restart");
     Check(

@@ -21,7 +21,7 @@ namespace ConsoleProbe;
 /// CONSOLEPROBE_OUT as "STEP\tTEXT", STEP counting the plan's command lines from 0; replies of a command
 /// that answers later (a change on the World Authority) come when they come.
 ///   wait SECONDS     let the game run
-///   clock DAYS       moves the clock that ages offline partitions in the contracts, a test's week
+///   away DAYS        moves the clock players are away by in the contracts, a test's month
 ///   anything else    a chat command line, for example "!oct market show Alpha"
 ///   pculimit N       sets the player's PCU limit in the contracts, so a test needn't own a million PCU
 /// Grid ids in the file CONSOLEPROBE_PLAN.convert become ships on the process holding them, as the game's
@@ -120,9 +120,13 @@ public class Probe : IPlugin, ICommandResponder
                 .SetValue(null, int.Parse(next.Substring(9), CultureInfo.InvariantCulture));
             return;
         }
-        if (next.StartsWith("clock "))
+        if (next.StartsWith("away "))
         {
-            ShiftContractClock(double.Parse(next.Substring(6), CultureInfo.InvariantCulture));
+            ContractsField("AwayClockShift")
+                .SetValue(
+                    null,
+                    TimeSpan.FromDays(double.Parse(next.Substring(5), CultureInfo.InvariantCulture))
+                );
             return;
         }
         replying = step++;
@@ -194,9 +198,6 @@ public class Probe : IPlugin, ICommandResponder
             File.AppendAllText(planPathAll + ".towed", text + "\n");
         }
     }
-
-    private static void ShiftContractClock(double days) =>
-        ContractsField("OfflineClockShift").SetValue(null, TimeSpan.FromDays(days));
 
     private static FieldInfo ContractsField(string name) =>
         AppDomain

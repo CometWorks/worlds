@@ -698,7 +698,8 @@ internal sealed class ContractBook(TimeSpan goneAfter)
         foreach (
             var hunt in wrecks
                 .Concat(Areas())
-                .Where(h => h.Value >= Rules.MinValue)
+                // Nothing to price it by yet: no grid reported has a value
+                .Where(h => h.Value > 0 && h.Value >= Rules.MinValue)
                 .OrderByDescending(h => h.Value)
                 .ThenBy(h => h.Grid.Id)
         )
@@ -796,7 +797,7 @@ internal sealed class ContractBook(TimeSpan goneAfter)
     )
     {
         if (target.Kind == 'a')
-            return JudgeArea(target, active, stationAt, hunterNear, now);
+            return JudgeArea(target, active, stationAt, hunterNear, now, hunterOwns);
         var gone = IsGone(target.Grid, now);
         Grids.TryGetValue(target.Grid, out var row);
         if (hunterNear)
@@ -872,12 +873,16 @@ internal sealed class ContractBook(TimeSpan goneAfter)
         bool active,
         ContractPoint? stationAt,
         bool hunterNear,
-        DateTime now
+        DateTime now,
+        bool hunterOwns
     )
     {
         var empty = Left(area, now).Count == 0;
         if (!active)
             return !empty && stationAt != null ? ContractVerdict.Keep : ContractVerdict.Withdraw;
+        // Debris they built themselves: nobody is paid for clearing away their own scrap
+        if (hunterOwns)
+            return ContractVerdict.Fail;
         return empty && hunterNear ? ContractVerdict.Finish : ContractVerdict.Keep;
     }
 
