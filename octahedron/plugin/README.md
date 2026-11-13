@@ -105,7 +105,8 @@ the tanks get what the balance buys, the whole balance, and the owner hears so
 once per docking. Without ice for sale at the Store there is no hydrogen. Only the
 money moves: the Store's ice stock stays. A tank turned off gets nothing, so a
 player can opt out. Shipyards are no stations: a ship docked at a shipyard
-connector gets neither power nor hydrogen from the plugin.
+connector gets neither power nor hydrogen from the plugin. The police ships of
+officers on duty pay nothing: Police fills their tanks free (SE-1384).
 
 ### Station patches
 

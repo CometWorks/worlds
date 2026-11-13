@@ -329,6 +329,10 @@ internal static class Police
         return best;
     }
 
+    // A police ship of an officer on duty: Resupply fills its tanks free, StationCharging doesn't bill it
+    public static bool Resupplied(MyCubeGrid grid) =>
+        Config.PoliceEnabled && Named(grid) && grid.BigOwners.Any(officers.ContainsKey);
+
     // A ship named PoliceGridName* that a bot owns: no alert for its damage, whoever it hits
     private static bool IsPolice(MyCubeGrid grid) =>
         Named(grid) && grid.BigOwners.Any(ShipyardOrders.IsBot);
