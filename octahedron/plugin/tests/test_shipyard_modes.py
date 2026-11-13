@@ -318,7 +318,9 @@ def main() -> int:
         with_config(a, **CONFIG)
         log(tr.remove(a))
         log(probe(a, f"yardvol {STATION}"))
-        probe(a, "balance 1000000")
+        probe(
+            a, "balance 200000"
+        )  # past 1,000,000 SC the game unlocks an achievement, which crashes a client without Steam
         billboard(a)
         switching(a)
         repair(a)
