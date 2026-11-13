@@ -212,7 +212,14 @@ internal static partial class ShipyardOrders
                 }
                 break;
             case SlotKind.Grind:
-                CollectGround(shipyard);
+                // ToolCore's deconstructors don't always name their inventory to the grinding
+                // patch, so what they ground counts as work too
+                if (CollectGround(shipyard))
+                {
+                    slot.LastWork = DateTime.UtcNow;
+                    slot.Worked = true;
+                    idle = false;
+                }
                 if (idle)
                     EndGrind(
                         shipyard,
@@ -359,8 +366,10 @@ internal static partial class ShipyardOrders
     // --- grind ---
 
     // ToolCore puts what it grinds into the deconstructor; the containers keep it for the end
-    private static void CollectGround(MyCubeGrid shipyard)
+    // True if the deconstructors held anything
+    private static bool CollectGround(MyCubeGrid shipyard)
     {
+        var any = false;
         var containers = Containers(shipyard).ToList();
         foreach (var tool in Deconstructors(shipyard))
         {
@@ -368,6 +377,7 @@ internal static partial class ShipyardOrders
             if (inventory == null)
                 continue;
             var items = inventory.GetItems();
+            any |= items.Count > 0;
             for (var i = items.Count - 1; i >= 0; i--)
             {
                 var item = items[i];
@@ -376,6 +386,7 @@ internal static partial class ShipyardOrders
                     inventory.RemoveItemsAt(i, item.Amount - over);
             }
         }
+        return any;
     }
 
     private static bool LeftToGrind(MyCubeGrid shipyard, BuildVolume volume, long player) =>
