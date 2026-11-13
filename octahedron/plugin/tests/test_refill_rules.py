@@ -8,6 +8,8 @@ ice it takes at the station's Store price, paid by its owner to OCT.
   ceil(1,000,000 L / 20 L per kg x the Store's ice price), OCT gets it.
 - Partial: with a few SC the tank gets what they buy and the balance ends at 0.
 - Off: a tank that is turned off gets nothing, nor does a tank under 1 % short of full.
+- Police: a ship named Police* of an officer on duty (a bot that said !oct police duty) fills
+  free; Police (SE-1384) fills it, the dock refill doesn't bill it.
 - Shipyard: a ship at the shipyard's connector gets nothing (no turn, so it may not even lock;
   the log says which).
 
@@ -196,6 +198,23 @@ def off(a) -> None:
     log(probe(a, "undock"))
 
 
+def police(a) -> None:
+    """A police ship of an officer on duty fills free (Police), never billed here"""
+    with_config(a, **tr.CONFIG, **tt.MONEY, ShipyardBotSteamIds=str(rig.CLIENT_ID))
+    reply = " ".join(st.chat(a, f"!oct police duty {STATION}"))
+    check("On duty" in reply, f"police: the bot goes on duty: {reply}")
+    you, octs = balance(a), oct_money(a)
+    ship = dock(a, "H2=0,NAME=PoliceRefill,AT=" + RIM[0])
+    full = st.wait_until(lambda: tt.liters(a, ship) == TANK, 60, 2)
+    check(bool(full), f"police: the tank fills: {tt.liters(a, ship):,} L")
+    time.sleep(5)
+    check(balance(a) == you, f"police: the officer paid nothing: {you - balance(a)} SC")
+    check(oct_money(a) == octs, "police: OCT got nothing")
+    log(probe(a, "undock"))
+    log(" ".join(st.chat(a, "!oct police duty off")))
+    with_config(a, **tr.CONFIG, **tt.MONEY)
+
+
 def shipyard(a) -> None:
     """Nothing at the shipyard"""
     you = balance(a)
@@ -223,7 +242,7 @@ def main() -> int:
         # Under 1,000,000 SC: the game's MillionaireClub achievement disconnects an offline client
         set_balance(a, 600_000)
         sa.admin(a, f"!oct market set {STATION} {ICE} 100000")
-        for scenario in (new_ship, paid, partial, off, shipyard):
+        for scenario in (new_ship, paid, partial, off, police, shipyard):
             log(f"--- {scenario.__name__}")
             scenario(a)
     finally:

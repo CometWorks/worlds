@@ -149,7 +149,17 @@ public sealed class ProbeCommands : CommandModule
             );
         if (free == null)
             return "NOCONNECTOR";
-        return Hauler(free, ownerId, owner == "mine" ? "Dock Hauler" : "Stranger Hauler", items);
+        // NAME=x: the ship's name
+        var named = items
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.StartsWith("NAME="))
+            ?.Substring(5);
+        return Hauler(
+            free,
+            ownerId,
+            named ?? (owner == "mine" ? "Dock Hauler" : "Stranger Hauler"),
+            items
+        );
     }
 
     // A ship with a connector and a cargo container at the free connector, connecting
@@ -269,6 +279,7 @@ public sealed class ProbeCommands : CommandModule
                 || pair.StartsWith("BAT=")
                 || pair.StartsWith("BATS=")
                 || pair.StartsWith("AT=")
+                || pair.StartsWith("NAME=")
                 || pair == "STOCKPILE"
                 || pair == "H2OFF"
             )
