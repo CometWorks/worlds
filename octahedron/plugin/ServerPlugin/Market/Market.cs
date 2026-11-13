@@ -383,7 +383,7 @@ internal static class Market
 
     // Writes the book's rows into the station's store items, the ones a Store block lists. An item
     // keeps its id, so a client with the Store open can still buy it.
-    private static void Show(string stationName, string text)
+    internal static void Show(string stationName, string text)
     {
         var station = OctStations().FirstOrDefault(s => s.Name == stationName);
         if (station == null)
