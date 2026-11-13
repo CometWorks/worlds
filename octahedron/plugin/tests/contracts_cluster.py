@@ -736,8 +736,11 @@ def run(bench) -> None:
     )
     time.sleep(20)
     check("and the reward stays the player's", balances(api) == now, balances(api))
-    reply = " ".join(rig.chat(api, "!oct scrap", 15))
-    check("nothing more to scrap", "no wreck to scrap" in reply, reply)
+    check(
+        "the nearest one only: the first derelict, farther away, stays the player's",
+        grid_owner("Test Derelict") == identity,
+        grid_owner("Test Derelict"),
+    )
 
     # The third, too much for the player: the contract pays and the shipyard breaks the grid down
     reconfigure(ContractSalvageRadius=500)

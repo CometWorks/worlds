@@ -353,14 +353,30 @@ internal static class ContractGrids
         var mine = scrappable.Where(s => s.Value.Player == player).ToList();
         if (mine.Count == 0)
             return "You have no wreck to scrap: towing one in for a contract lets you, for a while.";
-        foreach (var (id, (_, station)) in mine)
-        {
-            if (
-                !MyEntities.TryGetEntityById(id, out var entity)
-                || entity is not MyCubeGrid { MarkedForClose: false } grid
-                || !Plugin.Simulated(grid)
+        var at = MySession
+            .Static.Players.TryGetIdentity(player)
+            ?.Character?.PositionComp.GetPosition();
+        // The one they stand nearest to, of those this node has
+        var here = mine.Select(s =>
+                (
+                    s.Key,
+                    s.Value.Station,
+                    Grid: MyEntities.TryGetEntityById(s.Key, out var e)
+                    && e is MyCubeGrid { MarkedForClose: false } g
+                    && Plugin.Simulated(g)
+                        ? g
+                        : null
+                )
             )
-                continue;
+            .Where(s => s.Grid != null)
+            .OrderBy(s =>
+                at == null
+                    ? 0
+                    : VRageMath.Vector3D.Distance(at.Value, s.Grid.PositionComp.GetPosition())
+            )
+            .ToList();
+        foreach (var (id, station, grid) in here)
+        {
             var group = Attached(grid);
             if (
                 !group.Any(g => g.BigOwners.Contains(player))
