@@ -26,10 +26,13 @@ from test_client import log
 checks: list[tuple[bool, str]] = []
 # Options of the test on top of the world's config: a magnesium stock a character can carry,
 # without the market's hourly restock, which would fill it before the first contracts;
-# a low threat for the small test grid
+# a low threat for the small test grid. The stations' own stock and the target stock go too:
+# acquisitions ask for those as well, and only the magnesium may be missing
 OPTIONS = {
     "MarketEnabled": "false",
     "MarketMinStock": "Ingot/Magnesium=10",
+    "MarketStationStock": "",
+    "MarketTargetStock": "",
     "ContractAcquisitionMaxAmount": 10,
     "ContractBountyMinThreat": 1,
     "ContractSalvageRadius": 500,
@@ -136,10 +139,14 @@ def owners(name: str) -> set[str]:
 
 def contracts(remote, post: bool = False) -> dict[str, list[tuple]]:
     """Station name -> [(id, kind, state, reward, detail)], plus "others" counts"""
-    lines = rig.chat(remote, "!oct contracts post" if post else "!oct contracts", 4)
     if post:
-        log(" | ".join(lines))
-        lines = rig.chat(remote, "!oct contracts", 4)
+        log(" | ".join(rig.chat(remote, "!oct contracts post", 10)))
+    # A loaded server can answer late or in parts: the listing is asked again until it has
+    # every station
+    for _ in range(3):
+        lines = rig.chat(remote, "!oct contracts", 10)
+        if sum(bool(HEADER.match(l.strip())) for l in lines) >= STATIONS:
+            break
     stations: dict[str, list[tuple]] = {}
     others: dict[str, int] = {}
     current = None
@@ -160,12 +167,12 @@ def contracts(remote, post: bool = False) -> dict[str, list[tuple]]:
 
 def run_check(remote) -> None:
     """Scans, checks the targets and posts now, as the plugin does on its timers"""
-    log(" | ".join(rig.chat(remote, "!oct contracts post", 4)))
+    log(" | ".join(rig.chat(remote, "!oct contracts post", 10)))
 
 
 def balances(remote) -> tuple[int, int]:
     """(OCT's balance, the caller's)"""
-    text = " ".join(rig.chat(remote, "!oct money", 4))
+    text = " ".join(rig.chat(remote, "!oct money", 10))
     oct_balance = re.search(r"OCT: ([\d,]+) SC", text)
     mine = re.search(r"You: ([\d,]+) SC", text)
     assert oct_balance and mine, text
@@ -188,7 +195,7 @@ def paid_for(remote, contract: tuple, before: tuple[int, int], what: str) -> Non
 
 
 def act(remote, command: str, expect: str, what: str) -> None:
-    reply = " | ".join(rig.chat(remote, f"!oct contract {command}", 4))
+    reply = " | ".join(rig.chat(remote, f"!oct contract {command}", 10))
     check(expect in reply, f"{what}: {reply}")
 
 
