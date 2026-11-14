@@ -259,8 +259,9 @@ with no restart. An admin types in game chat, or Quasar's console runs:
   or what this process runs for one option.
 - `!oct config reset <option>|all`: back to the deployed value.
 
-Most options take effect at once. A few are read only when the server starts
-(Harmony patches, the station patches); those apply at the next start.
+The market, contract and dock options are read on every use, so they take
+effect at once. An option a rule reads only when the server starts applies at
+the next start.
 
 The values are kept in `live.cfg` in the plugin's shared storage folder,
 `<run root>/plugin-shared/plugins/F7FB710B-…/` on a one-machine Quasar cluster.
