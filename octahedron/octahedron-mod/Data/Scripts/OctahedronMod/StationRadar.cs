@@ -21,7 +21,8 @@ namespace OctahedronMod
     // several shades, shared by its marker and its row, that it keeps for as long as it stays
     // listed. The station's own installations are no contacts: a group with a static grid that
     // the screen's owner or nobody owns, like the shipyard and the lane computers. The lane
-    // computers show as the gates instead, in a table below the map, by where they lead.
+    // computers show as the gates instead, in a table below the map, by where they lead, laid
+    // out as their markers are on the map (SE-1518).
     [MyTextSurfaceScript("OctahedronRadar", "Octahedron Radar")]
     public class StationRadar : MyTSSCommon
     {
@@ -36,34 +37,65 @@ namespace OctahedronMod
         const float Tilt = 0.4f;
         const float Height = 0.36f;
 
-        // The shades of each relation's color: hostile red, friendly green and neutral white, in
-        // the order of the list.
-        // Each listed contact takes the least used shade of its color, the first ones differing
-        // the most.
-        const int Shades = 10;
+        // Each listed contact has a shape (SE-1518), drawn as its marker and in front of its row,
+        // so that rows and markers match without telling colors apart. The most distinct shapes
+        // come first: filled circle, triangle up, diamond, +, square, X, triangle down, circle, *,
+        // the outlined triangle up, the filled triangles right and left, and the outlined
+        // triangles down, right and left. A sprite name, its turn clockwise in eighths, and
+        // whether it is outlined; "+" and "*" are drawn from bars.
+        static readonly string[] Sprites =
+        {
+            "Circle",
+            "Triangle",
+            "SquareSimple",
+            "+",
+            "SquareSimple",
+            "+",
+            "Triangle",
+            "Circle",
+            "*",
+            "Triangle",
+            "Triangle",
+            "Triangle",
+            "Triangle",
+            "Triangle",
+            "Triangle",
+        };
+        static readonly int[] Turns = { 0, 0, 1, 0, 0, 1, 4, 0, 0, 0, 2, 6, 4, 2, 6 };
+        static readonly bool[] Outlined =
+        {
+            false,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            true,
+            false,
+            true,
+            false,
+            false,
+            true,
+            true,
+            true,
+        };
+        static readonly int ShapeCount = Sprites.Length;
+
+        // Hostile red, friendly green and neutral white, in the order of the list. When one
+        // relation has more contacts than shapes, the shapes come again in a darker shade.
+        const int Shades = 2;
         const int Hostile = 0;
         const int Friendly = 1;
         const int Neutral = 2;
         static readonly float[] Hues = { 0f, 0.33f, 0f };
         static readonly float[] Saturations = { 0.8f, 0.75f, 0f };
-        static readonly float[] HueShifts =
-        {
-            0,
-            0.05f,
-            -0.05f,
-            0.025f,
-            -0.025f,
-            0.05f,
-            -0.05f,
-            0.025f,
-            -0.025f,
-            0,
-        };
-        static readonly float[] Values = { 1, 0.8f, 0.8f, 0.65f, 0.65f, 1, 1, 0.9f, 0.9f, 0.55f };
+        static readonly float[] Values = { 1, 0.55f };
+        static readonly int Slots = ShapeCount * Shades;
         static readonly Color[] Palette = new Color[3 * Shades];
 
         // The gate table below the map
-        const int GateRows = 2;
+        const int GateRows = 3;
         const int GateColumns = 3;
 
         // The gates in the cyan blue of the gate models
@@ -73,18 +105,11 @@ namespace OctahedronMod
         {
             for (var relation = 0; relation < 3; relation++)
             for (var i = 0; i < Shades; i++)
-            {
-                var hue = Hues[relation] + (relation == Neutral ? 0 : HueShifts[i]);
-                // White has no hue to shift: only its brightness differs
-                var value = relation == Neutral ? 0.55f + 0.05f * i : Values[i];
                 Palette[relation * Shades + i] = new Vector3(
-                    (hue + 1) % 1,
+                    Hues[relation],
                     Saturations[relation],
-                    value
+                    Values[i]
                 ).HSVtoColor();
-            }
-            // The brightest white first
-            Array.Reverse(Palette, Neutral * Shades, Shades);
         }
 
         readonly List<IMyCubeGrid> group = new List<IMyCubeGrid>();
@@ -94,12 +119,14 @@ namespace OctahedronMod
         readonly List<Contact> contacts = new List<Contact>();
         readonly List<Contact> listed = new List<Contact>();
         readonly List<Contact> gates = new List<Contact>();
+        readonly List<Contact> table = new List<Contact>();
+        readonly Dictionary<long, int> rowOf = new Dictionary<long, int>();
 
-        // The palette index of each listed contact, by its largest grid's id, and how many listed
-        // contacts use each
-        readonly Dictionary<long, int> colors = new Dictionary<long, int>();
+        // The slot of each listed contact, by its largest grid's id: its relation, shade and shape,
+        // as relation * Slots + shade * ShapeCount + shape; and how many listed contacts use each
+        readonly Dictionary<long, int> slots = new Dictionary<long, int>();
         readonly List<long> unlisted = new List<long>();
-        readonly int[] used = new int[3 * Shades];
+        readonly int[] used = new int[3 * Slots];
         readonly StringBuilder measured = new StringBuilder();
         readonly Dictionary<string, string> clipped = new Dictionary<string, string>();
 
@@ -115,7 +142,8 @@ namespace OctahedronMod
         public StationRadar(IngameTextSurface surface, IngameCubeBlock block, Vector2 size)
             : base(surface, block, size) { }
 
-        public override ScriptUpdate NeedsUpdate => ScriptUpdate.Update10;
+        // Redrawn once every 100 simulation frames (SE-1518)
+        public override ScriptUpdate NeedsUpdate => ScriptUpdate.Update100;
 
         public override void Run()
         {
@@ -203,7 +231,7 @@ namespace OctahedronMod
             );
             if (listed.Count > Rows)
                 listed.RemoveRange(Rows, listed.Count - Rows);
-            KeepColors();
+            KeepSlots();
         }
 
         static int Relation(IMyCubeGrid grid, IMyPlayer player)
@@ -224,44 +252,135 @@ namespace OctahedronMod
             }
         }
 
-        // The listed contacts keep their shades; one that drops off the list or changes sides
-        // frees its shade, and one new on the list takes the least used shade of its color
-        void KeepColors()
+        // The listed contacts keep their shapes and shades; one that drops off the list or changes
+        // sides frees its slot, and one new on the list takes the least used slot of its relation,
+        // every shape in the first shade before the darker one
+        void KeepSlots()
         {
             unlisted.Clear();
-            foreach (var pair in colors)
+            foreach (var pair in slots)
             {
                 var found = false;
                 for (var i = 0; i < listed.Count && !found; i++)
-                    found = listed[i].Id == pair.Key && listed[i].Relation == pair.Value / Shades;
+                    found = listed[i].Id == pair.Key && listed[i].Relation == pair.Value / Slots;
                 if (!found)
                     unlisted.Add(pair.Key);
             }
             foreach (var id in unlisted)
             {
-                used[colors[id]]--;
-                colors.Remove(id);
+                used[slots[id]]--;
+                slots.Remove(id);
             }
             foreach (var c in listed)
             {
-                if (colors.ContainsKey(c.Id))
+                if (slots.ContainsKey(c.Id))
                     continue;
-                var best = c.Relation * Shades;
-                for (var shade = best + 1; shade < (c.Relation + 1) * Shades; shade++)
-                    if (used[shade] < used[best])
-                        best = shade;
+                var best = c.Relation * Slots;
+                for (var slot = best + 1; slot < (c.Relation + 1) * Slots; slot++)
+                    if (used[slot] < used[best])
+                        best = slot;
                 used[best]++;
-                colors[c.Id] = best;
+                slots[c.Id] = best;
             }
         }
 
-        // Its shade while listed; one past the list is drawn dim in its relation's color
-        Color Paint(Contact c)
+        // A listed contact's shape in its shade; one past the list is a dim dot in its
+        // relation's color
+        void Shape(MySpriteDrawFrame frame, Contact c, Vector2 at, float size)
         {
-            int index;
-            return colors.TryGetValue(c.Id, out index)
-                ? Palette[index]
-                : Palette[c.Relation * Shades] * 0.5f;
+            int slot;
+            if (!slots.TryGetValue(c.Id, out slot))
+            {
+                frame.Add(
+                    new MySprite(
+                        SpriteType.TEXTURE,
+                        "Circle",
+                        at,
+                        new Vector2(size / 2),
+                        Palette[c.Relation * Shades] * 0.5f
+                    )
+                );
+                return;
+            }
+            var shape = slot % ShapeCount;
+            var color = Palette[c.Relation * Shades + slot % Slots / ShapeCount];
+            var turn = Turns[shape] * MathHelper.PiOver4;
+            var line = Math.Max(1.5f, 0.18f * size);
+            switch (Sprites[shape])
+            {
+                case "+":
+                    for (var i = 0; i < 2; i++)
+                        Bar(frame, at, size, line, turn + i * MathHelper.PiOver2, color);
+                    return;
+                case "*":
+                    for (var i = 0; i < 3; i++)
+                        Bar(frame, at, size, line, i * MathHelper.Pi / 3, color);
+                    return;
+            }
+            var triangle = Sprites[shape] == "Triangle";
+            // A square fits its box when turned to a diamond
+            var side = triangle || Sprites[shape] == "Circle" ? size : 0.75f * size;
+            Sprite(frame, Sprites[shape], at, side, turn, color);
+            if (!Outlined[shape])
+                return;
+            // Outlined: the background over the inside, the same shape smaller by the line on each
+            // side. A triangle's inside centers on its incircle, 0.309 of its side above the base,
+            // and its box's center is 0.5 above it.
+            var inner = side - 2 * line;
+            var shift = Vector2.Zero;
+            if (triangle)
+            {
+                inner = side * (1 - line / (0.309f * side));
+                var down = 0.191f * (side - inner);
+                shift = new Vector2(-down * (float)Math.Sin(turn), down * (float)Math.Cos(turn));
+            }
+            Sprite(frame, Sprites[shape], at + shift, inner, turn, m_backgroundColor);
+        }
+
+        static void Sprite(
+            MySpriteDrawFrame frame,
+            string sprite,
+            Vector2 at,
+            float size,
+            float turn,
+            Color color
+        )
+        {
+            frame.Add(
+                new MySprite(
+                    SpriteType.TEXTURE,
+                    sprite,
+                    at,
+                    new Vector2(size),
+                    color,
+                    null,
+                    TextAlignment.CENTER,
+                    turn
+                )
+            );
+        }
+
+        static void Bar(
+            MySpriteDrawFrame frame,
+            Vector2 at,
+            float length,
+            float width,
+            float turn,
+            Color color
+        )
+        {
+            frame.Add(
+                new MySprite(
+                    SpriteType.TEXTURE,
+                    "SquareSimple",
+                    at,
+                    new Vector2(width, length),
+                    color,
+                    null,
+                    TextAlignment.CENTER,
+                    turn
+                )
+            );
         }
 
         // Where a lane computer's gate leads, short for the gate table: its grid is named
@@ -381,34 +500,38 @@ namespace OctahedronMod
             // Farthest first, so the near ones draw on top
             var k = (float)(radius / Range);
             foreach (var g in gates)
-                Marker(frame, g, middle, k, scale, "CircleHollow", Gate);
+                frame.Add(
+                    new MySprite(
+                        SpriteType.TEXTURE,
+                        "CircleHollow",
+                        Stalk(frame, g, middle, k, scale, Gate),
+                        new Vector2(16, 16) * scale,
+                        Gate
+                    )
+                );
             for (var i = Math.Min(contacts.Count, MaxMarkers) - 1; i >= 0; i--)
             {
                 var c = contacts[i];
-                Marker(
-                    frame,
-                    c,
-                    middle,
-                    k,
-                    scale,
-                    c.Local.Z >= 0 ? "Triangle" : "SquareSimple",
-                    Paint(c)
-                );
+                Shape(frame, c, Stalk(frame, c, middle, k, scale, Paint(c)), 16 * scale);
             }
 
             // Hostile, friendly, then neutral, each nearest first; how many more there are below
             var width = listWidth - 32 * scale;
+            // Each row starts with its contact's shape, in the row's middle at the text's height
+            var mark = 26 * size;
             for (var i = 0; i < listed.Count; i++)
             {
                 var c = listed[i];
+                var at = origin + new Vector2(16 * scale, top + i * row);
                 Row(
                     frame,
                     c,
-                    origin + new Vector2(16 * scale, top + i * row),
-                    width,
+                    at + new Vector2(mark * 1.3f, 0),
+                    width - mark * 1.3f,
                     size,
                     Paint(c)
                 );
+                Shape(frame, c, at + new Vector2(mark / 2, 18 * size), mark);
             }
             if (contacts.Count > listed.Count)
                 Text(
@@ -419,13 +542,28 @@ namespace OctahedronMod
                     size
                 );
 
-            // The nearest gates in a table below the map, row by row
+            // The nearest gates in a table below the map, laid out as their markers are (SE-1518):
+            // the top row has the highest ones on the map, each row goes left to right
+            table.Clear();
+            rowOf.Clear();
+            for (var i = 0; i < gates.Count && i < GateRows * GateColumns; i++)
+                table.Add(gates[i]);
+            table.Sort((a, b) => Up(b).CompareTo(Up(a)));
+            // Then each row of GateColumns left to right
+            for (var i = 0; i < table.Count; i++)
+                rowOf[table[i].Id] = i / GateColumns;
+            table.Sort(
+                (a, b) =>
+                    rowOf[a.Id] != rowOf[b.Id]
+                        ? rowOf[a.Id].CompareTo(rowOf[b.Id])
+                        : a.Local.X.CompareTo(b.Local.X)
+            );
             var cell = mapWidth / GateColumns;
             var gateTop = area.Y - GateRows * row - 8 * scale;
-            for (var i = 0; i < gates.Count && i < GateRows * GateColumns; i++)
+            for (var i = 0; i < table.Count; i++)
                 Row(
                     frame,
-                    gates[i],
+                    table[i],
                     origin
                         + new Vector2(
                             listWidth + 16 * scale + i % GateColumns * cell,
@@ -437,13 +575,17 @@ namespace OctahedronMod
                 );
         }
 
-        void Marker(
+        // How high a contact's marker is on the map, per radius
+        static double Up(Contact c) => c.Local.Y * Tilt + c.Local.Z * Height;
+
+        // The stalk from the contact's foot on the deck plane to where its marker goes, dim in
+        // its color
+        Vector2 Stalk(
             MySpriteDrawFrame frame,
             Contact c,
             Vector2 middle,
             float k,
             float scale,
-            string shape,
             Color color
         )
         {
@@ -459,9 +601,16 @@ namespace OctahedronMod
                     color * 0.5f
                 )
             );
-            frame.Add(
-                new MySprite(SpriteType.TEXTURE, shape, spot, new Vector2(16, 16) * scale, color)
-            );
+            return spot;
+        }
+
+        // Its relation's color in its shade while listed, dim when past the list
+        Color Paint(Contact c)
+        {
+            int slot;
+            return slots.TryGetValue(c.Id, out slot)
+                ? Palette[c.Relation * Shades + slot % Slots / ShapeCount]
+                : Palette[c.Relation * Shades] * 0.5f;
         }
 
         // A list row: the distance, and the name cut to fit the width

@@ -16,9 +16,10 @@ the range (CROWD_SIDES). The others get 3 each: the test player's (friendly, gre
 After: every LCD runs OctahedronRadar, lists its probe ships and no lane computer ("TL ..."),
 shipyard or shipyard arm, has the contact count in the top right corner, and lists at most 15
 contacts on the left: hostile, friendly, then neutral, each by distance, with "... N" for the
-rest. Each listed ship has a shade of its relation's color, shared by its row and its marker,
-and keeps it while the drifting probe changes the order. The map is on the right. The gates
-(the station's lane computers) are in a table of up to 2 rows and 3 columns below it, in cyan
+rest. Each listed ship has a shape in its relation's color (SE-1518), drawn as its marker and in
+front of its row, different from the other ships of its side while the 15 shapes last, and keeps
+it while the drifting probe changes the order. The map is on the right. The gates
+(the station's lane computers) are in a table of up to 3 rows and 3 columns below it, laid out as their markers on the map, in cyan
 blue, by where they lead: the station at the other end, or Earth for a pole. Before: only reports what Arthur's radar draws, for comparison.
 
     OCT_TASK=SE-1380 OCT_WORLD_SOURCE=<world built from main with --octahedron-mod 3833786664> \\
@@ -69,7 +70,6 @@ CROWD_SIZE = len(CROWD_SIDES)
 DISTANCE = re.compile(r"^(\d+) m$|^(\d+\.\d\d) km$")
 RING = re.compile(r"^\d+ k?m$")
 GATE = re.compile(r"^TL \d+ (\w+) Station > (.+)$")
-MARKERS = ("Triangle", "SquareSimple")
 # The identity the test client plays, so that it owns the friendly probes
 TESTER = 144115188075999502
 SIDES = ("friendly", "neutral", "hostile")
@@ -77,7 +77,7 @@ SIDES = ("friendly", "neutral", "hostile")
 FIRST = ("hostile", "friendly", "neutral")
 ROWS = 15
 MORE = re.compile(r"^\.\.\. (\d+)$")
-SHADES = 10
+SHAPES = 15
 COUNT = re.compile(r"^Contacts: (\d+)$")
 HIDDEN = re.compile(r"^TL \d|Shipyard|^Subgrid|Alien Shipyard arm")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
@@ -186,6 +186,45 @@ def pirates() -> int:
     """The founder of the pirate faction"""
     text = (rig.world_source() / "Sandbox.sbc").read_text(encoding="utf-8")
     return int(re.search(r"<Tag>SPRT</Tag>.*?<PlayerId>(\d+)", text, re.S)[1])
+
+
+def glyphs(sprites: list[dict], start: int, stop) -> list[dict]:
+    """The texture sprites from start on that draw one shape: up to the next text, the next
+    stalk (SquareTapered) or a sprite stop says ends it"""
+    out = []
+    for sp in sprites[start:]:
+        if sp.get("type") != "TEXTURE" or sp.get("data") == "SquareTapered" or stop(sp):
+            break
+        out.append(sp)
+    return out
+
+
+def shape_of(glyph: list[dict], background) -> tuple:
+    """What a shape looks like regardless of its size: its sprites, turns and parts in the
+    background color (the inside of an outlined one), with sizes and offsets relative to its
+    first sprite. The color is its first sprite's."""
+    first = glyph[0]
+    unit = max(first["size"])
+    x0, y0 = first["position"]
+    return (
+        tuple(first["color"]),
+        tuple(
+            (
+                sp["data"],
+                round(sp.get("rotation") or 0.0, 2),
+                tuple(sp["color"]) == background,
+                tuple(round(v / unit, 1) for v in sp["size"]),
+                round((sp["position"][0] - x0) / unit, 1),
+                round((sp["position"][1] - y0) / unit, 1),
+            )
+            for sp in glyph
+        ),
+    )
+
+
+def shows(shown: str, name: str) -> bool:
+    """A listed name is the name, or its start and "…" where the column cuts it"""
+    return shown == name or (shown.endswith("…") and name.startswith(shown[:-1]))
 
 
 def color_side(color) -> str:
@@ -325,7 +364,7 @@ def visit(remote, name: str, s: dict) -> None:
         counts = [COUNT.match(sp.get("data") or "") for sp in sprites]
         shown = max((int(m.group(1)) for m in counts if m), default=0)
         names = {sp.get("data") for sp in sprites}
-        if shown >= ships(station, s) and all(g in names for g in s["gates"][:6]):
+        if shown >= ships(station, s) and all(g in names for g in s["gates"][:9]):
             break
     time.sleep(15 if MODE == "before" else 5)
     surface = remote.get_surface(grid_id, s["cell"])
@@ -376,15 +415,39 @@ def visit(remote, name: str, s: dict) -> None:
     first = check_list(station, s, surface.get("sprites", []))
     if station != CROWD or not first:
         return
+    # The radar redraws once every 100 frames, 1.7 s at 60 frames a second: the drifting
+    # probe's distance changes on each redraw
+    started = time.monotonic()
+    changes, last = [], None
+    while time.monotonic() - started < 30:
+        texts = tuple(
+            sp.get("data")
+            for sp in remote.get_surface(grid_id, s["cell"]).get("sprites", [])
+            if sp.get("type") == "TEXT"
+        )
+        if last is not None and texts != last:
+            changes.append(time.monotonic())
+        last = texts
+        time.sleep(0.2)
+    gaps = sorted(b - a for a, b in zip(changes, changes[1:]))
+    print(
+        f"  {station}: {len(changes)} redraws in 30 s, seconds apart: "
+        + ", ".join(f"{g:.1f}" for g in gaps),
+        flush=True,
+    )
+    check(
+        len(gaps) >= 8 and 1.2 < gaps[len(gaps) // 2] < 2.4,
+        f"{station}: the radar redraws about every 100 frames (1.7 s)",
+    )
     # The drifting probe moves 400 m in 100 s, past at least one other hostile probe
-    time.sleep(100)
+    time.sleep(70)
     later = check_list(
         station,
         s,
         remote.get_surface(grid_id, s["cell"]).get("sprites", []),
         quiet=True,
     )
-    rank = lambda rows, n: next((i for i, r in enumerate(rows) if r[3] == n), None)
+    rank = lambda rows, n: next((i for i, r in enumerate(rows) if shows(r[3], n)), None)
     name = mover(s)[0]
     print(
         f"  {station}: the mover went from row {rank(first, name)} to row "
@@ -397,10 +460,10 @@ def visit(remote, name: str, s: dict) -> None:
         and rank(first, name) < rank(later, name),
         f"{station}: the drifting probe moved down the list",
     )
-    before = {r[3]: r[4] for r in first}
+    before = {r[3]: r[6] for r in first}
     check(
-        all(before[r[3]] == r[4] for r in later if r[3] in before),
-        f"{station}: every ship listed in both reads kept its color",
+        all(before[r[3]] == r[6] for r in later if r[3] in before),
+        f"{station}: every ship listed in both reads kept its shape and color",
     )
 
 
@@ -430,7 +493,8 @@ def check_list(
     station: str, s: dict, all_sprites: list[dict], quiet: bool = False
 ) -> list[tuple]:
     """The count in the top right corner, the two columns sorted by distance, their colors, and
-    the gates below the map. Returns the ship rows: (x, y, meters, name, color)"""
+    the gates below the map. Returns the ship rows: (x, y, meters, name, color, same color,
+    shape, shape sprites)"""
     if quiet:
         global check
         real, check = check, lambda ok, what: None
@@ -457,6 +521,8 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
     width, height = count_sprite["position"][0] + 16 * unit - ox, 512 * unit
     # A row is a distance and the name right of it, at the same height, in one color: the list
     # rows start at the title's left edge, the gates right of the list
+    background = tuple(all_sprites[0]["color"])
+    index = {id(sp): i for i, sp in enumerate(all_sprites)}
     rows, gates = [], []
     for sp in sprites:
         m = DISTANCE.match(sp.get("data") or "")
@@ -478,7 +544,10 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         if not name or RING.match(name):
             continue
         same = beside.get("color") == sp.get("color")
-        row = (x, y, meters, name, tuple(sp.get("color") or ()), same)
+        # The row's shape is drawn right after its name
+        glyph = glyphs(all_sprites, index[id(beside)] + 1, lambda o: False)
+        shape = shape_of(glyph, background) if glyph else None
+        row = (x, y, meters, name, tuple(sp.get("color") or ()), same, shape, glyph)
         (gates if x > ox + 0.38 * width else rows).append(row)
     listed = sorted(rows, key=lambda r: r[1])
     probes = ships(station, s)
@@ -518,7 +587,7 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
     )
     if count == probes:
         # Whose they are first, then by distance: the probes' numbers go by distance
-        names = [r[3] for r in listed if "Mover" not in r[3]]
+        names = [r[3] for r in listed if not shows(r[3], mover(s)[0])]
         wanted = sorted(
             (name for name, _ in probe_spots(station, s)),
             key=lambda n: (FIRST.index(side(n)), n),
@@ -533,41 +602,62 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
             f"{station}: the expected {len(wanted)} probes are listed in order",
         )
 
-    # Colors: one per ship, its row's and its marker's
-    markers = {
-        tuple(sp.get("color") or ())
-        for sp in all_sprites
-        if sp.get("type") == "TEXTURE" and sp.get("data") in MARKERS
-    }
-    colors = [r[4] for r in listed]
-    print(f"  {station}: {len(set(colors))} row colors, {len(markers)} marker colors")
+    # The map's markers: a stalk, its foot, then the contact's shape
+    markers = []
+    for i, sp in enumerate(all_sprites):
+        if (
+            sp.get("data") == "SquareTapered"
+            and i + 2 < len(all_sprites)
+            and all_sprites[i + 1].get("data") == "Circle"
+        ):
+            glyph = glyphs(all_sprites, i + 2, lambda o: False)
+            if glyph:
+                markers.append(glyph)
+    marker_shapes = [shape_of(g, background) for g in markers]
+    print(
+        f"  {station}: {len(listed)} rows, {len(markers)} markers, "
+        f"{len(set(marker_shapes))} different marker shapes",
+        flush=True,
+    )
     check(
         all(r[5] for r in listed),
         f"{station}: each row's distance and name share a color",
     )
     check(
+        all(r[6] and r[6][0] == r[4] for r in listed),
+        f"{station}: each row starts with a shape in the row's color",
+    )
+    check(
+        all(r[7] and max(sp["position"][0] for sp in r[7]) < r[0] for r in listed),
+        f"{station}: each row's shape is left of its text",
+    )
+    check(
+        all(r[6] in marker_shapes for r in listed),
+        f"{station}: each row's shape and color is a marker's on the map",
+    )
+    check(
         all(color_side(r[4]) == side(r[3]) for r in listed),
         f"{station}: friendly ships green, neutral white, hostile red",
     )
+    # Telling shapes apart by their sprites and turns, not their sizes
     by_side = {}
     for r in listed:
-        by_side.setdefault(side(r[3]), []).append(r[4])
+        if r[6]:
+            by_side.setdefault(side(r[3]), []).append(
+                (r[6][0], tuple(part[:3] for part in r[6][1]))
+            )
     print(
-        f"  {station}: shades "
+        f"  {station}: different shapes "
         + ", ".join(f"{k} {len(set(v))}/{len(v)}" for k, v in by_side.items()),
         flush=True,
     )
     check(
-        all(len(set(v)) == min(len(v), SHADES) for v in by_side.values()),
-        f"{station}: the ships of one side have different shades, up to {SHADES}",
+        all(len(set(v)) == min(len(v), SHAPES) for v in by_side.values()),
+        f"{station}: the ships of one side have different shapes, up to {SHAPES}",
     )
     check(
         all(color_side(r[4]) == "gate" for r in gates),
         f"{station}: the gates are cyan blue",
-    )
-    check(
-        all(c in markers for c in colors),
-        f"{station}: each listed ship's color is on a marker of the map",
     )
 
     # The gates below the map in a table, row by row, by distance
@@ -579,23 +669,40 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         flush=True,
     )
     check(
-        sorted(r[3] for r in gates) == sorted(s["gates"])[:6],
+        sorted(r[3] for r in gates) == sorted(s["gates"])[:9],
         f"{station}: the gates are listed by where they lead",
     )
-    check(
-        all(a[2] <= b[2] for a, b in zip(gates, gates[1:])),
-        f"{station}: the gates are sorted by distance, row by row",
-    )
-    check(
-        len({round(r[1]) for r in gates}) <= 2
-        and len({round(r[0]) for r in gates}) <= 3,
-        f"{station}: the gates are in at most 2 rows and 3 columns",
-    )
-    ships_drawn = [
-        sp["position"]
-        for sp in all_sprites
-        if sp.get("type") == "TEXTURE" and sp.get("data") in MARKERS
+    # The map draws the gates' markers nearest first, so the n-th marker is the n-th nearest
+    # gate. The table lays them out as on the map (SE-1518): the top row has the highest
+    # markers, each row goes left to right.
+    spots = [
+        g[0]["position"]
+        for g in markers
+        if g[0]["data"] == "CircleHollow" and color_side(g[0]["color"]) == "gate"
+    ][: len(gates)]
+    by_height = sorted(range(len(spots)), key=lambda j: spots[j][1])
+    layout = [
+        j
+        for part in (by_height[:3], by_height[3:6], by_height[6:])
+        for j in sorted(part, key=lambda j: spots[j][0])
     ]
+    nearest = sorted(r[2] for r in gates)
+    print(
+        f"  {station}: gate markers (x, y) nearest first "
+        + ", ".join(f"({x:.0f}, {y:.0f})" for x, y in spots),
+        flush=True,
+    )
+    check(
+        len(spots) == len(gates)
+        and [r[2] for r in gates] == [nearest[j] for j in layout],
+        f"{station}: the gate table is laid out as the gates' markers on the map",
+    )
+    check(
+        len({round(r[1]) for r in gates}) <= 3
+        and len({round(r[0]) for r in gates}) <= 3,
+        f"{station}: the gates are in at most 3 rows and 3 columns",
+    )
+    ships_drawn = [g[0]["position"] for g in markers]
     check(
         bool(ships_drawn) and all(x > ox + 0.38 * width for x, _ in ships_drawn),
         f"{station}: the map is on the right side",
