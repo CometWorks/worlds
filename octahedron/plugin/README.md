@@ -1701,6 +1701,14 @@ station grid among them (a build still on a shipyard's arm), and one with someon
 else seated in it (a cab with a passenger). The bot itself is put out of its seat
 first. The answer names the grid id: `Ship 123 scrapped.`
 
+The station safe zones forbid landing gear and magnetic plate locks (SE-974). A gear
+or plate on a bot's ship locks in them anyway (SE-1466), so the janitors can tow
+garbage away from beside a station. Gears and plates have no owner of their own (no
+computer), so this goes by the grid's big owners, who must all be bots, by Steam ID,
+never by a grid's name: players' gears stay forbidden. Both ways to lock are covered: a lock
+request and the gear's autolock go through the server's one zone check
+(`BotGearLocks`).
+
 ### Contracts
 
 With `ContractsEnabled` on, OCT (`MoneyAuthorityFactionTag`) posts the stations'

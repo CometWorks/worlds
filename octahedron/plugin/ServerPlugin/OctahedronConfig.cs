@@ -950,7 +950,7 @@ public class OctahedronConfig : PluginConfig
         description: "Steam IDs of bots whose shipyard orders give way to human players', comma separated; first-last is a range. "
             + "A human player's order goes ahead of the bots' waiting ones and cancels a bot's build in progress, "
             + "and a full queue drops its last bot order for it. The trader bots' on the Octahedron, "
-            + "who have no reputation in OCT either.",
+            + "who have no reputation in OCT either. Their ships' landing gears lock in the station safe zones (SE-1466).",
         Parent = "shipyard"
     )]
     public string ShipyardBotSteamIds

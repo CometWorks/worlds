@@ -8,6 +8,10 @@ which allows no action since SE-974; both still work outside it.
   armor block in Alpha's zone and 100 m out of it. All four are ready to lock; locked by
   hand, the two outside lock and the two inside don't.
 - Auto lock: the same with auto lock on, the game's other way to lock.
+- Bots' gears (SE-1466): with the test client's Steam ID in ShipyardBotSteamIds the gears and
+  plates on its ships (a gear has no owner: a cargo container of its makes the ship its) lock in
+  the zone, by hand and by auto lock, and outside it too. Taken off the list again, its new ones
+  in the zone don't.
 - Locked before: with the zone set back to allow locks, a gear and a plate in it lock; the
   zone then forbids locks, as the admin menu would. They stay locked, and after a server
   restart they load locked. Released, they don't lock again.
@@ -32,7 +36,7 @@ os.environ.setdefault("OCT_TASK", "SE-974")
 import rig  # noqa: E402
 import station_tests as st  # noqa: E402
 from station_tests import check, probe  # noqa: E402
-from test_client import log  # noqa: E402
+from test_client import log, with_config  # noqa: E402
 
 STATION = "Alpha"
 KINDS = ("LargeBlockLandingGear", "LargeBlockMagneticPlate")
@@ -118,6 +122,30 @@ def auto_lock(a) -> None:
         )
 
 
+def bot_gears(a) -> None:
+    with_config(a, ShipyardBotSteamIds=rig.CLIENT_ID)
+    for kind in KINDS:
+        ships = {where: spawn(a, where, kind, "owned") for where in ("in", "out")}
+        for where, ship in ships.items():
+            ready(a, ship, f"the bot's {kind} {where} the zone")
+            probe(a, f"gearlock {ship} on")
+        for where, ship in ships.items():
+            check(locks(a, ship), f"the bot's {kind} {where} the zone locks")
+        ship = spawn(a, "in", kind, "auto,owned")
+        check(locks(a, ship), f"the bot's {kind} in the zone auto locks")
+    with_config(a)
+    for kind in KINDS:
+        ship = spawn(a, "in", kind, "owned")
+        ready(a, ship, f"the {kind} off the bot list")
+        probe(a, f"gearlock {ship} on")
+        time.sleep(SETTLE)
+        state = mode(a, ship)
+        check(
+            state == "ReadyToLock",
+            f"off the bot list, the {kind} doesn't lock: {state}",
+        )
+
+
 def locked_before(a) -> list[str]:
     check(
         zone(a, "Drilling+LandingGearLock") == "Drilling+LandingGearLock",
@@ -177,6 +205,7 @@ def main() -> int:
         drilling(a)
         by_hand(a)
         auto_lock(a)
+        bot_gears(a)
         ships = locked_before(a)
         log("restarting the server, it saves")
         rig.stop_client()
