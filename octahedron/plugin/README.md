@@ -100,7 +100,7 @@ that hydrogen at the station's Store price:
 with 20 L of H2 per kg of ice, the vanilla H2/O2 generator's ratio, and the ice
 price OCT asks at that station's Store, per kg: the price of a Store unit over
 its lot (`MarketLots`). A full small H2 tank of a large grid, 1,000,000 L, is
-50,000 kg of ice: 500 SC at 10 SC per 1,000 kg lot. The
+50,000 kg of ice: 2,050 SC at 41 SC per 1,000 kg lot. The
 owner of the ship's biggest grid pays OCT and gets a chat message. Short of money,
 the tanks get what the balance buys, the whole balance, and the owner hears so
 once per docking. Without ice for sale at the Store there is no hydrogen. Only the
@@ -1541,8 +1541,8 @@ stock as long as its entry keeps the name.
   and charge 9.8: the screen works out a trade's total from the whole SC it
   shows, so it would show totals other than the ones charged. A player who opens an OCT Store hears about the lots in chat (again
   after 6 hours), and each trade in lots says in chat what it moved in kg.
-- Ice sells for 0.01 SC per kg (`MarketPrices`), against the game's 5 SC: 10 SC a
-  lot, bought back at 9. It has no row of single units, as that would cost 1 SC a
+- Ice sells for 0.04 SC per kg (`MarketPrices`), against the game's 5 SC: 41 SC a
+  lot with the tax, bought back at 39. It has no row of single units, as that would cost 1 SC a
   kg. Stone keeps its reference, the game's 1 SC per kg: 1,000 SC a lot, bought
   back at 980, and 1 SC a kg, not bought back by the kg. Any cheaper and buying
   stone to refine would pay: a tonne makes about 550 SC of ingots at OCT's buy
@@ -1553,7 +1553,7 @@ stock as long as its entry keeps the name.
   the items taken on a sale. A row of lots has its own Store item id, the item's
   name with `|lot`. Paid builds, acquisition contracts, shipyard leftovers and
   grid values use the lot's price per kg (`OctAsk`/`OctBid`), and docked ships
-  pay for hydrogen at the cheapest ice offer per kg: 0.01 SC. The sebot traders
+  pay for hydrogen at the cheapest ice offer per kg: 0.041 SC. The sebot traders
   use the rows of single units (`market.TWO_ROWS`) and the taxis buy ice by the
   lot (`market.LOTS`).
 - The stock is real: it goes down with each purchase and up with each sale, and

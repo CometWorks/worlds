@@ -109,7 +109,7 @@ def run(bench) -> None:
                 [
                     r
                     for r in replies
-                    if f"MarketPrices = {PRICES}, set live; deployed: Ore/Ice=0.01" in r
+                    if f"MarketPrices = {PRICES}, set live; deployed: Ore/Ice=0.04" in r
                 ]
             )
             == every,
@@ -200,7 +200,7 @@ def run(bench) -> None:
     replies = everywhere("!oct config show MarketPrices", every)
     check(
         "every process runs the deployed value again",
-        len([r for r in replies if r.strip() == "MarketPrices = Ore/Ice=0.01"])
+        len([r for r in replies if r.strip() == "MarketPrices = Ore/Ice=0.04"])
         == every,
         replies,
     )

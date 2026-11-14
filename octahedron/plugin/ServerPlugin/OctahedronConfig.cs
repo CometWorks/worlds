@@ -1714,12 +1714,12 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = "Ore/Ice=0.01";
+    } = "Ore/Ice=0.04";
 
     [StringOption(
         description: "Items OCT's Stores also trade in lots, priced in whole SC per lot: Type/Subtype=units per lot, "
             + "comma separated; * matches any text, an item's own entry wins over a pattern. Their Store has a second "
-            + "row whose unit is a lot; a lot of 1,000 kg of ice at 0.01 SC per kg costs 10 SC. With OctahedronMod a "
+            + "row whose unit is a lot; a lot of 1,000 kg of ice at 0.04 SC per kg costs 40 SC. With OctahedronMod a "
             + "lot of 1,000 is named \"(1 t)\" or \"(x1000)\" on the Store screen.",
         Parent = "market"
     )]
