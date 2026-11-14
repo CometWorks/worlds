@@ -102,6 +102,10 @@ internal static class OctFaction
         );
     }
 
+    /// <summary>A player OctLeaders names, whatever their rank in OCT now</summary>
+    public static bool Leader(long identity) =>
+        Leaders.Contains(MySession.Static.Players.TryGetSteamId(identity));
+
     private static HashSet<ulong> Leaders =>
         Plugin
             .Config.OctLeaders.Split(',', StringSplitOptions.RemoveEmptyEntries)

@@ -161,12 +161,23 @@ internal sealed class ReputationBook
         double seconds,
         Func<long, bool> member,
         List<(long Identity, string Text)> tell,
-        List<long> kick
+        List<long> kick,
+        Func<long, bool> leader = null
     )
     {
         foreach (var (identity, e) in entries)
         {
             var inOct = member(identity);
+            // OCT's leaders are never removed: no countdown, a running one stops without a word
+            if (inOct && leader?.Invoke(identity) == true)
+            {
+                if (e.Below != -1)
+                {
+                    e.Below = -1;
+                    Dirty = true;
+                }
+                continue;
+            }
             // Removed: again, without a word, until the faction has them out
             if (e.Below == Removed)
             {
