@@ -57,6 +57,7 @@ SIDE = float(os.environ.get("RADAR_SIDE", "-1"))
 CROWD = os.environ.get("RADAR_CROWD", "North")
 CROWD_SIZE = 36
 DISTANCE = re.compile(r"^(\d+) m$|^(\d+\.\d\d) km$")
+RING = re.compile(r"^\d+ k?m$")
 COUNT = re.compile(r"^Contacts: (\d+)$")
 HIDDEN = re.compile(r"^TL \d|Shipyard|^Subgrid|Alien Shipyard arm")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
@@ -194,7 +195,7 @@ def visit(remote, name: str, s: dict) -> None:
     remote.character_teleport(*add(lcd, s["forward"], SIDE * 9.0))
     # The client streams the station in once it is near, and a radar draws its contacts after a
     # splash screen: wait for a frame with more than the splash on it
-    deadline = time.monotonic() + 120
+    deadline = time.monotonic() + 240
     surface = {}
     while time.monotonic() < deadline:
         time.sleep(3)
@@ -204,9 +205,12 @@ def visit(remote, name: str, s: dict) -> None:
         surface = remote.get_surface(grid_id, s["cell"])
         # Arthur's radar renders in a way Remote doesn't capture past its splash: just wait
         sprites = surface.get("sprites", [])
-        if (MODE == "before" and sprites) or any(
-            f"Radar Probe {station}" in (sp.get("data") or "") for sp in sprites
-        ):
+        if MODE == "before" and sprites:
+            break
+        # All its probes streamed in: the client gets the far ones last
+        counts = [COUNT.match(sp.get("data") or "") for sp in sprites]
+        shown = max((int(m.group(1)) for m in counts if m), default=0)
+        if shown >= len(probe_spots(station, s)):
             break
     time.sleep(15 if MODE == "before" else 5)
     surface = remote.get_surface(grid_id, s["cell"])
@@ -280,7 +284,9 @@ def check_list(station: str, s: dict, sprites: list[dict]) -> None:
             key=lambda o: o["position"][0],
             default={"data": ""},
         )["data"]
-        rows.append((x, y, meters, name))
+        # Not a range ring's label, which has no name beside it
+        if name and not RING.match(name):
+            rows.append((x, y, meters, name))
     middle = (min(r[0] for r in rows) + max(r[0] for r in rows)) / 2 if rows else 0
     left = sorted((r for r in rows if r[0] <= middle), key=lambda r: r[1])
     right = sorted((r for r in rows if r[0] > middle), key=lambda r: r[1])
