@@ -329,6 +329,8 @@ def visit(remote, name: str, s: dict) -> None:
         flush=True,
     )
     time.sleep(3)  # The screenshot is written after the call returns
+    if MODE == "after":
+        raised(remote, station, s, lcd)
     shown = [t for t in texts if t.strip()]
     print(f"  {station}: script={surface.get('script')} texts={shown}", flush=True)
     # What the radar has to leave out is there: the client has streamed it in
@@ -387,6 +389,28 @@ def visit(remote, name: str, s: dict) -> None:
         all(before[r[3]] == r[4] for r in later if r[3] in before),
         f"{station}: every ship listed in both reads kept its color",
     )
+
+
+def raised(remote, station: str, s: dict, lcd) -> None:
+    """A screenshot from 2.5 m higher on the jetpack, above the lounge seats that hide the
+    bottom of the screen from the floor"""
+    remote.key("X")
+    time.sleep(1)
+    try:
+        flying = remote.get_character().get("jetpack")
+        remote.character_teleport(
+            *add(add(lcd, s["forward"], SIDE * 9.0), s["up"], 2.5)
+        )
+        time.sleep(3)
+        remote.character_look_at(*lcd, tolerance=2)
+        time.sleep(2)
+        shot = remote.screenshot_save(str(OUT / f"{station}-raised.png"))
+        print(f"  raised screenshot (jetpack {flying}): {shot}", flush=True)
+        time.sleep(3)
+    except Exception as e:  # noqa: BLE001 -- the floor screenshot is there already
+        print(f"  raised screenshot {station}: {e}")
+    finally:
+        remote.key("X")
 
 
 def check_list(
