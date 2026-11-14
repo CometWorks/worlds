@@ -21,7 +21,8 @@ namespace OctahedronMod
     // several shades, shared by its marker and its row, that it keeps for as long as it stays
     // listed. The station's own installations are no contacts: a group with a static grid that
     // the screen's owner or nobody owns, like the shipyard and the lane computers. The lane
-    // computers show as the gates instead, in a table below the map, by where they lead.
+    // computers show as the gates instead, in a table below the map, by where they lead, laid
+    // out as their markers are on the map (SE-1518).
     [MyTextSurfaceScript("OctahedronRadar", "Octahedron Radar")]
     public class StationRadar : MyTSSCommon
     {
@@ -94,7 +95,7 @@ namespace OctahedronMod
         static readonly Color[] Palette = new Color[3 * Shades];
 
         // The gate table below the map
-        const int GateRows = 2;
+        const int GateRows = 3;
         const int GateColumns = 3;
 
         // The gates in the cyan blue of the gate models
@@ -119,6 +120,7 @@ namespace OctahedronMod
         readonly List<Contact> listed = new List<Contact>();
         readonly List<Contact> gates = new List<Contact>();
         readonly List<Contact> table = new List<Contact>();
+        readonly Dictionary<long, int> rowOf = new Dictionary<long, int>();
 
         // The slot of each listed contact, by its largest grid's id: its relation, shade and shape,
         // as relation * Slots + shade * ShapeCount + shape; and how many listed contacts use each
@@ -542,15 +544,17 @@ namespace OctahedronMod
             // The nearest gates in a table below the map, laid out as their markers are (SE-1518):
             // the top row has the highest ones on the map, each row goes left to right
             table.Clear();
+            rowOf.Clear();
             for (var i = 0; i < gates.Count && i < GateRows * GateColumns; i++)
                 table.Add(gates[i]);
             table.Sort((a, b) => Up(b).CompareTo(Up(a)));
-            // The lowest of the top row
-            var cut = table.Count > 0 ? Up(table[Math.Min(table.Count, GateColumns) - 1]) : 0;
+            // Then each row of GateColumns left to right
+            for (var i = 0; i < table.Count; i++)
+                rowOf[table[i].Id] = i / GateColumns;
             table.Sort(
                 (a, b) =>
-                    Up(a) >= cut != Up(b) >= cut
-                        ? (Up(a) >= cut ? -1 : 1)
+                    rowOf[a.Id] != rowOf[b.Id]
+                        ? rowOf[a.Id].CompareTo(rowOf[b.Id])
                         : a.Local.X.CompareTo(b.Local.X)
             );
             var cell = mapWidth / GateColumns;
