@@ -19,7 +19,8 @@ namespace ConsoleProbe;
 /// the file CONSOLEPROBE_PLAN as the server console, owner level, once the session is ready, on the node
 /// CONSOLEPROBE_NODE (CLUSTER_NODE_ID) only. Lines appended later run as they arrive. Every reply goes to
 /// CONSOLEPROBE_OUT as "STEP\tTEXT", STEP counting the plan's command lines from 0; replies of a command
-/// that answers later (a change on the World Authority) come when they come.
+/// that answers later (a change on the World Authority) come when they come. CONSOLEPROBE_NODE "*" runs the
+/// lines on every process the probe is loaded on, each with its replies in CONSOLEPROBE_OUT.NODE.
 ///   wait SECONDS     let the game run
 ///   away DAYS        moves the clock players are away by in the contracts, a test's month
 ///   anything else    a chat command line, for example "!oct market show Alpha"
@@ -64,8 +65,11 @@ public class Probe : IPlugin, ICommandResponder
         var only = Environment.GetEnvironmentVariable("CONSOLEPROBE_NODE");
         convertPath = path == null ? null : path + ".convert";
         planPathAll = path;
-        if (path == null || outPath == null || (only != null && node != only))
+        if (path == null || outPath == null || (only != null && only != "*" && node != only))
             return;
+        // Every process at once: each its own file, appends of several processes to one would mix
+        if (only == "*" && node != null)
+            outPath += "." + node;
         planPath = path;
         output = new StreamWriter(outPath, append: true) { AutoFlush = true };
     }

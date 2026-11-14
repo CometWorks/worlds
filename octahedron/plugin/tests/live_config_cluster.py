@@ -47,6 +47,15 @@ def run(bench) -> None:
             if p.is_file()
         )
 
+    def answers_to(step: int) -> list[str]:
+        """Each process's replies to the step, from its own file"""
+        return [
+            l.split("\t", 1)[1]
+            for f in sorted(wa.lc.OUT.parent.glob(wa.lc.OUT.name + ".*"))
+            for l in f.read_text(errors="replace").splitlines()
+            if l.split("\t", 1)[0] == str(step)
+        ]
+
     def everywhere(line: str, count: int, timeout: float = 120) -> list[str]:
         """Runs a line on every process with the probe; the replies once there are count of them"""
         step = probe.step
@@ -54,12 +63,12 @@ def run(bench) -> None:
         with wa.lc.PLAN.open("a") as plan:
             plan.write(line + "\n")
         deadline = time.monotonic() + timeout
-        while len(probe.replies(step)) < count and time.monotonic() < deadline:
+        while len(answers_to(step)) < count and time.monotonic() < deadline:
             time.sleep(1)
         time.sleep(2)
-        replies = probe.replies(step)
-        print(f"{line} -> {replies}", flush=True)
-        return replies
+        answers = answers_to(step)
+        print(f"{line} -> {answers}", flush=True)
+        return answers
 
     def stores() -> dict[tuple[str, str], int]:
         """What each node's Store blocks ask for the item, per (node, station), stations with stock only"""
@@ -205,7 +214,9 @@ def main() -> int:
         encoding="utf-8",
     )
     # The probe on every process, its commands as the console of each
-    wa.os.environ.pop("CONSOLEPROBE_NODE", None)
+    wa.os.environ["CONSOLEPROBE_NODE"] = "*"
+    for stale in wa.lc.OUT.parent.glob(wa.lc.OUT.name + ".*"):
+        stale.unlink()
     wa.os.environ["CLUSTER_EXTRA_PLUGINS"] = wa.os.environ[
         "CLUSTER_EXTRA_PLUGINS"
     ].replace(
