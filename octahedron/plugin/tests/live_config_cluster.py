@@ -33,7 +33,9 @@ NODES = ("node-1", "node-2")
 def run(bench) -> None:
     cluster = bench.cluster
     probe = wa.lc.Probe()
-    processes = ["wa-1", *NODES]
+    # The WA, the two regular nodes and the hot spare
+    processes = [node.node_id for node in cluster.config.nodes]
+    every = len(processes)
 
     def check(label, passed, detail="") -> bool:
         return bench.check(label, bool(passed), str(detail)[:600])
@@ -61,7 +63,7 @@ def run(bench) -> None:
 
     def stores() -> dict[tuple[str, str], int]:
         """What each node's Store blocks ask for the item, per (node, station), stations with stock only"""
-        replies = everywhere(f"!oct market stores {ITEM}", 3, 60)
+        replies = everywhere(f"!oct market stores {ITEM}", every, 60)
         found = {}
         for reply in replies:
             for node, station, ask, _ in STORE.findall(reply):
@@ -135,10 +137,10 @@ def run(bench) -> None:
         took is not None,
         f"{took and round(took)} s: {shown}",
     )
-    replies = everywhere("!oct config show MarketPrices", 3)
+    replies = everywhere("!oct config show MarketPrices", every)
     check(
-        "the WA and both nodes run it",
-        len([r for r in replies if f"MarketPrices = {PRICES}, set live" in r]) == 3,
+        "the WA, both nodes and the hot spare run it",
+        len([r for r in replies if f"MarketPrices = {PRICES}, set live" in r]) == every,
         replies,
     )
     text = shared()
@@ -167,10 +169,10 @@ def run(bench) -> None:
     cluster.wait_ready(nodes=["wa-1"])
     took, shown = until(raised, 240)
     check("after a WA kill, every node's Store still asks it", took is not None, shown)
-    replies = everywhere("!oct config show MarketPrices", 3)
+    replies = everywhere("!oct config show MarketPrices", every)
     check(
-        "the WA and both nodes still run it",
-        len([r for r in replies if f"MarketPrices = {PRICES}, set live" in r]) == 3,
+        "the WA, both nodes and the hot spare still run it",
+        len([r for r in replies if f"MarketPrices = {PRICES}, set live" in r]) == every,
         replies,
     )
 
@@ -182,14 +184,18 @@ def run(bench) -> None:
         took is not None,
         f"{took and round(took)} s: {shown}",
     )
-    replies = everywhere("!oct config show MarketPrices", 3)
+    replies = everywhere("!oct config show MarketPrices", every)
     check(
-        "the WA and both nodes run the deployed value again",
-        len([r for r in replies if r.strip() == "MarketPrices = Ore/Ice=0.01"]) == 3,
+        "every process runs the deployed value again",
+        len([r for r in replies if r.strip() == "MarketPrices = Ore/Ice=0.01"])
+        == every,
         replies,
     )
     check("live.cfg is empty", "<Market" not in shared(), shared())
     check("graceful stop", cluster.stop(grace=240))
+
+
+run.spare_nodes = 1
 
 
 def main() -> int:
