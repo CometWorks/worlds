@@ -312,7 +312,8 @@ def visit(remote, name: str, s: dict) -> None:
         # All its probes streamed in: the client gets the far ones last
         counts = [COUNT.match(sp.get("data") or "") for sp in sprites]
         shown = max((int(m.group(1)) for m in counts if m), default=0)
-        if shown >= ships(station, s):
+        names = {sp.get("data") for sp in sprites}
+        if shown >= ships(station, s) and all(g in names for g in s["gates"][:6]):
             break
     time.sleep(15 if MODE == "before" else 5)
     surface = remote.get_surface(grid_id, s["cell"])

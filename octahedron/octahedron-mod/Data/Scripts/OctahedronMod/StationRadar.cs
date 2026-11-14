@@ -33,7 +33,7 @@ namespace OctahedronMod
 
         // How flat the deck plane looks, and how far up a contact's height goes, per radius
         const float Tilt = 0.45f;
-        const float Height = 0.8f;
+        const float Height = 0.5f;
 
         // The shades of each relation's color: hostile red, friendly green and neutral white, in
         // the order of the list.
