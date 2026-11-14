@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using PluginSdk.Commands;
+using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.SessionComponents;
 using Sandbox.Game.World;
+using VRage.Game;
 using VRage.Game.ModAPI;
+using VRage.Game.ObjectBuilders.Definitions;
 
 namespace ServerPlugin;
 
@@ -98,24 +102,52 @@ public sealed class MarketCommands : CommandModule
 
     [Command(
         "market stores",
-        "Counts the store items of OCT's stations; with tick runs the game's economy tick first",
-        "!oct market stores [tick]"
+        "Counts the store items of OCT's stations; with tick runs the game's economy tick first; "
+            + "with an item, what the Store blocks of the stations on this process ask and bid for it",
+        "!oct market stores [tick|item]"
     )]
     [Permission(MyPromoteLevel.Admin)]
     public string Stores(string tick = null)
     {
-        if (tick != null)
-            MySession.Static.GetComponent<MySessionComponentEconomy>()?.ForceEconomyTick();
         var oct = MySession.Static.Factions.TryGetFactionByTag(
             Plugin.Config.MoneyAuthorityFactionTag
         );
         if (oct == null)
             return $"No faction tagged {Plugin.Config.MoneyAuthorityFactionTag}.";
+        if (tick != null && tick.Contains("/"))
+            return StorePrices(oct, tick);
+        if (tick != null)
+            MySession.Static.GetComponent<MySessionComponentEconomy>()?.ForceEconomyTick();
         return string.Join(
             "\n",
             oct.Stations.OfType<MyFactionStation>()
                 .OrderBy(s => s.Name)
                 .Select(s => $"STORE {s.Name.Split(' ')[0]} {s.StoreItems.Count}")
         );
+    }
+
+    // One line per station this process simulates, with the node's name on a cluster
+    private static string StorePrices(MyFaction oct, string item)
+    {
+        if (!Stations.TryItemId(item, out var id))
+            return $"No item {item}.";
+        string node = Environment.GetEnvironmentVariable("CLUSTER_NODE_ID") ?? "server";
+        var lines = oct
+            .Stations.OfType<MyFactionStation>()
+            .Where(s => MyEntities.EntityExists(s.StationEntityId))
+            .OrderBy(s => s.Name)
+            .Select(s =>
+            {
+                int Price(StoreItemTypes type) =>
+                    s.StoreItems.FirstOrDefault(i =>
+                        i.Item.HasValue
+                        && (MyDefinitionId)i.Item.Value == id
+                        && i.StoreItemType == type
+                    )?.PricePerUnit
+                    ?? 0;
+                return $"STORE {node} {s.Name.Split(' ')[0]} {item} ask {Price(StoreItemTypes.Offer)} bid {Price(StoreItemTypes.Order)}";
+            })
+            .ToList();
+        return lines.Count == 0 ? $"STORE {node} none" : string.Join("\n", lines);
     }
 }
