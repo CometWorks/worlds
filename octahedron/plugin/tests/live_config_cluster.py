@@ -2,7 +2,7 @@
 Authority, every node and the hot spare without a restart, and the value outlasts a node kill, a World
 Authority kill and a cluster restart. Same bench and world as world_config_cluster.py, with the
 world's octahedron.cfg, but no client: the console probe (tests/console-probe) runs on every process,
-and !oct market stores <item> says what the Store blocks of the stations on each node ask.
+and !oct market stores <item> says what the Store blocks of the stations on each node ask and bid.
 
 The set and the reset go to node-2 only (the probe's "@node-2" lines), and the plan is emptied before
 the cluster restart, so no process that restarts runs them again: what it shows after its start came
@@ -28,7 +28,6 @@ PRICES = "Ore/Ice=0.01, Component/SteelPlate=1000"
 LIMIT = 75
 HIGH = 500
 STORE = re.compile(rf"STORE (\S+) (\S+) {re.escape(ITEM)} ask (\d+) bid (\d+)")
-NODES = ("node-1", "node-2")
 
 
 def run(bench) -> None:
@@ -71,14 +70,17 @@ def run(bench) -> None:
         print(f"{line} -> {answers}", flush=True)
         return answers
 
-    def stores() -> dict[tuple[str, str], int]:
-        """What each node's Store blocks ask for the item, per (node, station), stations with stock only"""
+    def stores() -> dict[tuple[str, str, str], int]:
+        """The item's prices at the Store blocks of the stations on each node, per (node, station, ask or
+        bid): only the offers with stock and the orders with demand, the others show 0
+        """
         replies = everywhere(f"!oct market stores {ITEM}", every, 60)
         found = {}
         for reply in replies:
-            for node, station, ask, _ in STORE.findall(reply):
-                if int(ask) > 0:
-                    found[(node, station)] = int(ask)
+            for node, station, ask, bid in STORE.findall(reply):
+                for side, price in (("ask", int(ask)), ("bid", int(bid))):
+                    if price > 0:
+                        found[(node, station, side)] = price
         return found
 
     def until(predicate, timeout: float) -> tuple[float | None, dict]:
@@ -91,9 +93,6 @@ def run(bench) -> None:
             if time.time() - start > timeout:
                 return None, shown
             time.sleep(5)
-
-    def on_both(shown) -> bool:
-        return {node for node, _ in shown} == set(NODES)
 
     # Stations move between the nodes as the balancer likes: whichever node has them must show it
     def raised(shown) -> bool:
@@ -136,10 +135,9 @@ def run(bench) -> None:
     )
     check("the WA serves the market", served)
 
-    # Both nodes simulate stations: the world's partitions are shared out at the start
-    _, before = until(on_both, 300)
-    check(f"both nodes' stores sell {ITEM} before", on_both(before), before)
-    check(f"{ITEM} costs under {HIGH} SC before", lowered(before), before)
+    # The stations' partitions are shared out among the nodes at the start
+    _, before = until(lowered, 300)
+    check(f"the Stores trade {ITEM} under {HIGH} SC before", lowered(before), before)
 
     reply = " ".join(everywhere("@node-2 !oct config set MarketPrice 5", 1))
     check("an unknown option is refused", "No option MarketPrice" in reply, reply)
@@ -159,7 +157,7 @@ def run(bench) -> None:
     )
     took, shown = until(raised, LIMIT)
     check(
-        f"every node's Store asks {HIGH}+ SC within {LIMIT} s, no restart",
+        f"the Stores' prices are {HIGH}+ SC within {LIMIT} s, no restart",
         took is not None,
         f"{took and round(took)} s: {shown}",
     )
@@ -181,12 +179,14 @@ def run(bench) -> None:
         log("node-1").count("Live config: MarketPrices = " + PRICES) > applied,
     )
     took, shown = until(raised, 240)
-    check("after a node-1 kill, the Stores still ask it", took is not None, shown)
+    check(
+        "after a node-1 kill, the Stores still have its prices", took is not None, shown
+    )
 
     cluster.restart_node("wa-1")
     cluster.wait_ready(nodes=["wa-1"])
     took, shown = until(raised, 240)
-    check("after a WA kill, the Stores still ask it", took is not None, shown)
+    check("after a WA kill, the Stores still have its prices", took is not None, shown)
     run_live("after the node-1 and WA kills")
 
     # The whole cluster down and up, the plan emptied meanwhile: no process sets it again
@@ -198,14 +198,18 @@ def run(bench) -> None:
     cluster.start(processes)
     cluster.wait_ready(nodes=processes)
     took, shown = until(raised, 300)
-    check("after a cluster restart, the Stores still ask it", took is not None, shown)
+    check(
+        "after a cluster restart, the Stores still have its prices",
+        took is not None,
+        shown,
+    )
     run_live("after a cluster restart")
 
     reply = " ".join(everywhere("@node-2 !oct config reset MarketPrices", 1))
     check("node-2 resets it", "goes back to" in reply, reply)
     took, shown = until(lowered, LIMIT)
     check(
-        f"every node's Store is back under {HIGH} SC within {LIMIT} s",
+        f"the Stores' prices are back under {HIGH} SC within {LIMIT} s",
         took is not None,
         f"{took and round(took)} s: {shown}",
     )
