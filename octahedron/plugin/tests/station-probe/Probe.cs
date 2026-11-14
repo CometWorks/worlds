@@ -1565,6 +1565,57 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "projector",
+        "A grid's projectors: what they project and how much of it is left to build, for lining up a repair projection (SE-1468): PROJECTOR id projecting remaining total buildable offset rotation",
+        "!sprobe projector <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Projector(string gridId)
+    {
+        if (
+            !long.TryParse(gridId, out long id)
+            || !MyEntities.TryGetEntityById(id, out MyCubeGrid grid)
+        )
+            return $"PROJECTOR {gridId} gone";
+        return string.Join(
+            " | ",
+            grid.GetFatBlocks<MyProjectorBase>()
+                .Cast<Sandbox.ModAPI.IMyProjector>()
+                .Select(p =>
+                    $"PROJECTOR {p.EntityId} projecting={p.IsProjecting} remaining={p.RemainingBlocks} "
+                    + $"total={p.TotalBlocks} buildable={p.BuildableBlocksCount} offset={p.ProjectionOffset} "
+                    + $"rotation={p.ProjectionRotation}"
+                )
+                .DefaultIfEmpty($"PROJECTOR {gridId} none")
+        );
+    }
+
+    [Command(
+        "paint",
+        "A grid's colors and skins, the most used first: PAINT id count hsv skin | ...",
+        "!sprobe paint <grid id>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string Paint(string gridId)
+    {
+        if (
+            !long.TryParse(gridId, out long id)
+            || !MyEntities.TryGetEntityById(id, out MyCubeGrid grid)
+        )
+            return $"PAINT {gridId} gone";
+        return $"PAINT {id} "
+            + string.Join(
+                " | ",
+                grid.GetBlocks()
+                    .GroupBy(b =>
+                        $"{b.ColorMaskHSV.X:0.00},{b.ColorMaskHSV.Y:0.00},{b.ColorMaskHSV.Z:0.00} {b.SkinSubtypeId}"
+                    )
+                    .OrderByDescending(g => g.Count())
+                    .Select(g => $"{g.Count()} {g.Key}")
+            );
+    }
+
+    [Command(
         "letgo",
         "Disconnects the ship from the station: LETGO grid-id",
         "!sprobe letgo <grid id>"
