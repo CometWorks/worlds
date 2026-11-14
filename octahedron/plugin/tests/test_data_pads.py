@@ -37,6 +37,8 @@ STATION = "Alpha"
 BOXES = 4
 INTERVAL = 2
 ORES = ("gold", "silver", "uranium", "platinum")
+# SE-1538: whom the police shoot, and how they fight a strong enemy at a station
+POLICE_PADS = ("Sergeant's briefing", "Dock hand's letter")
 GPS = re.compile(r"\{GPS:([^:}]+):([^}]+)\}")
 MISSING = "Lost survey"
 # The pad rule, told from the Free Tools rule for the tools by its Datapad item
@@ -69,6 +71,11 @@ def check_split(pads: list[tuple[str, str]]) -> None:
     check(ores == set(ORES), f"together the pads name every rare ore: {sorted(ores)}")
     want = {f"Octahedron-Ice-{i}" for i in range(1, 5)}
     check(ice == want, f"together the pads give all 4 ice asteroids: {sorted(ice)}")
+    missing = [t for t in POLICE_PADS if t not in titles]
+    check(
+        not missing,
+        f"the pads on the police's rules and their fights: missing {missing}",
+    )
 
 
 def test_config(text: str) -> str:

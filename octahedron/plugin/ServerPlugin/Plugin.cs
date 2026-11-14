@@ -131,6 +131,7 @@ public class Plugin : IPlugin
             Reputation.Update();
             Taxi.Update();
             Police.Update();
+            Hints.Update();
         }
         catch (Exception e)
         {
@@ -205,6 +206,7 @@ public class Plugin : IPlugin
         Reputation.Dispose();
         Taxi.Dispose();
         Police.Dispose();
+        Hints.Dispose();
         // Harmony patches stay: unpatching all may break other plugins
     }
 }

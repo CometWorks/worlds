@@ -30,6 +30,7 @@ namespace ServerPlugin;
 [Section("patches", caption: "Station Patches")]
 [Section("taxi", caption: "Taxi")]
 [Section("police", caption: "Police")]
+[Section("hints", caption: "Hints")]
 public class OctahedronConfig : PluginConfig
 {
     [BoolOption("Turns all of the plugin's rules on or off.")]
@@ -2375,6 +2376,42 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     } = 0.5;
 
+    [BoolOption(
+        "Good.bot tells the players one of Hints in global chat now and then (SE-1538), never the one it said "
+            + "last. On a cluster the World Authority times it and every player hears it once.",
+        Parent = "hints"
+    )]
+    public bool HintsEnabled
+    {
+        get;
+        set => SetField(ref field, value);
+    } = true;
+
+    [DoubleOption(
+        0,
+        description: "Shortest wait between two hints (minutes). Each wait is random between this and HintMaxMinutes.",
+        Parent = "hints"
+    )]
+    public double HintMinMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 30;
+
+    [DoubleOption(0, description: "Longest wait between two hints (minutes).", Parent = "hints")]
+    public double HintMaxMinutes
+    {
+        get;
+        set => SetField(ref field, value);
+    } = 120;
+
+    [StructOption("The hints Good.bot picks from. Empty by default: no hints.", Parent = "hints")]
+    public List<HintEntry> Hints
+    {
+        get;
+        set => SetField(ref field, value);
+    } = new();
+
     [StructOption(
         "Station patches every process applies to the station and shipyard grids it loads, in this order, "
             + "each once per grid by the grid's ledger (SE-1234). Empty by default.",
@@ -2452,6 +2489,12 @@ public struct DataPadEntry
     [StructMember(
         "Text of the pad. {GPS:StorageName:Label} becomes a GPS line of that voxel map's center."
     )]
+    public string Text { get; set; }
+}
+
+public struct HintEntry
+{
+    [StructMember("The hint, one short chat line."), StructCaption]
     public string Text { get; set; }
 }
 
