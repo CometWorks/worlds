@@ -43,7 +43,7 @@ namespace ServerPlugin;
 //
 // A police ship of an officer on duty, docked at a station's connector (where they park), gets its
 // hydrogen and oxygen tanks filled and its guns and cargo (PoliceCargoAmmo of the volume) filled with the guns' ammo,
-// for free, every second it stays there. A later service station is to do this instead.
+// for free, while it stays there: each of them once it falls under 90 % (SE-1523). A later service station is to do this instead.
 //
 // Officers and targets live in this process: on a cluster each node knows the officers who said
 // they are on duty there and the stations it simulates. The bots say it again now and then.
@@ -468,7 +468,7 @@ internal static class Police
     {
         var filled = new List<string>();
         foreach (var tank in ship.GetFatBlocks<MyGasTank>())
-            if (tank.IsFunctional && tank.FilledRatio < 0.999)
+            if (tank.IsFunctional && DockHydrogenMath.Due(tank.FilledRatio, 1, true))
             {
                 ((IMyGasTank)tank).ChangeFilledRatio(1, true);
                 filled.Add(
@@ -504,7 +504,8 @@ internal static class Police
             );
     }
 
-    // Adds magazines until they take up share of the inventory's volume, or it is full: how many
+    // Adds magazines until they take up share of the inventory's volume, or it is full: how many. Only once
+    // fewer than 90 % of them are there (DockHydrogenMath.Due), not after every shot
     private static int Top(MyInventory inventory, MyDefinitionId magazine, double share)
     {
         if (
@@ -515,6 +516,8 @@ internal static class Police
         var want = (int)Math.Floor((double)inventory.MaxVolume * share / item.Volume);
         var have = (int)inventory.GetItemAmount(magazine);
         var fits = (int)inventory.ComputeAmountThatFits(magazine);
+        if (!DockHydrogenMath.Due(have, want, true))
+            return 0;
         var add = Math.Min(want - have, fits);
         if (add <= 0)
             return 0;

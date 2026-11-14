@@ -27,7 +27,7 @@ namespace ServerPlugin;
 // stops charging until the connectors it was docked to let go of it. Each cluster node charges at
 // the stations it simulates.
 // Hydrogen (StationDockHydrogen): the docked ship's H2 tanks that are on are filled whenever they are
-// 1 % or more short of full, for what the ice would cost at the station's Store
+// 1 % or more short of full (a bot's service ship: under 90 %), for what the ice would cost at the station's Store
 // (DockHydrogenMath), paid by the ship's owner to the station's faction. Short of money, the tanks
 // get what the balance buys. Shipyards are no stations: nothing is refilled there.
 internal static class StationCharging
@@ -42,9 +42,6 @@ internal static class StationCharging
     // The ships told they can't pay for hydrogen, until they let go
     private static readonly HashSet<long> broke = new();
 
-    // Fill the H2 tanks only once they lack this share, so a ship burning hydrogen while docked
-    // isn't billed every second
-    private const double HydrogenShortRatio = 0.01;
     private const string Ice = "Ore/Ice";
 
     private sealed class Ship
@@ -177,14 +174,15 @@ internal static class StationCharging
                 && d.StoredGasId.SubtypeName == "Hydrogen"
             )
             .ToList();
-        var capacity = tanks.Sum(t => (double)t.Capacity);
-        var wanted = tanks.Sum(t => (1 - t.FilledRatio) * t.Capacity);
-        if (capacity <= 0 || wanted < capacity * HydrogenShortRatio)
-            return;
-
         var main = grids.MaxBy(g => g.BlocksCount);
         var owner = main.BigOwners.FirstOrDefault();
         if (owner == 0 || MySession.Static.Players.IdentityIsNpc(owner))
+            return;
+        // Filled only once they lack 1 %, a bot's service ship's under 90 % (DockHydrogenMath.Due), so a
+        // ship burning hydrogen while docked isn't billed every few seconds
+        var capacity = tanks.Sum(t => (double)t.Capacity);
+        var wanted = tanks.Sum(t => (1 - t.FilledRatio) * t.Capacity);
+        if (!DockHydrogenMath.Due(capacity - wanted, capacity, ShipyardOrders.IsBot(owner)))
             return;
         var price = IcePrice(entry);
         var balance = MyBankingSystem.Static.TryGetAccountInfo(owner, out var account)
