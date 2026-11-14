@@ -2,7 +2,8 @@
 commands (!oct contracts, !oct contract ...): three hauling contracts posted at every
 station and none of the game's own, an acquisition at each station for the stock OCT
 lacks, a bounty on an NPC grid and a wreck contract on a derelict placed near
-Alpha Station, posted with the player out of sync range of it. Then the client takes and hands in a hauling and an acquisition
+Alpha Station, posted with the player out of sync range of it, and one on an SPRT raider whose weapons
+are broken. Then the client takes and hands in a hauling and an acquisition
 contract (paid by OCT, the items in OCT's stock at Alpha, no new acquisition for them),
 takes the wreck contract and completes the bounty. A larger salvage radius stands in for the tow:
 the derelict is the player's once it is in reach, and the reward is paid. A derelict already
@@ -38,6 +39,8 @@ OPTIONS = {
     "ContractSalvageRadius": 500,
     # A single armor block is worth a contract: the test's own debris
     "ContractWreckMinReward": 1,
+    # A disarmed NPC grid is a wreck at once
+    "ContractNpcWreckMinutes": 0,
     # The hourly split would change the balances the test compares
     "MoneySubsidyPerActivePlayer": 0,
 }
@@ -81,6 +84,34 @@ def test_grids() -> list[str]:
         rig.small_ship_blocks(SPRT_MEMBER),
         position=(sx, sy + 3000, sz),
     )
+    # SE-1511: an SPRT raider the police disarmed, 5 km from the shipyard: a charged battery and
+    # a working remote control, its only turret broken, and 30 armor blocks
+    own = f"<Owner>{SPRT_MEMBER}</Owner><BuiltBy>{SPRT_MEMBER}</BuiltBy>"
+    raider = [
+        rig.block(
+            "MyObjectBuilder_RemoteControl", "LargeBlockRemoteControl", (0, 1, 0), own
+        ),
+        rig.block(
+            "MyObjectBuilder_BatteryBlock",
+            "LargeBlockBatteryBlock",
+            (1, 1, 0),
+            own + "<CurrentStoredPower>3</CurrentStoredPower>",
+        ),
+        rig.block(
+            "MyObjectBuilder_LargeGatlingTurret",
+            "",
+            (3, 1, 0),
+            own
+            + "<IntegrityPercent>0.05</IntegrityPercent><BuildPercent>1</BuildPercent>",
+        ),
+        *(
+            rig.block(
+                "MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z), own
+            )
+            for x in range(6)
+            for z in range(5)
+        ),
+    ]
     # Nobody's cockpit and 30 armor blocks (trash removal takes grids under 20), 1 km from
     # the shipyard, out of the test's reach of 500 m until the test widens it
     derelict = [
@@ -112,6 +143,7 @@ def test_grids() -> list[str]:
         target,
         rig.grid("Test Derelict", None, derelict, position=(sx, sy - 1000, sz)),
         rig.grid("Yard Derelict", None, derelict, position=(sx, sy - 400, sz)),
+        rig.grid("Disarmed Raider", None, raider, position=(sx, sy, sz + 5000)),
     ]
 
 
@@ -234,10 +266,24 @@ def main() -> int:
         )
         check(others.get(station) == 0, f"{station}: none of the game's own contracts")
     alpha = found["Alpha Station"]
-    bounty = one(found, "Alpha Station", "bounty")
+    bounty = next(
+        (
+            c
+            for c in alpha
+            if c[1] == "bounty" and "Bounty Target" in c[4] and c[2] == "Inactive"
+        ),
+        None,
+    )
     check(
-        bounty is not None and "Bounty Target" in bounty[4] and bounty[3] > 0,
+        bounty is not None and bounty[3] > 0,
         f"a bounty on the NPC grid: {bounty}",
+    )
+    # SE-1511: what the police leave of a raider, its weapons broken but still powered and
+    # controllable, is a wreck
+    raider = [c for c in alpha if c[1] == "wreck" and "Disarmed Raider" in c[4]]
+    check(
+        len(raider) == 1 and raider[0][3] > 0,
+        f"a wreck contract on the disarmed NPC raider: {raider}",
     )
     salvage = next(
         (
