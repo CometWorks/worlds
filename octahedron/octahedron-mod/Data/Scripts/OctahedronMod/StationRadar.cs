@@ -15,8 +15,9 @@ namespace OctahedronMod
     // The radar on the stations' big map LCD (SE-1380): the grids within Range of the screen, one
     // marker per logical group (connectors, rotors, pistons), above or below the station's deck
     // plane on a stalk. The contact count is in the top right corner, and the nearest 30 are
-    // listed by distance in a column on each side, left first (SE-1502). Each listed contact keeps
-    // its color, shared by its marker and its row, for as long as it stays listed. The station's
+    // listed by distance in a column on each side, left first (SE-1502). A contact is green when
+    // it is the viewer's or a friend's, red when hostile and white otherwise, in one of several
+    // shades, shared by its marker and its row, that it keeps for as long as it stays listed. The station's
     // own installations are no contacts: a group with a static grid that the screen's owner or
     // nobody owns, like the shipyard and the lane computers. The lane computers show as the gates
     // instead, listed at the bottom by where they lead. Players' and NPC ships, and players'
@@ -34,20 +35,50 @@ namespace OctahedronMod
         const float Tilt = 0.45f;
         const float Height = 0.8f;
 
-        // A color for each list row: 15 hues, spread so that the first few differ most, bright
-        // for the first 15, darker for the rest
-        static readonly Color[] Palette = new Color[2 * Rows];
-        // The gates in white, which no ship color is
-        static readonly Color Gate = new Color(230, 230, 230);
+        // The shades of each relation's color: friendly green, neutral white and hostile red.
+        // Each listed contact takes the least used shade of its color, the first ones differing
+        // the most.
+        const int Shades = 10;
+        const int Friendly = 0;
+        const int Neutral = 1;
+        const int Hostile = 2;
+        static readonly float[] Hues = { 0.33f, 0f, 0f };
+        static readonly float[] Saturations = { 0.75f, 0f, 0.8f };
+        static readonly float[] HueShifts =
+        {
+            0,
+            0.05f,
+            -0.05f,
+            0.025f,
+            -0.025f,
+            0.05f,
+            -0.05f,
+            0.025f,
+            -0.025f,
+            0,
+        };
+        static readonly float[] Values = { 1, 0.8f, 0.8f, 0.65f, 0.65f, 1, 1, 0.9f, 0.9f, 0.55f };
+        static readonly Color[] Palette = new Color[3 * Shades];
+
+        // The gates in the cyan blue of the gate models
+        static readonly Color Gate = new Color(60, 190, 255);
 
         static StationRadar()
         {
-            for (var i = 0; i < Palette.Length; i++)
-                Palette[i] = new Vector3(
-                    i * 7 % Rows / (float)Rows,
-                    0.7f,
-                    i < Rows ? 1f : 0.65f
+            for (var relation = 0; relation < 3; relation++)
+            for (var i = 0; i < Shades; i++)
+            {
+                var hue = Hues[relation] + (relation == Neutral ? 0 : HueShifts[i]);
+                // White has no hue to shift: only its brightness differs
+                var value = relation == Neutral ? 0.55f + 0.05f * i : Values[i];
+                Palette[relation * Shades + i] = new Vector3(
+                    (hue + 1) % 1,
+                    Saturations[relation],
+                    value
                 ).HSVtoColor();
+            }
+            // The brightest white first
+            Array.Reverse(Palette, Neutral * Shades, Shades);
         }
 
         readonly List<IMyCubeGrid> group = new List<IMyCubeGrid>();
@@ -55,10 +86,11 @@ namespace OctahedronMod
         readonly List<Contact> contacts = new List<Contact>();
         readonly List<Contact> gates = new List<Contact>();
 
-        // The palette index of each listed contact, by its largest grid's id
+        // The palette index of each listed contact, by its largest grid's id, and how many listed
+        // contacts use each
         readonly Dictionary<long, int> colors = new Dictionary<long, int>();
         readonly List<long> unlisted = new List<long>();
-        readonly bool[] taken = new bool[2 * Rows];
+        readonly int[] used = new int[3 * Shades];
         readonly StringBuilder measured = new StringBuilder();
         readonly Dictionary<string, string> clipped = new Dictionary<string, string>();
 
@@ -68,6 +100,7 @@ namespace OctahedronMod
             public string Name;
             public Vector3D Local;
             public double Distance;
+            public int Relation;
         }
 
         public StationRadar(IngameTextSurface surface, IngameCubeBlock block, Vector2 size)
@@ -99,6 +132,7 @@ namespace OctahedronMod
             var right = Vector3D.Cross(away, up);
 
             var sphere = new BoundingSphereD(center, Range);
+            var player = MyAPIGateway.Session?.Player;
             foreach (var entity in MyAPIGateway.Entities.GetEntitiesInSphere(ref sphere))
             {
                 var grid = entity as IMyCubeGrid;
@@ -143,6 +177,7 @@ namespace OctahedronMod
                         Name = gate != null ? Destination(gate) : largest.DisplayName ?? "",
                         Local = new Vector3D(offset.Dot(right), offset.Dot(away), offset.Dot(up)),
                         Distance = distance,
+                        Relation = gate != null ? Neutral : Relation(largest, player),
                     }
                 );
             }
@@ -152,39 +187,65 @@ namespace OctahedronMod
             KeepColors();
         }
 
-        // The listed contacts keep their colors; one that drops off the list frees its color, and
-        // one new on the list takes the first free one
+        static int Relation(IMyCubeGrid grid, IMyPlayer player)
+        {
+            var owners = grid.BigOwners;
+            if (owners.Count == 0 || player == null)
+                return Neutral;
+            switch (player.GetRelationTo(owners[0]))
+            {
+                case MyRelationsBetweenPlayerAndBlock.Enemies:
+                    return Hostile;
+                case MyRelationsBetweenPlayerAndBlock.Owner:
+                case MyRelationsBetweenPlayerAndBlock.FactionShare:
+                case MyRelationsBetweenPlayerAndBlock.Friends:
+                    return Friendly;
+                default:
+                    return Neutral;
+            }
+        }
+
+        // The listed contacts keep their shades; one that drops off the list or changes sides
+        // frees its shade, and one new on the list takes the least used shade of its color
         void KeepColors()
         {
             var listed = Math.Min(contacts.Count, 2 * Rows);
             unlisted.Clear();
-            foreach (var id in colors.Keys)
+            foreach (var pair in colors)
             {
                 var found = false;
                 for (var i = 0; i < listed && !found; i++)
-                    found = contacts[i].Id == id;
+                    found =
+                        contacts[i].Id == pair.Key && contacts[i].Relation == pair.Value / Shades;
                 if (!found)
-                    unlisted.Add(id);
+                    unlisted.Add(pair.Key);
             }
             foreach (var id in unlisted)
             {
-                taken[colors[id]] = false;
+                used[colors[id]]--;
                 colors.Remove(id);
             }
             for (var i = 0; i < listed; i++)
             {
-                if (colors.ContainsKey(contacts[i].Id))
+                var c = contacts[i];
+                if (colors.ContainsKey(c.Id))
                     continue;
-                var free = Array.IndexOf(taken, false);
-                taken[free] = true;
-                colors[contacts[i].Id] = free;
+                var best = c.Relation * Shades;
+                for (var shade = best + 1; shade < (c.Relation + 1) * Shades; shade++)
+                    if (used[shade] < used[best])
+                        best = shade;
+                used[best]++;
+                colors[c.Id] = best;
             }
         }
 
+        // Its shade while listed; one past the list is drawn dim in its relation's color
         Color Paint(Contact c)
         {
             int index;
-            return colors.TryGetValue(c.Id, out index) ? Palette[index] : m_foregroundColor * 0.5f;
+            return colors.TryGetValue(c.Id, out index)
+                ? Palette[index]
+                : Palette[c.Relation * Shades] * 0.5f;
         }
 
         // Where a lane computer's gate leads: its grid is named "TL 07 North Station > Beta

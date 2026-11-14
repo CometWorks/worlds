@@ -9,15 +9,16 @@ each station's LCD, reads the sprites it rendered and saves a screenshot.
 
 One station (RADAR_CROWD, default North) gets 36 probe ships 300-1875 m away instead, for the
 contact count and the two list columns of SE-1502, and one more that drifts outward at 2 m/s
-from 280 m, overtaking the others; the others get 3 each.
+from 280 m, overtaking the others; the others get 3 each. The probes take turns being the test
+player's (friendly, green), nobody's (neutral, white) and the pirates' (hostile, red).
 
 After: every LCD runs OctahedronRadar, lists its probe ships and no lane computer ("TL ..."),
 shipyard or shipyard arm, has the contact count in the top right corner, and lists at most 15
 contacts per column by distance, nearest first, the left column first: the 30 nearest of the 36
-on the crowded station. Each listed ship has its own color, shared by its row and its marker,
-and keeps it while the drifting probe changes the order. The gates (the station's lane
-computers) are listed below the map by where they lead: the station at the other end, or Earth
-for a pole. Before: only reports what Arthur's radar draws, for comparison.
+on the crowded station. Each listed ship has a shade of its relation's color, shared by its
+row and its marker, and keeps it while the drifting probe changes the order. The gates (the
+station's lane computers) are listed in cyan blue below the map by where they lead: the station
+at the other end, or Earth for a pole. Before: only reports what Arthur's radar draws, for comparison.
 
     OCT_TASK=SE-1380 OCT_WORLD_SOURCE=<world built from main with --octahedron-mod 3833786664> \\
         uv run --no-project --with httpx python tests/test_station_radar.py after|before [OUT]
@@ -65,6 +66,10 @@ RING = re.compile(r"^\d+ k?m$")
 GATE = re.compile(r"^TL \d+ (\w+) Station > (.+)$")
 DESTINATION = re.compile(r"^(\w+ Station|Earth)$")
 MARKERS = ("Triangle", "SquareSimple")
+# The identity the test client plays, so that it owns the friendly probes
+TESTER = 144115188075999502
+SIDES = ("friendly", "neutral", "hostile")
+SHADES = 10
 COUNT = re.compile(r"^Contacts: (\d+)$")
 HIDDEN = re.compile(r"^TL \d|Shipyard|^Subgrid|Alien Shipyard arm")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
@@ -154,6 +159,28 @@ def probe_spots(station: str, s: dict) -> list[tuple[str, tuple]]:
     return spots
 
 
+def side(probe: str) -> str:
+    """Whose a probe is, by its number: the tester's, nobody's or the pirates'"""
+    number = probe.rsplit(" ", 1)[1]
+    return SIDES[(int(number) - 1) % 3] if number.isdigit() else "neutral"
+
+
+def pirates() -> int:
+    """The founder of the pirate faction"""
+    text = (rig.world_source() / "Sandbox.sbc").read_text(encoding="utf-8")
+    return int(re.search(r"<Tag>SPRT</Tag>.*?<PlayerId>(\d+)", text, re.S)[1])
+
+
+def color_side(color) -> str:
+    """What a sprite color shows: green friendly, red hostile, white neutral, blue a gate"""
+    r, g, b = color[:3]
+    if max(r, g, b) - min(r, g, b) < 40:
+        return "neutral"
+    if b >= g > r:
+        return "gate"
+    return "friendly" if g > r else "hostile"
+
+
 def mover(s: dict) -> tuple[str, tuple, tuple]:
     """The crowded station's drifting probe: name, position and velocity"""
     a = -0.5
@@ -173,8 +200,9 @@ def ships(station: str, s: dict) -> int:
 
 
 def prepare(found) -> None:
+    owners = {"friendly": TESTER, "neutral": 0, "hostile": pirates()}
     probes = [
-        rig.grid(probe, None, rig.small_ship_blocks(), position=at)
+        rig.grid(probe, None, rig.small_ship_blocks(owners[side(probe)]), position=at)
         for name, s in found.items()
         for probe, at in probe_spots(name.split()[0], s)
     ]
@@ -184,6 +212,26 @@ def prepare(found) -> None:
         rig.grid(name, None, rig.small_ship_blocks(), position=at, velocity=velocity)
     )
     rig.prepare_world(extra_grids=probes)
+    # The test client plays TESTER, who owns the friendly probes
+    path = rig.WORLD / "Sandbox.sbc"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(
+        "</Identities>",
+        f"<MyObjectBuilder_Identity><IdentityId>{TESTER}</IdentityId>"
+        f"<DisplayName>{rig.CLIENT_NAME}</DisplayName><CharacterEntityId>0</CharacterEntityId>"
+        "</MyObjectBuilder_Identity></Identities>",
+        1,
+    )
+    text, count = re.subn(
+        r"(<AllPlayersData>\s*<dictionary>)",
+        lambda m: m[1]
+        + f"<item><Key><ClientId>{rig.CLIENT_ID}</ClientId><SerialId>0</SerialId></Key>"
+        f"<Value><DisplayName>{rig.CLIENT_NAME}</DisplayName><IdentityId>{TESTER}</IdentityId>"
+        "<Connected>false</Connected><ForceRealPlayer>false</ForceRealPlayer></Value></item>",
+        text,
+    )
+    assert count == 1, "AllPlayersData"
+    path.write_text(text, encoding="utf-8")
     mods = rig.mod_items(
         {
             TRADE_LANES: "Trade Lanes MP",
@@ -432,8 +480,24 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         f"{station}: each row's distance and name share a color",
     )
     check(
-        len(set(colors)) == len(colors),
-        f"{station}: every listed ship has its own color",
+        all(color_side(r[4]) == side(r[3]) for r in listed),
+        f"{station}: friendly ships green, neutral white, hostile red",
+    )
+    by_side = {}
+    for r in listed:
+        by_side.setdefault(side(r[3]), []).append(r[4])
+    print(
+        f"  {station}: shades "
+        + ", ".join(f"{k} {len(set(v))}/{len(v)}" for k, v in by_side.items()),
+        flush=True,
+    )
+    check(
+        all(len(set(v)) == min(len(v), SHADES) for v in by_side.values()),
+        f"{station}: the ships of one side have different shades, up to {SHADES}",
+    )
+    check(
+        all(color_side(r[4]) == "gate" for r in gates),
+        f"{station}: the gates are cyan blue",
     )
     check(
         all(c in markers for c in colors),
