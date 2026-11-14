@@ -207,7 +207,8 @@ public sealed class Commands : CommandModule
         "Has the shipyard take apart the wreck you just towed in for a contract; a bot removes a ship of its own",
         "!oct scrap: within a few minutes of handing in a wreck contract at a shipyard, the station takes the wreck "
             + "apart instead of you keeping it; the reward stays yours. !oct scrap <grid id>: bots only. The ship must "
-            + "be the bot's alone and on this node, with nobody else seated in it. The bot is put out of its seat."
+            + "be on this node and owned by the bot alone, or by bots that aren't near it, with nobody else "
+            + "seated in it. The bot is put out of its seat."
     )]
     [Permission(MyPromoteLevel.None)]
     public string Scrap(params string[] ship) =>
