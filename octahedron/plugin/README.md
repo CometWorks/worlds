@@ -1691,9 +1691,19 @@ that said `!oct police duty <station>`, flying a ship named `PoliceGridName*` (P
 the "Raptor - Ion" in the station's color (cluster-regression `sebot/tools/trader/police.py`).
 
 - Weapon damage (bullets, rockets, explosions, mines) to any grid or character within
-  `PoliceAlertRange` (2 km) of a station's center makes the attacker a target: the grid of
-  the weapon block or missile launcher that did it, with every grid mechanically connected
-  to it. Damage by a police ship, by a station grid and by hand weapons raises no alert.
+  `PoliceAlertRange` (2 km) of a station's center calls the police. Who started the fight
+  decides whom they go after (SE-1490):
+  - an enemy NPC that fires is a target, whatever it hits. An enemy NPC is an NPC outside OCT
+    whose faction is at war with OCT (`MoneyAuthorityFactionTag`), or that has no faction:
+    pirates, hostile encounters;
+  - whoever fires at an enemy NPC brings the police against that NPC, not against the shooter;
+  - fire at a ship the police already chase is self-defense or help: no alert;
+  - whoever fires at anything else, a player's ship or an OCT ship (traders, taxis, janitors,
+    police, station ships) first of all, is a target.
+
+  A target is a grid with every grid mechanically connected to it: the shooter's is the grid
+  of the weapon block or missile launcher that fired. Damage by a police ship, by a station
+  grid and by hand weapons raises no alert.
 - Every `PoliceReportSeconds` (2) the officers on duty at that station hear, privately from
   `Police`, `Target KEY at X Y Z moving VX VY VZ grids ID,... weapons N`, until the target is
   clear: `Clear KEY: WHY`, once all its grids are beyond `PoliceChaseRange` (3 km) of the

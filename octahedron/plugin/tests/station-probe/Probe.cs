@@ -93,6 +93,30 @@ public sealed class ProbeCommands : CommandModule
     }
 
     [Command(
+        "gridowner",
+        "Gives a grid and the grids joined to it to an NPC of the faction with this tag, like SPRT or OCT, or to the caller with me: OWNER grid identity",
+        "!sprobe gridowner <grid id> <tag|me>"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string GridOwner(long gridId, string tag)
+    {
+        if (!MyEntities.TryGetEntityById(gridId, out MyCubeGrid grid))
+            return $"NOGRID {gridId}";
+        var owner =
+            tag == "me"
+                ? Context.Caller.IdentityId
+                : MySession
+                    .Static.Factions.TryGetFactionByTag(tag)
+                    ?.Members.Keys.FirstOrDefault(MySession.Static.Players.IdentityIsNpc)
+                    ?? 0;
+        if (owner == 0)
+            return $"NONPC {tag}";
+        foreach (var g in MyCubeGridGroups.Static.Mechanical.GetGroupNodes(grid))
+            g.ChangeGridOwnership(owner, MyOwnershipShareModeEnum.Faction);
+        return $"OWNER {gridId} {owner}";
+    }
+
+    [Command(
         "safezone",
         "The safe zone blocks' upkeep: SAFEZONE subtype chips minutes, one per block",
         "!sprobe safezone"
