@@ -142,21 +142,12 @@ namespace OctahedronMod
         public StationRadar(IngameTextSurface surface, IngameCubeBlock block, Vector2 size)
             : base(surface, block, size) { }
 
-        // Redrawn once every 197 simulation frames. Scripts run only every 10 frames at most, so
-        // each redraw is due 197 frames after the one before it: 190 or 200 frames apart, 197 on
-        // average.
-        const int Period = 197;
-        int due;
-
-        public override ScriptUpdate NeedsUpdate => ScriptUpdate.Update10;
+        // Redrawn once every 100 simulation frames (SE-1518)
+        public override ScriptUpdate NeedsUpdate => ScriptUpdate.Update100;
 
         public override void Run()
         {
             base.Run();
-            var now = MyAPIGateway.Session.GameplayFrameCounter;
-            if (now < due)
-                return;
-            due = now - due > 2 * Period ? now + Period : due + Period;
             var block = m_block as IMyCubeBlock;
             if (block?.CubeGrid == null)
                 return;

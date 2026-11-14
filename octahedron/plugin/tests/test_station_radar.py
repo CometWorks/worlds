@@ -415,7 +415,7 @@ def visit(remote, name: str, s: dict) -> None:
     first = check_list(station, s, surface.get("sprites", []))
     if station != CROWD or not first:
         return
-    # The radar redraws once every 197 frames, 3.3 s at 60 frames a second: the drifting
+    # The radar redraws once every 100 frames, 1.7 s at 60 frames a second: the drifting
     # probe's distance changes on each redraw
     started = time.monotonic()
     changes, last = [], None
@@ -436,8 +436,8 @@ def visit(remote, name: str, s: dict) -> None:
         flush=True,
     )
     check(
-        len(gaps) >= 4 and 2.5 < gaps[len(gaps) // 2] < 4.5,
-        f"{station}: the radar redraws about every 197 frames (3.3 s)",
+        len(gaps) >= 8 and 1.2 < gaps[len(gaps) // 2] < 2.4,
+        f"{station}: the radar redraws about every 100 frames (1.7 s)",
     )
     # The drifting probe moves 400 m in 100 s, past at least one other hostile probe
     time.sleep(70)
