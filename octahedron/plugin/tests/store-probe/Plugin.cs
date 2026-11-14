@@ -19,7 +19,8 @@ namespace StoreProbe;
 // the nearest Store block. The game's own requests go to the server, and the answers come back as
 // chat lines:
 //   /store list [item|all]        STORE items offers bonus; OFFER or ORDER item amount price
-//   /store buy <item> <amount>    BUY result, into the character's inventory
+//   /store buy <item> <amount>    BUY result, into the character's inventory; <item>@lot buys
+//                                 from the row of lots of an item that has two rows
 //   /store sell <item> <amount>   SELL result, from the character's inventory
 //   /store have <item>            HAVE amount
 //   /store ships                  SHIPS the inventories of ships docked at the station's trading
@@ -124,9 +125,21 @@ public class Plugin : IPlugin
                     (items, tick, _, _, _) =>
                     {
                         if (verb == "buyship")
-                            Buy(store, Find(items, item, StoreItemTypes.Offer), amount, ship.EntityId, tick);
+                            Buy(
+                                store,
+                                Find(items, item, StoreItemTypes.Offer),
+                                amount,
+                                ship.EntityId,
+                                tick
+                            );
                         else
-                            Sell(store, Find(items, item, StoreItemTypes.Order), amount, ship.EntityId, tick);
+                            Sell(
+                                store,
+                                Find(items, item, StoreItemTypes.Order),
+                                amount,
+                                ship.EntityId,
+                                tick
+                            );
                     }
                 );
             });
@@ -138,9 +151,21 @@ public class Plugin : IPlugin
                 if (verb == "list")
                     List(items, item, offers, orders, npc);
                 else if (verb == "buy")
-                    Buy(store, Find(items, item, StoreItemTypes.Offer), amount, character.EntityId, tick);
+                    Buy(
+                        store,
+                        Find(items, item, StoreItemTypes.Offer),
+                        amount,
+                        character.EntityId,
+                        tick
+                    );
                 else if (verb == "sell")
-                    Sell(store, Find(items, item, StoreItemTypes.Order), amount, character.EntityId, tick);
+                    Sell(
+                        store,
+                        Find(items, item, StoreItemTypes.Order),
+                        amount,
+                        character.EntityId,
+                        tick
+                    );
                 else
                     Say("NOVERB " + verb);
             }
@@ -168,7 +193,15 @@ public class Plugin : IPlugin
 
     private static MyStoreItem Find(List<MyStoreItem> items, string item, StoreItemTypes type)
     {
-        var found = items.FirstOrDefault(i => i.StoreItemType == type && Name(i) == item);
+        // An item of OCT's lots has two rows (SE-1471): "<item>@lot" is the row of lots, the dearer
+        // one, a plain item the row of single units
+        bool lot = item.EndsWith("@lot");
+        if (lot)
+            item = item.Substring(0, item.Length - 4);
+        var rows = items.Where(i => i.StoreItemType == type && Name(i) == item);
+        var found = lot
+            ? rows.OrderByDescending(i => i.PricePerUnit).FirstOrDefault()
+            : rows.OrderBy(i => i.PricePerUnit).FirstOrDefault();
         if (found == null)
             Say($"NOITEM {item}");
         return found;

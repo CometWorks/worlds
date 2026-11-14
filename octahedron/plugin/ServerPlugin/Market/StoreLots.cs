@@ -1,15 +1,22 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
+using Sandbox.Definitions;
 using Sandbox.Game;
+using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.World;
 using VRage;
 using VRage.Game;
+using VRage.Network;
 using VRage.ObjectBuilders;
 
 namespace ServerPlugin;
 
 /// <summary>
-/// The Store blocks of OCT's stations trade an item of MarketLots in lots: a unit of the Store is
-/// a lot of that many units, priced in whole SC per lot, so ice can cost less than 1 SC per kg.
+/// The Store blocks of OCT's stations trade the items of MarketLots in lots too: on that row a unit
+/// of the Store is a lot of that many units, priced in whole SC per lot, so ice can cost less than
+/// 1 SC per kg, and stone can be bought back at about 1 SC per kg.
 /// The game's own trade methods run, cluster patches and all; while one runs for a lot item, the
 /// inventory calls in it count lots: the room checked and the items added on a purchase, the
 /// amount the seller has and the items taken on a sale.
@@ -29,15 +36,8 @@ internal static class StoreLots
     private static Scope scope;
 
     /// <summary>A trade of the Store item starts: its lots count from here to <see cref="End"/>.</summary>
-    public static void Begin(SerializableDefinitionId? item)
-    {
-        scope = null;
-        if (item is not { } id)
-            return;
-        long lot = Market.Settings.Lot(Stations.ItemName(id));
-        if (lot > 1)
-            scope = new Scope { Item = id, Lot = lot };
-    }
+    public static void Begin(SerializableDefinitionId? item, long lot) =>
+        scope = item is { } id && lot > 1 ? new Scope { Item = id, Lot = lot } : null;
 
     public static void End() => scope = null;
 
@@ -65,6 +65,66 @@ internal static class StoreLots
             "OCT",
             player.Identity.IdentityId
         );
+    }
+
+    // When each player last heard about the lots
+    private static readonly Dictionary<long, DateTime> told = new();
+    private static readonly TimeSpan TellEvery = TimeSpan.FromHours(6);
+
+    /// <summary>The lots, in a chat line: the first time a player opens an OCT Store, then every few hours.</summary>
+    public static string Advert()
+    {
+        var settings = Market.Settings;
+        string Name(string item) =>
+            Stations.TryItemId(item, out var id)
+            && MyDefinitionManager.Static.TryGetPhysicalItemDefinition(id, out var d)
+                ? d.DisplayNameText
+                : item;
+        var both = settings
+            .Lots.Keys.Where(i => !settings.LotsOnly.Contains(i))
+            .Select(Name)
+            .ToList();
+        var only = settings.LotsOnly.Select(Name).ToList();
+        if (both.Count + only.Count == 0)
+            return null;
+        var lot = settings.Lots.Values.Max();
+        return "OCT trades by the tonne: "
+            + (
+                both.Count > 0
+                    ? $"{string.Join(", ", both)} have a second row whose unit is a lot of {lot:N0} kg (or pieces), priced per lot. "
+                    : ""
+            )
+            + (
+                only.Count > 0 ? $"{string.Join(", ", only)} come in lots of {lot:N0} kg only." : ""
+            );
+    }
+
+    [HarmonyPatch(typeof(MyStoreBlock), "GetStoreItems", typeof(bool))]
+    private static class Opened
+    {
+        // ReSharper disable once UnusedMember.Local
+        private static void Postfix(MyStoreBlock __instance, bool isPlayerRequest)
+        {
+            if (!isPlayerRequest || !Market.On || MyEventContext.Current.IsLocallyInvoked)
+                return;
+            var station = MySession.Static.Factions.GetStationByGridId(
+                __instance.CubeGrid.EntityId
+            );
+            if (station == null || Market.OctStations().All(s => s.Id != station.Id))
+                return;
+            long identity = MySession.Static.Players.TryGetIdentityId(
+                MyEventContext.Current.Sender.Value
+            );
+            var now = DateTime.UtcNow;
+            if (
+                identity == 0
+                || told.TryGetValue(identity, out var last) && now - last < TellEvery
+                || Advert() is not { } text
+            )
+                return;
+            told[identity] = now;
+            MyVisualScriptLogicProvider.SendChatMessage(text, "OCT", identity);
+        }
     }
 
     [HarmonyPatch(

@@ -1511,19 +1511,33 @@ stock as long as its entry keeps the name.
   SC: rounded to the nearest, at least 1 SC, a bid at least 1 SC below the ask, so
   on a very cheap item the rounding costs more than the tax. An item worth under
   about 1 SC is sold but not bought.
-- Ice is cheaper than that (SE-1469): `MarketPrices` sets its reference to
-  0.01 SC per kg, 1 SC per 100 kg, against the game's 5 SC. The vanilla Store
-  prices a unit of an item in whole SC, and ice's unit is 1 kg, so `MarketLots`
-  (`Ore/Ice=1000`) makes OCT's Stores trade ice in lots of 1,000 kg: a Store unit
-  of ice is a lot, its price is per lot, 10 SC to buy and 9 SC to sell (the tax,
-  rounded to whole SC), and its amount counts lots. While the game's own trade
-  methods run for such a row (the cluster's patches in them too), `StoreLots`
-  makes their inventory calls count lots: the room checked and the ice added on a
-  purchase, the whole lots the seller holds and the ice taken on a sale. Each
-  trade in lots tells the player in chat what it moved in kg. Paid builds,
-  acquisition contracts, shipyard leftovers, grid values and docked ships'
-  hydrogen pay the same 0.01 SC per kg (9 SC a tonne where OCT buys). The sebot
-  traders and taxis know the lot size (`market.LOTS`).
+- Cheap bulk goods also come by the tonne (SE-1469, SE-1471). Nobody wants to
+  type 57,000 into the Store, and a whole SC per kg leaves little room for prices.
+  `MarketLots` lists the items, now stone, ice, iron, nickel, silicon, cobalt and
+  magnesium ore, gravel, and iron, silicon and nickel ingots, with 1,000 units
+  each. Their Store gets a second row whose unit is a lot of 1,000 kg (or pieces),
+  priced in whole SC per lot at the item's reference with the usual tax both
+  ways. The row of single units stays next to it, except for the items of
+  `MarketLotsOnly` (ice). The rows sort under the same name; the lot is the one
+  priced about 1,000 times higher. Neither row buys at or above what the other
+  sells for, or buying by the kg and selling by the lot would pay out of the
+  rounding. A player who opens an OCT Store hears about the lots in chat (again
+  after 6 hours), and each trade in lots says in chat what it moved in kg.
+- Ice sells for 0.01 SC per kg (`MarketPrices`), against the game's 5 SC: 10 SC a
+  lot, bought back at 9. It has no row of single units, as that would cost 1 SC a
+  kg. Stone keeps its reference, the game's 1 SC per kg: 1,020 SC a lot, bought
+  back at 980, and 1 SC a kg, not bought back by the kg. Any cheaper and buying
+  stone to refine would pay: a tonne makes about 550 SC of ingots at OCT's buy
+  prices (no yield modules).
+- While the game's own trade methods run for a row of lots (the cluster's patches
+  in them too), `StoreLots` makes their inventory calls count lots: the room
+  checked and the items added on a purchase, the whole lots the seller holds and
+  the items taken on a sale. A row of lots has its own Store item id, the item's
+  name with `|lot`. Paid builds, acquisition contracts, shipyard leftovers and
+  grid values use the lot's price per kg (`OctAsk`/`OctBid`), and docked ships
+  pay for hydrogen at the cheapest ice offer per kg: 0.01 SC. The sebot traders
+  use the rows of single units (`market.TWO_ROWS`) and the taxis buy ice by the
+  lot (`market.LOTS`).
 - The stock is real: it goes down with each purchase and up with each sale, and
   what the Store shows is what is there. Once an hour, on the UTC hour, OCT brings
   every item that is completely out back to the station's minimum: `MarketMinStock`

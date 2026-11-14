@@ -39,8 +39,10 @@ public sealed class MarketSettings
     public Dictionary<(string Station, string Item), long> FixedAsks = new();
     public long FixedStock;
 
-    // Items a Store trades in lots of this many units, priced in whole SC per lot: ice in tonnes
+    // Items a Store also trades in lots of this many units, priced in whole SC per lot: ice, stone,
+    // ores and ingots in tonnes. The ones in LotsOnly have no single-unit row.
     public Dictionary<string, long> Lots = new();
+    public HashSet<string> LotsOnly = new();
 
     /// <summary>Units of the item in one unit of a Store block, 1 if it has no lots.</summary>
     public long Lot(string item) => Lots.TryGetValue(item, out long lot) && lot > 1 ? lot : 1;
@@ -105,31 +107,41 @@ public struct MarketFill
     public long Cost;
 }
 
-/// <summary>An item as a station's Store block shows it. Prices in milli-SC per unit, whole SC; amounts raw.</summary>
-public readonly record struct StoreRow(string Item, long Ask, long Stock, long Bid, long Wanted)
+/// <summary>
+/// An item as a station's Store block shows it. Prices in milli-SC per unit, whole SC per Store unit;
+/// amounts raw. An item with lots also has a row of lots of Lot units, at LotAsk and LotBid, whole SC
+/// per lot; Ask and Bid are 0 for an item sold in lots only.
+/// </summary>
+public readonly record struct StoreRow(
+    string Item,
+    long Ask,
+    long Stock,
+    long Bid,
+    long Wanted,
+    long Lot = 1,
+    long LotAsk = 0,
+    long LotBid = 0
+)
 {
     public string Encode() =>
         string.Join(
             "\t",
-            Item,
-            Ask.ToString(CultureInfo.InvariantCulture),
-            Stock.ToString(CultureInfo.InvariantCulture),
-            Bid.ToString(CultureInfo.InvariantCulture),
-            Wanted.ToString(CultureInfo.InvariantCulture)
+            new[] { Ask, Stock, Bid, Wanted, Lot, LotAsk, LotBid }
+                .Select(v => v.ToString(CultureInfo.InvariantCulture))
+                .Prepend(Item)
         );
 
     public static List<StoreRow> DecodeAll(string text) =>
-        (text ?? "")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => line.Split('\t'))
-            .Select(f => new StoreRow(
-                f[0],
-                long.Parse(f[1], CultureInfo.InvariantCulture),
-                long.Parse(f[2], CultureInfo.InvariantCulture),
-                long.Parse(f[3], CultureInfo.InvariantCulture),
-                long.Parse(f[4], CultureInfo.InvariantCulture)
-            ))
-            .ToList();
+        (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(Decode).ToList();
+
+    // Rows from before the lots (SE-1471) have 5 fields
+    private static StoreRow Decode(string line)
+    {
+        var f = line.Split('\t');
+        long V(int i, long missing) =>
+            i < f.Length ? long.Parse(f[i], CultureInfo.InvariantCulture) : missing;
+        return new StoreRow(f[0], V(1, 0), V(2, 0), V(3, 0), V(4, 0), V(5, 1), V(6, 0), V(7, 0));
+    }
 }
 
 /// <summary>
@@ -225,7 +237,8 @@ public sealed class MarketBook
         string station,
         string item,
         int percent,
-        int tax
+        int tax,
+        long lot
     )
     {
         double sc =
@@ -237,12 +250,15 @@ public sealed class MarketBook
             / 100
             * Factor(s, station, item, w.Now)
             * Scarcity(w, s, station, item);
-        long lot = s.Lot(item);
         return PerUnit((long)Math.Round(sc * lot, MidpointRounding.AwayFromZero), lot);
     }
 
     /// <summary>What OCT sells the item for at the station, milli-SC per unit; 0: it doesn't. A specialty sells at no less than the station pays for it, or the Store itself would be a way to make money.</summary>
-    public long OctAsk(IMarketWorld w, MarketSettings s, string station, string item)
+    public long OctAsk(IMarketWorld w, MarketSettings s, string station, string item) =>
+        Ask(w, s, station, item, s.Lot(item));
+
+    // OCT's price in whole SC per Store unit of lot units
+    private long Ask(IMarketWorld w, MarketSettings s, string station, string item, long lot)
     {
         if (s.FixedAsks.TryGetValue((station, item), out long ask))
             return ask;
@@ -251,7 +267,7 @@ public sealed class MarketBook
         int percent = w.Specialty(station, item)
             ? Math.Max(s.OctSellPercent, s.SpecialtyPercent)
             : s.OctSellPercent;
-        return Math.Max(PerUnit(1, s.Lot(item)), Price(w, s, station, item, percent, s.TaxPercent));
+        return Math.Max(PerUnit(1, lot), Price(w, s, station, item, percent, s.TaxPercent, lot));
     }
 
     /// <summary>What OCT pays for the item at the station, milli-SC per unit; 0: it doesn't buy it. At least 1 SC a Store unit (or lot) below what it sells for, whatever the rounding to whole SC does to the tax.</summary>
@@ -261,6 +277,15 @@ public sealed class MarketBook
         string station,
         string item,
         bool specialty = false
+    ) => Bid(w, s, station, item, s.Lot(item), specialty);
+
+    private long Bid(
+        IMarketWorld w,
+        MarketSettings s,
+        string station,
+        string item,
+        long lot,
+        bool specialty
     )
     {
         if (w.Reference(station, item) <= 0)
@@ -270,8 +295,8 @@ public sealed class MarketBook
         return Math.Max(
             0,
             Math.Min(
-                Price(w, s, station, item, percent, -s.TaxPercent),
-                OctAsk(w, s, station, item) - PerUnit(1, s.Lot(item))
+                Price(w, s, station, item, percent, -s.TaxPercent, lot),
+                Ask(w, s, station, item, lot) - PerUnit(1, lot)
             )
         );
     }
@@ -318,8 +343,42 @@ public sealed class MarketBook
                     room,
                     Raw(s.SpecialtyDailyKg - SpecialtyBoughtKg(station), massKg, integral)
                 );
+            long lot = s.Lot(item);
+            if (lot == 1)
+            {
+                rows.Add(
+                    new StoreRow(item, OctAsk(w, s, station, item), have, bid, bid > 0 ? room : 0)
+                );
+                continue;
+            }
+            // bid is the lot's. Neither row buys at or above what the other sells for, or buying
+            // by the kg and selling by the lot (or back) would make money from the rounding.
+            long lotAsk = Ask(w, s, station, item, lot);
+            long ask = 0,
+                unitBid = 0;
+            if (!s.LotsOnly.Contains(item))
+            {
+                ask = Ask(w, s, station, item, 1);
+                unitBid = Math.Max(
+                    0,
+                    Math.Min(
+                        Bid(w, s, station, item, 1, special),
+                        (lotAsk - 1) / MilliPerSc * MilliPerSc
+                    )
+                );
+                bid = Math.Max(0, Math.Min(bid, ask - PerUnit(1, lot)));
+            }
             rows.Add(
-                new StoreRow(item, OctAsk(w, s, station, item), have, bid, bid > 0 ? room : 0)
+                new StoreRow(
+                    item,
+                    ask,
+                    have,
+                    unitBid,
+                    unitBid > 0 || bid > 0 ? room : 0,
+                    lot,
+                    lotAsk,
+                    bid
+                )
             );
         }
         return rows;
