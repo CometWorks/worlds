@@ -15,6 +15,8 @@ changes, and the countdown and the removal from OCT run there.
 - Below -10,000 the countdown (40 s here) starts with a warning, warns at 30 and 10 s left while
   the player is handed over to the other node, and removes them from OCT at its end. The client
   and its node see them out of OCT, and they hear why.
+- SE-1495: !oct rep names the removal threshold; back above it the countdown stops and the
+  World Authority's line reaches the player on their node; below again it starts over.
 
     OCT_TASK=SE-1283C OCT_WORLD_SOURCE=<world from build_world.py> \\
         <Test>/.venv/bin/python tests/reputation_cluster.py <Test>     (from plugin/)
@@ -245,6 +247,36 @@ def run(bench) -> None:
     told = heard(api, since, "If it stays there", 30)
     check(
         "below -10,000 the countdown starts with a warning",
+        any("If it stays there for 40 seconds" in t for t in told),
+        told,
+    )
+    reply = " ".join(rig.chat(api, "!oct rep", 15))
+    check(
+        f"!oct rep on {where()} names the threshold and the time left",
+        "Removal from OCT below -10,000: removed in" in reply,
+        reply,
+    )
+    # SE-1495: back up, the World Authority stops the countdown and its line reaches the node
+    since = api.get_chat_messages()
+    rig.chat(api, "!oct rep add 2000", 10)
+    told = heard(api, since, "you stay in OCT", 30)
+    check(
+        f"back above -10,000 the player hears it on {where()}",
+        any("back above -10,000: you stay in OCT" in t for t in told),
+        told,
+    )
+    reply = " ".join(rig.chat(api, "!oct rep", 15))
+    check(
+        "!oct rep names the threshold with no countdown",
+        reply.rstrip().endswith("Removal from OCT below -10,000."),
+        reply,
+    )
+    since = api.get_chat_messages()
+    started = time.monotonic()
+    rig.chat(api, "!oct rep add -2000", 10)
+    told = heard(api, since, "If it stays there", 30)
+    check(
+        "below again: the countdown starts over",
         any("If it stays there for 40 seconds" in t for t in told),
         told,
     )
