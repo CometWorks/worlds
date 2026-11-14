@@ -247,21 +247,22 @@ internal static class StationCharging
             .Bill(liters, price, Plugin.Config.ShipyardHydrogenLitersPerIce, long.MaxValue)
             .Sc;
 
-    // What OCT sells a kg of ice for at the station's Store, in SC: the price of a Store unit, a lot
-    // of MarketLots kg; 0 when it has none for sale
+    // What OCT sells a kg of ice for at the station's Store, in SC: the lowest of its offers, a row of
+    // lots (MarketLots) counting per kg; 0 when it has none for sale
     private static double IcePrice(IMyFactionStation entry)
     {
         if (entry is not MyFactionStation station || !Stations.TryItemId(Ice, out var id))
             return 0;
         return station
-                .StoreItems.FirstOrDefault(i =>
-                    i.StoreItemType == StoreItemTypes.Offer
-                    && i.Amount > 0
-                    && i.Item.HasValue
-                    && (MyDefinitionId)i.Item.Value == id
-                )
-                ?.PricePerUnit / (double)Market.Settings.Lot(Ice)
-            ?? 0;
+            .StoreItems.Where(i =>
+                i.StoreItemType == StoreItemTypes.Offer
+                && i.Amount > 0
+                && i.Item.HasValue
+                && (MyDefinitionId)i.Item.Value == id
+            )
+            .Select(i => i.PricePerUnit / (double)Market.LotOf(station.Name, i))
+            .DefaultIfEmpty(0)
+            .Min();
     }
 
     private static string Sc(long amount) => $"{amount:N0} SC";

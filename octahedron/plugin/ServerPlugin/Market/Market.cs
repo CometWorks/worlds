@@ -84,6 +84,9 @@ internal static class Market
                 ),
             FixedStock = Config.ZoneChipStock * Amounts.Unit,
             Lots = Lots(),
+            LotsOnly = MarketBook.Glob(Config.MarketLotsOnly) is { } only
+                ? Lots().Keys.Where(item => only.IsMatch(item)).ToHashSet()
+                : [],
         };
 
     /// <summary>The market, on the authority only, loaded from the world on first use.</summary>
@@ -356,7 +359,7 @@ internal static class Market
 
     // --- the game's station stores ---
 
-    private static IEnumerable<MyFactionStation> OctStations() =>
+    internal static IEnumerable<MyFactionStation> OctStations() =>
         MySession
             .Static.Factions.TryGetFactionByTag(Config.MoneyAuthorityFactionTag)
             ?.Stations.OfType<MyFactionStation>()
@@ -390,14 +393,12 @@ internal static class Market
         if (station == null)
             return;
         var ids = new HashSet<long>();
-        var settings = Settings;
-        void Put(string item, StoreItemTypes type, long raw, long price)
+        void Put(string item, StoreItemTypes type, long raw, long price, long lot)
         {
-            long lot = settings.Lot(item);
             int amount = (int)Math.Min(int.MaxValue, raw / Amounts.Unit / lot);
             if (amount <= 0 || price <= 0 || !Stations.TryItemId(item, out var itemId))
                 return;
-            long id = StoreItemId(stationName, item, type);
+            long id = StoreItemId(stationName, lot > 1 ? item + LotRow : item, type);
             ids.Add(id);
             int sc = (int)
                 Math.Min(
@@ -417,10 +418,30 @@ internal static class Market
         }
         foreach (var row in StoreRow.DecodeAll(text))
         {
-            Put(row.Item, StoreItemTypes.Offer, row.Stock, row.Ask);
-            Put(row.Item, StoreItemTypes.Order, row.Wanted, row.Bid);
+            Put(row.Item, StoreItemTypes.Offer, row.Stock, row.Ask, 1);
+            Put(row.Item, StoreItemTypes.Order, row.Wanted, row.Bid, 1);
+            if (row.Lot > 1)
+            {
+                Put(row.Item, StoreItemTypes.Offer, row.Stock, row.LotAsk, row.Lot);
+                Put(row.Item, StoreItemTypes.Order, row.Wanted, row.LotBid, row.Lot);
+            }
         }
         station.StoreItems.RemoveAll(i => !ids.Contains(i.Id));
+    }
+
+    // A Store item of lots has its own id: the item's name with this
+    private const string LotRow = "|lot";
+
+    /// <summary>The units in a Store unit of the station's Store item: its lot on a row of lots (MarketLots), else 1.</summary>
+    public static long LotOf(string station, MyStoreItem shown)
+    {
+        if (station == null || shown?.Item is not { } item)
+            return 1;
+        string name = Stations.ItemName(item);
+        long lot = Settings.Lot(name);
+        return lot > 1 && shown.Id == StoreItemId(station, name + LotRow, shown.StoreItemType)
+            ? lot
+            : 1;
     }
 
     // The same on every node and after a restart: FNV-1a
@@ -478,8 +499,8 @@ internal static class Market
         private static void Prefix(long stationId, MyStoreItem storeItem, out int __state)
         {
             __state = storeItem.Amount;
-            if (On && stationId != 0 && OctStation(stationId) != null)
-                StoreLots.Begin(storeItem.Item);
+            if (On && stationId != 0)
+                StoreLots.Begin(storeItem.Item, LotOf(OctStation(stationId), storeItem));
         }
 
         // ReSharper disable once UnusedMember.Local
@@ -497,7 +518,7 @@ internal static class Market
             string station = OctStation(stationId);
             if (station != null && storeItem.Item is { } item)
             {
-                long lot = Settings.Lot(Stations.ItemName(item));
+                long lot = LotOf(station, storeItem);
                 Change(
                     Guid.NewGuid(),
                     Verb.Bought,
@@ -521,8 +542,8 @@ internal static class Market
         {
             var shown = (station as MyFactionStation)?.StoreItems.FirstOrDefault(i => i.Id == id);
             __state = shown?.Amount ?? -1;
-            if (On && shown != null && OctStation(station.Id) != null)
-                StoreLots.Begin(shown.Item);
+            if (On && shown != null)
+                StoreLots.Begin(shown.Item, LotOf(OctStation(station.Id), shown));
         }
 
         // ReSharper disable once UnusedMember.Local
@@ -539,7 +560,7 @@ internal static class Market
             var shown = (station as MyFactionStation)?.StoreItems.FirstOrDefault(i => i.Id == id);
             if (shown?.Item is { } item && shown.Amount == __state - amount)
             {
-                long lot = Settings.Lot(Stations.ItemName(item));
+                long lot = LotOf(station.Name, shown);
                 Change(
                     Guid.NewGuid(),
                     Verb.Sold,

@@ -55,7 +55,13 @@ public sealed class MarketCommands : CommandModule
         foreach (var row in StoreRow.DecodeAll(view))
             if (filter == null ? row.Stock > 0 : filter == "all" || filter == row.Item)
                 yield return $"  {row.Item}: OCT buys {MarketBook.Price(row.Bid)} up to {Amounts.Units(row.Wanted)}, "
-                    + $"sells {MarketBook.Price(row.Ask)}, stock {Amounts.Units(row.Stock)}";
+                    + $"sells {MarketBook.Price(row.Ask)}, stock {Amounts.Units(row.Stock)}"
+                    + (
+                        row.Lot > 1
+                            ? $"; lots of {row.Lot:N0}: buys {MarketBook.Price(row.LotBid * row.Lot)}, "
+                                + $"sells {MarketBook.Price(row.LotAsk * row.Lot)}"
+                            : ""
+                    );
     }
 
     [Command("market stations", "The stations that have a market", "!oct market stations")]

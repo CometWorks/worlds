@@ -87,6 +87,42 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     Check(m.SalePrice(w, lots, B, "Ore/Ice") == 9, "leftover ice sells at 9 SC a t");
     m.SetStock(B, "Ore/Ice", 0);
 
+    // SE-1471: a lot item has both rows, the single units and the lots; ice the lots only
+    var two = new MarketSettings
+    {
+        DriftKg = 0,
+        Lots =
+        {
+            ["Ore/Ice"] = 1000,
+            [Iron] = 1000,
+            ["Ore/Odd"] = 1000,
+        },
+        LotsOnly = { "Ore/Ice" },
+    };
+    var ironRow = Row(m, w, two, B, Iron);
+    Check(
+        ironRow is { Ask: 10_000, Bid: 9_000, Lot: 1000, LotAsk: 10_200, LotBid: 9_800 },
+        $"iron: 10 / 9 SC a kg, 10,200 / 9,800 SC a lot: {ironRow}"
+    );
+    Check(m.OctAsk(w, two, B, Iron) == 10_200, "a build pays the lot's price per kg");
+    var iceRow = Row(m, w, two, B, "Ore/Ice");
+    Check(
+        iceRow is { Ask: 0, Bid: 0, LotAsk: 10, LotBid: 9 },
+        $"ice: lots only, 10 / 9 SC: {iceRow}"
+    );
+    // 1.4 SC a kg: 1 SC a kg rounded, 1,428 / 1,372 SC a lot. Selling a lot at 1.372 SC a kg after
+    // buying the kg at 1 SC would pay, so the lot buys under 1 SC a kg.
+    var odd = Row(m, w, two, B, "Ore/Odd");
+    Check(
+        odd is { Ask: 1_000, Bid: 0, LotAsk: 1_428, LotBid: 999 },
+        $"no row buys at what the other sells for: {odd}"
+    );
+    Check(
+        StoreRow.DecodeAll("Ingot/Iron\t10000\t5\t9000\t7").Single()
+            == new StoreRow(Iron, 10_000, 5, 9_000, 7),
+        "rows from before the lots"
+    );
+
     var tax = new MarketSettings { DriftKg = 0, TaxPercent = 6 };
     Check(m.OctAsk(w, tax, B, Motor) == 106_000, "the tax is a setting");
     var old = new MarketSettings
@@ -466,6 +502,7 @@ sealed class FakeWorld : IMarketWorld
         ["Ingot/Gold"] = (1, false, 0),
         ["Ore/Grit"] = (1, false, 400),
         ["Ore/Ice"] = (1, false, 10),
+        ["Ore/Odd"] = (1, false, 1_400),
         ["Component/ZoneChip"] = (0.25, true, 0),
     };
 
