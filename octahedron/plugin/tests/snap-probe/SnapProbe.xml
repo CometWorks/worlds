@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>snap-probe</Id>
+    <GroupId>snap-probe</GroupId>
+    <RepoId>local/snap-probe</RepoId>
+
+    <FriendlyName>Snap Probe</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Test only: logs the local character's position jumps and prediction state</Tooltip>
+    <Description>Test only. Writes the local character's per-frame position jumps, client
+        prediction flags and parent changes to snap-probe.csv in the game's user data folder.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>
