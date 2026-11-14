@@ -118,6 +118,7 @@ namespace OctahedronMod
         readonly List<Contact> contacts = new List<Contact>();
         readonly List<Contact> listed = new List<Contact>();
         readonly List<Contact> gates = new List<Contact>();
+        readonly List<Contact> table = new List<Contact>();
 
         // The slot of each listed contact, by its largest grid's id: its relation, shade and shape,
         // as relation * Slots + shade * ShapeCount + shape; and how many listed contacts use each
@@ -538,13 +539,26 @@ namespace OctahedronMod
                     size
                 );
 
-            // The nearest gates in a table below the map, row by row
+            // The nearest gates in a table below the map, laid out as their markers are (SE-1518):
+            // the top row has the highest ones on the map, each row goes left to right
+            table.Clear();
+            for (var i = 0; i < gates.Count && i < GateRows * GateColumns; i++)
+                table.Add(gates[i]);
+            table.Sort((a, b) => Up(b).CompareTo(Up(a)));
+            // The lowest of the top row
+            var cut = table.Count > 0 ? Up(table[Math.Min(table.Count, GateColumns) - 1]) : 0;
+            table.Sort(
+                (a, b) =>
+                    Up(a) >= cut != Up(b) >= cut
+                        ? (Up(a) >= cut ? -1 : 1)
+                        : a.Local.X.CompareTo(b.Local.X)
+            );
             var cell = mapWidth / GateColumns;
             var gateTop = area.Y - GateRows * row - 8 * scale;
-            for (var i = 0; i < gates.Count && i < GateRows * GateColumns; i++)
+            for (var i = 0; i < table.Count; i++)
                 Row(
                     frame,
-                    gates[i],
+                    table[i],
                     origin
                         + new Vector2(
                             listWidth + 16 * scale + i % GateColumns * cell,
@@ -555,6 +569,9 @@ namespace OctahedronMod
                     Gate
                 );
         }
+
+        // How high a contact's marker is on the map, per radius
+        static double Up(Contact c) => c.Local.Y * Tilt + c.Local.Z * Height;
 
         // The stalk from the contact's foot on the deck plane to where its marker goes, dim in
         // its color

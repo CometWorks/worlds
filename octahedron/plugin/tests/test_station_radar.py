@@ -19,7 +19,7 @@ contacts on the left: hostile, friendly, then neutral, each by distance, with ".
 rest. Each listed ship has a shape in its relation's color (SE-1518), drawn as its marker and in
 front of its row, different from the other ships of its side while the 15 shapes last, and keeps
 it while the drifting probe changes the order. The map is on the right. The gates
-(the station's lane computers) are in a table of up to 2 rows and 3 columns below it, in cyan
+(the station's lane computers) are in a table of up to 2 rows and 3 columns below it, laid out as their markers on the map, in cyan
 blue, by where they lead: the station at the other end, or Earth for a pole. Before: only reports what Arthur's radar draws, for comparison.
 
     OCT_TASK=SE-1380 OCT_WORLD_SOURCE=<world built from main with --octahedron-mod 3833786664> \\
@@ -643,9 +643,30 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         sorted(r[3] for r in gates) == sorted(s["gates"])[:6],
         f"{station}: the gates are listed by where they lead",
     )
+    # The map draws the gates' markers nearest first, so the n-th marker is the n-th nearest
+    # gate. The table lays them out as on the map (SE-1518): the top row has the highest
+    # markers, each row goes left to right.
+    spots = [
+        g[0]["position"]
+        for g in markers
+        if g[0]["data"] == "CircleHollow" and color_side(g[0]["color"]) == "gate"
+    ][: len(gates)]
+    by_height = sorted(range(len(spots)), key=lambda j: spots[j][1])
+    layout = [
+        j
+        for part in (by_height[:3], by_height[3:])
+        for j in sorted(part, key=lambda j: spots[j][0])
+    ]
+    nearest = sorted(r[2] for r in gates)
+    print(
+        f"  {station}: gate markers (x, y) nearest first "
+        + ", ".join(f"({x:.0f}, {y:.0f})" for x, y in spots),
+        flush=True,
+    )
     check(
-        all(a[2] <= b[2] for a, b in zip(gates, gates[1:])),
-        f"{station}: the gates are sorted by distance, row by row",
+        len(spots) == len(gates)
+        and [r[2] for r in gates] == [nearest[j] for j in layout],
+        f"{station}: the gate table is laid out as the gates' markers on the map",
     )
     check(
         len({round(r[1]) for r in gates}) <= 2
