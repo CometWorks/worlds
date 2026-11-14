@@ -20,7 +20,7 @@ from pathlib import Path
 os.environ.setdefault("OCT_TASK", "SE-1527-live")
 
 import rig  # noqa: E402
-from snapback import PROBE, RESULTS, fly_jiggle, fly_wander, summarize  # noqa: E402
+from snapback import RESULTS, client_plugins, fly_bounce, fly_jiggle, fly_wander, summarize  # noqa: E402
 
 GATEWAY = os.environ.get("LIVE_GATEWAY", "192.168.1.80:27116")
 WORKSHOP = Path(os.environ.get("LIVE_WORKSHOP", "/mnt/data/workshop/content/244850"))
@@ -40,7 +40,7 @@ def main(label: str, minutes: float) -> int:
     rig.stop_client()
     probe_csv = rig.APPDATA / "snap-probe.csv"
     probe_csv.unlink(missing_ok=True)
-    rig.prepare_client([PROBE])
+    rig.prepare_client(client_plugins())
     link_mods()
     rig._start(
         [
@@ -58,10 +58,7 @@ def main(label: str, minutes: float) -> int:
         rig.wait_world(remote, 1800)
         c = rig.ensure_character(remote, 600)
         print(f"spawned at {[round(v, 1) for v in c['position']]} state {c.get('state')}", flush=True)
-        if not remote.get_character().get("jetpack"):
-            remote.key("X")
-            time.sleep(1)
-        (fly_wander if os.environ.get("SNAP_MODE") == "wander" else fly_jiggle)(remote, minutes)
+        {"wander": fly_wander, "bounce": fly_bounce}.get(os.environ.get("SNAP_MODE"), fly_jiggle)(remote, minutes)
     finally:
         try:
             remote.exit_game(force=True)

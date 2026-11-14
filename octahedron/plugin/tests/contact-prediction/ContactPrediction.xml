@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<PluginData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="GitHubPlugin">
+
+    <Id>contact-prediction</Id>
+    <GroupId>contact-prediction</GroupId>
+    <RepoId>local/contact-prediction</RepoId>
+
+    <FriendlyName>Contact Prediction</FriendlyName>
+    <Author>Viktor</Author>
+
+    <Tooltip>Prototype: keeps client prediction of the character on through contact with a grid at rest</Tooltip>
+    <Description>Prototype for SE-1527. The game turns client prediction of the local character off for 10 s
+        whenever its capsule overlaps a grid. This keeps it on when every overlapped grid is static or at rest.
+    </Description>
+
+    <Runtimes>CoreCLR</Runtimes>
+
+    <Hidden>true</Hidden>
+
+    <Commit>TODO</Commit>
+
+</PluginData>

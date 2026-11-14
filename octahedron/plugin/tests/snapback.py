@@ -21,6 +21,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROBE = ("snap-probe", HERE / "snap-probe", "SnapProbe.xml", "snap-probe")
+FIX = ("contact-prediction", HERE / "contact-prediction", "ContactPrediction.xml", "contact-prediction")
+
+
+def client_plugins():
+    """The probe, with SNAP_FIX=1 the prototype fix, with SNAP_FIX=bugfixes the Bugfixes plugin
+    from OCT_BUGFIXES_REPO"""
+    fix = os.environ.get("SNAP_FIX")
+    if fix == "bugfixes":
+        return [PROBE, ("bugfixes", Path(os.environ["OCT_BUGFIXES_REPO"]), "BugfixesClient.xml", "bugfixes")]
+    return [PROBE, FIX] if fix == "1" else [PROBE]
 RESULTS = Path(os.environ.get("SNAP_RESULTS", HERE / "snap-results"))
 # (unused) One round of the pattern: (keys held, seconds). Dampeners stay on, so each leg stops on its own.
 PATTERN = [
@@ -88,6 +98,23 @@ def dot(a, b):
     return sum(a[i] * b[i] for i in range(3))
 
 
+def ensure_jetpack(remote) -> None:
+    """Closes the server's message of the day, which takes the keys while it is open, and
+    switches the jetpack on"""
+    for _ in range(5):
+        screens = remote.list_screens()
+        motd = [i for i, screen in enumerate(screens) if "MotD" in screen.get("type", "")]
+        if motd:
+            remote.control_click(text="Continue", screen=motd[0])
+            time.sleep(1.5)
+            continue
+        if remote.get_character().get("jetpack"):
+            return
+        remote.key("X")
+        time.sleep(2)
+    raise RuntimeError("The jetpack did not switch on")
+
+
 def goto(remote, target, timeout: float = 20.0) -> bool:
     """Holds the jetpack keys toward target along the character's own axes until within 1.5 m,
     as a player flying by keyboard would"""
@@ -122,6 +149,7 @@ def waypoints(center, points):
 
 
 def fly_waypoints(remote, center, points, minutes: float) -> None:
+    ensure_jetpack(remote)
     mark = time.monotonic()
     legs = done = 0
     route = waypoints(center, points)
@@ -159,6 +187,7 @@ def deck(station: str):
 def fly_jiggle(remote, minutes: float, tap: float = 0.4, rest: float = 0.8) -> None:
     """Short taps along each of the character's axes and back, in place: a few m/s, a meter or two
     of travel, no walls. Dampeners stop each tap. Back to the start when it drifted over 1.5 m."""
+    ensure_jetpack(remote)
     c = remote.get_character()
     home = vec(c["position"], c["up"], 1.0)
     goto(remote, home, 6)
@@ -175,9 +204,31 @@ def fly_jiggle(remote, minutes: float, tap: float = 0.4, rest: float = 0.8) -> N
     print(f"{rounds} rounds", flush=True)
 
 
+def fly_bounce(remote, minutes: float) -> None:
+    """Down onto the floor under the character and back up, over and over: the same contact with a
+    grid every round, at a few m/s"""
+    ensure_jetpack(remote)
+    c = remote.get_character()
+    home = vec(c["position"], c["up"], 1.5)
+    goto(remote, home, 6)
+    mark = time.monotonic()
+    rounds = 0
+    while time.monotonic() - mark < minutes * 60:
+        for key, hold, rest in (("C", 0.8, 0.5), ("Space", 0.5, 0.7), ("W", 0.3, 0.5), ("S", 0.3, 0.5)):
+            remote.set_input_state(keys=[key])
+            time.sleep(hold)
+            remote.clear_input_state()
+            time.sleep(rest)
+        rounds += 1
+        if rounds % 5 == 0:
+            goto(remote, home, 6)
+    print(f"{rounds} rounds", flush=True)
+
+
 def fly_wander(remote, minutes: float, radius: float = 8.0) -> None:
     """Legs out from where the character is and back, 1 m above it, in 8 directions on its own
     floor level. A leg that a wall blocks ends after 6 s."""
+    ensure_jetpack(remote)
     c = remote.get_character()
     pos, fwd, up = c["position"], c["forward"], c["up"]
     right = [fwd[1] * up[2] - fwd[2] * up[1], fwd[2] * up[0] - fwd[0] * up[2], fwd[0] * up[1] - fwd[1] * up[0]]
@@ -198,15 +249,15 @@ def fly_wander(remote, minutes: float, radius: float = 8.0) -> None:
 
 
 def fly(remote, start, center, points, minutes: float) -> None:
-    if not remote.get_character().get("jetpack"):
-        remote.key("X")
-        time.sleep(1)
+    ensure_jetpack(remote)
     remote.character_teleport(*start)
     time.sleep(13)  # the teleport's own 10 s without prediction
     if os.environ.get("SNAP_MODE") == "waypoints":
         fly_waypoints(remote, center, points, minutes)
     elif os.environ.get("SNAP_MODE") == "wander":
         fly_wander(remote, minutes)
+    elif os.environ.get("SNAP_MODE") == "bounce":
+        fly_bounce(remote, minutes)
     else:
         fly_jiggle(remote, minutes)
 
@@ -232,7 +283,7 @@ def run(label: str, minutes: float, station: str) -> int:
     print(f"{station} deck: {len(points)} connectors, start {[round(v, 1) for v in start]}", flush=True)
     try:
         rig.start_server()
-        remote = rig.start_client(extra_dev_folders=[PROBE])
+        remote = rig.start_client(extra_dev_folders=client_plugins())
         rig.ensure_character(remote)
         fly(remote, start, center, points, minutes)
     finally:
