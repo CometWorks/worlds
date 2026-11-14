@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Sandbox.Game.GameSystems.TextSurfaceScripts;
 using Sandbox.ModAPI;
 using VRage.Game;
@@ -13,17 +14,19 @@ namespace OctahedronMod
 {
     // The radar on the stations' big map LCD (SE-1380): the grids within Range of the screen, one
     // marker per logical group (connectors, rotors, pistons), above or below the station's deck
-    // plane on a stalk, and the nearest of them listed below. It leaves out the station's own installations: a group with a static grid
-    // that the screen's owner or nobody owns, like the shipyard and the lane computers. Players'
-    // and NPC ships, and players' bases, show.
+    // plane on a stalk. The contact count is in the top right corner, and the nearest 30 are
+    // listed by distance in a column on each side, left first (SE-1502). It leaves out the
+    // station's own installations: a group with a static grid that the screen's owner or nobody
+    // owns, like the shipyard and the lane computers. Players' and NPC ships, and players' bases,
+    // show.
     [MyTextSurfaceScript("OctahedronRadar", "Octahedron Radar")]
     public class StationRadar : MyTSSCommon
     {
         // 2 km since 2026-11-13; Arthur's Lcd Mod radar the screen ran before was set to 6 km
         const double Range = 2000;
         static readonly double[] Rings = { 500, 1000, 2000 };
-        const int MaxContacts = 40;
-        const int MaxListed = 4;
+        const int MaxMarkers = 40;
+        const int Rows = 15;
 
         // How flat the deck plane looks, and how far up a contact's height goes, per radius
         const float Tilt = 0.45f;
@@ -35,6 +38,8 @@ namespace OctahedronMod
         readonly List<IMyCubeGrid> group = new List<IMyCubeGrid>();
         readonly HashSet<long> seen = new HashSet<long>();
         readonly List<Contact> contacts = new List<Contact>();
+        readonly StringBuilder measured = new StringBuilder();
+        readonly Dictionary<string, string> clipped = new Dictionary<string, string>();
 
         struct Contact
         {
@@ -123,8 +128,6 @@ namespace OctahedronMod
             }
 
             contacts.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-            if (contacts.Count > MaxContacts)
-                contacts.RemoveRange(MaxContacts, contacts.Count - MaxContacts);
         }
 
         // A station installation: a static grid of the station's owner or of nobody
@@ -170,9 +173,9 @@ namespace OctahedronMod
                 )
             );
 
-            // The deck plane's ellipse in the upper part, with room for heights; the list below
-            var radius = Math.Min(area.X * 0.4f, area.Y * 0.24f / Tilt);
-            var middle = origin + new Vector2(area.X / 2f, area.Y * 0.4f);
+            // The deck plane's ellipse in the middle, with room for heights; a list column each side
+            var radius = Math.Min(area.X * 0.14f, area.Y * 0.36f);
+            var middle = origin + new Vector2(area.X / 2f, area.Y * 0.5f);
 
             // Range rings at 500 m, 1 km and 2 km
             foreach (var ring in Rings)
@@ -225,10 +228,18 @@ namespace OctahedronMod
                 m_foregroundColor,
                 1.2f * scale
             );
+            Text(
+                frame,
+                $"Contacts: {contacts.Count}",
+                origin + new Vector2(area.X - 16 * scale, 14 * scale),
+                m_foregroundColor,
+                0.9f * scale,
+                TextAlignment.RIGHT
+            );
 
             // Farthest first, so the near ones draw on top
             var k = (float)(radius / Range);
-            for (var i = contacts.Count - 1; i >= 0; i--)
+            for (var i = Math.Min(contacts.Count, MaxMarkers) - 1; i >= 0; i--)
             {
                 var c = contacts[i];
                 var foot = middle + new Vector2((float)c.Local.X * k, -(float)c.Local.Y * k * Tilt);
@@ -254,33 +265,61 @@ namespace OctahedronMod
                 );
             }
 
-            var line = origin + new Vector2(16 * scale, area.Y * 0.66f);
-            Text(
-                frame,
-                contacts.Count == 0 ? "No contacts" : $"Contacts: {contacts.Count}",
-                line,
-                m_foregroundColor,
-                0.9f * scale
-            );
-            for (var i = 0; i < contacts.Count && i < MaxListed; i++)
+            // Nearest first: down the left column, then down the right one; the rest is left out
+            var top = 60 * scale;
+            var row = (area.Y - top - 8 * scale) / Rows;
+            var size = Math.Min(0.7f * scale, row / 37f);
+            var width = middle.X - origin.X - radius - 32 * scale;
+            for (var i = 0; i < contacts.Count && i < 2 * Rows; i++)
             {
                 var c = contacts[i];
-                line += new Vector2(0, 30 * scale);
+                var x = i < Rows ? 16 * scale : area.X - 16 * scale - width;
+                var at = origin + new Vector2(x, top + (i % Rows) * row);
+                var distance =
+                    c.Distance < 1000 ? $"{c.Distance:0} m" : $"{c.Distance / 1000:0.00} km";
+                Text(frame, distance, at, c.Color, size);
+                var indent = Measure("0.00 km ", size);
                 Text(
                     frame,
-                    $"{c.Distance / 1000:0.00} km  {Clip(c.Name)}",
-                    line,
+                    Clip(c.Name, width - indent, size),
+                    at + new Vector2(indent, 0),
                     c.Color,
-                    0.8f * scale
+                    size
                 );
             }
         }
 
-        static string Clip(string name) => name.Length > 32 ? name.Substring(0, 31) + "…" : name;
-
-        static void Text(MySpriteDrawFrame frame, string text, Vector2 at, Color color, float size)
+        float Measure(string text, float size)
         {
-            var sprite = MySprite.CreateText(text, "White", color, size, TextAlignment.LEFT);
+            measured.Clear().Append(text);
+            return m_surface.MeasureStringInPixels(measured, "White", size).X;
+        }
+
+        // The name cut to fit the column; the column's width stays, so each name is cut once
+        string Clip(string name, float width, float size)
+        {
+            string fit;
+            if (clipped.TryGetValue(name, out fit))
+                return fit;
+            fit = name;
+            for (var n = name.Length; n > 0 && Measure(fit, size) > width; n--)
+                fit = name.Substring(0, n - 1) + "…";
+            if (clipped.Count > 1000)
+                clipped.Clear();
+            clipped[name] = fit;
+            return fit;
+        }
+
+        static void Text(
+            MySpriteDrawFrame frame,
+            string text,
+            Vector2 at,
+            Color color,
+            float size,
+            TextAlignment alignment = TextAlignment.LEFT
+        )
+        {
+            var sprite = MySprite.CreateText(text, "White", color, size, alignment);
             sprite.Position = at;
             frame.Add(sprite);
         }

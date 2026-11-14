@@ -7,8 +7,13 @@ copy's config, whose station patches switch them to OctahedronRadar on load; wit
 the config without them. Every station gets a probe ship 600 m from its LCD. The client visits
 each station's LCD, reads the sprites it rendered and saves a screenshot.
 
-After: every LCD runs OctahedronRadar, lists its probe ship and no lane computer ("TL ..."),
-shipyard or shipyard arm. Before: only reports what Arthur's radar draws, for comparison.
+One station (RADAR_CROWD, default North) gets 36 probe ships 300-1875 m away instead, for the
+contact count and the two list columns of SE-1502; the others get 3 each.
+
+After: every LCD runs OctahedronRadar, lists its probe ships and no lane computer ("TL ..."),
+shipyard or shipyard arm, has the contact count in the top right corner, and lists at most 15
+contacts per column by distance, nearest first, the left column first: the 30 nearest of the 36
+on the crowded station. Before: only reports what Arthur's radar draws, for comparison.
 
     OCT_TASK=SE-1380 OCT_WORLD_SOURCE=<world built from main with --octahedron-mod 3833786664> \\
         uv run --no-project --with httpx python tests/test_station_radar.py after|before [OUT]
@@ -49,6 +54,10 @@ LCD_NAME = "LCD Panel - Station Lounge big map"
 # Station infrastructure the radar must leave out, by grid name
 # Which side of the screen the viewer stands on, along the station grid's forward
 SIDE = float(os.environ.get("RADAR_SIDE", "-1"))
+CROWD = os.environ.get("RADAR_CROWD", "North")
+CROWD_SIZE = 36
+DISTANCE = re.compile(r"^(\d+) m$|^(\d+\.\d\d) km$")
+COUNT = re.compile(r"^Contacts: (\d+)$")
 HIDDEN = re.compile(r"^TL \d|Shipyard|^Subgrid|Alien Shipyard arm")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
 
@@ -110,15 +119,25 @@ def stations(sector: Path) -> dict[str, dict]:
     return found
 
 
+def probe_spots(station: str, s: dict) -> list[tuple[str, tuple]]:
+    """Probe ship names and positions: numbered nearest first, spread around the screen"""
+    if station == CROWD:
+        rings = [(300 + 45 * i, 0.9 * i, 150 * math.sin(i)) for i in range(CROWD_SIZE)]
+    else:
+        rings = [(d, a, 150) for d, a in ((600, 0.0), (900, 2.1), (1300, 4.2))]
+    spots = []
+    for i, (d, a, h) in enumerate(rings, 1):
+        at = add(s["lcd"], s["right"], d * math.cos(a))
+        at = add(at, s["forward"], d * math.sin(a))
+        spots.append((f"Radar Probe {station} {i:02}", add(at, s["up"], h)))
+    return spots
+
+
 def prepare(found) -> None:
     probes = [
-        rig.grid(
-            f"Radar Probe {name.split()[0]}",
-            None,
-            rig.small_ship_blocks(),
-            position=add(add(s["lcd"], s["right"], 600), s["up"], 150),
-        )
+        rig.grid(probe, None, rig.small_ship_blocks(), position=at)
         for name, s in found.items()
+        for probe, at in probe_spots(name.split()[0], s)
     ]
     rig.prepare_world(extra_grids=probes)
     mods = rig.mod_items(
@@ -191,11 +210,8 @@ def visit(remote, name: str, s: dict) -> None:
             break
     time.sleep(15 if MODE == "before" else 5)
     surface = remote.get_surface(grid_id, s["cell"])
-    texts = [
-        sp.get("data", "")
-        for sp in surface.get("sprites", [])
-        if sp.get("type") == "TEXT"
-    ]
+    text_sprites = [sp for sp in surface.get("sprites", []) if sp.get("type") == "TEXT"]
+    texts = [sp.get("data", "") for sp in text_sprites]
     (OUT / f"{station}.json").write_text(json.dumps(surface, indent=1))
     try:
         remote.character_look_at(*lcd, tolerance=2)
@@ -236,6 +252,74 @@ def visit(remote, name: str, s: dict) -> None:
         not any(HIDDEN.search(t) for t in texts),
         f"{station}: no lane computer or shipyard shows",
     )
+    check_list(station, s, text_sprites)
+
+
+def check_list(station: str, s: dict, sprites: list[dict]) -> None:
+    """The count in the top right corner and the two columns sorted by distance"""
+    counts = [sp for sp in sprites if COUNT.match(sp.get("data") or "")]
+    check(len(counts) == 1, f"{station}: one contact count")
+    if not counts:
+        return
+    count_sprite = counts[0]
+    count = int(COUNT.match(count_sprite["data"]).group(1))
+    # A row is a distance and the name right of it, at the same height
+    rows = []
+    for sp in sprites:
+        m = DISTANCE.match(sp.get("data") or "")
+        if not m:
+            continue
+        x, y = sp["position"]
+        meters = float(m.group(1)) if m.group(1) else 1000 * float(m.group(2))
+        name = min(
+            (
+                o
+                for o in sprites
+                if abs(o["position"][1] - y) < 1 and 0 < o["position"][0] - x < 200
+            ),
+            key=lambda o: o["position"][0],
+            default={"data": ""},
+        )["data"]
+        rows.append((x, y, meters, name))
+    middle = (min(r[0] for r in rows) + max(r[0] for r in rows)) / 2 if rows else 0
+    left = sorted((r for r in rows if r[0] <= middle), key=lambda r: r[1])
+    right = sorted((r for r in rows if r[0] > middle), key=lambda r: r[1])
+    listed = left + right
+    probes = len(probe_spots(station, s))
+    print(
+        f"  {station}: count {count}, left {len(left)}, right {len(right)}: "
+        + ", ".join(f"{r[2]:.0f} m {r[3]}" for r in listed),
+        flush=True,
+    )
+    check(count >= probes, f"{station}: the count {count} has the {probes} probes")
+    check(
+        len(listed) == min(count, 30),
+        f"{station}: lists min(count, 30) = {min(count, 30)} contacts",
+    )
+    check(
+        len(left) == min(len(listed), 15) and len(right) == len(listed) - len(left),
+        f"{station}: up to 15 in the left column, the rest in the right one",
+    )
+    check(
+        all(a[2] <= b[2] for a, b in zip(listed, listed[1:])),
+        f"{station}: sorted by distance, nearest first, left column first",
+    )
+    check(
+        all(count_sprite["position"][1] < r[1] for r in listed)
+        and all(count_sprite["position"][0] > r[0] for r in listed),
+        f"{station}: the count is in the top right corner, above and right of the list",
+    )
+    if count == probes:
+        wanted = [name for name, _ in probe_spots(station, s)][:30]
+        # A long name ends in "…" where the column cuts it
+        check(
+            len(listed) == len(wanted)
+            and all(
+                n == w or (n.endswith("…") and w.startswith(n[:-1]))
+                for n, w in zip((r[3] for r in listed), wanted)
+            ),
+            f"{station}: the nearest {len(wanted)} probes are listed in order",
+        )
 
 
 def main() -> int:
