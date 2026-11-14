@@ -262,7 +262,8 @@ again every 5 s, six times at most.
 
 After a wipe the stations are built from the new blueprint, and the staged pairs
 rebuild their blocks to what they already are. Entries can be dropped from the list
-once every kept world they were for has been wiped.
+once every kept world they were for has been wiped, or has applied them: a station's
+ledger keeps the ids, and the plugin never looks at an applied entry again.
 
 A patch waits while something is where it builds (SE-1449). A block of another grid in
 a cell it builds or builds again makes it log `WAITING <id> on <grid>: <ship> is where it
@@ -273,8 +274,9 @@ whether its player is online or not. A grid's patches also wait for its staged g
 moves.
 
 The Octahedron Large Station (SE-1406) replaced every station of the live world this
-way: the staged pairs `2026-11-14-large-station-*` rebuild the old station in place,
-about 4,800 ops each. The grid keeps its entity id, name, owner, storage and ledger, so
+way, in the 2026-11-14 keep-world deploy: the staged pairs `2026-11-14-large-station-*`
+rebuilt the old station in place, about 4,800 ops each. They were dropped from the list
+once applied (SE-1496); a wiped world gets the Large Station from the build. The grid keeps its entity id, name, owner, storage and ledger, so
 the faction station entry, its Store offers, contracts, safe zone and GPS stay as they
 were. A block at the same cell and of the same type keeps its inventory. The game looks
 for split grids only after the frame, so the whole swap runs in one call and only the
@@ -337,8 +339,8 @@ built now has it, once (SE-1369). Neither a station patch, which changes blocks,
 world patch, which adds grids, can do that. The first ones turn the shipyards of Alpha,
 Gamma, North and South Station about their center line, so a bottom beam no longer
 hides the middle of the build space from the lobby. `2026-11-14-large-station-moon-move`
-moves Moon Station 20 m further from its shipyard, for the Large Station's longer
-docking connectors (SE-1449). A station's safe zone stays where it is. Its entry's
+moved Moon Station 20 m further from its shipyard, for the Large Station's longer
+docking connectors (SE-1449), and was dropped once applied (SE-1496). A station's safe zone stays where it is. Its entry's
 `StationPosition` is where the station's faction station entry goes, which the game makes
 the station's GPS from: every process, the World Authority too, sets its copy there
 whenever it differs and logs `Grid move STATION <id>`.

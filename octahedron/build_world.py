@@ -222,7 +222,7 @@ SAFE_ZONE_MARGIN = 10.0
 # station's (right, up, forward), from the safe zone's center: the station's block bounds center,
 # and the shipyard's, with its forward and up. Their zone is larger.
 # Moved 20 m further from the shipyard for the Octahedron Large Station's longer docking connectors (SE-1449); a kept
-# world's station moves there by the GridMoves entry 2026-11-14-large-station-moon-move
+# world's station was moved there by the GridMoves entry 2026-11-14-large-station-moon-move, dropped once applied (SE-1496)
 MOON_STATION_PLACE = (-58.1622, -112.3188, -88.9359)
 MOON_SHIPYARD_PLACE = (
     (4.5376, 0.0001, -2.6406),
