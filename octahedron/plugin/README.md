@@ -460,8 +460,11 @@ pirate's, and after `!oct reload` with the options off the same deposit and grin
 ### OCT reputation
 
 With `ReputationEnabled` on, every OCT member has a reputation, counted in SC
-([SE-1283](https://tasks.cometworks.se/tasks/2199)). It starts at `ReputationStart` (10,000) and
-`!oct rep` shows it; `!oct rep add <amount> [player name]` (admin) changes it.
+([SE-1283](https://tasks.cometworks.se/tasks/2199)). It starts at `ReputationStart` (200,000) and
+`!oct rep` shows it; `!oct rep add <amount> [player name]` (admin) changes it. A new
+`ReputationStart` moves every member's reputation by as much, so each keeps what they gained or
+lost since they started ([SE-1495](https://tasks.cometworks.se/tasks/2436)). Saves from before
+the start was kept count from 10,000.
 
 - **Down:** grinding, shooting, blowing up or ramming a grid that another member owns most of
   costs the value lost: the block's components at their reference prices (`MarketPrices`, else
@@ -478,11 +481,11 @@ With `ReputationEnabled` on, every OCT member has a reputation, counted in SC
   the faster of the two, does to other members' grids until `ReputationRamGapSeconds` (10) pass
   without one; its pilot pays. The trader bots (`ShipyardBotSteamIds`) have no reputation.
 
-Below zero the member is told. Below `ReputationKickBelow` (-10,000) a countdown of
+Below zero the member is told. Below `ReputationKickBelow` (-200,000) a countdown of
 `ReputationKickAfterSeconds` (an hour) starts, with a warning at its start and at
 `ReputationWarnSeconds` (30, 10 and 5 minutes) before its end. Back above, it stops and starts
 over in full next time. At its end the member is removed from OCT and told why; their reputation
-stays as it was. The countdown counts the time the server runs, whether the member is online or not.
+stays as it was. OCT's leaders (`OctLeaders`) are never removed: no countdown runs for them. The countdown counts the time the server runs, whether the member is online or not.
 
 The reputations live where the faction and the bank accounts do: on a plain server, or on the
 World Authority of a cluster, in the world variable `Octahedron.Reputation`, saved with them. The

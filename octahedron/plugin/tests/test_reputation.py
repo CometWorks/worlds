@@ -438,8 +438,8 @@ SHIPPED = {
     "OctNoDeposits": "false",
     "OctGridsNoGrinding": "true",
     "OctProtectedSteamIds": "",
-    "ReputationStart": "10000",
-    "ReputationKickBelow": "-10000",
+    "ReputationStart": "200000",
+    "ReputationKickBelow": "-200000",
 }
 
 
@@ -471,6 +471,9 @@ def config() -> str:
         "ReputationWarnSeconds": WARN,
         "ReputationRamGapSeconds": str(RAM_GAP),
         "ReputationRamGraceSeconds": "3600",
+        # The checks count from the old start and line (SE-1495 moved both to 200,000)
+        "ReputationStart": "10000",
+        "ReputationKickBelow": "-10000",
     }
     for option, value in options.items():
         text, count = re.subn(

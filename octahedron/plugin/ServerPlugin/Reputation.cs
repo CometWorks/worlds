@@ -26,7 +26,8 @@ using VRage.Utils;
 
 namespace ServerPlugin;
 
-// OCT members have a reputation, in SC (SE-1283). It starts at ReputationStart. Grinding, shooting,
+// OCT members have a reputation, in SC (SE-1283). It starts at ReputationStart; a new start moves
+// everyone's by as much (SE-1495). Grinding, shooting,
 // blowing up or ramming a grid that another member owns most of lowers it by the value lost: the
 // block's components at Market.ReferencePrice, the prices the store and the market start from,
 // times the share of the block's integrity lost. Paying into OCT's account raises it by the SC
@@ -634,6 +635,7 @@ internal static class Reputation
         s.KickAfterSeconds = Config.ReputationKickAfterSeconds;
         s.WarnSeconds = ReputationSettings.ParseWarnings(Config.ReputationWarnSeconds);
         s.RamGraceSeconds = Config.ReputationRamGraceSeconds;
+        Book.Rebase();
     }
 
     private static readonly List<(long Identity, string Text)> tell = [];

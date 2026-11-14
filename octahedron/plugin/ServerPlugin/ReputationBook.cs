@@ -26,8 +26,8 @@ internal enum ReputationKind
 
 internal sealed class ReputationSettings
 {
-    public long Start = 10_000;
-    public long KickBelow = -10_000;
+    public long Start = 200_000;
+    public long KickBelow = -200_000;
     public double KickAfterSeconds = 3600;
 
     /// <summary>Seconds left at which the member is warned again, largest first</summary>
@@ -78,6 +78,10 @@ internal sealed class ReputationBook
 
     private readonly Dictionary<long, Entry> entries = new();
 
+    // The start the reputations were counted from: saves from before it was kept used 10,000
+    private const long OldStart = 10_000;
+    private long start = OldStart;
+
     public ReputationSettings Settings = new();
 
     /// <summary>A change the save should keep</summary>
@@ -97,6 +101,24 @@ internal sealed class ReputationBook
         if (!entries.TryGetValue(identity, out var e))
             entries[identity] = e = new Entry { Value = Settings.Start };
         return e;
+    }
+
+    /// <summary>
+    /// A new Settings.Start moves everyone's reputation by as much (SE-1495): a member keeps what
+    /// they gained or lost since they started, from the new start.
+    /// </summary>
+    public void Rebase()
+    {
+        if (Settings.Start == start)
+            return;
+        var by = Settings.Start - start;
+        foreach (var e in entries.Values)
+        {
+            e.Value += by;
+            e.Negative = e.Value < 0;
+        }
+        start = Settings.Start;
+        Dirty = true;
     }
 
     /// <summary>An admin's change, which warns nobody</summary>
@@ -259,22 +281,26 @@ internal sealed class ReputationBook
             ? $"{Math.Round(seconds / 60):0} minutes"
             : $"{Math.Round(seconds):0} seconds";
 
-    // --- the save: one line per member ---
+    // --- the save: the start, then one line per member ---
+
+    private const string StartLine = "start";
 
     public string Serialize() =>
         string.Join(
             "\n",
-            entries.Select(p =>
-                string.Join(
-                    " ",
-                    p.Key.ToString(CultureInfo.InvariantCulture),
-                    p.Value.Value.ToString(CultureInfo.InvariantCulture),
-                    p.Value.Below.ToString("R", CultureInfo.InvariantCulture),
-                    p.Value.Warned.ToString(CultureInfo.InvariantCulture),
-                    p.Value.Negative ? "1" : "0",
-                    p.Value.FreeRamAt.ToString(CultureInfo.InvariantCulture)
+            entries
+                .Select(p =>
+                    string.Join(
+                        " ",
+                        p.Key.ToString(CultureInfo.InvariantCulture),
+                        p.Value.Value.ToString(CultureInfo.InvariantCulture),
+                        p.Value.Below.ToString("R", CultureInfo.InvariantCulture),
+                        p.Value.Warned.ToString(CultureInfo.InvariantCulture),
+                        p.Value.Negative ? "1" : "0",
+                        p.Value.FreeRamAt.ToString(CultureInfo.InvariantCulture)
+                    )
                 )
-            )
+                .Prepend($"{StartLine} {start.ToString(CultureInfo.InvariantCulture)}")
         );
 
     public static ReputationBook Deserialize(string text)
@@ -283,6 +309,11 @@ internal sealed class ReputationBook
         foreach (var line in (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var f = line.Split(' ');
+            if (f[0] == StartLine)
+            {
+                book.start = long.Parse(f[1], CultureInfo.InvariantCulture);
+                continue;
+            }
             book.entries[long.Parse(f[0], CultureInfo.InvariantCulture)] = new Entry
             {
                 Value = decimal.Parse(f[1], CultureInfo.InvariantCulture),

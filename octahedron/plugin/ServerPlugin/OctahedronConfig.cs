@@ -266,12 +266,15 @@ public class OctahedronConfig : PluginConfig
         set => SetField(ref field, value);
     }
 
-    [LongOption(description: "Reputation every OCT member starts with.", Parent = "faction")]
+    [LongOption(
+        description: "Reputation every OCT member starts with. Changing it moves every member's reputation by as much.",
+        Parent = "faction"
+    )]
     public long ReputationStart
     {
         get;
         set => SetField(ref field, value);
-    } = 10_000;
+    } = 200_000;
 
     [LongOption(
         description: "A member whose reputation stays below this for ReputationKickAfterSeconds is removed from OCT.",
@@ -281,7 +284,7 @@ public class OctahedronConfig : PluginConfig
     {
         get;
         set => SetField(ref field, value);
-    } = -10_000;
+    } = -200_000;
 
     [IntOption(
         1,

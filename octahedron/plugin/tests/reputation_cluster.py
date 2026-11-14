@@ -320,10 +320,14 @@ def main() -> int:
     # A host whose Magnetar never loaded Multigrid Projector gets its build from elsewhere
     wa.MGP_CACHE = Path(os.environ.get("OCT_MGP_CACHE", wa.MGP_CACHE))
     run.world_template = wa.prepare()
-    # The world's config as it is, but for the countdown
+    # The world's config as it is, but for the countdown and the old start and line
     tr.check_shipped_config()
     wa.set_config(
-        ReputationKickAfterSeconds=KICK_SECONDS, ReputationWarnSeconds="30,10"
+        ReputationKickAfterSeconds=KICK_SECONDS,
+        ReputationWarnSeconds="30,10",
+        # The checks count from the old start and line (SE-1495 moved both to 200,000)
+        ReputationStart=10_000,
+        ReputationKickBelow=-10_000,
     )
     # SE-1285: the hulls, their owners in OCT, Essentials and the !claim alias
     sector = rig.WORLD / "SANDBOX_0_0_0_.sbs"
