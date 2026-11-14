@@ -31,10 +31,12 @@ Computers would count; debris is the pieces under two blocks.
   Taken with the player away: fails. Nobody took it: withdrawn.
 - The debris area: its pieces deleted with the player near, done and paid.
 - A taken static wreck stays taken when converted to a ship; deleted, it counts as done.
+- A taken wreck ground down on the spot to its last blocks, fewer than the least blocks of a wreck, with the
+  player there: done and paid, not failed (SE-1555).
 - A node restart keeps the contracts, and so does a graceful cluster stop and warm start, with the player's
   ownership and the memory of the given grid.
 
-Grinding down, repairing a wreck, the seated and claimed rules, the most valuable first and the area geometry are
+The stages of grinding down, repairing a wreck, the seated and claimed rules, the most valuable first and the area geometry are
 checked in tests/contracts/ContractTests.
 
 Takes over an hour, most of it waiting out the 5 minute import grace on grid deletes.
@@ -990,6 +992,37 @@ def run(bench) -> None:
         before,
         paid(api, before, static[3], 360),
         static[3],
+    )
+
+    # SE-1555: ground down on the spot with the player there. Its last 2 of 10 blocks are fewer than the
+    # least blocks of a wreck and a quarter of what was posted: a dead wreck still, so done and paid
+    ground = named(contracts()[0], "Near Wreck", "wreck")[0]
+    before = balances(api)
+    bench.wait_spawned(CLIENT_ID)
+    api.character_teleport(near_wreck[0] + 30, near_wreck[1], near_wreck[2])
+    wait_until(lambda: owner("Near Wreck"), 180, "the near wreck awake")
+    reply = " ".join(command(f"!oct contract accept {ground[0]} {identity}"))
+    check("take the wreck to grind down", "Success" in reply, reply)
+    wait_until(
+        lambda: any(g["entityId"] == GRIDS["Near Wreck"] for g in api.list_grids()),
+        120,
+        "the near wreck in the client's view",
+    )
+    api.set_admin_flag("creativeTools", True)
+    cubes = sorted(api.list_cubes(GRIDS["Near Wreck"])["cubes"], key=lambda c: c["min"])
+    # From the far end: what is left stays in one piece, so the grid keeps its id
+    for cube in reversed(cubes[2:]):
+        api.character_grid_event(GRIDS["Near Wreck"], tuple(cube["min"]), "raze")
+    left = wait_until(
+        lambda: api.list_cubes(GRIDS["Near Wreck"])["total"] <= 2, 60, "2 blocks left"
+    )
+    api.set_admin_flag("creativeTools", False)
+    check("ground down to 2 of its 10 blocks", left and len(cubes) == 10, len(cubes))
+    still_paid(
+        "wreck ground down to its last blocks with the hunter near",
+        before,
+        paid(api, before, ground[3], 360),
+        ground[3],
     )
 
     # --- restarts ---

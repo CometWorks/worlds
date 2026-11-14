@@ -210,12 +210,11 @@ internal static class ContractGrids
         if (!group.Any(g => IsStation(g) || OwnedBy(g, octId) || LaneComputer(g)))
         {
             var abandoned = group.All(g => g.BigOwners.Count == 0) || WreckFaction(grid);
-            if (!big)
-            {
-                if (abandoned)
-                    row.Flags |= ContractGridFlags.Debris;
-            }
-            else
+            if (!big && abandoned)
+                row.Flags |= ContractGridFlags.Debris;
+            // A watched one of any size: a wreck being ground down is as dead under the least
+            // blocks as above it, or its contract fails a few blocks before it is done (SE-1555)
+            if (big || isWatched)
             {
                 var terminals = group.SelectMany(g => g.GetFatBlocks<MyTerminalBlock>()).ToList();
                 if (!terminals.Any(Producing))
