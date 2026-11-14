@@ -83,8 +83,11 @@ List<string> Run(double seconds)
 k.Apply(A, ReputationKind.Damage, -20_001, null, 0);
 var start = Run(1);
 Check(
-    start.Count == 1 && start[0].Contains("60 minutes"),
-    "the countdown starts and is told: " + string.Join("|", start)
+    start.Count == 1
+        && start[0].Contains("-10,001, below -10,000")
+        && start[0].Contains("for 60 minutes")
+        && start[0].EndsWith("to raise it to -10,000 or above."),
+    "the countdown starts and is told the threshold and the time: " + string.Join("|", start)
 );
 Check(k.Left(A) == 3600, "60 minutes left at the start");
 Check(Run(1799).Count == 0, "nothing told 1,801 s before the end");
@@ -127,8 +130,22 @@ Run(1000);
 k.Apply(A, ReputationKind.Deposit, 5_000, null, 0);
 var back = Run(1);
 Check(
-    back.Count == 1 && back[0].Contains("back above") && k.Left(A) == null,
-    "back above is told, the countdown stops"
+    back.SequenceEqual([
+        "Your OCT reputation is back to -5,001, at or above -10,000: you won't be removed from OCT.",
+    ])
+        && k.Left(A) == null,
+    "back up is told with the value, the countdown stops: " + string.Join("|", back)
+);
+Check(Run(1).Count == 0 && Run(5000).Count == 0, "back up is told once, not on every tick");
+k.Apply(A, ReputationKind.Damage, -5_000, null, 0);
+Run(1);
+k.Set(A, -10_000);
+Check(
+    Run(1)
+        .SequenceEqual([
+            "Your OCT reputation is back to -10,000, at or above -10,000: you won't be removed from OCT.",
+        ]),
+    "exactly at the threshold is back up, and an admin's change is told too"
 );
 k.Apply(A, ReputationKind.Damage, -5_000, null, 0);
 Run(1);
@@ -233,7 +250,7 @@ old.Tick(1, _ => true, tell, kick);
 Check(
     kick.Count == 0
         && old.Left(A) == null
-        && tell.Any(t => t.Identity == A && t.Text.Contains("back above")),
+        && tell.Any(t => t.Identity == A && t.Text.Contains("you won't be removed from OCT")),
     "a countdown running from before stops: " + string.Join("|", tell.Select(t => t.Text))
 );
 var saved = old.Serialize();

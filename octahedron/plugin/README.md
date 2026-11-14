@@ -483,8 +483,8 @@ the start was kept count from 10,000.
 
 Below zero the member is told. Below `ReputationKickBelow` (-200,000) a countdown of
 `ReputationKickAfterSeconds` (an hour) starts, with a warning at its start and at
-`ReputationWarnSeconds` (30, 10 and 5 minutes) before its end. Back above, it stops and starts
-over in full next time. At its end the member is removed from OCT and told why; their reputation
+`ReputationWarnSeconds` (30, 10 and 5 minutes) before its end. Back at or above it, the countdown
+stops, the member is told once that they won't be removed, and it starts over in full next time. At its end the member is removed from OCT and told why; their reputation
 stays as it was. OCT's leaders (`OctLeaders`) are never removed: no countdown runs for them. The countdown counts the time the server runs, whether the member is online or not.
 
 The reputations live where the faction and the bank accounts do: on a plain server, or on the

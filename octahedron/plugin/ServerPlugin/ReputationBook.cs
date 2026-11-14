@@ -222,7 +222,8 @@ internal sealed class ReputationBook
                     tell.Add(
                         (
                             identity,
-                            $"Your reputation is back above {Sc(Settings.KickBelow)}: you stay in OCT."
+                            $"Your OCT reputation is back to {Sc(e.Value)}, at or above {Sc(Settings.KickBelow)}: "
+                                + "you won't be removed from OCT."
                         )
                     );
                 continue;
@@ -238,7 +239,7 @@ internal sealed class ReputationBook
                         identity,
                         $"Your reputation in OCT is {Sc(e.Value)}, below {Sc(Settings.KickBelow)}. "
                             + $"If it stays there for {Duration(Settings.KickAfterSeconds)}, you are removed from OCT. "
-                            + "Pay into OCT's account or share your grids with OCT to raise it."
+                            + $"Pay into OCT's account or share your grids with OCT to raise it to {Sc(Settings.KickBelow)} or above."
                     )
                 );
                 continue;

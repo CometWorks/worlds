@@ -290,7 +290,7 @@ public class OctahedronConfig : PluginConfig
         1,
         int.MaxValue,
         "Seconds a member's reputation may stay below ReputationKickBelow before they are removed from OCT. "
-            + "The count runs while the server runs, online or not, and starts over once the reputation is back above.",
+            + "The count runs while the server runs, online or not, and starts over once the reputation is back at or above it; the member is told so.",
         Parent = "faction"
     )]
     public int ReputationKickAfterSeconds
