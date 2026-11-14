@@ -369,6 +369,17 @@ blocks from the OmniArc welder and deconstructor definitions of the Workshop cop
   other shipyards keep OmniArc's tools, and without the option the Moon Shipyard
   does too.
 
+### Store lot items
+
+`octahedron-mod/Data/PhysicalItems_OctahedronLots.sbc` defines an item for each
+item OCT's Stores sell in 1,000 kg lots: "Silicon Ore (1 t)", "Iron Ingot (1 t)" and
+so on, subtype `OctahedronLot_<Type>_<Subtype>` (SE-1497). They only name the rows
+of lots on the Store screen, which takes a row's name, icon and unit from its item;
+the plugin puts them into the rows it sends to the clients. Nobody ever holds one.
+They are hidden components with no blueprint, so they are counted in pieces, one
+per lot. An item added to `MarketLots` needs its entry here too, or its row of lots
+reads in kg like a row of single units.
+
 ### Station radar
 
 The stations' radar (SE-1380) is the `OctahedronRadar` LCD

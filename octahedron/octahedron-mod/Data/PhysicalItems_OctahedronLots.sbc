@@ -1,0 +1,185 @@
+<?xml version="1.0"?>
+<!-- The rows of 1,000 kg lots in OCT's Stores (SE-1497). The Store screen takes a row's name, icon
+     and unit from its item's definition, so the plugin shows a lot row to the clients as one of these
+     items: "Silicon Ore (1 t)", counted in pieces, priced per lot. Nobody ever holds one: the Store
+     trades the real item (StoreLots in the plugin). Not public, no blueprint, in no faction's store. -->
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Components>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ore_Ice</SubtypeId>
+      </Id>
+      <DisplayName>Ice (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Ice, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Ice into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ore_H2O_ice.dds</Icon>
+      <Model>Models\Components\Sphere.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>370</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ore_Stone</SubtypeId>
+      </Id>
+      <DisplayName>Stone (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Stone, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Stone into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ore_rock.dds</Icon>
+      <Model>Models\Components\Sphere.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>370</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ore_Iron</SubtypeId>
+      </Id>
+      <DisplayName>Iron Ore (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Iron Ore, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Iron Ore into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ore_Fe_iron.dds</Icon>
+      <Model>Models\Components\Sphere.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>370</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ore_Nickel</SubtypeId>
+      </Id>
+      <DisplayName>Nickel Ore (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Nickel Ore, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Nickel Ore into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ore_Ni_nickel.dds</Icon>
+      <Model>Models\Components\Sphere.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>370</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ore_Silicon</SubtypeId>
+      </Id>
+      <DisplayName>Silicon Ore (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Silicon Ore, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Silicon Ore into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ore_Si_silicon.dds</Icon>
+      <Model>Models\Components\Sphere.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>370</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ore_Cobalt</SubtypeId>
+      </Id>
+      <DisplayName>Cobalt Ore (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Cobalt Ore, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Cobalt Ore into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ore_Co_cobalt.dds</Icon>
+      <Model>Models\Components\Sphere.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>370</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ore_Magnesium</SubtypeId>
+      </Id>
+      <DisplayName>Magnesium Ore (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Magnesium Ore, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Magnesium Ore into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ore_Mg_magnesium.dds</Icon>
+      <Model>Models\Components\Sphere.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>370</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ingot_Stone</SubtypeId>
+      </Id>
+      <DisplayName>Gravel (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Gravel, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Gravel into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ingot\gravel_ingot.dds</Icon>
+      <Model>Models\Ingots\stone_ingot.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>370</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ingot_Iron</SubtypeId>
+      </Id>
+      <DisplayName>Iron Ingot (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Iron Ingot, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Iron Ingot into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ingot\iron_ingot.dds</Icon>
+      <Model>Models\Ingots\iron_ingot.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>127</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ingot_Silicon</SubtypeId>
+      </Id>
+      <DisplayName>Silicon Wafer (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Silicon Wafer, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Silicon Wafer into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ingot\silicon_ingot.dds</Icon>
+      <Model>Models\Ingots\silicon_ingot.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>429</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+    <Component>
+      <Id>
+        <TypeId>Component</TypeId>
+        <SubtypeId>OctahedronLot_Ingot_Nickel</SubtypeId>
+      </Id>
+      <DisplayName>Nickel Ingot (1 t)</DisplayName>
+      <Description>A lot of 1,000 kg of Nickel Ingot, the way OCT's Stores trade it. The price is per lot; a purchase puts 1,000 kg of Nickel Ingot into the inventory for each lot.</Description>
+      <Icon>Textures\GUI\Icons\ingot\nickel_ingot.dds</Icon>
+      <Model>Models\Ingots\nickel_ingot.mwm</Model>
+      <Size><X>0.5</X><Y>0.5</Y><Z>0.5</Z></Size>
+      <Mass>1000</Mass>
+      <Volume>112</Volume>
+      <Public>false</Public>
+      <MaxIntegrity>1</MaxIntegrity>
+      <DropProbability>0</DropProbability>
+    </Component>
+  </Components>
+</Definitions>

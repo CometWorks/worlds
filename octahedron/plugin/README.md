@@ -1520,8 +1520,13 @@ stock as long as its entry keeps the name.
   each. Their Store gets a second row whose unit is a lot of 1,000 kg (or pieces),
   priced in whole SC per lot at the item's reference with the usual tax both
   ways. The row of single units stays next to it, except for the items of
-  `MarketLotsOnly` (ice). The rows sort under the same name; the lot is the one
-  priced about 1,000 times higher. Neither row buys at or above what the other
+  `MarketLotsOnly` (ice). The Store screen names a row, shows its icon and picks
+  its unit (kg for ore, pcs for the rest) from the row's item, so a client gets
+  each row of lots with OctahedronMod's item for it, "Silicon Ore (1 t)" counted
+  in pcs (SE-1497). The station's own rows, and every trade, keep the real item:
+  the client's requests name a row by its id. Without OctahedronMod, or with a lot
+  other than 1,000, the row of lots keeps the item's name and unit and reads like
+  "200 kg" for 200 lots. Neither row buys at or above what the other
   sells for, or buying by the kg and selling by the lot would pay out of the
   rounding. A player who opens an OCT Store hears about the lots in chat (again
   after 6 hours), and each trade in lots says in chat what it moved in kg.

@@ -8,6 +8,7 @@ using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.World;
 using VRage;
 using VRage.Game;
+using VRage.Game.ModAPI;
 using VRage.Network;
 using VRage.ObjectBuilders;
 
@@ -88,10 +89,17 @@ internal static class StoreLots
         if (both.Count + only.Count == 0)
             return null;
         var lot = settings.Lots.Values.Max();
+        // With OctahedronMod the rows of lots read "Iron Ore (1 t)"
+        bool named =
+            lot == ShownLot
+            && Stations.TryItemId(settings.Lots.Keys.First(), out var first)
+            && Shown(first, lot) != null;
         return "OCT trades by the tonne: "
             + (
                 both.Count > 0
-                    ? $"{string.Join(", ", both)} have a second row whose unit is a lot of {lot:N0} kg (or pieces), priced per lot. "
+                    ? named
+                        ? $"{string.Join(", ", both)} have a second row, \"(1 t)\", priced per lot of {lot:N0} kg (or pieces). "
+                        : $"{string.Join(", ", both)} have a second row whose unit is a lot of {lot:N0} kg (or pieces), priced per lot. "
                     : ""
             )
             + (
@@ -124,6 +132,73 @@ internal static class StoreLots
                 return;
             told[identity] = now;
             MyVisualScriptLogicProvider.SendChatMessage(text, "OCT", identity);
+        }
+    }
+
+    // OctahedronMod's items named after a lot, "Silicon Ore (1 t)": the Store screen takes a row's
+    // name, icon and unit from its item, so a client is shown a row of lots as one of these
+    private const long ShownLot = 1000;
+    private const string ShownPrefix = "OctahedronLot_";
+
+    /// <summary>The item a client sees on a row of lots of the item: OctahedronMod's "(1 t)" item, if the world has it and the lot is a tonne.</summary>
+    public static MyDefinitionId? Shown(MyDefinitionId item, long lot)
+    {
+        if (lot != ShownLot)
+            return null;
+        var id = new MyDefinitionId(
+            typeof(MyObjectBuilder_Component),
+            ShownPrefix + Stations.ItemName(item).Replace('/', '_')
+        );
+        return MyDefinitionManager.Static.TryGetPhysicalItemDefinition(id, out _) ? id : null;
+    }
+
+    // The rows a client gets: the station's own, with the rows of lots showing OctahedronMod's
+    // "(1 t)" items. The trades still find the station's rows by id, with the real items in them.
+    [HarmonyPatch(typeof(MyStoreBlock), "GetStoreItemsForStation")]
+    private static class Listed
+    {
+        // ReSharper disable once UnusedMember.Local
+        private static void Postfix(
+            IMyFactionStation station,
+            ref StoreItemsWithEconomyStats __result
+        )
+        {
+            if (
+                !Market.On
+                || __result?.StoreItems is not { } items
+                || Market.OctStations().All(s => s.Id != station.Id)
+            )
+                return;
+            List<MyStoreItem> shown = null;
+            for (int i = 0; i < items.Count; i++)
+            {
+                var row = items[i];
+                if (
+                    row.Item is not { } item
+                    || Shown(item, Market.LotOf(station.Name, row)) is not { } lotItem
+                )
+                    continue;
+                shown ??= new List<MyStoreItem>(items);
+                shown[i] = new MyStoreItem(
+                    row.Id,
+                    lotItem,
+                    row.Amount,
+                    row.PricePerUnit,
+                    row.ItemType,
+                    row.StoreItemType
+                )
+                {
+                    PreviousPricePerUnit = row.PreviousPricePerUnit,
+                    PricePerUnitDiscount = row.PricePerUnitDiscount,
+                };
+            }
+            if (shown != null)
+                __result = new StoreItemsWithEconomyStats(
+                    shown,
+                    __result.OffersBonus,
+                    __result.OrdersBonus,
+                    __result.FactionStation
+                );
         }
     }
 
