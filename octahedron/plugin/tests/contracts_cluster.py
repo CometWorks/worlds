@@ -1010,7 +1010,8 @@ def run(bench) -> None:
     )
     api.set_admin_flag("creativeTools", True)
     cubes = sorted(api.list_cubes(GRIDS["Near Wreck"])["cubes"], key=lambda c: c["min"])
-    for cube in cubes[2:]:
+    # From the far end: what is left stays in one piece, so the grid keeps its id
+    for cube in reversed(cubes[2:]):
         api.character_grid_event(GRIDS["Near Wreck"], tuple(cube["min"]), "raze")
     left = wait_until(
         lambda: api.list_cubes(GRIDS["Near Wreck"])["total"] <= 2, 60, "2 blocks left"

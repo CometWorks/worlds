@@ -163,9 +163,10 @@ def grind_point(sx: float, sy: float, sz: float) -> tuple[float, float, float]:
 
 
 def grind(remote, grid_id: int, leave: int) -> None:
-    """Removes blocks from one end of the grid, as a grinder does, until leave are left"""
+    """Removes blocks from the far end of the grid until leave are left: what is left stays in
+    one piece, so the grid keeps its id"""
     cubes = sorted(remote.list_cubes(grid_id)["cubes"], key=lambda c: c["min"])
-    for cube in cubes[leave:]:
+    for cube in reversed(cubes[leave:]):
         remote.character_grid_event(grid_id, tuple(cube["min"]), "raze")
     rig.wait_until(
         lambda: remote.list_cubes(grid_id)["total"] <= leave,
