@@ -273,6 +273,18 @@ internal sealed class ReputationBook
         }
     }
 
+    /// <summary>!oct rep's answer: the reputation, the removal threshold and the countdown if one runs</summary>
+    public string Describe(long identity, bool leader = false)
+    {
+        var text = $"Your reputation in OCT: {Sc(Get(identity))}. ";
+        if (leader)
+            return text + "OCT's leaders are never removed from OCT.";
+        text += $"Removal from OCT below {Sc(Settings.KickBelow)}";
+        return Left(identity) is { } seconds
+            ? text + $": removed in {Duration(seconds)} unless it rises."
+            : text + ".";
+    }
+
     public static string Sc(decimal value) =>
         Math.Round(value).ToString("#,0", CultureInfo.InvariantCulture);
 

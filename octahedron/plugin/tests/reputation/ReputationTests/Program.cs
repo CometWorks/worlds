@@ -87,6 +87,20 @@ Check(
     "the countdown starts and is told: " + string.Join("|", start)
 );
 Check(k.Left(A) == 3600, "60 minutes left at the start");
+Check(
+    k.Describe(A)
+        == "Your reputation in OCT: -10,001. Removal from OCT below -10,000: removed in 60 minutes unless it rises.",
+    "!oct rep in the countdown: the threshold and the time left: " + k.Describe(A)
+);
+Check(
+    k.Describe(B) == "Your reputation in OCT: 10,000. Removal from OCT below -10,000.",
+    "!oct rep above the threshold names it too: " + k.Describe(B)
+);
+Check(
+    k.Describe(A, leader: true)
+        == "Your reputation in OCT: -10,001. OCT's leaders are never removed from OCT.",
+    "!oct rep for a leader: " + k.Describe(A, leader: true)
+);
 Check(Run(1799).Count == 0, "nothing told 1,801 s before the end");
 var w30 = Run(1);
 Check(

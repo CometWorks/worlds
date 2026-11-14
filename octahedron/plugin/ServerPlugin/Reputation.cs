@@ -683,16 +683,8 @@ internal static class Reputation
     private static string Name(long identity) =>
         MySession.Static.Players.TryGetIdentity(identity)?.DisplayName ?? "?";
 
-    private static string Describe(long identity)
-    {
-        var left = Book.Left(identity);
-        return $"Your reputation in OCT: {ReputationBook.Sc(Book.Get(identity))}."
-            + (
-                left is { } seconds
-                    ? $" Below {ReputationBook.Sc(Book.Settings.KickBelow)}: removed from OCT in {ReputationBook.Duration(seconds)} unless it rises."
-                    : ""
-            );
-    }
+    private static string Describe(long identity) =>
+        Book.Describe(identity, OctFaction.Leader(identity));
 
     // --- commands ---
 
