@@ -958,6 +958,8 @@ is outside it.
   Only the containers' room limits a batch, and the next check tops it up. The welded
   and projected blocks aren't capped by `GroupPcuLimit` either. The booking node checks
   the flag and the queue entry keeps it, so it holds on whichever node runs the slot.
+  The police and janitor bots (`ShipyardFreeRepairSteamIds`, SE-1468) repair for free
+  the same way, and the chat says "Free repair: <name> is a station's bot".
 - **Grind.** The containers, welders, connectors and the deconstructors become the
   player's, and the deconstructors go on; the welders stay off. They take apart what in
   the volume belongs to the player or their faction, to nobody, or to a wreck faction

@@ -1068,8 +1068,9 @@ internal static partial class ShipyardOrders
                 Ship = kind.ToString(),
                 Repair = true,
                 Slot = kind,
-                // Free, unlimited repair for an admin who ignores PCU limits (SE-1467)
-                Exempt = kind == SlotKind.Repair && FreePrints.Exempt(player),
+                // Free, unlimited repair for an admin who ignores PCU limits (SE-1467) and for the
+                // police and janitor bots (SE-1468)
+                Exempt = kind == SlotKind.Repair && FreeRepair(player),
             },
             (ok, message) =>
             {
@@ -1143,7 +1144,7 @@ internal static partial class ShipyardOrders
                                 + "repair projector, into the build volume, the cylinder inside the frame."
                                 + (
                                     next.Exempt
-                                        ? $" Free repair: {Name(next.Player)} ignores PCU limits, so what the welders "
+                                        ? $" Free repair: {Name(next.Player)} {FreeRepairWhy(next.Player)}, so what the welders "
                                             + "lack is given for nothing and the PCU limits don't apply."
                                     : Config.ShipyardRepairBuy
                                         ? " What the welders lack is bought from the station for you, so you need no ship with "

@@ -427,11 +427,11 @@ internal static partial class ShipyardOrders
         );
         slot.LastWork = DateTime.UtcNow;
         Plugin.Log.Info(
-            $"Repair slot {slot.Id}: free repair: {Name(slot.Player)} ignores PCU limits, gave {what}"
+            $"Repair slot {slot.Id}: free repair: {Name(slot.Player)} {FreeRepairWhy(slot.Player)}, gave {what}"
         );
         Tell(
             slot.Player,
-            $"Free repair: {Name(slot.Player)} ignores PCU limits, your repair got what it lacked for nothing: {what}."
+            $"Free repair: {Name(slot.Player)} {FreeRepairWhy(slot.Player)}, your repair got what it lacked for nothing: {what}."
         );
     }
 
