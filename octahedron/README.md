@@ -104,7 +104,7 @@ offer them.
   (SE1-0204), and no drilling or landing gear and magnetic plate locks
   ([SE-974](https://tasks.cometworks.se/tasks/1865)). A gear locked before the
   zone forbade it stays locked until it is released. The plugin lets the gears of
-  bots (`ShipyardBotSteamIds`, by the block owner's Steam ID) lock in the zone, so
+  bots' ships (`ShipyardBotSteamIds`, by the owners' Steam IDs) lock in the zone, so
   the janitors can tow garbage out of it
   ([SE-1466](https://tasks.cometworks.se/tasks/2404)). The stations start empty, apart from
   10,000 kg of uranium ingots in each large reactor, a full safe zone block (75
