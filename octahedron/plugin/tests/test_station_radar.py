@@ -415,8 +415,32 @@ def visit(remote, name: str, s: dict) -> None:
     first = check_list(station, s, surface.get("sprites", []))
     if station != CROWD or not first:
         return
+    # The radar redraws once every 197 frames, 3.3 s at 60 frames a second: the drifting
+    # probe's distance changes on each redraw
+    started = time.monotonic()
+    changes, last = [], None
+    while time.monotonic() - started < 30:
+        texts = tuple(
+            sp.get("data")
+            for sp in remote.get_surface(grid_id, s["cell"]).get("sprites", [])
+            if sp.get("type") == "TEXT"
+        )
+        if last is not None and texts != last:
+            changes.append(time.monotonic())
+        last = texts
+        time.sleep(0.2)
+    gaps = sorted(b - a for a, b in zip(changes, changes[1:]))
+    print(
+        f"  {station}: {len(changes)} redraws in 30 s, seconds apart: "
+        + ", ".join(f"{g:.1f}" for g in gaps),
+        flush=True,
+    )
+    check(
+        len(gaps) >= 4 and 2.5 < gaps[len(gaps) // 2] < 4.5,
+        f"{station}: the radar redraws about every 197 frames (3.3 s)",
+    )
     # The drifting probe moves 400 m in 100 s, past at least one other hostile probe
-    time.sleep(100)
+    time.sleep(70)
     later = check_list(
         station,
         s,
