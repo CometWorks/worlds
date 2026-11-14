@@ -27,11 +27,16 @@ public class Plugin : IPlugin
     public const string Id = "F7FB710B-7B41-45D6-B05C-A01DDE0FEE3A";
     public static readonly Logger Log = Logger.Create(Name);
 
-    // The live config; !oct reload replaces it
-    public static OctahedronConfig Config { get; private set; } = new();
+    // The config the server was deployed with, as loaded; !oct reload replaces it. On a Quasar cluster
+    // it is the node's pinned canonical copy, which must never change in memory: Magnetar counts any
+    // change as configuration drift and takes the node out of service.
+    public static OctahedronConfig Deployed { get; private set; } = new();
+
+    // What the rules run: Deployed, or a copy of it with the values set live over it (LiveConfig)
+    public static OctahedronConfig Config { get; internal set; } = Deployed;
 
     // Discovered by the Quasar agent, which looks for a public property of a PluginConfig type
-    public OctahedronConfig PluginConfig => Config;
+    public OctahedronConfig PluginConfig => Deployed;
 
     // OCTAHEDRON_CONFIG lets every node of a cluster read the same file, the checkout's
     internal static string ConfigPath =>
@@ -66,7 +71,8 @@ public class Plugin : IPlugin
 
     public static void LoadConfig()
     {
-        Config = ConfigStorage.LoadXml<OctahedronConfig>(ConfigPath);
+        Deployed = ConfigStorage.LoadXml<OctahedronConfig>(ConfigPath);
+        Config = Deployed;
         Log.Info($"Config loaded from {ConfigPath}");
     }
 

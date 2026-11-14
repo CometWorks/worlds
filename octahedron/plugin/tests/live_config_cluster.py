@@ -1,11 +1,12 @@
 """Live config on a cluster (SE-1474): an admin's !oct config set changes a market price on the World
-Authority and every node without a restart, and the value outlasts a node restart on a fresh data root
-(as a recycle) and a World Authority kill. Same bench and world as world_config_cluster.py, with the
+Authority, every node and the hot spare without a restart, and the value outlasts a node kill, a World
+Authority kill and a cluster restart. Same bench and world as world_config_cluster.py, with the
 world's octahedron.cfg, but no client: the console probe (tests/console-probe) runs on every process,
 and !oct market stores <item> says what the Store blocks of the stations on each node ask.
 
-The set and the reset go to node-2 only (the probe's "@node-2" lines), so the processes that restart
-never run them again: what they show after their start came from live.cfg in the shared storage.
+The set and the reset go to node-2 only (the probe's "@node-2" lines), and the plan is emptied before
+the cluster restart, so no process that restarts runs them again: what it shows after its start came
+from live.cfg in the shared storage.
 
     OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/live_config_cluster.py CLUSTER_TEST_DIR     (from plugin/)
 """
@@ -94,11 +95,27 @@ def run(bench) -> None:
     def on_both(shown) -> bool:
         return {node for node, _ in shown} == set(NODES)
 
+    # Stations move between the nodes as the balancer likes: whichever node has them must show it
     def raised(shown) -> bool:
-        return on_both(shown) and all(ask >= HIGH for ask in shown.values())
+        return bool(shown) and all(ask >= HIGH for ask in shown.values())
 
     def lowered(shown) -> bool:
-        return on_both(shown) and all(ask < HIGH for ask in shown.values())
+        return bool(shown) and all(ask < HIGH for ask in shown.values())
+
+    def run_live(label: str) -> None:
+        replies = everywhere("!oct config show MarketPrices", every)
+        check(
+            f"{label}: every process runs it, the deployed config object unchanged",
+            len(
+                [
+                    r
+                    for r in replies
+                    if f"MarketPrices = {PRICES}, set live; deployed: Ore/Ice=0.01" in r
+                ]
+            )
+            == every,
+            replies,
+        )
 
     def shared() -> str:
         files = list((cluster.config.root / "shared").rglob("live.cfg"))
@@ -146,12 +163,7 @@ def run(bench) -> None:
         took is not None,
         f"{took and round(took)} s: {shown}",
     )
-    replies = everywhere("!oct config show MarketPrices", every)
-    check(
-        "the WA, both nodes and the hot spare run it",
-        len([r for r in replies if f"MarketPrices = {PRICES}, set live" in r]) == every,
-        replies,
-    )
+    run_live("the WA, both nodes and the hot spare")
     text = shared()
     check(
         "live.cfg in the shared storage has it",
@@ -160,30 +172,34 @@ def run(bench) -> None:
     )
     bench.record("live-cfg", text)
 
-    # A recycled node comes back on a fresh data root
-    cluster.restart_node("node-1", fresh=True)
+    # The set and the reset run on node-2 only, so node-1 and the WA never run them again
+    applied = log("node-1").count("Live config: MarketPrices = " + PRICES)
+    cluster.restart_node("node-1")
     cluster.wait_ready(nodes=["node-1"])
-    took, shown = until(raised, 240)
-    check(
-        "after node-1 restarted fresh, every node's Store still asks it",
-        took is not None,
-        shown,
-    )
     check(
         "node-1 applied it from live.cfg at its start",
-        "Live config: MarketPrices = " + PRICES in log("node-1"),
+        log("node-1").count("Live config: MarketPrices = " + PRICES) > applied,
     )
+    took, shown = until(raised, 240)
+    check("after a node-1 kill, the Stores still ask it", took is not None, shown)
 
     cluster.restart_node("wa-1")
     cluster.wait_ready(nodes=["wa-1"])
     took, shown = until(raised, 240)
-    check("after a WA kill, every node's Store still asks it", took is not None, shown)
-    replies = everywhere("!oct config show MarketPrices", every)
-    check(
-        "the WA, both nodes and the hot spare still run it",
-        len([r for r in replies if f"MarketPrices = {PRICES}, set live" in r]) == every,
-        replies,
-    )
+    check("after a WA kill, the Stores still ask it", took is not None, shown)
+    run_live("after the node-1 and WA kills")
+
+    # The whole cluster down and up, the plan emptied meanwhile: no process sets it again
+    check("graceful stop", cluster.stop(grace=240))
+    wa.lc.PLAN.write_text("")
+    for old in wa.lc.OUT.parent.glob(wa.lc.OUT.name + ".*"):
+        old.unlink()
+    probe.step = 0
+    cluster.start(processes)
+    cluster.wait_ready(nodes=processes)
+    took, shown = until(raised, 300)
+    check("after a cluster restart, the Stores still ask it", took is not None, shown)
+    run_live("after a cluster restart")
 
     reply = " ".join(everywhere("@node-2 !oct config reset MarketPrices", 1))
     check("node-2 resets it", "goes back to" in reply, reply)
@@ -201,7 +217,7 @@ def run(bench) -> None:
         replies,
     )
     check("live.cfg is empty", "<Market" not in shared(), shared())
-    check("graceful stop", cluster.stop(grace=240))
+    check("graceful stop at the end", cluster.stop(grace=240))
 
 
 run.spare_nodes = 1

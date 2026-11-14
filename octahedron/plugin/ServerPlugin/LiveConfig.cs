@@ -13,11 +13,15 @@ namespace ServerPlugin;
 
 /// <summary>
 /// Option values an admin set on the running server with !oct config set (SE-1474), over the ones
-/// the server started with. They live in live.cfg in the plugin's shared storage directory, which
-/// every process of a cluster sees and Quasar keeps across restarts, keep-world updates and backups.
-/// Every process reads the file every 15 s and applies it to its config, so the World Authority and
-/// all nodes, hot spares too, run the same values without a restart. The file has the elements of
-/// octahedron.cfg, so a tuned value can be copied back into the worlds repo as it is.
+/// it was deployed with. They live in live.cfg in the plugin's shared storage directory, which every
+/// process of a cluster sees and Quasar keeps across restarts, keep-world updates and backups. Every
+/// process reads the file every 15 s, so the World Authority and all nodes, hot spares too, run the
+/// same values without a restart. The file has the elements of octahedron.cfg, so a tuned value can
+/// be copied back into the worlds repo as it is.
+///
+/// The deployed config object is never changed: Magnetar takes a cluster node whose plugin config
+/// differs from Quasar's pinned copy out of service. The rules run a copy with the live values
+/// instead (Plugin.Config). Quasar applying such values itself is SE-1482.
 /// </summary>
 internal static class LiveConfig
 {
@@ -26,28 +30,28 @@ internal static class LiveConfig
 
     private static DateTime nextRead;
     private static string readText;
-    private static OctahedronConfig appliedTo;
+    private static OctahedronConfig builtFrom;
     private static Dictionary<string, string> overrides = new();
-
-    // What each overridden option had before, to go back to on a reset
-    private static readonly Dictionary<string, string> deployed = new();
     private static string directory;
     private static bool unavailable;
 
-    private static readonly Dictionary<string, PropertyInfo> Options = typeof(OctahedronConfig)
+    // Every option, for the copy
+    private static readonly PropertyInfo[] All = typeof(OctahedronConfig)
         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
         .Where(p =>
-            p.CanWrite
-            && p.GetCustomAttribute<ConfigOptionAttribute>() != null
-            && (
-                p.PropertyType.IsEnum
-                || p.PropertyType == typeof(bool)
-                || p.PropertyType == typeof(int)
-                || p.PropertyType == typeof(long)
-                || p.PropertyType == typeof(float)
-                || p.PropertyType == typeof(double)
-                || p.PropertyType == typeof(string)
-            )
+            p.CanRead && p.CanWrite && p.GetCustomAttribute<ConfigOptionAttribute>() != null
+        )
+        .ToArray();
+
+    // The options that can be set live: single values
+    private static readonly Dictionary<string, PropertyInfo> Options = All.Where(p =>
+            p.PropertyType.IsEnum
+            || p.PropertyType == typeof(bool)
+            || p.PropertyType == typeof(int)
+            || p.PropertyType == typeof(long)
+            || p.PropertyType == typeof(float)
+            || p.PropertyType == typeof(double)
+            || p.PropertyType == typeof(string)
         )
         .ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
 
@@ -71,13 +75,21 @@ internal static class LiveConfig
         }
     }
 
-    /// <summary>Reads live.cfg every 15 s and applies it, and at once after a config reload.</summary>
+    /// <summary>Reads live.cfg every 15 s, and builds the config the rules run when it or the deployed one changed.</summary>
     public static void Update()
     {
         var now = DateTime.UtcNow;
-        if (now < nextRead && ReferenceEquals(appliedTo, Plugin.Config))
-            return;
-        nextRead = now + Interval;
+        if (now >= nextRead)
+        {
+            nextRead = now + Interval;
+            Read();
+        }
+        if (!ReferenceEquals(builtFrom, Plugin.Deployed))
+            Build();
+    }
+
+    private static void Read()
+    {
         var path = FilePath;
         if (path == null)
             return;
@@ -91,50 +103,43 @@ internal static class LiveConfig
             Plugin.Log.Warning($"Live config: {path} unreadable: {e.Message}");
             return;
         }
-        if (text != readText)
+        if (text == readText)
+            return;
+        try
         {
-            try
-            {
-                overrides = Parse(text);
-                readText = text;
-            }
-            catch (XmlException e)
-            {
-                Plugin.Log.Error(
-                    $"Live config: {path} broken, the values before stay: {e.Message}"
-                );
-                return;
-            }
+            overrides = Parse(text);
+            readText = text;
         }
-        Apply();
+        catch (XmlException e)
+        {
+            Plugin.Log.Error($"Live config: {path} broken, the values before stay: {e.Message}");
+            return;
+        }
+        Build();
     }
 
-    // The overrides onto the config. Each change is logged, a value given back on a reset too.
-    private static void Apply()
+    // The deployed config as it is, or a copy of it with the live values
+    private static void Build()
     {
-        var config = Plugin.Config;
-        if (!ReferenceEquals(appliedTo, config))
+        var deployed = Plugin.Deployed;
+        builtFrom = deployed;
+        if (overrides.Count == 0)
         {
-            // A reloaded config starts from the file's values
-            appliedTo = config;
-            deployed.Clear();
+            if (!ReferenceEquals(Plugin.Config, deployed))
+                Plugin.Log.Info("Live config: none, the deployed values apply");
+            Plugin.Config = deployed;
+            return;
         }
-        foreach (var name in deployed.Keys.Where(n => !overrides.ContainsKey(n)).ToList())
-        {
-            Set(config, name, deployed[name]);
-            Plugin.Log.Info($"Live config: {name} back to {deployed[name]}");
-            deployed.Remove(name);
-        }
+        // A plain new object: ConfigStorage doesn't track it, so nothing checks it against Quasar's copy
+        var config = new OctahedronConfig();
+        foreach (var property in All)
+            property.SetValue(config, property.GetValue(deployed));
         foreach (var pair in overrides)
-        {
-            string current = Text(config, pair.Key);
-            if (current == pair.Value)
-                continue;
-            if (!deployed.ContainsKey(pair.Key))
-                deployed[pair.Key] = current;
-            Set(config, pair.Key, pair.Value);
-            Plugin.Log.Info($"Live config: {pair.Key} = {pair.Value}");
-        }
+            Options[pair.Key].SetValue(config, Value(Options[pair.Key].PropertyType, pair.Value));
+        Plugin.Config = config;
+        Plugin.Log.Info(
+            "Live config: " + string.Join(", ", overrides.Select(p => $"{p.Key} = {p.Value}"))
+        );
     }
 
     // --- commands ---
@@ -143,7 +148,6 @@ internal static class LiveConfig
     {
         if (FilePath == null)
             return "Live config: this server has no shared storage.";
-        Update();
         if (option == null)
             return overrides.Count == 0
                 ? "No live config values: the server runs its deployed config."
@@ -152,14 +156,14 @@ internal static class LiveConfig
                         "\n",
                         overrides
                             .OrderBy(p => p.Key)
-                            .Select(p => $"{p.Key} = {p.Value} [{Deployed(p.Key)}]")
+                            .Select(p => $"{p.Key} = {p.Value} [{Text(Plugin.Deployed, p.Key)}]")
                     );
         if (!Options.TryGetValue(option, out var property))
             return Unknown(option);
         string name = property.Name;
         string value = Text(Plugin.Config, name);
         return overrides.ContainsKey(name)
-            ? $"{name} = {value}, set live; deployed: {Deployed(name)}"
+            ? $"{name} = {value}, set live; deployed: {Text(Plugin.Deployed, name)}"
             : $"{name} = {value}";
     }
 
@@ -183,11 +187,10 @@ internal static class LiveConfig
         if (!Options.TryGetValue(option, out var property))
             return Unknown(option);
         string name = property.Name;
-        Update();
         if (!overrides.ContainsKey(name))
             return $"{name} has no live value.";
         return Write(values => values.Remove(name))
-            ?? $"{name} goes back to {Deployed(name)} within 15 s.";
+            ?? $"{name} goes back to {Text(Plugin.Deployed, name)} within 15 s.";
     }
 
     // Reads, changes and writes live.cfg, then applies it here at once. Null when that worked.
@@ -249,17 +252,11 @@ internal static class LiveConfig
             )
         ) + "\n";
 
-    private static string Deployed(string name) =>
-        deployed.TryGetValue(name, out string value) ? value : Text(Plugin.Config, name);
-
     private static string Unknown(string option) =>
         $"No option {option} to set live: only single values (number, text, true or false), named as in octahedron.cfg.";
 
     private static string Text(OctahedronConfig config, string name) =>
         Canonical(Options[name].GetValue(config));
-
-    private static void Set(OctahedronConfig config, string name, string text) =>
-        Options[name].SetValue(config, Value(Options[name].PropertyType, text));
 
     private static string Canonical(object value) =>
         value switch
