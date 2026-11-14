@@ -84,9 +84,9 @@ internal static class Market
                 ),
             FixedStock = Config.ZoneChipStock * Amounts.Unit,
             Lots = Lots(),
-            LotsOnly = MarketBook.Glob(Config.MarketLotsOnly) is { } only
-                ? Lots().Keys.Where(item => only.IsMatch(item)).ToHashSet()
-                : [],
+            LotsOnly = (Config.MarketLotsOnly ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(),
         };
 
     /// <summary>The market, on the authority only, loaded from the world on first use.</summary>
@@ -397,6 +397,21 @@ internal static class Market
         {
             int amount = (int)Math.Min(int.MaxValue, raw / Amounts.Unit / lot);
             if (amount <= 0 || price <= 0 || !Stations.TryItemId(item, out var itemId))
+                return;
+            // A row of lots the Store screen can't name would read like its single units: left
+            // out, unless the item comes in lots only (SE-1497)
+            if (
+                lot > 1
+                && StoreLots.HaveShown
+                && StoreLots.Shown(itemId, lot) == null
+                && !Settings.LotsOnly.Contains(item)
+            )
+                return;
+            // A Store price is an int: a lot dearer than that isn't offered rather than sold cheap
+            if (
+                lot > 1
+                && (price * lot + MarketBook.MilliPerSc / 2) / MarketBook.MilliPerSc > int.MaxValue
+            )
                 return;
             long id = StoreItemId(stationName, lot > 1 ? item + LotRow : item, type);
             ids.Add(id);

@@ -1513,21 +1513,37 @@ stock as long as its entry keeps the name.
   SC: rounded to the nearest, at least 1 SC, a bid at least 1 SC below the ask, so
   on a very cheap item the rounding costs more than the tax. An item worth under
   about 1 SC is sold but not bought.
-- Cheap bulk goods also come by the tonne (SE-1469, SE-1471). Nobody wants to
-  type 57,000 into the Store, and a whole SC per kg leaves little room for prices.
-  `MarketLots` lists the items, now stone, ice, iron, nickel, silicon, cobalt and
-  magnesium ore, gravel, and iron, silicon and nickel ingots, with 1,000 units
-  each. Their Store gets a second row whose unit is a lot of 1,000 kg (or pieces),
-  priced in whole SC per lot at the item's reference with the usual tax both
-  ways. The row of single units stays next to it, except for the items of
-  `MarketLotsOnly` (ice). The rows sort under the same name; the lot is the one
-  priced about 1,000 times higher. Neither row buys at or above what the other
+- Ores, ingots and components also come by the thousand (SE-1469, SE-1471,
+  SE-1497). Nobody wants to type 57,000 into the Store, and a whole SC per kg
+  leaves little room for prices. `MarketLots` lists the items with their lot,
+  `Ore/*=1000,Ingot/*=1000,Component/*=1000` (an item's own entry wins over a
+  pattern). Their Store gets a second row whose unit is a lot of 1,000 kg or
+  pieces, priced in whole SC per lot at the item's reference with the usual tax
+  both ways. Tools, weapons, ammo, bottles and the rest have single units only.
+  The row of single units stays next to the lots, except for the items of
+  `MarketLotsOnly` (ice, names only). A row of lots shows only with at least a
+  whole lot in stock (or of room, for OCT's orders), so items a station holds
+  a few hundred of, like superconductors or platinum ingots, have none until
+  players sell more. The Store screen names a row, shows its icon and picks
+  its unit (kg for ore, pcs for the rest) from the row's item, so a client gets
+  each row of lots with OctahedronMod's item for it, "Silicon Ore (1 t)" or
+  "Steel Plate (x1000)", counted in pcs (SE-1497). With the mod, a row of lots
+  of an item it has no lot item for (a modded component) is left out. The station's own rows, and every trade, keep the real item:
+  the client's requests name a row by its id. Without OctahedronMod, or with a lot
+  other than 1,000, the row of lots keeps the item's name and unit and reads like
+  "200 kg" for 200 lots. Neither row buys at or above what the other
   sells for, or buying by the kg and selling by the lot would pay out of the
-  rounding. A player who opens an OCT Store hears about the lots in chat (again
+  rounding. A lot is never the worse deal (SE-1497): it sells for its exact
+  price, but at most 1,000 times the rounded price per kg (iron ore 10,000 SC,
+  not 10,200), and the kg row buys at no more than the lot's price per kg,
+  rounded down to whole SC (9 SC against 9,800 a lot). Builds, contracts and
+  leftovers use the same lot price per kg. The Store can't show 10 SC per kg
+  and charge 9.8: the screen works out a trade's total from the whole SC it
+  shows, so it would show totals other than the ones charged. A player who opens an OCT Store hears about the lots in chat (again
   after 6 hours), and each trade in lots says in chat what it moved in kg.
 - Ice sells for 0.01 SC per kg (`MarketPrices`), against the game's 5 SC: 10 SC a
   lot, bought back at 9. It has no row of single units, as that would cost 1 SC a
-  kg. Stone keeps its reference, the game's 1 SC per kg: 1,020 SC a lot, bought
+  kg. Stone keeps its reference, the game's 1 SC per kg: 1,000 SC a lot, bought
   back at 980, and 1 SC a kg, not bought back by the kg. Any cheaper and buying
   stone to refine would pay: a tonne makes about 550 SC of ingots at OCT's buy
   prices (no yield modules).

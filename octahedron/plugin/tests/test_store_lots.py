@@ -8,7 +8,7 @@ price; OCT buys lots back below the lot price; buying 10 lots puts 10,000 kg int
 10 times the lot price; selling more lots than the inventory holds whole is refused and takes
 nothing; selling the 10 lots takes the 10,000 kg for 10 times the buy-back price; buying 57 kg
 on the row of single units charges 57 times its price. Ice costs 10 SC a lot, bought back at 9;
-stone 1,020 SC, bought back at 980, and 1 SC a kg. At the end it prints OCT's prices of the lot
+stone 1,000 SC, bought back at 980, and 1 SC a kg (a lot costs no more than its kg, SE-1497). At the end it prints OCT's prices of the lot
 items and what refining makes of them (LOTPRICE lines). Prints one line per check and a pass/fail
 summary; exit code 0 = all passed.
 
@@ -162,8 +162,8 @@ def run(remote) -> None:
         "ice: lots only, 10 SC a lot, bought at 9",
     )
     check(
-        lots(remote, STONE, True) == (1020, 980, 1, 0),
-        "stone: 1,020 SC a lot, bought at 980; 1 SC a kg, not bought by the kg",
+        lots(remote, STONE, True) == (1000, 980, 1, 0),
+        "stone: 1,000 SC a lot, bought at 980; 1 SC a kg, not bought by the kg",
     )
     ask, bid, unit_ask, unit_bid = lots(remote, IRON, True)
     check(unit_bid > 0, f"iron ingots: bought by the kg too, at {unit_bid}")

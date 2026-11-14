@@ -8,6 +8,7 @@ using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.World;
 using VRage;
 using VRage.Game;
+using VRage.Game.ModAPI;
 using VRage.Network;
 using VRage.ObjectBuilders;
 
@@ -59,9 +60,18 @@ internal static class StoreLots
     {
         if (lot <= 1 || player == null)
             return;
+        MyDefinitionId id = item;
+        // Ores and ingots by the kg, the rest by the piece
+        string unit =
+            id.TypeId == typeof(MyObjectBuilder_Ore) || id.TypeId == typeof(MyObjectBuilder_Ingot)
+                ? "kg"
+                : "pcs";
+        string name = MyDefinitionManager.Static.TryGetPhysicalItemDefinition(id, out var d)
+            ? d.DisplayNameText
+            : item.SubtypeName;
         MyVisualScriptLogicProvider.SendChatMessage(
-            $"{verb} {lots:N0} x {lot:N0} kg of {item.SubtypeName}: {lots * lot:N0} kg for {sc:N0} SC. "
-                + $"The Store trades {item.SubtypeName} in lots of {lot:N0} kg.",
+            $"{verb} {lots:N0} x {lot:N0} {unit} of {name}: {lots * lot:N0} {unit} for {sc:N0} SC. "
+                + $"The Store trades {name} in lots of {lot:N0} {unit}.",
             "OCT",
             player.Identity.IdentityId
         );
@@ -75,11 +85,13 @@ internal static class StoreLots
     public static string Advert()
     {
         var settings = Market.Settings;
+        // "Ore/*" are the ores
         string Name(string item) =>
-            Stations.TryItemId(item, out var id)
+            item.EndsWith("/*") ? item.Substring(0, item.Length - 2).ToLowerInvariant() + "s"
+            : Stations.TryItemId(item, out var id)
             && MyDefinitionManager.Static.TryGetPhysicalItemDefinition(id, out var d)
                 ? d.DisplayNameText
-                : item;
+            : item;
         var both = settings
             .Lots.Keys.Where(i => !settings.LotsOnly.Contains(i))
             .Select(Name)
@@ -88,11 +100,15 @@ internal static class StoreLots
         if (both.Count + only.Count == 0)
             return null;
         var lot = settings.Lots.Values.Max();
-        return "OCT trades by the tonne: "
-            + (
-                both.Count > 0
-                    ? $"{string.Join(", ", both)} have a second row whose unit is a lot of {lot:N0} kg (or pieces), priced per lot. "
-                    : ""
+        string all = string.Join(", ", both);
+        // With OctahedronMod the rows of lots read "Iron Ore (1 t)", "Steel Plate (x1000)"
+        return (
+                both.Count == 0 ? ""
+                : lot == ShownLot && HaveShown
+                    ? $"OCT's Stores also trade {all} by the thousand: the rows named \"(1 t)\" and \"(x1000)\" "
+                        + "are lots of 1,000 kg or pieces, priced per lot, never dearer than as many single units. "
+                : $"OCT's Stores also trade {all} in lots: a second row whose unit is a lot of {lot:N0} kg (or pieces), "
+                    + "priced per lot. "
             )
             + (
                 only.Count > 0 ? $"{string.Join(", ", only)} come in lots of {lot:N0} kg only." : ""
@@ -124,6 +140,81 @@ internal static class StoreLots
                 return;
             told[identity] = now;
             MyVisualScriptLogicProvider.SendChatMessage(text, "OCT", identity);
+        }
+    }
+
+    // OctahedronMod's items named after a lot, "Silicon Ore (1 t)": the Store screen takes a row's
+    // name, icon and unit from its item, so a client is shown a row of lots as one of these
+    private const long ShownLot = 1000;
+    private const string ShownPrefix = "OctahedronLot_";
+
+    /// <summary>The item a client sees on a row of lots of the item: OctahedronMod's "(1 t)" item, if the world has it and the lot is a tonne.</summary>
+    public static MyDefinitionId? Shown(MyDefinitionId item, long lot)
+    {
+        if (lot != ShownLot)
+            return null;
+        var id = new MyDefinitionId(
+            typeof(MyObjectBuilder_Component),
+            ShownPrefix + Stations.ItemName(item).Replace('/', '_')
+        );
+        return MyDefinitionManager.Static.TryGetPhysicalItemDefinition(id, out _) ? id : null;
+    }
+
+    private static bool? haveShown;
+
+    /// <summary>Whether the world has OctahedronMod's lot items. Without them a row of lots reads like its single units.</summary>
+    public static bool HaveShown =>
+        haveShown ??= MyDefinitionManager
+            .Static.GetPhysicalItemDefinitions()
+            .Any(d => d.Id.SubtypeName.StartsWith(ShownPrefix));
+
+    // The rows a client gets: the station's own, with the rows of lots showing OctahedronMod's
+    // "(1 t)" items. The trades still find the station's rows by id, with the real items in them.
+    [HarmonyPatch(typeof(MyStoreBlock), "GetStoreItemsForStation")]
+    private static class Listed
+    {
+        // ReSharper disable once UnusedMember.Local
+        private static void Postfix(
+            IMyFactionStation station,
+            ref StoreItemsWithEconomyStats __result
+        )
+        {
+            if (
+                !Market.On
+                || __result?.StoreItems is not { } items
+                || Market.OctStations().All(s => s.Id != station.Id)
+            )
+                return;
+            List<MyStoreItem> shown = null;
+            for (int i = 0; i < items.Count; i++)
+            {
+                var row = items[i];
+                if (
+                    row.Item is not { } item
+                    || Shown(item, Market.LotOf(station.Name, row)) is not { } lotItem
+                )
+                    continue;
+                shown ??= new List<MyStoreItem>(items);
+                shown[i] = new MyStoreItem(
+                    row.Id,
+                    lotItem,
+                    row.Amount,
+                    row.PricePerUnit,
+                    row.ItemType,
+                    row.StoreItemType
+                )
+                {
+                    PreviousPricePerUnit = row.PreviousPricePerUnit,
+                    PricePerUnitDiscount = row.PricePerUnitDiscount,
+                };
+            }
+            if (shown != null)
+                __result = new StoreItemsWithEconomyStats(
+                    shown,
+                    __result.OffersBonus,
+                    __result.OrdersBonus,
+                    __result.FactionStation
+                );
         }
     }
 

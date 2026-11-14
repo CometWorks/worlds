@@ -76,6 +76,28 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     // In 1,000 kg lots (MarketLots) the Store prices a lot in whole SC: 10.2 SC sells at 10, 9.8 buys at 9
     var lots = new MarketSettings { DriftKg = 0, Lots = { ["Ore/Ice"] = 1000 } };
     Check(lots.Lot("Ore/Ice") == 1000 && lots.Lot(Iron) == 1, "lots by item");
+    // SE-1497: patterns; an item's own entry wins
+    var globbed = new MarketSettings { Lots = { ["Ore/*"] = 1000, ["Ore/Ice"] = 500 } };
+    Check(
+        globbed.Lot("Ore/Gold") == 1000 && globbed.Lot("Ore/Ice") == 500 && globbed.Lot(Iron) == 1,
+        "lots by pattern"
+    );
+    var defaults = new MarketSettings
+    {
+        Lots =
+        {
+            ["Ore/*"] = 1000,
+            ["Ingot/*"] = 1000,
+            ["Component/*"] = 1000,
+        },
+    };
+    Check(
+        defaults.Lot("Component/SteelPlate") == 1000
+            && defaults.Lot("PhysicalGunObject/WelderItem") == 1
+            && defaults.Lot("AmmoMagazine/NATO_25x184mm") == 1
+            && defaults.Lot("GasContainerObject/HydrogenBottle") == 1,
+        "MarketLots' default: components in lots, tools, ammo and bottles not"
+    );
     Check(
         m.OctAsk(w, lots, B, "Ore/Ice") == 10 && m.OctBid(w, lots, B, "Ore/Ice") == 9,
         $"ice in lots: 10 SC a lot, bought at 9: {m.OctAsk(w, lots, B, "Ore/Ice")} {m.OctBid(w, lots, B, "Ore/Ice")}"
@@ -96,15 +118,16 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
             ["Ore/Ice"] = 1000,
             [Iron] = 1000,
             ["Ore/Odd"] = 1000,
+            ["Ore/Fifty"] = 1000,
         },
         LotsOnly = { "Ore/Ice" },
     };
     var ironRow = Row(m, w, two, B, Iron);
     Check(
-        ironRow is { Ask: 10_000, Bid: 9_000, Lot: 1000, LotAsk: 10_200, LotBid: 9_800 },
-        $"iron: 10 / 9 SC a kg, 10,200 / 9,800 SC a lot: {ironRow}"
+        ironRow is { Ask: 10_000, Bid: 9_000, Lot: 1000, LotAsk: 10_000, LotBid: 9_800 },
+        $"iron: 10 / 9 SC a kg; a lot sells for no more than 1,000 kg (10,000, not 10,200), buys at 9,800: {ironRow}"
     );
-    Check(m.OctAsk(w, two, B, Iron) == 10_200, "a build pays the lot's price per kg");
+    Check(m.OctAsk(w, two, B, Iron) == 10_000, "a build pays the lot's price per kg");
     var iceRow = Row(m, w, two, B, "Ore/Ice");
     Check(
         iceRow is { Ask: 0, Bid: 0, LotAsk: 10, LotBid: 9 },
@@ -114,8 +137,19 @@ StoreRow Row(MarketBook m, FakeWorld w, MarketSettings s, string station, string
     // buying the kg at 1 SC would pay, so the lot buys under 1 SC a kg.
     var odd = Row(m, w, two, B, "Ore/Odd");
     Check(
-        odd is { Ask: 1_000, Bid: 0, LotAsk: 1_428, LotBid: 999 },
-        $"no row buys at what the other sells for: {odd}"
+        odd is { Ask: 1_000, Bid: 0, LotAsk: 1_000, LotBid: 999 },
+        $"no row buys at what the other sells for, the lot no dearer than 1,000 kg: {odd}"
+    );
+    // SE-1497: 50.612 SC a kg; OCT buys at 49.6, which rounds up to 50 a kg. The kg buys at 49, so
+    // a lot of them pays no more than the lot's 49,600; the kg sells at 52 (51.62), the lot at 51,624
+    var fifty = Row(m, w, two, B, "Ore/Fifty");
+    Check(
+        fifty is { Ask: 52_000, Bid: 49_000, LotAsk: 51_624, LotBid: 49_600 },
+        $"the lot is the better deal both ways: {fifty}"
+    );
+    Check(
+        m.OctBid(w, two, B, "Ore/Fifty") == 49_600 && m.OctAsk(w, two, B, "Ore/Fifty") == 51_624,
+        "builds and leftovers price it per kg of the lot"
     );
     Check(
         StoreRow.DecodeAll("Ingot/Iron\t10000\t5\t9000\t7").Single()
@@ -503,6 +537,7 @@ sealed class FakeWorld : IMarketWorld
         ["Ore/Grit"] = (1, false, 400),
         ["Ore/Ice"] = (1, false, 10),
         ["Ore/Odd"] = (1, false, 1_400),
+        ["Ore/Fifty"] = (1, false, 50_612),
         ["Component/ZoneChip"] = (0.25, true, 0),
     };
 

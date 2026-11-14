@@ -39,13 +39,28 @@ public sealed class MarketSettings
     public Dictionary<(string Station, string Item), long> FixedAsks = new();
     public long FixedStock;
 
-    // Items a Store also trades in lots of this many units, priced in whole SC per lot: ice, stone,
-    // ores and ingots in tonnes. The ones in LotsOnly have no single-unit row.
+    // Items a Store also trades in lots of this many units, priced in whole SC per lot: ores and
+    // ingots in tonnes, components by the thousand. A key is an item or a pattern ("Ore/*"); an item
+    // takes its own entry, else the first pattern it matches. The ones in LotsOnly have no
+    // single-unit row.
     public Dictionary<string, long> Lots = new();
     public HashSet<string> LotsOnly = new();
 
+    private List<(Regex Items, long Lot)> lotPatterns;
+
     /// <summary>Units of the item in one unit of a Store block, 1 if it has no lots.</summary>
-    public long Lot(string item) => Lots.TryGetValue(item, out long lot) && lot > 1 ? lot : 1;
+    public long Lot(string item)
+    {
+        if (Lots.TryGetValue(item, out long lot))
+            return Math.Max(1, lot);
+        lotPatterns ??= Lots.Where(p => p.Key.Contains('*'))
+            .Select(p => (MarketBook.Glob(p.Key), p.Value))
+            .ToList();
+        foreach (var (items, units) in lotPatterns)
+            if (items.IsMatch(item))
+                return Math.Max(1, units);
+        return 1;
+    }
 }
 
 /// <summary>What the market needs from the game: time, items, prices and accounts.</summary>
@@ -254,8 +269,15 @@ public sealed class MarketBook
     }
 
     /// <summary>What OCT sells the item for at the station, milli-SC per unit; 0: it doesn't. A specialty sells at no less than the station pays for it, or the Store itself would be a way to make money.</summary>
-    public long OctAsk(IMarketWorld w, MarketSettings s, string station, string item) =>
-        Ask(w, s, station, item, s.Lot(item));
+    public long OctAsk(IMarketWorld w, MarketSettings s, string station, string item)
+    {
+        long lot = s.Lot(item);
+        long ask = Ask(w, s, station, item, lot);
+        // A lot costs at most its single units (SE-1497), as in the Store
+        return lot > 1 && !s.LotsOnly.Contains(item)
+            ? Math.Min(ask, Ask(w, s, station, item, 1))
+            : ask;
+    }
 
     // OCT's price in whole SC per Store unit of lot units
     private long Ask(IMarketWorld w, MarketSettings s, string station, string item, long lot)
@@ -277,7 +299,15 @@ public sealed class MarketBook
         string station,
         string item,
         bool specialty = false
-    ) => Bid(w, s, station, item, s.Lot(item), specialty);
+    )
+    {
+        long lot = s.Lot(item);
+        long bid = Bid(w, s, station, item, lot, specialty);
+        // Under the lot's price, which may be capped at its single units' (OctAsk)
+        return bid > 0 && lot > 1
+            ? Math.Max(0, Math.Min(bid, OctAsk(w, s, station, item) - PerUnit(1, lot)))
+            : bid;
+    }
 
     private long Bid(
         IMarketWorld w,
@@ -353,7 +383,10 @@ public sealed class MarketBook
             }
             // bid is the lot's. Neither row buys at or above what the other sells for, or buying
             // by the kg and selling by the lot (or back) would make money from the rounding.
-            long lotAsk = Ask(w, s, station, item, lot);
+            // The lot is never the worse deal (SE-1497): it costs at most the whole SC price of
+            // its single units, and they are bought at no more than the lot's price per unit,
+            // rounded down to whole SC.
+            long lotAsk = OctAsk(w, s, station, item);
             long ask = 0,
                 unitBid = 0;
             if (!s.LotsOnly.Contains(item))
@@ -363,10 +396,9 @@ public sealed class MarketBook
                     0,
                     Math.Min(
                         Bid(w, s, station, item, 1, special),
-                        (lotAsk - 1) / MilliPerSc * MilliPerSc
+                        Math.Min(lotAsk - 1, bid) / MilliPerSc * MilliPerSc
                     )
                 );
-                bid = Math.Max(0, Math.Min(bid, ask - PerUnit(1, lot)));
             }
             rows.Add(
                 new StoreRow(
