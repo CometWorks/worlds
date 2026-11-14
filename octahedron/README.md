@@ -496,6 +496,14 @@ two blocks.
   platinum only in the asteroid ring), the GPS of one of the ring's 4 ice
   asteroids, or that there are four of them. The plugin takes the GPS from the
   loaded world's `Octahedron-Ice-N` voxel maps.
+- Good.bot tells the players a hint in global chat every 30 to 120 minutes
+  (`Hints`, `HintMinMinutes`, `HintMaxMinutes` in `config/octahedron.cfg`,
+  [SE-1538](https://tasks.cometworks.se/tasks/2479)): one at a time, never the one
+  it said last. On a cluster the World Authority times it and every node says it
+  to its own players, so each player hears it once. With nobody online it reaches
+  nobody and the timer goes on. `tests/test_hints.py` and
+  `tests/hints_cluster.py` check it with waits of seconds, `tests/hints` the
+  timer itself (`dotnet test`).
 - Binoculars work in a safe zone that forbids shooting, though the game counts them as a
   rifle. Clients have no plugin, so the plugin's `BinocularsInZones` tells them the zone
   doesn't hold a character holding binoculars. The server's own check doesn't change.
