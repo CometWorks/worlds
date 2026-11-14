@@ -55,5 +55,15 @@ Check(DockHydrogenMath.Bill(0, 3, 20, 100) == (0, 0), "full tanks");
 (liters, sc) = DockHydrogenMath.Bill(1000, 7, 20, 1);
 Check(Near(liters, 20.0 / 7) && sc == 1, $"1 SC buys a little: {liters} L for {sc} SC");
 
+// SE-1523: a player's tanks are filled once 1 % short, a bot's service ship (tanks, ammo) only under 90 %
+Check(DockHydrogenMath.Due(98.9, 100, false), "player 98.9 %: fill");
+Check(!DockHydrogenMath.Due(99.5, 100, false), "player 99.5 %: no fill");
+Check(!DockHydrogenMath.Due(95, 100, true), "service ship 95 %: no fill");
+Check(!DockHydrogenMath.Due(0.9, 1, true), "service ship at 90 %: no fill");
+Check(DockHydrogenMath.Due(0.89, 1, true), "service ship 89 %: fill");
+Check(DockHydrogenMath.Due(26, 30, true), "26 of 30 magazines: top up");
+Check(!DockHydrogenMath.Due(27, 30, true), "27 of 30 magazines: no top-up");
+Check(!DockHydrogenMath.Due(0, 0, true), "nothing to fill");
+
 Console.WriteLine($"{checks - failures}/{checks} dock hydrogen checks passed");
 return failures == 0 ? 0 : 1;

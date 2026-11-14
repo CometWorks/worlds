@@ -92,7 +92,9 @@ each node charges at the stations it simulates.
 
 With `StationDockHydrogen` on (SE-1387), the docked ship's H2 tanks are filled
 too, but not for free. Once the tanks that are on lack 1 % or more of their
-capacity, the plugin fills them and bills the ice a gas generator would need for
+capacity (a bot's service ship, `ShipyardBotSteamIds`: once they are under 90 %,
+so a ship burning hydrogen while docked isn't billed every few seconds, SE-1523),
+the plugin fills them and bills the ice a gas generator would need for
 that hydrogen at the station's Store price:
 
     SC = ceil(liters / ShipyardHydrogenLitersPerIce x ice price), at least 1
@@ -1729,7 +1731,7 @@ the "Raptor - Ion" in the station's color (cluster-regression `sebot/tools/trade
   station, it has no working weapon block, or it is gone.
 - A police ship of an officer on duty docked at a station's connector (where the officers
   park) gets its hydrogen and oxygen tanks filled (oxygen since SE-1457), and its guns and its cargo (`PoliceCargoAmmo` of the volume, 0.5)
-  filled with its guns' ammo, free, every second. A service station is to do this later.
+  filled with its guns' ammo, free, each once it falls under 90 % (SE-1523). A service station is to do this later.
 - `!oct police list` (admins) lists the officers on duty and the targets.
 
 Officers and targets live in the process: on a cluster each node knows the officers who went
