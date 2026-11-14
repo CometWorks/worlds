@@ -7,10 +7,11 @@ copy's config, whose station patches switch them to OctahedronRadar on load; wit
 the config without them. Every station gets a probe ship 600 m from its LCD. The client visits
 each station's LCD, reads the sprites it rendered and saves a screenshot.
 
-One station (RADAR_CROWD, default North) gets 36 probe ships 300-1875 m away instead, for the
+One station (RADAR_CROWD, default North) gets 17 probe ships 300-1870 m away instead, for the
 contact count and the list of SE-1502, and one more hostile one that drifts outward at 4 m/s
-from 280 m, overtaking the others; the others get 3 each. The probes take turns being the test
-player's (friendly, green), nobody's (neutral, white) and the pirates' (hostile, red).
+from 280 m, overtaking the others: 5 hostile, 8 friendly and 5 neutral, each side spread over
+the range (CROWD_SIDES). The others get 3 each: the test player's (friendly, green), nobody's
+(neutral, white) and the pirates' (hostile, red).
 
 After: every LCD runs OctahedronRadar, lists its probe ships and no lane computer ("TL ..."),
 shipyard or shipyard arm, has the contact count in the top right corner, and lists at most 15
@@ -60,7 +61,11 @@ LCD_NAME = "LCD Panel - Station Lounge big map"
 # Which side of the screen the viewer stands on, along the station grid's forward
 SIDE = float(os.environ.get("RADAR_SIDE", "-1"))
 CROWD = os.environ.get("RADAR_CROWD", "North")
-CROWD_SIZE = 36
+# The crowded station's probes, nearest first: F friendly, N neutral, H hostile. With the
+# drifting hostile one that makes 18: 5 hostile, 8 friendly, 5 neutral, each side spread over
+# 300-1870 m, so the list shows the 5 hostile, the 8 friendly and 2 neutral ones, then "... 3"
+CROWD_SIDES = "FNHFFNHFNFHFNFHNF"
+CROWD_SIZE = len(CROWD_SIDES)
 DISTANCE = re.compile(r"^(\d+) m$|^(\d+\.\d\d) km$")
 RING = re.compile(r"^\d+ k?m$")
 GATE = re.compile(r"^TL \d+ (\w+) Station > (.+)$")
@@ -153,7 +158,7 @@ def stations(sector: Path) -> dict[str, dict]:
 def probe_spots(station: str, s: dict) -> list[tuple[str, tuple]]:
     """Probe ship names and positions: numbered nearest first, spread around the screen"""
     if station == CROWD:
-        rings = [(300 + 45 * i, 0.9 * i, 150 * math.sin(i)) for i in range(CROWD_SIZE)]
+        rings = [(300 + 98 * i, 0.9 * i, 150 * math.sin(i)) for i in range(CROWD_SIZE)]
     else:
         rings = [(d, a, 150) for d, a in ((600, 0.0), (900, 2.1), (1300, 4.2))]
     spots = []
@@ -165,9 +170,16 @@ def probe_spots(station: str, s: dict) -> list[tuple[str, tuple]]:
 
 
 def side(probe: str) -> str:
-    """Whose a probe is, by its number: the tester's, nobody's or the pirates'"""
+    """Whose a probe is, by its number: the tester's, nobody's or the pirates'. The drifting
+    one is the pirates'."""
     number = probe.rsplit(" ", 1)[1]
-    return SIDES[(int(number) - 1) % 3] if number.isdigit() else "hostile"
+    if not number.isdigit():
+        return "hostile"
+    if f" {CROWD} " in probe:
+        return {"F": "friendly", "N": "neutral", "H": "hostile"}[
+            CROWD_SIDES[int(number) - 1]
+        ]
+    return SIDES[(int(number) - 1) % 3]
 
 
 def pirates() -> int:
@@ -364,8 +376,8 @@ def visit(remote, name: str, s: dict) -> None:
     first = check_list(station, s, surface.get("sprites", []))
     if station != CROWD or not first:
         return
-    # The drifting probe moves 120 m in a minute, past two or three others
-    time.sleep(60)
+    # The drifting probe moves 400 m in 100 s, past at least one other hostile probe
+    time.sleep(100)
     later = check_list(
         station,
         s,
