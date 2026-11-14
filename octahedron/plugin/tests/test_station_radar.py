@@ -7,17 +7,19 @@ copy's config, whose station patches switch them to OctahedronRadar on load; wit
 the config without them. Every station gets a probe ship 600 m from its LCD. The client visits
 each station's LCD, reads the sprites it rendered and saves a screenshot.
 
-One station (RADAR_CROWD, default North) gets 36 probe ships 300-1875 m away instead, for the
-contact count and the two list columns of SE-1502, and one more that drifts outward at 2 m/s
-from 280 m, overtaking the others; the others get 3 each.
+One station (RADAR_CROWD, default North) gets 17 probe ships 300-1870 m away instead, for the
+contact count and the list of SE-1502, and one more hostile one that drifts outward at 4 m/s
+from 280 m, overtaking the others: 5 hostile, 8 friendly and 5 neutral, each side spread over
+the range (CROWD_SIDES). The others get 3 each: the test player's (friendly, green), nobody's
+(neutral, white) and the pirates' (hostile, red).
 
 After: every LCD runs OctahedronRadar, lists its probe ships and no lane computer ("TL ..."),
 shipyard or shipyard arm, has the contact count in the top right corner, and lists at most 15
-contacts per column by distance, nearest first, the left column first: the 30 nearest of the 36
-on the crowded station. Each listed ship has its own color, shared by its row and its marker,
-and keeps it while the drifting probe changes the order. The gates (the station's lane
-computers) are listed below the map by where they lead: the station at the other end, or Earth
-for a pole. Before: only reports what Arthur's radar draws, for comparison.
+contacts on the left: hostile, friendly, then neutral, each by distance, with "... N" for the
+rest. Each listed ship has a shade of its relation's color, shared by its row and its marker,
+and keeps it while the drifting probe changes the order. The map is on the right. The gates
+(the station's lane computers) are in a table of up to 2 rows and 3 columns below it, in cyan
+blue, by where they lead: the station at the other end, or Earth for a pole. Before: only reports what Arthur's radar draws, for comparison.
 
     OCT_TASK=SE-1380 OCT_WORLD_SOURCE=<world built from main with --octahedron-mod 3833786664> \\
         uv run --no-project --with httpx python tests/test_station_radar.py after|before [OUT]
@@ -59,12 +61,23 @@ LCD_NAME = "LCD Panel - Station Lounge big map"
 # Which side of the screen the viewer stands on, along the station grid's forward
 SIDE = float(os.environ.get("RADAR_SIDE", "-1"))
 CROWD = os.environ.get("RADAR_CROWD", "North")
-CROWD_SIZE = 36
+# The crowded station's probes, nearest first: F friendly, N neutral, H hostile. With the
+# drifting hostile one that makes 18: 5 hostile, 8 friendly, 5 neutral, each side spread over
+# 300-1870 m, so the list shows the 5 hostile, the 8 friendly and 2 neutral ones, then "... 3"
+CROWD_SIDES = "FNHFFNHFNFHFNFHNF"
+CROWD_SIZE = len(CROWD_SIDES)
 DISTANCE = re.compile(r"^(\d+) m$|^(\d+\.\d\d) km$")
 RING = re.compile(r"^\d+ k?m$")
 GATE = re.compile(r"^TL \d+ (\w+) Station > (.+)$")
-DESTINATION = re.compile(r"^(\w+ Station|Earth)$")
 MARKERS = ("Triangle", "SquareSimple")
+# The identity the test client plays, so that it owns the friendly probes
+TESTER = 144115188075999502
+SIDES = ("friendly", "neutral", "hostile")
+# The list's order of the sides
+FIRST = ("hostile", "friendly", "neutral")
+ROWS = 15
+MORE = re.compile(r"^\.\.\. (\d+)$")
+SHADES = 10
 COUNT = re.compile(r"^Contacts: (\d+)$")
 HIDDEN = re.compile(r"^TL \d|Shipyard|^Subgrid|Alien Shipyard arm")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
@@ -136,14 +149,16 @@ def stations(sector: Path) -> dict[str, dict]:
         at = vec(entity.find("PositionAndOrientation/Position"))
         if math.dist(at, s["lcd"]) < 2000:
             to = m.group(2)
-            s["gates"].append(to if to.endswith(" Station") else "Earth")
+            s["gates"].append(
+                to[: -len(" Station")] if to.endswith(" Station") else "Earth"
+            )
     return found
 
 
 def probe_spots(station: str, s: dict) -> list[tuple[str, tuple]]:
     """Probe ship names and positions: numbered nearest first, spread around the screen"""
     if station == CROWD:
-        rings = [(300 + 45 * i, 0.9 * i, 150 * math.sin(i)) for i in range(CROWD_SIZE)]
+        rings = [(300 + 98 * i, 0.9 * i, 150 * math.sin(i)) for i in range(CROWD_SIZE)]
     else:
         rings = [(d, a, 150) for d, a in ((600, 0.0), (900, 2.1), (1300, 4.2))]
     spots = []
@@ -152,6 +167,35 @@ def probe_spots(station: str, s: dict) -> list[tuple[str, tuple]]:
         at = add(at, s["forward"], d * math.sin(a))
         spots.append((f"Radar Probe {station} {i:02}", add(at, s["up"], h)))
     return spots
+
+
+def side(probe: str) -> str:
+    """Whose a probe is, by its number: the tester's, nobody's or the pirates'. The drifting
+    one is the pirates'."""
+    number = probe.rsplit(" ", 1)[1]
+    if not number.isdigit():
+        return "hostile"
+    if f" {CROWD} " in probe:
+        return {"F": "friendly", "N": "neutral", "H": "hostile"}[
+            CROWD_SIDES[int(number) - 1]
+        ]
+    return SIDES[(int(number) - 1) % 3]
+
+
+def pirates() -> int:
+    """The founder of the pirate faction"""
+    text = (rig.world_source() / "Sandbox.sbc").read_text(encoding="utf-8")
+    return int(re.search(r"<Tag>SPRT</Tag>.*?<PlayerId>(\d+)", text, re.S)[1])
+
+
+def color_side(color) -> str:
+    """What a sprite color shows: green friendly, red hostile, white neutral, blue a gate"""
+    r, g, b = color[:3]
+    if max(r, g, b) - min(r, g, b) < 40:
+        return "neutral"
+    if b >= g > r:
+        return "gate"
+    return "friendly" if g > r else "hostile"
 
 
 def mover(s: dict) -> tuple[str, tuple, tuple]:
@@ -164,7 +208,7 @@ def mover(s: dict) -> tuple[str, tuple, tuple]:
     return (
         f"Radar Probe {CROWD} Mover",
         add(s["lcd"], way, 280),
-        tuple(2 * c for c in way),
+        tuple(4 * c for c in way),
     )
 
 
@@ -173,17 +217,44 @@ def ships(station: str, s: dict) -> int:
 
 
 def prepare(found) -> None:
+    owners = {"friendly": TESTER, "neutral": 0, "hostile": pirates()}
     probes = [
-        rig.grid(probe, None, rig.small_ship_blocks(), position=at)
+        rig.grid(probe, None, rig.small_ship_blocks(owners[side(probe)]), position=at)
         for name, s in found.items()
         for probe, at in probe_spots(name.split()[0], s)
     ]
     crowd = found[f"{CROWD} Station"]
     name, at, velocity = mover(crowd)
     probes.append(
-        rig.grid(name, None, rig.small_ship_blocks(), position=at, velocity=velocity)
+        rig.grid(
+            name,
+            None,
+            rig.small_ship_blocks(owners[side(name)]),
+            position=at,
+            velocity=velocity,
+        )
     )
     rig.prepare_world(extra_grids=probes)
+    # The test client plays TESTER, who owns the friendly probes
+    path = rig.WORLD / "Sandbox.sbc"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(
+        "</Identities>",
+        f"<MyObjectBuilder_Identity><IdentityId>{TESTER}</IdentityId>"
+        f"<DisplayName>{rig.CLIENT_NAME}</DisplayName><CharacterEntityId>0</CharacterEntityId>"
+        "</MyObjectBuilder_Identity></Identities>",
+        1,
+    )
+    text, count = re.subn(
+        r"(<AllPlayersData>\s*<dictionary>)",
+        lambda m: m[1]
+        + f"<item><Key><ClientId>{rig.CLIENT_ID}</ClientId><SerialId>0</SerialId></Key>"
+        f"<Value><DisplayName>{rig.CLIENT_NAME}</DisplayName><IdentityId>{TESTER}</IdentityId>"
+        "<Connected>false</Connected><ForceRealPlayer>false</ForceRealPlayer></Value></item>",
+        text,
+    )
+    assert count == 1, "AllPlayersData"
+    path.write_text(text, encoding="utf-8")
     mods = rig.mod_items(
         {
             TRADE_LANES: "Trade Lanes MP",
@@ -253,7 +324,8 @@ def visit(remote, name: str, s: dict) -> None:
         # All its probes streamed in: the client gets the far ones last
         counts = [COUNT.match(sp.get("data") or "") for sp in sprites]
         shown = max((int(m.group(1)) for m in counts if m), default=0)
-        if shown >= ships(station, s):
+        names = {sp.get("data") for sp in sprites}
+        if shown >= ships(station, s) and all(g in names for g in s["gates"][:6]):
             break
     time.sleep(15 if MODE == "before" else 5)
     surface = remote.get_surface(grid_id, s["cell"])
@@ -270,6 +342,8 @@ def visit(remote, name: str, s: dict) -> None:
         flush=True,
     )
     time.sleep(3)  # The screenshot is written after the call returns
+    if MODE == "after":
+        raised(remote, station, s, lcd)
     shown = [t for t in texts if t.strip()]
     print(f"  {station}: script={surface.get('script')} texts={shown}", flush=True)
     # What the radar has to leave out is there: the client has streamed it in
@@ -302,8 +376,8 @@ def visit(remote, name: str, s: dict) -> None:
     first = check_list(station, s, surface.get("sprites", []))
     if station != CROWD or not first:
         return
-    # The drifting probe moves 120 m in a minute, past two or three others
-    time.sleep(60)
+    # The drifting probe moves 400 m in 100 s, past at least one other hostile probe
+    time.sleep(100)
     later = check_list(
         station,
         s,
@@ -330,6 +404,28 @@ def visit(remote, name: str, s: dict) -> None:
     )
 
 
+def raised(remote, station: str, s: dict, lcd) -> None:
+    """A screenshot from 2.5 m higher on the jetpack, above the lounge seats that hide the
+    bottom of the screen from the floor"""
+    remote.key("X")
+    time.sleep(1)
+    try:
+        flying = remote.get_character().get("jetpack")
+        remote.character_teleport(
+            *add(add(lcd, s["forward"], SIDE * 9.0), s["up"], 2.5)
+        )
+        time.sleep(3)
+        remote.character_look_at(*lcd, tolerance=2)
+        time.sleep(2)
+        shot = remote.screenshot_save(str(OUT / f"{station}-raised.png"))
+        print(f"  raised screenshot (jetpack {flying}): {shot}", flush=True)
+        time.sleep(3)
+    except Exception as e:  # noqa: BLE001 -- the floor screenshot is there already
+        print(f"  raised screenshot {station}: {e}")
+    finally:
+        remote.key("X")
+
+
 def check_list(
     station: str, s: dict, all_sprites: list[dict], quiet: bool = False
 ) -> list[tuple]:
@@ -353,7 +449,14 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         return []
     count_sprite = counts[0]
     count = int(COUNT.match(count_sprite["data"]).group(1))
-    # A row is a distance and the name right of it, at the same height, in one color
+    # The screen's area from the title (16, 10) and the count (X - 16, 14), in 1/512 of its
+    # height
+    title = next(sp for sp in sprites if sp.get("data") == "RADAR")
+    unit = (count_sprite["position"][1] - title["position"][1]) / 4
+    ox, oy = title["position"][0] - 16 * unit, title["position"][1] - 10 * unit
+    width, height = count_sprite["position"][0] + 16 * unit - ox, 512 * unit
+    # A row is a distance and the name right of it, at the same height, in one color: the list
+    # rows start at the title's left edge, the gates right of the list
     rows, gates = [], []
     for sp in sprites:
         m = DISTANCE.match(sp.get("data") or "")
@@ -376,39 +479,50 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
             continue
         same = beside.get("color") == sp.get("color")
         row = (x, y, meters, name, tuple(sp.get("color") or ()), same)
-        (gates if DESTINATION.match(name) else rows).append(row)
-    middle = (min(r[0] for r in rows) + max(r[0] for r in rows)) / 2 if rows else 0
-    left = sorted((r for r in rows if r[0] <= middle), key=lambda r: r[1])
-    right = sorted((r for r in rows if r[0] > middle), key=lambda r: r[1])
-    listed = left + right
+        (gates if x > ox + 0.38 * width else rows).append(row)
+    listed = sorted(rows, key=lambda r: r[1])
     probes = ships(station, s)
     print(
-        f"  {station}: count {count}, left {len(left)}, right {len(right)}: "
+        f"  {station}: count {count}, listed {len(listed)}: "
         + ", ".join(f"{r[2]:.0f} m {r[3]}" for r in listed),
         flush=True,
     )
     check(count >= probes, f"{station}: the count {count} has the {probes} probes")
     check(
-        len(listed) == min(count, 30),
-        f"{station}: lists min(count, 30) = {min(count, 30)} contacts",
+        len(listed) == min(count, ROWS),
+        f"{station}: lists min(count, {ROWS}) = {min(count, ROWS)} contacts",
     )
     check(
-        len(left) == min(len(listed), 15) and len(right) == len(listed) - len(left),
-        f"{station}: up to 15 in the left column, the rest in the right one",
+        len({round(r[0]) for r in listed}) <= 1,
+        f"{station}: one column on the left",
     )
+    order = [(FIRST.index(side(r[3])), r[2]) for r in listed]
     check(
-        all(a[2] <= b[2] for a, b in zip(listed, listed[1:])),
-        f"{station}: sorted by distance, nearest first, left column first",
+        order == sorted(order),
+        f"{station}: hostile, friendly, then neutral, each by distance",
     )
+    more = [sp for sp in sprites if MORE.match(sp.get("data") or "")]
+    if count > ROWS:
+        check(
+            len(more) == 1
+            and int(MORE.match(more[0]["data"]).group(1)) == count - ROWS
+            and more[0]["position"][1] > listed[-1][1],
+            f"{station}: '... {count - ROWS}' below the list",
+        )
+    else:
+        check(not more, f"{station}: no '... N' line with {count} contacts")
     check(
         all(count_sprite["position"][1] < r[1] for r in listed)
         and all(count_sprite["position"][0] > r[0] for r in listed),
         f"{station}: the count is in the top right corner, above and right of the list",
     )
     if count == probes:
-        # The drifting probe takes one of the 30 rows on the crowded station
+        # Whose they are first, then by distance: the probes' numbers go by distance
         names = [r[3] for r in listed if "Mover" not in r[3]]
-        wanted = [name for name, _ in probe_spots(station, s)][: len(names)]
+        wanted = sorted(
+            (name for name, _ in probe_spots(station, s)),
+            key=lambda n: (FIRST.index(side(n)), n),
+        )[: len(names)]
         # A long name ends in "…" where the column cuts it
         check(
             len(names) == len(wanted)
@@ -416,7 +530,7 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
                 n == w or (n.endswith("…") and w.startswith(n[:-1]))
                 for n, w in zip(names, wanted)
             ),
-            f"{station}: the nearest {len(wanted)} probes are listed in order",
+            f"{station}: the expected {len(wanted)} probes are listed in order",
         )
 
     # Colors: one per ship, its row's and its marker's
@@ -432,16 +546,32 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         f"{station}: each row's distance and name share a color",
     )
     check(
-        len(set(colors)) == len(colors),
-        f"{station}: every listed ship has its own color",
+        all(color_side(r[4]) == side(r[3]) for r in listed),
+        f"{station}: friendly ships green, neutral white, hostile red",
+    )
+    by_side = {}
+    for r in listed:
+        by_side.setdefault(side(r[3]), []).append(r[4])
+    print(
+        f"  {station}: shades "
+        + ", ".join(f"{k} {len(set(v))}/{len(v)}" for k, v in by_side.items()),
+        flush=True,
+    )
+    check(
+        all(len(set(v)) == min(len(v), SHADES) for v in by_side.values()),
+        f"{station}: the ships of one side have different shades, up to {SHADES}",
+    )
+    check(
+        all(color_side(r[4]) == "gate" for r in gates),
+        f"{station}: the gates are cyan blue",
     )
     check(
         all(c in markers for c in colors),
         f"{station}: each listed ship's color is on a marker of the map",
     )
 
-    # The gates below the map, between the columns, by distance
-    gates.sort(key=lambda r: r[1])
+    # The gates below the map in a table, row by row, by distance
+    gates.sort(key=lambda r: (r[1], r[0]))
     print(
         f"  {station}: gates "
         + ", ".join(f"{r[2]:.0f} m {r[3]}" for r in gates)
@@ -449,24 +579,33 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         flush=True,
     )
     check(
-        sorted(r[3] for r in gates) == sorted(s["gates"]),
+        sorted(r[3] for r in gates) == sorted(s["gates"])[:6],
         f"{station}: the gates are listed by where they lead",
     )
     check(
         all(a[2] <= b[2] for a, b in zip(gates, gates[1:])),
-        f"{station}: the gates are sorted by distance",
+        f"{station}: the gates are sorted by distance, row by row",
     )
-    # The screen's area from the title (16, 10) and the count (X - 16, 14), in 1/512 of its
-    # height
-    title = next(sp for sp in sprites if sp.get("data") == "RADAR")
-    unit = (count_sprite["position"][1] - title["position"][1]) / 4
-    ox, oy = title["position"][0] - 16 * unit, title["position"][1] - 10 * unit
-    width, height = count_sprite["position"][0] + 16 * unit - ox, 512 * unit
+    check(
+        len({round(r[1]) for r in gates}) <= 2
+        and len({round(r[0]) for r in gates}) <= 3,
+        f"{station}: the gates are in at most 2 rows and 3 columns",
+    )
+    ships_drawn = [
+        sp["position"]
+        for sp in all_sprites
+        if sp.get("type") == "TEXTURE" and sp.get("data") in MARKERS
+    ]
+    check(
+        bool(ships_drawn) and all(x > ox + 0.38 * width for x, _ in ships_drawn),
+        f"{station}: the map is on the right side",
+    )
     check(
         bool(gates)
-        and all(ox + 0.3 * width < r[0] < ox + 0.7 * width for r in gates)
-        and all(r[1] > oy + 0.6 * height for r in gates),
-        f"{station}: the gates are at the bottom center",
+        and all(r[0] > ox + 0.38 * width for r in gates)
+        and all(r[1] > max(y for _, y in ships_drawn) for r in gates)
+        and all(r[1] > oy + 0.75 * height for r in gates),
+        f"{station}: the gates are at the bottom, below the map",
     )
     return listed
 
