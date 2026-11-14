@@ -2,7 +2,7 @@ using System;
 
 namespace ServerPlugin;
 
-/// <summary>What a ship docked at a station pays for hydrogen: the ice a gas generator would make it from, at the station's ice price (StationCharging).</summary>
+/// <summary>What a ship docked at a station pays for hydrogen: the ice a gas generator would make it from, at the station's ice price (StationCharging), and when a docked ship's refill is due (StationCharging, Police).</summary>
 public static class DockHydrogenMath
 {
     /// <summary>A player's ship gets its tanks filled once they are this share short of full.</summary>

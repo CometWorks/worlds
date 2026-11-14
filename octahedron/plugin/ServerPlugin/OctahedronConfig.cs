@@ -131,7 +131,7 @@ public class OctahedronConfig : PluginConfig
     } = true;
 
     [BoolOption(
-        "Fill the H2 tanks of a ship docked at a station's trading connector once they are 1 % short of full, "
+        "Fill the H2 tanks of a ship docked at a station's trading connector once they are 1 % short of full (a bot's service ship, ShipyardBotSteamIds: once under 90 %), "
             + "for what the ice costs at the station's Store at ShipyardHydrogenLitersPerIce liters per kg, rounded up to a whole SC. "
             + "The ship's owner pays the station's faction; short of money, the tanks get what the balance buys. Tanks that are off get nothing.",
         Parent = "stations"
