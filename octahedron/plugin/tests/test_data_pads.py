@@ -41,6 +41,7 @@ ORES = ("gold", "silver", "uranium", "platinum")
 POLICE_PADS = ("Sergeant's briefing", "Dock hand's letter")
 GPS = re.compile(r"\{GPS:([^:}]+):([^}]+)\}")
 MISSING = "Lost survey"
+TAKES = 120
 # The pad rule, told from the Free Tools rule for the tools by its Datapad item
 PAD_RULE = re.compile(
     r"(<IntervalSeconds>)600(</IntervalSeconds>\s*<Items>\s*<RefillItem>\s*<Item>Datapad/Datapad<)"
@@ -144,7 +145,8 @@ def run(probe, check, pads: list[tuple[str, str]], centers) -> None:
 
     seen: dict[str, str] = {}
     misses = 0
-    for _ in range(40):
+    # Enough takes for every pad to turn up: 4 boxes a take, a miss of any of 32 pads under 1 in 1000
+    for _ in range(TAKES):
         got = st.wait_until(
             lambda: full(b := boxes(probe(f"datapads {STATION}"))) and b,
             INTERVAL * 5,

@@ -8,7 +8,7 @@ so a player hears each hint once, as tests/test_hints.py checks it on one server
 The setup is tests/wa_economy_cluster.py's, see there for host.env: WA + 2 regular nodes + one
 headless admin client.
 
-Run on polaris on 2026-11-14 with cluster CLUSTER_VERSION: RESULT_CLUSTER
+Run on polaris on 2026-11-14 with cluster 0.3.11: 12/12 checks.
 """
 
 from __future__ import annotations
