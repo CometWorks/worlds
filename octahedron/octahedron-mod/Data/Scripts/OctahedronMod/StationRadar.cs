@@ -263,8 +263,9 @@ namespace OctahedronMod
                 : Palette[c.Relation * Shades] * 0.5f;
         }
 
-        // Where a lane computer's gate leads: its grid is named "TL 07 North Station > Beta
-        // Station". A lane to a planet's pole leads to Earth, which has no station yet.
+        // Where a lane computer's gate leads, short for the gate table: its grid is named
+        // "TL 07 North Station > Beta Station", which leads to Beta. A lane to a planet's pole
+        // leads to Earth, which has no station yet.
         static string Destination(IMyCubeGrid grid)
         {
             var name = grid.DisplayName ?? "";
@@ -272,7 +273,9 @@ namespace OctahedronMod
             if (!name.StartsWith("TL ", StringComparison.Ordinal) || arrow < 0)
                 return null;
             var to = name.Substring(arrow + 3);
-            return to.EndsWith(" Station", StringComparison.Ordinal) ? to : "Earth";
+            return to.EndsWith(" Station", StringComparison.Ordinal)
+                ? to.Substring(0, to.Length - " Station".Length)
+                : "Earth";
         }
 
         // A station installation: a static grid of the station's owner or of nobody

@@ -64,7 +64,6 @@ CROWD_SIZE = 36
 DISTANCE = re.compile(r"^(\d+) m$|^(\d+\.\d\d) km$")
 RING = re.compile(r"^\d+ k?m$")
 GATE = re.compile(r"^TL \d+ (\w+) Station > (.+)$")
-DESTINATION = re.compile(r"^(\w+ Station|Earth)$")
 MARKERS = ("Triangle", "SquareSimple")
 # The identity the test client plays, so that it owns the friendly probes
 TESTER = 144115188075999502
@@ -145,7 +144,9 @@ def stations(sector: Path) -> dict[str, dict]:
         at = vec(entity.find("PositionAndOrientation/Position"))
         if math.dist(at, s["lcd"]) < 2000:
             to = m.group(2)
-            s["gates"].append(to if to.endswith(" Station") else "Earth")
+            s["gates"].append(
+                to[: -len(" Station")] if to.endswith(" Station") else "Earth"
+            )
     return found
 
 
@@ -411,7 +412,14 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         return []
     count_sprite = counts[0]
     count = int(COUNT.match(count_sprite["data"]).group(1))
-    # A row is a distance and the name right of it, at the same height, in one color
+    # The screen's area from the title (16, 10) and the count (X - 16, 14), in 1/512 of its
+    # height
+    title = next(sp for sp in sprites if sp.get("data") == "RADAR")
+    unit = (count_sprite["position"][1] - title["position"][1]) / 4
+    ox, oy = title["position"][0] - 16 * unit, title["position"][1] - 10 * unit
+    width, height = count_sprite["position"][0] + 16 * unit - ox, 512 * unit
+    # A row is a distance and the name right of it, at the same height, in one color: the list
+    # rows start at the title's left edge, the gates right of the list
     rows, gates = [], []
     for sp in sprites:
         m = DISTANCE.match(sp.get("data") or "")
@@ -434,7 +442,7 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
             continue
         same = beside.get("color") == sp.get("color")
         row = (x, y, meters, name, tuple(sp.get("color") or ()), same)
-        (gates if DESTINATION.match(name) else rows).append(row)
+        (gates if x > ox + 0.38 * width else rows).append(row)
     listed = sorted(rows, key=lambda r: r[1])
     probes = ships(station, s)
     print(
@@ -546,12 +554,6 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         and len({round(r[0]) for r in gates}) <= 3,
         f"{station}: the gates are in at most 2 rows and 3 columns",
     )
-    # The screen's area from the title (16, 10) and the count (X - 16, 14), in 1/512 of its
-    # height
-    title = next(sp for sp in sprites if sp.get("data") == "RADAR")
-    unit = (count_sprite["position"][1] - title["position"][1]) / 4
-    ox, oy = title["position"][0] - 16 * unit, title["position"][1] - 10 * unit
-    width, height = count_sprite["position"][0] + 16 * unit - ox, 512 * unit
     ships_drawn = [
         sp["position"]
         for sp in all_sprites
