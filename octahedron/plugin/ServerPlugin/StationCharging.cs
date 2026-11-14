@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
@@ -26,10 +27,11 @@ namespace ServerPlugin;
 // Fuse: while the docked ships want more than the station has to spare, the one drawing the most
 // stops charging until the connectors it was docked to let go of it. Each cluster node charges at
 // the stations it simulates.
-// Hydrogen (StationDockHydrogen): the docked ship's H2 tanks that are on are filled whenever they are
-// 1 % or more short of full (a bot's service ship: under 90 %), for what the ice would cost at the station's Store
-// (DockHydrogenMath), paid by the ship's owner to the station's faction. Short of money, the tanks
-// get what the balance buys. Shipyards are no stations: nothing is refilled there.
+// Gas (StationDockHydrogen): the docked ship's H2 and O2 tanks that are on are filled whenever the
+// tanks of either gas are 1 % or more short of full (a bot's service ship: under 90 %), for what the ice would cost at the station's
+// Store (DockGasMath). A gas generator makes both gases from the same ice, at its own liters per kg
+// of each, so the bill is the ice of the gas needing more. The ship's owner pays the station's
+// faction. Short of money, the tanks get what the balance buys. Shipyards are no stations: nothing is refilled there.
 internal static class StationCharging
 {
     private const float Seconds = 1;
@@ -86,7 +88,7 @@ internal static class StationCharging
             }
     }
 
-    // Charges the ships docked at the station, fills their hydrogen, and returns them with the
+    // Charges the ships docked at the station, fills their H2 and O2, and returns them with the
     // connectors holding them
     private static IEnumerable<KeyValuePair<long, HashSet<long>>> Charge(
         MyCubeGrid station,
@@ -116,7 +118,7 @@ internal static class StationCharging
 
         if (Plugin.Config.StationDockHydrogen)
             foreach (var ship in ships)
-                Hydrogen(station, entry, factionId, ship.Key, ship.Value.Grids);
+                Gas(station, entry, factionId, ship.Key, ship.Value.Grids);
         if (Plugin.Config.StationDockCharging)
             Power(station, ships);
         return ships.Select(s => new KeyValuePair<long, HashSet<long>>(s.Key, s.Value.Connectors));
@@ -154,8 +156,8 @@ internal static class StationCharging
         Debit(station, energy);
     }
 
-    // Fills the ship's H2 tanks for the ice it takes at the station's Store price
-    private static void Hydrogen(
+    // Fills the ship's H2 and O2 tanks for the ice they take at the station's Store price, billed once
+    private static void Gas(
         MyCubeGrid station,
         IMyFactionStation entry,
         long factionId,
@@ -167,33 +169,33 @@ internal static class StationCharging
             return;
         var tanks = grids
             .SelectMany(g => g.GetFatBlocks<MyGasTank>())
-            .Where(t =>
-                t.IsFunctional
-                && t.Enabled
-                && t.BlockDefinition is MyGasTankDefinition d
-                && d.StoredGasId.SubtypeName == "Hydrogen"
-            )
+            .Where(t => t.IsFunctional && t.Enabled)
             .ToList();
         var main = grids.MaxBy(g => g.BlocksCount);
         var owner = main.BigOwners.FirstOrDefault();
         if (owner == 0 || MySession.Static.Players.IdentityIsNpc(owner))
             return;
-        // Filled only once they lack 1 %, a bot's service ship's under 90 % (DockHydrogenMath.Due), so a
-        // ship burning hydrogen while docked isn't billed every few seconds
-        var capacity = tanks.Sum(t => (double)t.Capacity);
-        var wanted = tanks.Sum(t => (1 - t.FilledRatio) * t.Capacity);
-        if (!DockHydrogenMath.Due(capacity - wanted, capacity, ShipyardOrders.IsBot(owner)))
+        // Filled only once the tanks of a gas lack 1 %, a bot's service ship's under 90 %
+        // (DockGasMath.Due), so a ship burning gas while docked isn't billed every few seconds
+        var service = ShipyardOrders.IsBot(owner);
+        var h2 = Tanks(tanks, Hydrogen, service);
+        var o2 = Tanks(tanks, Oxygen, service);
+        if (!h2.Due && !o2.Due)
             return;
         var price = IcePrice(entry);
         var balance = MyBankingSystem.Static.TryGetAccountInfo(owner, out var account)
             ? account.Balance
             : 0;
-        var (liters, sc) = DockHydrogenMath.Bill(
-            wanted,
+        var (h2PerIce, o2PerIce) = LitersPerIce();
+        var (h2Liters, o2Liters, sc) = DockGasMath.Bill(
+            h2.Wanted,
+            o2.Wanted,
+            h2PerIce,
+            o2PerIce,
             price,
-            Plugin.Config.ShipyardHydrogenLitersPerIce,
             balance
         );
+        var wanted = Gases(h2.Wanted, o2.Wanted);
         if (sc <= 0 || !MyBankingSystem.ChangeBalance(owner, -sc))
         {
             if (broke.Add(key))
@@ -201,49 +203,98 @@ internal static class StationCharging
                     station,
                     owner,
                     price <= 0
-                        ? $"{station.DisplayName} has no ice for sale: no hydrogen for {main.DisplayName}."
-                        : $"{main.DisplayName} needs {wanted:N0} L of hydrogen for {Sc(Bill(wanted, price))} "
+                        ? $"{station.DisplayName} has no ice for sale: no {Gases(h2.Wanted, o2.Wanted, false)} for {main.DisplayName}."
+                        : $"{main.DisplayName} needs {wanted} for "
+                            + $"{Sc(DockGasMath.Bill(h2.Wanted, o2.Wanted, h2PerIce, o2PerIce, price, long.MaxValue).Sc)} "
                             + $"({PerTonne(price)} of ice), you have {Sc(balance)}."
                 );
             return;
         }
         if (!MyBankingSystem.ChangeBalance(factionId, sc))
             Plugin.Log.Error(
-                $"Station charging: {sc} SC taken from {owner} for hydrogen but not paid to faction {factionId}"
+                $"Station charging: {sc} SC taken from {owner} for gas but not paid to faction {factionId}"
             );
 
-        var left = liters;
+        Fill(h2.Tanks, h2Liters);
+        Fill(o2.Tanks, o2Liters);
+
+        var partial = h2Liters < h2.Wanted - 0.5 || o2Liters < o2.Wanted - 0.5;
+        var text =
+            $"{main.DisplayName} got {Gases(h2Liters, o2Liters)} for {Sc(sc)} ({PerTonne(price)} of ice)"
+            + (partial ? $", all you could pay for of the {wanted} it needed." : ".");
+        Plugin.Log.Info($"Station charging: gas at {station.DisplayName} for {owner}: {text}");
+        if (partial)
+            broke.Add(key);
+        Tell(station, owner, text);
+    }
+
+    private const string Hydrogen = "Hydrogen";
+    private const string Oxygen = "Oxygen";
+
+    // The tanks of the gas, the liters they lack, and whether their refill is due
+    private static (List<MyGasTank> Tanks, double Wanted, bool Due) Tanks(
+        List<MyGasTank> all,
+        string gas,
+        bool service
+    )
+    {
+        var tanks = all.Where(t =>
+                t.BlockDefinition is MyGasTankDefinition d && d.StoredGasId.SubtypeName == gas
+            )
+            .ToList();
+        var capacity = tanks.Sum(t => (double)t.Capacity);
+        var wanted = tanks.Sum(t => (1 - t.FilledRatio) * t.Capacity);
+        return (tanks, wanted, DockGasMath.Due(capacity - wanted, capacity, service));
+    }
+
+    private static void Fill(List<MyGasTank> tanks, double liters)
+    {
         foreach (var tank in tanks)
         {
-            var give = Math.Min(left, (1 - tank.FilledRatio) * tank.Capacity);
+            var give = Math.Min(liters, (1 - tank.FilledRatio) * tank.Capacity);
             if (give <= 0)
                 continue;
             ((Sandbox.ModAPI.IMyGasTank)tank).ChangeFilledRatio(
                 Math.Min(1, tank.FilledRatio + give / tank.Capacity),
                 true
             );
-            left -= give;
+            liters -= give;
         }
+    }
 
-        var text =
-            $"{main.DisplayName} got {liters:N0} L of hydrogen for {Sc(sc)} ({PerTonne(price)} of ice)"
-            + (
-                liters < wanted - 0.5
-                    ? $", all you could pay for of the {wanted:N0} L it needed."
-                    : "."
-            );
-        Plugin.Log.Info($"Station charging: hydrogen at {station.DisplayName} for {owner}: {text}");
-        if (liters < wanted - 0.5)
-            broke.Add(key);
-        Tell(station, owner, text);
+    private static string Gases(double h2, double o2, bool liters = true)
+    {
+        var parts = new List<string>();
+        if (h2 >= 0.5)
+            parts.Add(liters ? $"{h2:N0} L of hydrogen" : "hydrogen");
+        if (o2 >= 0.5)
+            parts.Add(liters ? $"{o2:N0} L of oxygen" : "oxygen");
+        return string.Join(" and ", parts);
+    }
+
+    // Liters of H2 and O2 per kg of ice, as the large O2/H2 generator makes them; the shipyard's
+    // ShipyardHydrogenLitersPerIce and ShipyardOxygenLitersPerIce without that definition
+    private static (double H2, double O2) LitersPerIce()
+    {
+        double h2 = Plugin.Config.ShipyardHydrogenLitersPerIce,
+            o2 = Plugin.Config.ShipyardOxygenLitersPerIce;
+        if (
+            MyDefinitionManager.Static.TryGetCubeBlockDefinition(
+                new MyDefinitionId(typeof(MyObjectBuilder_OxygenGenerator), ""),
+                out var block
+            ) && block is MyOxygenGeneratorDefinition { ProducedGases: { } gases }
+        )
+            foreach (var gas in gases)
+                if (gas.IceToGasRatio <= 0)
+                    continue;
+                else if (gas.Id.SubtypeName == Hydrogen)
+                    h2 = gas.IceToGasRatio;
+                else if (gas.Id.SubtypeName == Oxygen)
+                    o2 = gas.IceToGasRatio;
+        return (h2, o2);
     }
 
     private static string PerTonne(double price) => $"{price * 1000:N0} SC per t";
-
-    private static long Bill(double liters, double price) =>
-        DockHydrogenMath
-            .Bill(liters, price, Plugin.Config.ShipyardHydrogenLitersPerIce, long.MaxValue)
-            .Sc;
 
     // What OCT sells a kg of ice for at the station's Store, in SC: the lowest of its offers, a row of
     // lots (MarketLots) counting per kg; 0 when it has none for sale

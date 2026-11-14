@@ -131,8 +131,9 @@ public class OctahedronConfig : PluginConfig
     } = true;
 
     [BoolOption(
-        "Fill the H2 tanks of a ship docked at a station's trading connector once they are 1 % short of full (a bot's service ship, ShipyardBotSteamIds: once under 90 %), "
-            + "for what the ice costs at the station's Store at ShipyardHydrogenLitersPerIce liters per kg, rounded up to a whole SC. "
+        "Fill the H2 and O2 tanks of a ship docked at a station's trading connector once the H2 or the O2 tanks are 1 % short of full (a bot's service ship, ShipyardBotSteamIds: once under 90 %), "
+            + "for what the ice costs at the station's Store, rounded up to a whole SC. The O2/H2 generator makes both from the same ice, "
+            + "at the liters per kg its definition gives, so the bill is the ice of the gas needing more. "
             + "The ship's owner pays the station's faction; short of money, the tanks get what the balance buys. Tanks that are off get nothing.",
         Parent = "stations"
     )]
@@ -1058,7 +1059,8 @@ public class OctahedronConfig : PluginConfig
         0.001,
         description: "Liters of hydrogen per kg of ice, as a gas generator makes it. Hydrogen a paid build buys "
             + "at the station is bought as ice, hydrogen taken from a ship at the station counts as ice, "
-            + "and a ship docked at a station pays for its hydrogen as ice (StationDockHydrogen).",
+            + "and a ship docked at a station pays for its hydrogen as ice (StationDockHydrogen) at this ratio "
+            + "only when the O2/H2 generator's definition is missing.",
         Parent = "shipyard"
     )]
     public double ShipyardHydrogenLitersPerIce
