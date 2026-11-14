@@ -2304,7 +2304,8 @@ public class OctahedronConfig : PluginConfig
 
     [BoolOption(
         "Police bots defend the stations (SE-1384): weapon damage within PoliceAlertRange of a station makes the "
-            + "officers on duty there (bots that said !oct police duty <station>) hear the attacking ships, until "
+            + "officers on duty there (bots that said !oct police duty <station>) hear the ships to fight: whoever "
+            + "fires at a player's or OCT ship, enemy NPCs that fire or are fired at (SE-1490), until "
             + "they are beyond PoliceChaseRange or have no working weapon. A police ship docked at a station gets "
             + "its hydrogen and ammo filled for free.",
         Parent = "police"

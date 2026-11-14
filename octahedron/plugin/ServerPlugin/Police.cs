@@ -24,8 +24,12 @@ namespace ServerPlugin;
 
 // Police bots defend the stations (SE-1384). A police officer is a bot (ShipyardBotSteamIds) that
 // said "!oct police duty <station>"; it flies a ship named PoliceGridName*. Weapon damage to a grid
-// or a character within PoliceAlertRange of a station's center makes the attacker a target of that
-// station's police: the grid that owns the weapon, with every grid mechanically connected to it.
+// or a character within PoliceAlertRange of a station's center calls that station's police, and
+// who started the fight decides whom they go after (SE-1490, PoliceRules): an enemy NPC (an NPC of
+// a faction at war with OCT, the MoneyAuthorityFactionTag faction) that shoots is a target; anyone
+// who fires at an enemy NPC brings the police against that NPC; fire back at a ship the police
+// already chase is no crime; and anyone who fires at anything else, a player's or an OCT ship
+// first of all, is a target. A target is the grid, with every grid mechanically connected to it.
 // Every PoliceReportSeconds the officers on duty there hear, privately from "Police":
 //
 //     Target KEY at X Y Z moving VX VY VZ grids ID,ID,... weapons N
@@ -60,15 +64,18 @@ internal static class Police
     {
         public string Station;
         public HashSet<long> Grids = new();
+
+        // Grids that fired at this target and raised no alert, logged once each
+        public HashSet<long> Excused = new();
     }
 
     // Attacker key -> target
     private static readonly Dictionary<long, Target> targets = new();
 
-    // Damage seen since the last tick: attacker grid and station. The damage handler may run off
-    // the game's thread.
+    // Damage seen since the last tick, in order: attacker grid, what it hit (a grid or a
+    // character) and station. The damage handler may run off the game's thread.
     private static readonly object hitsLock = new();
-    private static List<(long Grid, string Station)> hits = new();
+    private static List<(long Grid, long Victim, string Station)> hits = new();
 
     public static string Duty(long identity, string station)
     {
@@ -117,11 +124,11 @@ internal static class Police
             if (!MySession.Static.Players.IsPlayerOnline(id))
                 officers.Remove(id);
 
-        List<(long Grid, string Station)> seen;
+        List<(long Grid, long Victim, string Station)> seen;
         lock (hitsLock)
             (seen, hits) = (hits, new());
-        foreach (var (grid, station) in seen)
-            AddTarget(grid, station);
+        foreach (var (grid, victim, station) in seen.Distinct())
+            OnHit(grid, victim, station);
 
         var report = now >= nextReport;
         if (report)
@@ -201,8 +208,83 @@ internal static class Police
         var station = StationNear(at.Value, Config.PoliceAlertRange);
         if (station == null)
             return;
+        var victim = target switch
+        {
+            MySlimBlock block => block.CubeGrid.EntityId,
+            MyEntity entity => entity.EntityId,
+            _ => 0,
+        };
         lock (hitsLock)
-            hits.Add((attacker.EntityId, station));
+            hits.Add((attacker.EntityId, victim, station));
+    }
+
+    private static void OnHit(long attackerId, long victimId, string station)
+    {
+        if (!MyEntities.TryGetEntityById(attackerId, out MyCubeGrid attacker) || attacker.Closed)
+            return;
+        MyEntities.TryGetEntityById(victimId, out MyEntity victim);
+        var victimGrid = victim as MyCubeGrid;
+        var victimTarget =
+            victimGrid == null ? null
+            : Group(victimGrid) is var joined
+                ? targets.Values.FirstOrDefault(t => joined.Any(g => t.Grids.Contains(g.EntityId)))
+            : null;
+        var pick = PoliceRules.Decide(
+            SideOf(OwnerOf(attacker)),
+            SideOf(victimGrid != null ? OwnerOf(victimGrid) : CharacterOwner(victim)),
+            victimTarget != null
+        );
+        var name = victim?.DisplayName ?? victimId.ToString();
+        switch (pick)
+        {
+            case PoliceRules.Pick.Attacker:
+                AddTarget(attacker, station, $"fired at {name}");
+                break;
+            case PoliceRules.Pick.Victim:
+                AddTarget(
+                    victimGrid,
+                    station,
+                    $"an enemy NPC, under fire by {attacker.DisplayName}"
+                );
+                break;
+            default:
+                if (victimTarget.Excused.Add(attacker.EntityId))
+                    Plugin.Log.Info(
+                        $"Police: no alert at {station}, {attacker.DisplayName} ({attacker.EntityId}) fired at target {name}"
+                    );
+                break;
+        }
+    }
+
+    // Who owns the most of the grid and the grids joined to it, 0 for nobody
+    private static long OwnerOf(MyCubeGrid grid) =>
+        Group(grid)
+            .OrderByDescending(g => g.BlocksCount)
+            .SelectMany(g => g.BigOwners)
+            .FirstOrDefault();
+
+    private static long CharacterOwner(MyEntity entity) =>
+        entity is MyCharacter character ? character.GetPlayerIdentityId() : 0;
+
+    // An NPC not in OCT whose faction is at war with OCT, or that has no faction at all
+    private static PoliceRules.Side SideOf(long identity)
+    {
+        if (identity == 0 || !MySession.Static.Players.IdentityIsNpc(identity))
+            return PoliceRules.Side.Other;
+        var oct = OctFaction.Faction;
+        if (oct?.IsMember(identity) == true)
+            return PoliceRules.Side.Other;
+        var faction = MySession.Static.Factions.GetPlayerFaction(identity);
+        if (faction == null)
+            return PoliceRules.Side.Enemy;
+        if (oct == null)
+            return PoliceRules.Side.Other;
+        return
+            MySession
+                .Static.Factions.GetRelationBetweenFactions(oct.FactionId, faction.FactionId)
+                .Item1 == MyRelationsBetweenFactions.Enemies
+            ? PoliceRules.Side.Enemy
+            : PoliceRules.Side.Other;
     }
 
     // The grid of the weapon that did the damage: a weapon block's, a missile's launcher's. Hand
@@ -216,18 +298,16 @@ internal static class Police
         return entity is MyCubeBlock block ? block.CubeGrid : null;
     }
 
-    private static void AddTarget(long gridId, string station)
+    private static void AddTarget(MyCubeGrid grid, string station, string why)
     {
-        if (!MyEntities.TryGetEntityById(gridId, out MyCubeGrid grid) || grid.Closed)
+        if (grid == null || grid.Closed)
             return;
         var group = Group(grid).Select(g => g.EntityId).ToList();
         if (targets.Values.Any(t => t.Grids.Overlaps(group)))
             return;
         var key = group.Min();
         targets[key] = new Target { Station = station, Grids = group.ToHashSet() };
-        Plugin.Log.Info(
-            $"Police: alert at {station}, {grid.DisplayName} ({key}) did weapon damage"
-        );
+        Plugin.Log.Info($"Police: alert at {station}, {grid.DisplayName} ({key}): {why}");
     }
 
     private static List<MyCubeGrid> Group(MyCubeGrid grid) =>
