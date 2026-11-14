@@ -7,8 +7,9 @@ are broken. Then the client takes and hands in a hauling and an acquisition
 contract (paid by OCT, the items in OCT's stock at Alpha, no new acquisition for them),
 takes the wreck contract and completes the bounty. A larger salvage radius stands in for the tow:
 the derelict is the player's once it is in reach, and the reward is paid. A derelict already
-at the shipyard gets no contract, and a block the player built and left ownerless, debris,
-gets an area cleanup they can't be paid for. After a save and restart the open contracts must be the same ones, not posted
+at the shipyard gets no contract. A static wreck is ground down on the spot: its contract stays
+taken under the least blocks of a wreck and pays at a quarter of them (SE-1555). A block the player
+built and left ownerless, debris, gets an area cleanup they can't be paid for. After a save and restart the open contracts must be the same ones, not posted
 again, and the save shows the derelict's new owner. Prints one line per check
 and a pass/fail summary; exit code 0 = all passed.
 
@@ -48,6 +49,7 @@ STATIONS = 7
 LINE = re.compile(r"^\s*(\d+) (\w+) (\w+) ([\d,]+) SC ?(.*)$")
 HEADER = re.compile(r"^(.+ Station): (\d+) contracts, (\d+) others$")
 SPRT_MEMBER = 144115188075855894
+GRIND_WRECK = "Grind Wreck"
 
 
 def check(ok: bool, what: str) -> None:
@@ -138,13 +140,38 @@ def test_grids() -> list[str]:
         )
         for i in range(1, 6)
     ]
+    # SE-1555: a static plate of nobody's, 40 armor blocks, 9 km away: ground down on the spot
+    plate = [
+        rig.block("MyObjectBuilder_CubeBlock", "LargeBlockArmorBlock", (x, 0, z))
+        for x in range(8)
+        for z in range(5)
+    ]
     return [
         *debris,
         target,
+        rig.grid(GRIND_WRECK, None, plate, position=grind_point(sx, sy, sz)).replace(
+            "<IsStatic>false</IsStatic>", "<IsStatic>true</IsStatic>"
+        ),
         rig.grid("Test Derelict", None, derelict, position=(sx, sy - 1000, sz)),
         rig.grid("Yard Derelict", None, derelict, position=(sx, sy - 400, sz)),
         rig.grid("Disarmed Raider", None, raider, position=(sx, sy, sz + 5000)),
     ]
+
+
+def grind_point(sx: float, sy: float, sz: float) -> tuple[float, float, float]:
+    return (sx + 4000, sy - 9000, sz)
+
+
+def grind(remote, grid_id: int, leave: int) -> None:
+    """Removes blocks from one end of the grid, as a grinder does, until leave are left"""
+    cubes = sorted(remote.list_cubes(grid_id)["cubes"], key=lambda c: c["min"])
+    for cube in cubes[leave:]:
+        remote.character_grid_event(grid_id, tuple(cube["min"]), "raze")
+    rig.wait_until(
+        lambda: remote.list_cubes(grid_id)["total"] <= leave,
+        60,
+        f"{leave} blocks left of the wreck",
+    )
 
 
 def set_options(remote, **values) -> None:
@@ -229,6 +256,45 @@ def paid_for(remote, contract: tuple, before: tuple[int, int], what: str) -> Non
 def act(remote, command: str, expect: str, what: str) -> None:
     reply = " | ".join(rig.chat(remote, f"!oct contract {command}", 10))
     check(expect in reply, f"{what}: {reply}")
+
+
+def grind_down(remote, found: dict, at: tuple[float, float, float]) -> None:
+    """SE-1555: a taken wreck ground down on the spot. Under the least blocks of a wreck
+    (ContractSalvageMinBlocks, 20) it is still the dead wreck that was posted, so the contract
+    stays taken; at a quarter of its blocks it is done and paid."""
+    wreck = next(
+        (c for c in found["Alpha Station"] if c[1] == "wreck" and GRIND_WRECK in c[4]),
+        None,
+    )
+    check(wreck is not None, f"a wreck contract on the static plate: {wreck}")
+    if wreck is None:
+        return
+    remote.character_teleport(at[0], at[1] + 30, at[2])
+    grid = rig.wait_until(
+        lambda: [g for g in remote.list_grids() if g.get("name") == GRIND_WRECK],
+        60,
+        "the static plate in the client's view",
+    )[0]["entityId"]
+    before = balances(remote)
+    act(remote, f"accept {wreck[0]}", "Success", "take the static wreck's contract")
+    remote.set_admin_flag("creativeTools", True)
+    grind(remote, grid, 15)
+    run_check(remote)
+    state = [c[2] for c in contracts(remote)["Alpha Station"] if c[0] == wreck[0]]
+    check(
+        state == ["Active"] and balances(remote) == before,
+        f"15 of its 40 blocks left: the contract is still taken, not failed: {state}",
+    )
+    grind(remote, grid, 8)
+    remote.set_admin_flag("creativeTools", False)
+    run_check(remote)
+    try:
+        rig.wait_until(
+            lambda: balances(remote)[1] != before[1], 60, "the wreck's reward"
+        )
+    except TimeoutError as e:
+        log(str(e))
+    paid_for(remote, wreck, before, "ground down to a quarter: finished, paid by OCT")
 
 
 def main() -> int:
@@ -349,8 +415,10 @@ def main() -> int:
     )
     paid_for(remote, salvage, before, "wreck finished by the plugin, paid by OCT")
 
-    # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
     set_options(remote, ContractSalvageRadius=500)
+    grind_down(remote, found, grind_point(sx, sy, sz))
+
+    # A ship of the player's own, ownerless: it gets a contract, but they can't take it for pay
     # Creative tools: the character has no building materials
     remote.set_admin_flag("creativeTools", True)
     built = remote.character_build_grid(
