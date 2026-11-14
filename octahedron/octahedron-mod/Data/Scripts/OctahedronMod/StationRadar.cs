@@ -37,7 +37,8 @@ namespace OctahedronMod
         // A color for each list row: 15 hues, spread so that the first few differ most, bright
         // for the first 15, darker for the rest
         static readonly Color[] Palette = new Color[2 * Rows];
-        static readonly Color Gate = new Color(80, 200, 255);
+        // The gates in white, which no ship color is
+        static readonly Color Gate = new Color(230, 230, 230);
 
         static StationRadar()
         {
