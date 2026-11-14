@@ -6,6 +6,11 @@ ice it takes at the station's Store price, paid by its owner to OCT.
   is left to the ship: its own battery starts charging it, so it is checked under 10 %.
 - Paid: a ship with an empty H2 tank docks; the tank fills and the player pays
   ceil(1,000,000 L / 20 L per kg x the Store's ice price), OCT gets it.
+- Oxygen (SE-1536): O2 tanks fill too, from the same ice. Empty H2 and O2 tanks both fill for
+  one bill, the ice of the gas needing more (the H2: 1,000,000 L at 20 L per kg is 50,000 kg,
+  100,000 L of O2 at 10 L per kg only 10,000 kg); a full H2 tank and an empty O2 tank fill the O2
+  for its 10,000 kg; a 90 % full H2 tank (5,000 kg) and an empty O2 tank fill both for the O2's
+  10,000 kg.
 - Partial: with a few SC the tank gets what they buy and the balance ends at 0.
 - Off: a tank that is turned off gets nothing, nor does a tank under 1 % short of full.
 - Police: a ship named Police* of an officer on duty (a bot that said !oct police duty) fills
@@ -45,7 +50,9 @@ rig.CONFIG_PINS.clear()
 STATION = tt.STATION
 ICE = "Ore/Ice"
 TANK = 1_000_000  # LargeHydrogenTankSmall
-LITERS_PER_ICE = 20
+O2_TANK = 100_000  # the large grid's OxygenTank
+LITERS_PER_ICE = 20  # H2, the large O2/H2 generator's ratio
+O2_LITERS_PER_ICE = 10
 SHIP = "RefillTest"
 REFILL = rig.grid(
     SHIP,
@@ -161,6 +168,50 @@ def paid(a) -> None:
     log(probe(a, "undock"))
 
 
+def o2_liters(a, grid: str) -> int:
+    return int(re.search(r"GAS \d+ (\d+)", probe(a, f"gas {grid} Oxygen"))[1])
+
+
+def oxygen(a) -> None:
+    """O2 fills along with H2, billed once for the gas needing more ice"""
+    price = ice_price(a)
+    cases = (
+        # what, the probe ship's tanks and their fill, the kg of ice billed
+        ("both empty", "H2=0,O2=0", TANK / LITERS_PER_ICE),
+        ("only O2", "H2=1,O2=0", O2_TANK / O2_LITERS_PER_ICE),
+        ("O2 needs more ice", "H2=0.9,O2=0", O2_TANK / O2_LITERS_PER_ICE),
+    )
+    for i, (what, items, ice) in enumerate(cases):
+        set_balance(a, 600_000)
+        cost = math.ceil(ice * price)
+        you, octs = balance(a), oct_money(a)
+        mark = tp.latest(a)
+        ship = dock(a, f"{items},AT={RIM[i % 2]}")
+        full = st.wait_until(
+            lambda: tt.liters(a, ship) == TANK and o2_liters(a, ship) == O2_TANK, 60, 2
+        )
+        check(
+            bool(full),
+            f"oxygen, {what}: H2 and O2 full: {tt.liters(a, ship):,} L H2, {o2_liters(a, ship):,} L O2",
+        )
+        time.sleep(5)
+        paid_sc = you - balance(a)
+        check(
+            paid_sc == cost,
+            f"oxygen, {what}: billed once, {paid_sc:,} SC, expected {cost:,} for {ice:,.0f} kg of ice",
+        )
+        check(
+            oct_money(a) - octs == cost,
+            f"oxygen, {what}: OCT got {oct_money(a) - octs:,} SC",
+        )
+        told = tp.wait_chat(a, "of oxygen for", 15, mark)
+        check(
+            told is not None and f"{cost:,} SC" in told,
+            f"oxygen, {what}: the player hears the price: {told}",
+        )
+        log(probe(a, "undock"))
+
+
 def partial(a) -> None:
     """A few SC buy what they buy, the balance ends at 0"""
     price = ice_price(a)
@@ -242,7 +293,7 @@ def main() -> int:
         # Under 1,000,000 SC: the game's MillionaireClub achievement disconnects an offline client
         set_balance(a, 600_000)
         sa.admin(a, f"!oct market set {STATION} {ICE} 100000")
-        for scenario in (new_ship, paid, partial, off, police, shipyard):
+        for scenario in (new_ship, paid, oxygen, partial, off, police, shipyard):
             log(f"--- {scenario.__name__}")
             scenario(a)
     finally:

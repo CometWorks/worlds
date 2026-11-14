@@ -468,7 +468,7 @@ internal static class Police
     {
         var filled = new List<string>();
         foreach (var tank in ship.GetFatBlocks<MyGasTank>())
-            if (tank.IsFunctional && DockHydrogenMath.Due(tank.FilledRatio, 1, true))
+            if (tank.IsFunctional && DockGasMath.Due(tank.FilledRatio, 1, true))
             {
                 ((IMyGasTank)tank).ChangeFilledRatio(1, true);
                 filled.Add(
@@ -505,7 +505,7 @@ internal static class Police
     }
 
     // Adds magazines until they take up share of the inventory's volume, or it is full: how many. Only once
-    // fewer than 90 % of them are there (DockHydrogenMath.Due), not after every shot
+    // fewer than 90 % of them are there (DockGasMath.Due), not after every shot
     private static int Top(MyInventory inventory, MyDefinitionId magazine, double share)
     {
         if (
@@ -516,7 +516,7 @@ internal static class Police
         var want = (int)Math.Floor((double)inventory.MaxVolume * share / item.Volume);
         var have = (int)inventory.GetItemAmount(magazine);
         var fits = (int)inventory.ComputeAmountThatFits(magazine);
-        if (!DockHydrogenMath.Due(have, want, true))
+        if (!DockGasMath.Due(have, want, true))
             return 0;
         var add = Math.Min(want - have, fits);
         if (add <= 0)

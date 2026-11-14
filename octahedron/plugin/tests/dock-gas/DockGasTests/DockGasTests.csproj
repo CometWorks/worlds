@@ -8,6 +8,6 @@
     <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../../ServerPlugin/DockHydrogenMath.cs" />
+    <Compile Include="../../../ServerPlugin/DockGasMath.cs" />
   </ItemGroup>
 </Project>
