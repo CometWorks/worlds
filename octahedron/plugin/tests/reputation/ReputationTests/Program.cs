@@ -179,5 +179,34 @@ Check(
     "text"
 );
 
+// OCT's leaders are never removed (SE-1495): a leader far below the line gets no countdown, and one
+// running from before they were a leader stops without a word
+var lead = new ReputationBook { Settings = settings };
+lead.Apply(A, ReputationKind.Damage, -34_401, null, 0);
+lead.Apply(B, ReputationKind.Damage, -34_401, null, 0);
+var leaders = new HashSet<long> { A };
+var leadKicks = new List<long>();
+var leaderTold = false;
+for (var i = 0; i < 7300; i++)
+{
+    tell.Clear();
+    kick.Clear();
+    lead.Tick(1, _ => true, tell, kick, leaders.Contains);
+    leadKicks.AddRange(kick);
+    leaderTold |= tell.Any(t => t.Identity == A);
+}
+Check(!leaderTold, "a leader is told nothing");
+Check(!leadKicks.Contains(A) && lead.Left(A) == null, "a leader is never removed");
+Check(leadKicks.Contains(B), "a member at the same reputation is removed");
+Check(lead.Get(A) == -24_401, "a leader's reputation still changes");
+leaders.Remove(A);
+tell.Clear();
+lead.Tick(1, _ => true, tell, kick, leaders.Contains);
+Check(lead.Left(A) == 3600, "no longer a leader: the full countdown starts");
+leaders.Add(A);
+tell.Clear();
+lead.Tick(1, _ => true, tell, kick, leaders.Contains);
+Check(lead.Left(A) == null && tell.Count == 0, "a leader again: the countdown stops silently");
+
 Console.WriteLine($"{checks - failures}/{checks} reputation checks passed");
 return failures == 0 ? 0 : 1;

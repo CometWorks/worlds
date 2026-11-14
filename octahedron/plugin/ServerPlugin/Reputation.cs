@@ -46,7 +46,8 @@ namespace ServerPlugin;
 //
 // Below zero the member is told. Below ReputationKickBelow a countdown of
 // ReputationKickAfterSeconds starts, with warnings at its start and ReputationWarnSeconds before
-// its end; at its end they are removed from OCT, and told why.
+// its end; at its end they are removed from OCT, and told why. OCT's leaders, OctLeaders, are never
+// removed (SE-1495): their reputation still changes, but no countdown runs for them.
 //
 // The reputations live where the faction and the bank accounts do: on a plain server, or on the
 // World Authority of a cluster, as a world variable saved with them. The countdowns run there.
@@ -648,7 +649,7 @@ internal static class Reputation
         if (oct == null)
             return;
         Settings();
-        Book.Tick(seconds, oct.IsMember, tell, kick);
+        Book.Tick(seconds, oct.IsMember, tell, kick, OctFaction.Leader);
         foreach (var (identity, text) in tell)
             Tell(identity, text);
         foreach (var identity in kick)
