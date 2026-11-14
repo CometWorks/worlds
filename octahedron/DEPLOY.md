@@ -244,6 +244,37 @@ shutdown proof; online backups of a running cluster are not implemented yet
   `make_ore_mod.py --seed 42` and upload the mod again under the same
   Workshop item.
 
+## Tuning the economy live
+
+Prices and the other Octahedron options can change on the running cluster,
+with no restart. An admin types in game chat, or Quasar's console runs:
+
+- `!oct config set <option> <value>`: the option, named as in
+  `config/octahedron.cfg`, takes the value on the World Authority and every
+  node within 15 s, hot spares too. For example
+  `!oct config set MarketPrices Ore/Ice=0.01, Component/SteelPlate=12` or
+  `!oct config set MarketTaxPercent 3`. Single values only: numbers, text,
+  true or false. The Stores show new prices at their next refresh, 15 s later.
+- `!oct config show [option]`: the values set live, each with the deployed one,
+  or what this process runs for one option.
+- `!oct config reset <option>|all`: back to the deployed value.
+
+Most options take effect at once. A few are read only when the server starts
+(Harmony patches, the station patches); those apply at the next start.
+
+The values are kept in `live.cfg` in the plugin's shared storage folder,
+`<run root>/plugin-shared/plugins/F7FB710B-…/` on a one-machine Quasar cluster.
+They outlast node restarts, recycles, cluster restarts, backups and Deploy
+Octahedron's updates: the plugin puts them over the staged `octahedron.cfg`
+values. A `--wipe` makes a new cluster without them.
+
+To make a tuned value permanent, copy its element from `live.cfg` into
+`config/octahedron.cfg` and merge that. `deploy.py` reports every live value
+before it changes anything, warning about each one that differs from
+`octahedron.cfg` with the line to put into the file; `deploy.py --live-config`
+gives that report alone. Once the file has the value, `!oct config reset` drops
+the live one.
+
 ## Publishing OctahedronOres
 
 A person with the Steam account that will own the item does this, on Windows or
