@@ -263,6 +263,12 @@ The market, contract and dock options are read on every use, so they take
 effect at once. An option a rule reads only when the server starts applies at
 the next start.
 
+Quasar's plugin settings page keeps showing the deployed values: the plugin
+never changes its deployed config object, because Magnetar takes a cluster
+node whose plugin config differs from Quasar's pinned copy out of service. The
+rules run a copy with the live values over it. Setting them in Quasar itself
+is [SE-1482](https://tasks.cometworks.se/tasks/2423).
+
 The values are kept in `live.cfg` in the plugin's shared storage folder,
 `<run root>/plugin-shared/plugins/F7FB710B-…/` on a one-machine Quasar cluster.
 They outlast node restarts, recycles, cluster restarts, backups and Deploy
