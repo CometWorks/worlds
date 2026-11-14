@@ -26,6 +26,10 @@ Check(Near(liters, 1_000_000) && sc == 150_000, $"a full small tank: {liters} L 
 (liters, sc) = DockHydrogenMath.Bill(1_000_000, 0.01, 20, 1_000_000);
 Check(Near(liters, 1_000_000) && sc == 500, $"cheap ice: {liters} L for {sc} SC");
 
+// SE-1497: ice at 0.04 SC per kg sells for 41 SC a lot with the tax: the full small tank is 2,050 SC
+(liters, sc) = DockHydrogenMath.Bill(1_000_000, 0.041, 20, 1_000_000);
+Check(Near(liters, 1_000_000) && sc == 2_050, $"ice at 41 SC a t: {liters} L for {sc} SC");
+
 // Rounded up to a whole SC: 30 L is 1.5 kg, 4.5 SC
 (liters, sc) = DockHydrogenMath.Bill(30, 3, 20, 100);
 Check(Near(liters, 30) && sc == 5, $"rounded up: {liters} L for {sc} SC");

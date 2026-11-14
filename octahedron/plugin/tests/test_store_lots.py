@@ -7,7 +7,7 @@ lots at the book's lot price, a row of single units next to it for stone and iro
 price; OCT buys lots back below the lot price; buying 10 lots puts 10,000 kg into the inventory for
 10 times the lot price; selling more lots than the inventory holds whole is refused and takes
 nothing; selling the 10 lots takes the 10,000 kg for 10 times the buy-back price; buying 57 kg
-on the row of single units charges 57 times its price. Ice costs 10 SC a lot, bought back at 9;
+on the row of single units charges 57 times its price. Ice costs 41 SC a lot, bought back at 39 (0.04 SC a kg and the tax);
 stone 1,000 SC, bought back at 980, and 1 SC a kg (a lot costs no more than its kg, SE-1497). At the end it prints OCT's prices of the lot
 items and what refining makes of them (LOTPRICE lines). Prints one line per check and a pass/fail
 summary; exit code 0 = all passed.
@@ -158,8 +158,8 @@ def run(remote) -> None:
         MarketSurplusPercent=100,
     )
     check(
-        lots(remote, ICE, False)[:2] == (10, 9),
-        "ice: lots only, 10 SC a lot, bought at 9",
+        lots(remote, ICE, False)[:2] == (41, 39),
+        "ice: lots only, 41 SC a lot, bought at 39",
     )
     check(
         lots(remote, STONE, True) == (1000, 980, 1, 0),

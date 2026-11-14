@@ -252,7 +252,7 @@ with no restart. An admin types in game chat, or Quasar's console runs:
 - `!oct config set <option> <value>`: the option, named as in
   `config/octahedron.cfg`, takes the value on the World Authority and every
   node within 15 s, hot spares too. For example
-  `!oct config set MarketPrices Ore/Ice=0.01, Component/SteelPlate=12` or
+  `!oct config set MarketPrices Ore/Ice=0.04, Component/SteelPlate=12` or
   `!oct config set MarketTaxPercent 3`. Single values only: numbers, text,
   true or false. The Stores show new prices at their next refresh, 15 s later.
 - `!oct config show [option]`: the values set live, each with the deployed one,
