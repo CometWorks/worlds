@@ -1746,6 +1746,12 @@ station grid among them (a build still on a shipyard's arm), and one with someon
 else seated in it (a cab with a passenger). The bot itself is put out of its seat
 first. The answer names the grid id: `Ship 123 scrapped.`
 
+A bot may also scrap a ship another bot gave up (SE-1526) when every owner of it is
+a bot with no character within 1 km of it. A bot can scrap a ship only from the
+node that simulates it, so one that respawned elsewhere left its ship standing for
+good, some in a shipyard's exit corridor. The sebot janitors scrap the given-up
+ships they find in their station's area.
+
 The station safe zones forbid landing gear and magnetic plate locks (SE-974). A gear
 or plate on a bot's ship locks in them anyway (SE-1466), so the janitors can tow
 garbage away from beside a station. Gears and plates have no owner of their own (no
