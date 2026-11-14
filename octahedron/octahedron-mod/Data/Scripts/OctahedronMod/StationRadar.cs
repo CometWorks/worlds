@@ -517,7 +517,8 @@ namespace OctahedronMod
 
             // Hostile, friendly, then neutral, each nearest first; how many more there are below
             var width = listWidth - 32 * scale;
-            // Each row starts with its contact's shape, in the row's middle at the text's height
+            // Each row starts with its contact's shape, in the row's middle at the text's height,
+            // 1 pixel of the screen's texture higher to center it on the text
             var mark = 26 * size;
             for (var i = 0; i < listed.Count; i++)
             {
@@ -531,7 +532,7 @@ namespace OctahedronMod
                     size,
                     Paint(c)
                 );
-                Shape(frame, c, at + new Vector2(mark / 2, 18 * size), mark);
+                Shape(frame, c, at + new Vector2(mark / 2, 18 * size - 1), mark);
             }
             if (contacts.Count > listed.Count)
                 Text(
