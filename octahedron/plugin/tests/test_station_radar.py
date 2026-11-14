@@ -406,8 +406,9 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         f"{station}: the count is in the top right corner, above and right of the list",
     )
     if count == probes:
-        wanted = [name for name, _ in probe_spots(station, s)][:30]
-        names = [r[3] for r in listed if "Mover" not in r[3]][: len(wanted)]
+        # The drifting probe takes one of the 30 rows on the crowded station
+        names = [r[3] for r in listed if "Mover" not in r[3]]
+        wanted = [name for name, _ in probe_spots(station, s)][: len(names)]
         # A long name ends in "…" where the column cuts it
         check(
             len(names) == len(wanted)
