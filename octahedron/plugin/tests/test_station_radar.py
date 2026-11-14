@@ -483,6 +483,24 @@ def raised(remote, station: str, s: dict, lcd) -> None:
         shot = remote.screenshot_save(str(OUT / f"{station}-raised.png"))
         print(f"  raised screenshot (jetpack {flying}): {shot}", flush=True)
         time.sleep(3)
+        if station == CROWD:
+            # The list up close, about 3.5 m left of the screen's middle as the viewer sees it,
+            # where a pixel of the screen is a few pixels of the screenshot (SE-1518)
+            ahead = tuple(-SIDE * f for f in s["forward"])
+            u = s["up"]
+            left = (
+                u[1] * ahead[2] - u[2] * ahead[1],
+                u[2] * ahead[0] - u[0] * ahead[2],
+                u[0] * ahead[1] - u[1] * ahead[0],
+            )
+            spot = add(add(lcd, left, 3.5), s["up"], 1.0)
+            remote.character_teleport(*add(spot, s["forward"], SIDE * 3.0))
+            time.sleep(3)
+            remote.character_look_at(*spot, tolerance=2)
+            time.sleep(2)
+            shot = remote.screenshot_save(str(OUT / f"{station}-list.png"))
+            print(f"  list close-up screenshot: {shot}", flush=True)
+            time.sleep(3)
     except Exception as e:  # noqa: BLE001 -- the floor screenshot is there already
         print(f"  raised screenshot {station}: {e}")
     finally:
