@@ -9,7 +9,7 @@ asteroid ring. The design and the reasons behind it are in the workspace note
 |---|---|
 | `build_world.py` | builds the world |
 | `make_ore_mod.py` | builds the OctahedronOres mod for a seed |
-| `make_octahedron_mod.py` | builds OctahedronMod, the world's mod for its small scripts and data: the Moon Shipyard's welders and deconstructors that draw filaments instead of laser beams (SE-1067) and the stations' radar LCD script (SE-1380); `octahedron-mod/` is its source |
+| `make_octahedron_mod.py` | builds OctahedronMod, the world's mod for its small scripts and data: the Moon Shipyard's welders and deconstructors that draw filaments instead of laser beams (SE-1067), the stations' radar LCD script (SE-1380) and the items that name the Stores' rows of lots (SE-1497); `octahedron-mod/` is its source |
 | `ore_stats.py` | writes the ore statistics of a world and its mod |
 | `check_sun_clearance.py` | sweeps the Sun over a day: can it strobe on a station? |
 | `build_trader_ships.py` | builds the offline "Octahedron Trader Ships" showcase save of the SE-948 cargo ships listed in `trader_ships.txt` (SE-985); see its docstring |
@@ -371,14 +371,14 @@ blocks from the OmniArc welder and deconstructor definitions of the Workshop cop
 
 ### Store lot items
 
-`octahedron-mod/Data/PhysicalItems_OctahedronLots.sbc` defines an item for each
-item OCT's Stores sell in 1,000 kg lots: "Silicon Ore (1 t)", "Iron Ingot (1 t)" and
-so on, subtype `OctahedronLot_<Type>_<Subtype>` (SE-1497). They only name the rows
-of lots on the Store screen, which takes a row's name, icon and unit from its item;
-the plugin puts them into the rows it sends to the clients. Nobody ever holds one.
-They are hidden components with no blueprint, so they are counted in pieces, one
-per lot. An item added to `MarketLots` needs its entry here too, or its row of lots
-reads in kg like a row of single units.
+`make_octahedron_mod.py` also writes `Data/PhysicalItems_OctahedronLots.sbc`: an
+item for each ore, ingot and component of the game (`--game`), named after the lots
+OCT's Stores trade it in, "Silicon Ore (1 t)" or "Steel Plate (x1000)", subtype
+`OctahedronLot_<Type>_<Subtype>` (SE-1497). They only name the rows of lots on the
+Store screen, which takes a row's name, icon and unit from its item; the plugin puts
+them into the rows it sends to the clients. Nobody ever holds one. They are hidden
+components with no blueprint, so they are counted in pieces, one per lot. Rerun the
+script and update the mod after a game update that adds ores, ingots or components.
 
 ### Station radar
 

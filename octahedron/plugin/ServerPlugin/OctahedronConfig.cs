@@ -1718,20 +1718,20 @@ public class OctahedronConfig : PluginConfig
 
     [StringOption(
         description: "Items OCT's Stores also trade in lots, priced in whole SC per lot: Type/Subtype=units per lot, "
-            + "comma separated. Their Store has a second row whose unit is a lot; a lot of 1,000 kg of ice at 0.01 SC "
-            + "per kg costs 10 SC.",
+            + "comma separated; * matches any text, an item's own entry wins over a pattern. Their Store has a second "
+            + "row whose unit is a lot; a lot of 1,000 kg of ice at 0.01 SC per kg costs 10 SC. With OctahedronMod a "
+            + "lot of 1,000 is named \"(1 t)\" or \"(x1000)\" on the Store screen.",
         Parent = "market"
     )]
     public string MarketLots
     {
         get;
         set => SetField(ref field, value);
-    } =
-        "Ore/Ice=1000,Ore/Stone=1000,Ore/Iron=1000,Ore/Nickel=1000,Ore/Silicon=1000,Ore/Cobalt=1000,Ore/Magnesium=1000,Ingot/Stone=1000,Ingot/Iron=1000,Ingot/Silicon=1000,Ingot/Nickel=1000";
+    } = "Ore/*=1000,Ingot/*=1000,Component/*=1000";
 
     [StringOption(
         description: "Items of MarketLots that OCT's Stores trade in lots only, without the row of single units: "
-            + "Type/Subtype patterns, comma separated.",
+            + "Type/Subtype names, comma separated.",
         Parent = "market"
     )]
     public string MarketLotsOnly

@@ -23,7 +23,13 @@ The mod ships no OmniArc files, so a world with it needs OmniArc and ToolCore
 too. The blocks are not public: only the Moon Shipyard has them (build_world.py
 --octahedron-mod), players can't build them.
 
-Rerun it after an OmniArc update that changes these two blocks.
+It also generates an item for each ore, ingot and component of the game, named after
+the lots OCT's Stores trade it in: "Silicon Ore (1 t)", "Steel Plate (x1000)"
+(SE-1497). The plugin shows the Stores' rows of lots to the clients as these items, as
+the Store screen takes a row's name, icon and unit from its item. Nobody ever holds one.
+
+Rerun it after an OmniArc update that changes these two blocks, and after a game
+update that adds ores, ingots or components.
 """
 
 import argparse
@@ -37,6 +43,10 @@ OMNIARC = Path.home() / ".steam/steam/steamapps/workshop/content/244850/34126570
 GAME = Path.home() / ".steam/steam/steamapps/common/SpaceEngineers"
 SCRIPTS = HERE / "octahedron-mod"
 BLOCKS_FILE = "CubeBlocks_OctahedronFilaments.sbc"
+LOTS_FILE = "PhysicalItems_OctahedronLots.sbc"
+# The plugin's StoreLots.Shown: OctahedronLot_<Type>_<Subtype>, of 1,000 units
+LOT_PREFIX = "OctahedronLot_"
+LOT_TYPES = {"Ore": "(1 t)", "Ingot": "(1 t)", "Component": "(x1000)"}
 
 # Ours -> OmniArc's definition file and subtype, our name and description
 TOOLS = {
@@ -100,6 +110,51 @@ def tool(source, subtype):
     return d
 
 
+def lot_items(game):
+    """A hidden component for each ore, ingot and component of the game: a lot of 1,000"""
+    texts = {
+        d.get("name"): d.findtext("value")
+        for d in ET.parse(game / "Content/Data/Localization/MyTexts.resx")
+        .getroot()
+        .iter("data")
+    }
+    root = ET.Element("Definitions")
+    items = ET.SubElement(root, "Components")
+    for path in sorted((game / "Content/Data").glob("*.sbc")):
+        for d in ET.parse(path).getroot().iter():
+            type_id = d.findtext("Id/TypeId", "").replace("MyObjectBuilder_", "")
+            if type_id not in LOT_TYPES or d.find("Icon") is None:
+                continue
+            subtype = d.findtext("Id/SubtypeId")
+            name = texts.get(d.findtext("DisplayName"), d.findtext("DisplayName"))
+            what = "kg" if type_id != "Component" else "pieces"
+            item = ET.SubElement(items, "Component")
+            ET.SubElement(item, "Id")
+            ET.SubElement(item.find("Id"), "TypeId").text = "Component"
+            ET.SubElement(item.find("Id"), "SubtypeId").text = (
+                f"{LOT_PREFIX}{type_id}_{subtype}"
+            )
+            ET.SubElement(item, "DisplayName").text = f"{name} {LOT_TYPES[type_id]}"
+            ET.SubElement(item, "Description").text = (
+                f"A lot of 1,000 {what} of {name}, the way OCT's Stores trade it. The "
+                f"price is per lot; a purchase puts 1,000 {what} of {name} into the "
+                "inventory for each lot."
+            )
+            ET.SubElement(item, "Icon").text = d.findtext("Icon")
+            ET.SubElement(item, "Model").text = d.findtext("Model")
+            size = ET.SubElement(item, "Size")
+            for axis in "XYZ":
+                ET.SubElement(size, axis).text = "0.5"
+            for value in ("Mass", "Volume"):
+                ET.SubElement(item, value).text = (
+                    f"{float(d.findtext(value, '1')) * 1000:g}"
+                )
+            ET.SubElement(item, "Public").text = "false"
+            ET.SubElement(item, "MaxIntegrity").text = "1"
+            ET.SubElement(item, "DropProbability").text = "0"
+    return root
+
+
 def write(root, path):
     ET.indent(root, "  ")
     text = ET.tostring(root, encoding="unicode")
@@ -129,13 +184,15 @@ def main():
     shutil.rmtree(out, ignore_errors=True)
     shutil.copytree(SCRIPTS, out)
     write(root, out / "Data" / BLOCKS_FILE)
+    lots = lot_items(args.game)
+    write(lots, out / "Data" / LOTS_FILE)
     waves = out / "Audio/OctahedronMod"
     waves.mkdir(parents=True)
     for wave in SOUND_WAVES:
         shutil.copy(args.game / "Content/Audio" / wave, waves)
     # ToolCore reads the tool values from the files listed here
     (out / "Data/ToolCoreFiles.txt").write_text(BLOCKS_FILE + "\n", encoding="utf-8")
-    print(f"{len(blocks)} blocks in {out}")
+    print(f"{len(blocks)} blocks and {len(lots[0])} lot items in {out}")
 
 
 if __name__ == "__main__":
