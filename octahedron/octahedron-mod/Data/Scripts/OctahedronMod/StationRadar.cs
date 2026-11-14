@@ -15,10 +15,12 @@ namespace OctahedronMod
     // The radar on the stations' big map LCD (SE-1380): the grids within Range of the screen, one
     // marker per logical group (connectors, rotors, pistons), above or below the station's deck
     // plane on a stalk. The contact count is in the top right corner, and the nearest 30 are
-    // listed by distance in a column on each side, left first (SE-1502). It leaves out the
-    // station's own installations: a group with a static grid that the screen's owner or nobody
-    // owns, like the shipyard and the lane computers. Players' and NPC ships, and players' bases,
-    // show.
+    // listed by distance in a column on each side, left first (SE-1502). Each listed contact keeps
+    // its color, shared by its marker and its row, for as long as it stays listed. The station's
+    // own installations are no contacts: a group with a static grid that the screen's owner or
+    // nobody owns, like the shipyard and the lane computers. The lane computers show as the gates
+    // instead, listed at the bottom by where they lead. Players' and NPC ships, and players'
+    // bases, show.
     [MyTextSurfaceScript("OctahedronRadar", "Octahedron Radar")]
     public class StationRadar : MyTSSCommon
     {
@@ -32,21 +34,39 @@ namespace OctahedronMod
         const float Tilt = 0.45f;
         const float Height = 0.8f;
 
-        static readonly Color Hostile = new Color(255, 70, 60);
-        static readonly Color Friendly = new Color(90, 220, 120);
+        // A color for each list row: 15 hues, spread so that the first few differ most, bright
+        // for the first 15, darker for the rest
+        static readonly Color[] Palette = new Color[2 * Rows];
+        static readonly Color Gate = new Color(80, 200, 255);
+
+        static StationRadar()
+        {
+            for (var i = 0; i < Palette.Length; i++)
+                Palette[i] = new Vector3(
+                    i * 7 % Rows / (float)Rows,
+                    0.7f,
+                    i < Rows ? 1f : 0.65f
+                ).HSVtoColor();
+        }
 
         readonly List<IMyCubeGrid> group = new List<IMyCubeGrid>();
         readonly HashSet<long> seen = new HashSet<long>();
         readonly List<Contact> contacts = new List<Contact>();
+        readonly List<Contact> gates = new List<Contact>();
+
+        // The palette index of each listed contact, by its largest grid's id
+        readonly Dictionary<long, int> colors = new Dictionary<long, int>();
+        readonly List<long> unlisted = new List<long>();
+        readonly bool[] taken = new bool[2 * Rows];
         readonly StringBuilder measured = new StringBuilder();
         readonly Dictionary<string, string> clipped = new Dictionary<string, string>();
 
         struct Contact
         {
+            public long Id;
             public string Name;
             public Vector3D Local;
             public double Distance;
-            public Color Color;
         }
 
         public StationRadar(IngameTextSurface surface, IngameCubeBlock block, Vector2 size)
@@ -68,6 +88,7 @@ namespace OctahedronMod
         void Collect(IMyCubeBlock block)
         {
             contacts.Clear();
+            gates.Clear();
             seen.Clear();
 
             // The deck plane is the station grid's; up on the map is away from the viewer
@@ -77,7 +98,6 @@ namespace OctahedronMod
             var right = Vector3D.Cross(away, up);
 
             var sphere = new BoundingSphereD(center, Range);
-            var player = MyAPIGateway.Session?.Player;
             foreach (var entity in MyAPIGateway.Entities.GetEntitiesInSphere(ref sphere))
             {
                 var grid = entity as IMyCubeGrid;
@@ -91,10 +111,14 @@ namespace OctahedronMod
                 IMyCubeGrid largest = null;
                 var volume = -1.0;
                 var skip = false;
+                IMyCubeGrid gate = null;
                 foreach (var g in group)
                 {
                     seen.Add(g.EntityId);
-                    skip |= g == block.CubeGrid || Installation(g, block.OwnerId);
+                    var installation = g == block.CubeGrid || Installation(g, block.OwnerId);
+                    skip |= installation;
+                    if (installation && Destination(g) != null)
+                        gate = g;
                     var v = g.WorldAABB.Volume;
                     if (v > volume)
                     {
@@ -102,32 +126,76 @@ namespace OctahedronMod
                         largest = g;
                     }
                 }
-                if (skip)
+                if (skip && gate == null)
                     continue;
 
-                var offset = largest.WorldAABB.Center - center;
+                var shown = gate ?? largest;
+                var offset = shown.WorldAABB.Center - center;
                 var distance = offset.Length();
                 if (distance > Range)
                     continue;
 
-                var owners = largest.BigOwners;
-                var owner = owners.Count > 0 ? owners[0] : 0;
-                var relation =
-                    owner == 0 || player == null
-                        ? MyRelationsBetweenPlayerAndBlock.NoOwnership
-                        : player.GetRelationTo(owner);
-                contacts.Add(
+                (gate != null ? gates : contacts).Add(
                     new Contact
                     {
-                        Name = largest.DisplayName ?? "",
+                        Id = shown.EntityId,
+                        Name = gate != null ? Destination(gate) : largest.DisplayName ?? "",
                         Local = new Vector3D(offset.Dot(right), offset.Dot(away), offset.Dot(up)),
                         Distance = distance,
-                        Color = Paint(relation),
                     }
                 );
             }
 
             contacts.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            gates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            KeepColors();
+        }
+
+        // The listed contacts keep their colors; one that drops off the list frees its color, and
+        // one new on the list takes the first free one
+        void KeepColors()
+        {
+            var listed = Math.Min(contacts.Count, 2 * Rows);
+            unlisted.Clear();
+            foreach (var id in colors.Keys)
+            {
+                var found = false;
+                for (var i = 0; i < listed && !found; i++)
+                    found = contacts[i].Id == id;
+                if (!found)
+                    unlisted.Add(id);
+            }
+            foreach (var id in unlisted)
+            {
+                taken[colors[id]] = false;
+                colors.Remove(id);
+            }
+            for (var i = 0; i < listed; i++)
+            {
+                if (colors.ContainsKey(contacts[i].Id))
+                    continue;
+                var free = Array.IndexOf(taken, false);
+                taken[free] = true;
+                colors[contacts[i].Id] = free;
+            }
+        }
+
+        Color Paint(Contact c)
+        {
+            int index;
+            return colors.TryGetValue(c.Id, out index) ? Palette[index] : m_foregroundColor * 0.5f;
+        }
+
+        // Where a lane computer's gate leads: its grid is named "TL 07 North Station > Beta
+        // Station". A lane to a planet's pole leads to Earth, which has no station yet.
+        static string Destination(IMyCubeGrid grid)
+        {
+            var name = grid.DisplayName ?? "";
+            var arrow = name.LastIndexOf(" > ", StringComparison.Ordinal);
+            if (!name.StartsWith("TL ", StringComparison.Ordinal) || arrow < 0)
+                return null;
+            var to = name.Substring(arrow + 3);
+            return to.EndsWith(" Station", StringComparison.Ordinal) ? to : "Earth";
         }
 
         // A station installation: a static grid of the station's owner or of nobody
@@ -137,23 +205,6 @@ namespace OctahedronMod
                 return false;
             var owners = grid.BigOwners;
             return owners.Count == 0 || owners.Contains(stationOwner);
-        }
-
-        Color Paint(MyRelationsBetweenPlayerAndBlock relation)
-        {
-            switch (relation)
-            {
-                case MyRelationsBetweenPlayerAndBlock.Enemies:
-                    return Hostile;
-                case MyRelationsBetweenPlayerAndBlock.Owner:
-                case MyRelationsBetweenPlayerAndBlock.FactionShare:
-                case MyRelationsBetweenPlayerAndBlock.Friends:
-                    return Friendly;
-                case MyRelationsBetweenPlayerAndBlock.NoOwnership:
-                    return m_foregroundColor * 0.6f;
-                default:
-                    return m_foregroundColor;
-            }
         }
 
         void Draw(MySpriteDrawFrame frame)
@@ -174,8 +225,9 @@ namespace OctahedronMod
             );
 
             // The deck plane's ellipse in the middle, with room for heights; a list column each side
+            // and the gates below
             var radius = Math.Min(area.X * 0.14f, area.Y * 0.36f);
-            var middle = origin + new Vector2(area.X / 2f, area.Y * 0.5f);
+            var middle = origin + new Vector2(area.X / 2f, area.Y * 0.42f);
 
             // Range rings at 500 m, 1 km and 2 km
             foreach (var ring in Rings)
@@ -239,29 +291,19 @@ namespace OctahedronMod
 
             // Farthest first, so the near ones draw on top
             var k = (float)(radius / Range);
+            foreach (var g in gates)
+                Marker(frame, g, middle, k, scale, "CircleHollow", Gate);
             for (var i = Math.Min(contacts.Count, MaxMarkers) - 1; i >= 0; i--)
             {
                 var c = contacts[i];
-                var foot = middle + new Vector2((float)c.Local.X * k, -(float)c.Local.Y * k * Tilt);
-                var spot = foot - new Vector2(0, (float)c.Local.Z * k * Height);
-                AddLine(frame, foot, spot, c.Color * 0.5f, scale);
-                frame.Add(
-                    new MySprite(
-                        SpriteType.TEXTURE,
-                        "Circle",
-                        foot,
-                        new Vector2(6, 6) * scale,
-                        c.Color * 0.5f
-                    )
-                );
-                frame.Add(
-                    new MySprite(
-                        SpriteType.TEXTURE,
-                        c.Local.Z >= 0 ? "Triangle" : "SquareSimple",
-                        spot,
-                        new Vector2(16, 16) * scale,
-                        c.Color
-                    )
+                Marker(
+                    frame,
+                    c,
+                    middle,
+                    k,
+                    scale,
+                    c.Local.Z >= 0 ? "Triangle" : "SquareSimple",
+                    Paint(c)
                 );
             }
 
@@ -274,19 +316,77 @@ namespace OctahedronMod
             {
                 var c = contacts[i];
                 var x = i < Rows ? 16 * scale : area.X - 16 * scale - width;
-                var at = origin + new Vector2(x, top + (i % Rows) * row);
-                var distance =
-                    c.Distance < 1000 ? $"{c.Distance:0} m" : $"{c.Distance / 1000:0.00} km";
-                Text(frame, distance, at, c.Color, size);
-                var indent = Measure("0.00 km ", size);
-                Text(
+                Row(
                     frame,
-                    Clip(c.Name, width - indent, size),
-                    at + new Vector2(indent, 0),
-                    c.Color,
-                    size
+                    c,
+                    origin + new Vector2(x, top + (i % Rows) * row),
+                    width,
+                    size,
+                    Paint(c)
                 );
             }
+
+            // The gates below the map, as many as fit
+            var gateTop = area.Y * 0.68f;
+            var gateRows = (int)((area.Y - gateTop - 8 * scale) / row);
+            for (var i = 0; i < gates.Count && i < gateRows; i++)
+                Row(
+                    frame,
+                    gates[i],
+                    origin + new Vector2(area.X / 2f - radius, gateTop + i * row),
+                    2 * radius,
+                    size,
+                    Gate
+                );
+        }
+
+        void Marker(
+            MySpriteDrawFrame frame,
+            Contact c,
+            Vector2 middle,
+            float k,
+            float scale,
+            string shape,
+            Color color
+        )
+        {
+            var foot = middle + new Vector2((float)c.Local.X * k, -(float)c.Local.Y * k * Tilt);
+            var spot = foot - new Vector2(0, (float)c.Local.Z * k * Height);
+            AddLine(frame, foot, spot, color * 0.5f, scale);
+            frame.Add(
+                new MySprite(
+                    SpriteType.TEXTURE,
+                    "Circle",
+                    foot,
+                    new Vector2(6, 6) * scale,
+                    color * 0.5f
+                )
+            );
+            frame.Add(
+                new MySprite(SpriteType.TEXTURE, shape, spot, new Vector2(16, 16) * scale, color)
+            );
+        }
+
+        // A list row: the distance, and the name cut to fit the width
+        void Row(
+            MySpriteDrawFrame frame,
+            Contact c,
+            Vector2 at,
+            float width,
+            float size,
+            Color color
+        )
+        {
+            var distance = c.Distance < 1000 ? $"{c.Distance:0} m" : $"{c.Distance / 1000:0.00} km";
+            Text(frame, distance, at, color, size);
+            var indent = Measure("0.00 km ", size);
+            Text(
+                frame,
+                Clip(c.Name, width - indent, size),
+                at + new Vector2(indent, 0),
+                color,
+                size
+            );
         }
 
         float Measure(string text, float size)

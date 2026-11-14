@@ -8,12 +8,16 @@ the config without them. Every station gets a probe ship 600 m from its LCD. The
 each station's LCD, reads the sprites it rendered and saves a screenshot.
 
 One station (RADAR_CROWD, default North) gets 36 probe ships 300-1875 m away instead, for the
-contact count and the two list columns of SE-1502; the others get 3 each.
+contact count and the two list columns of SE-1502, and one more that drifts outward at 2 m/s
+from 280 m, overtaking the others; the others get 3 each.
 
 After: every LCD runs OctahedronRadar, lists its probe ships and no lane computer ("TL ..."),
 shipyard or shipyard arm, has the contact count in the top right corner, and lists at most 15
 contacts per column by distance, nearest first, the left column first: the 30 nearest of the 36
-on the crowded station. Before: only reports what Arthur's radar draws, for comparison.
+on the crowded station. Each listed ship has its own color, shared by its row and its marker,
+and keeps it while the drifting probe changes the order. The gates (the station's lane
+computers) are listed below the map by where they lead: the station at the other end, or Earth
+for a pole. Before: only reports what Arthur's radar draws, for comparison.
 
     OCT_TASK=SE-1380 OCT_WORLD_SOURCE=<world built from main with --octahedron-mod 3833786664> \\
         uv run --no-project --with httpx python tests/test_station_radar.py after|before [OUT]
@@ -58,6 +62,9 @@ CROWD = os.environ.get("RADAR_CROWD", "North")
 CROWD_SIZE = 36
 DISTANCE = re.compile(r"^(\d+) m$|^(\d+\.\d\d) km$")
 RING = re.compile(r"^\d+ k?m$")
+GATE = re.compile(r"^TL \d+ (\w+) Station > (.+)$")
+DESTINATION = re.compile(r"^(\w+ Station|Earth)$")
+MARKERS = ("Triangle", "SquareSimple")
 COUNT = re.compile(r"^Contacts: (\d+)$")
 HIDDEN = re.compile(r"^TL \d|Shipyard|^Subgrid|Alien Shipyard arm")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
@@ -116,7 +123,20 @@ def stations(sector: Path) -> dict[str, dict]:
             "right": right,
             "up": up,
             "forward": forward,
+            "gates": [],
         }
+    # The lane computers within 2 km of each LCD, by where their gate leads
+    for entity in (
+        ET.parse(sector).getroot().iterfind("SectorObjects/MyObjectBuilder_EntityBase")
+    ):
+        m = GATE.match(entity.findtext("DisplayName") or "")
+        s = m and found.get(f"{m.group(1)} Station")
+        if not s:
+            continue
+        at = vec(entity.find("PositionAndOrientation/Position"))
+        if math.dist(at, s["lcd"]) < 2000:
+            to = m.group(2)
+            s["gates"].append(to if to.endswith(" Station") else "Earth")
     return found
 
 
@@ -134,12 +154,35 @@ def probe_spots(station: str, s: dict) -> list[tuple[str, tuple]]:
     return spots
 
 
+def mover(s: dict) -> tuple[str, tuple, tuple]:
+    """The crowded station's drifting probe: name, position and velocity"""
+    a = -0.5
+    way = add(
+        tuple(math.cos(a) * c for c in s["right"]),
+        tuple(math.sin(a) * c for c in s["forward"]),
+    )
+    return (
+        f"Radar Probe {CROWD} Mover",
+        add(s["lcd"], way, 280),
+        tuple(2 * c for c in way),
+    )
+
+
+def ships(station: str, s: dict) -> int:
+    return len(probe_spots(station, s)) + (station == CROWD)
+
+
 def prepare(found) -> None:
     probes = [
         rig.grid(probe, None, rig.small_ship_blocks(), position=at)
         for name, s in found.items()
         for probe, at in probe_spots(name.split()[0], s)
     ]
+    crowd = found[f"{CROWD} Station"]
+    name, at, velocity = mover(crowd)
+    probes.append(
+        rig.grid(name, None, rig.small_ship_blocks(), position=at, velocity=velocity)
+    )
     rig.prepare_world(extra_grids=probes)
     mods = rig.mod_items(
         {
@@ -210,7 +253,7 @@ def visit(remote, name: str, s: dict) -> None:
         # All its probes streamed in: the client gets the far ones last
         counts = [COUNT.match(sp.get("data") or "") for sp in sprites]
         shown = max((int(m.group(1)) for m in counts if m), default=0)
-        if shown >= len(probe_spots(station, s)):
+        if shown >= ships(station, s):
             break
     time.sleep(15 if MODE == "before" else 5)
     surface = remote.get_surface(grid_id, s["cell"])
@@ -256,26 +299,69 @@ def visit(remote, name: str, s: dict) -> None:
         not any(HIDDEN.search(t) for t in texts),
         f"{station}: no lane computer or shipyard shows",
     )
-    check_list(station, s, text_sprites)
+    first = check_list(station, s, surface.get("sprites", []))
+    if station != CROWD or not first:
+        return
+    # The drifting probe moves 120 m in a minute, past two or three others
+    time.sleep(60)
+    later = check_list(
+        station,
+        s,
+        remote.get_surface(grid_id, s["cell"]).get("sprites", []),
+        quiet=True,
+    )
+    rank = lambda rows, n: next((i for i, r in enumerate(rows) if r[3] == n), None)
+    name = mover(s)[0]
+    print(
+        f"  {station}: the mover went from row {rank(first, name)} to row "
+        f"{rank(later, name)}",
+        flush=True,
+    )
+    check(
+        rank(first, name) is not None
+        and rank(later, name) is not None
+        and rank(first, name) < rank(later, name),
+        f"{station}: the drifting probe moved down the list",
+    )
+    before = {r[3]: r[4] for r in first}
+    check(
+        all(before[r[3]] == r[4] for r in later if r[3] in before),
+        f"{station}: every ship listed in both reads kept its color",
+    )
 
 
-def check_list(station: str, s: dict, sprites: list[dict]) -> None:
-    """The count in the top right corner and the two columns sorted by distance"""
+def check_list(
+    station: str, s: dict, all_sprites: list[dict], quiet: bool = False
+) -> list[tuple]:
+    """The count in the top right corner, the two columns sorted by distance, their colors, and
+    the gates below the map. Returns the ship rows: (x, y, meters, name, color)"""
+    if quiet:
+        global check
+        real, check = check, lambda ok, what: None
+    try:
+        return _check_list(station, s, all_sprites)
+    finally:
+        if quiet:
+            check = real
+
+
+def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
+    sprites = [sp for sp in all_sprites if sp.get("type") == "TEXT"]
     counts = [sp for sp in sprites if COUNT.match(sp.get("data") or "")]
     check(len(counts) == 1, f"{station}: one contact count")
     if not counts:
-        return
+        return []
     count_sprite = counts[0]
     count = int(COUNT.match(count_sprite["data"]).group(1))
-    # A row is a distance and the name right of it, at the same height
-    rows = []
+    # A row is a distance and the name right of it, at the same height, in one color
+    rows, gates = [], []
     for sp in sprites:
         m = DISTANCE.match(sp.get("data") or "")
         if not m:
             continue
         x, y = sp["position"]
         meters = float(m.group(1)) if m.group(1) else 1000 * float(m.group(2))
-        name = min(
+        beside = min(
             (
                 o
                 for o in sprites
@@ -283,15 +369,19 @@ def check_list(station: str, s: dict, sprites: list[dict]) -> None:
             ),
             key=lambda o: o["position"][0],
             default={"data": ""},
-        )["data"]
+        )
+        name = beside["data"]
         # Not a range ring's label, which has no name beside it
-        if name and not RING.match(name):
-            rows.append((x, y, meters, name))
+        if not name or RING.match(name):
+            continue
+        same = beside.get("color") == sp.get("color")
+        row = (x, y, meters, name, tuple(sp.get("color") or ()), same)
+        (gates if DESTINATION.match(name) else rows).append(row)
     middle = (min(r[0] for r in rows) + max(r[0] for r in rows)) / 2 if rows else 0
     left = sorted((r for r in rows if r[0] <= middle), key=lambda r: r[1])
     right = sorted((r for r in rows if r[0] > middle), key=lambda r: r[1])
     listed = left + right
-    probes = len(probe_spots(station, s))
+    probes = ships(station, s)
     print(
         f"  {station}: count {count}, left {len(left)}, right {len(right)}: "
         + ", ".join(f"{r[2]:.0f} m {r[3]}" for r in listed),
@@ -317,15 +407,67 @@ def check_list(station: str, s: dict, sprites: list[dict]) -> None:
     )
     if count == probes:
         wanted = [name for name, _ in probe_spots(station, s)][:30]
+        names = [r[3] for r in listed if "Mover" not in r[3]][: len(wanted)]
         # A long name ends in "…" where the column cuts it
         check(
-            len(listed) == len(wanted)
+            len(names) == len(wanted)
             and all(
                 n == w or (n.endswith("…") and w.startswith(n[:-1]))
-                for n, w in zip((r[3] for r in listed), wanted)
+                for n, w in zip(names, wanted)
             ),
             f"{station}: the nearest {len(wanted)} probes are listed in order",
         )
+
+    # Colors: one per ship, its row's and its marker's
+    markers = {
+        tuple(sp.get("color") or ())
+        for sp in all_sprites
+        if sp.get("type") == "TEXTURE" and sp.get("data") in MARKERS
+    }
+    colors = [r[4] for r in listed]
+    print(f"  {station}: {len(set(colors))} row colors, {len(markers)} marker colors")
+    check(
+        all(r[5] for r in listed),
+        f"{station}: each row's distance and name share a color",
+    )
+    check(
+        len(set(colors)) == len(colors),
+        f"{station}: every listed ship has its own color",
+    )
+    check(
+        all(c in markers for c in colors),
+        f"{station}: each listed ship's color is on a marker of the map",
+    )
+
+    # The gates below the map, between the columns, by distance
+    gates.sort(key=lambda r: r[1])
+    print(
+        f"  {station}: gates "
+        + ", ".join(f"{r[2]:.0f} m {r[3]}" for r in gates)
+        + f"; expected {sorted(s['gates'])}",
+        flush=True,
+    )
+    check(
+        sorted(r[3] for r in gates) == sorted(s["gates"]),
+        f"{station}: the gates are listed by where they lead",
+    )
+    check(
+        all(a[2] <= b[2] for a, b in zip(gates, gates[1:])),
+        f"{station}: the gates are sorted by distance",
+    )
+    # The screen's area from the title (16, 10) and the count (X - 16, 14), in 1/512 of its
+    # height
+    title = next(sp for sp in sprites if sp.get("data") == "RADAR")
+    unit = (count_sprite["position"][1] - title["position"][1]) / 4
+    ox, oy = title["position"][0] - 16 * unit, title["position"][1] - 10 * unit
+    width, height = count_sprite["position"][0] + 16 * unit - ox, 512 * unit
+    check(
+        bool(gates)
+        and all(ox + 0.3 * width < r[0] < ox + 0.7 * width for r in gates)
+        and all(r[1] > oy + 0.6 * height for r in gates),
+        f"{station}: the gates are at the bottom center",
+    )
+    return listed
 
 
 def main() -> int:
