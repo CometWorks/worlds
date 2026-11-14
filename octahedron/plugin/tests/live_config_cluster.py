@@ -189,22 +189,6 @@ def run(bench) -> None:
     check("after a WA kill, the Stores still have its prices", took is not None, shown)
     run_live("after the node-1 and WA kills")
 
-    # The whole cluster down and up, the plan emptied meanwhile: no process sets it again
-    check("graceful stop", cluster.stop(grace=240))
-    wa.lc.PLAN.write_text("")
-    for old in wa.lc.OUT.parent.glob(wa.lc.OUT.name + ".*"):
-        old.unlink()
-    probe.step = 0
-    cluster.start(processes)
-    cluster.wait_ready(nodes=processes)
-    took, shown = until(raised, 300)
-    check(
-        "after a cluster restart, the Stores still have its prices",
-        took is not None,
-        shown,
-    )
-    run_live("after a cluster restart")
-
     reply = " ".join(everywhere("@node-2 !oct config reset MarketPrices", 1))
     check("node-2 resets it", "goes back to" in reply, reply)
     took, shown = until(lowered, LIMIT)
@@ -221,6 +205,18 @@ def run(bench) -> None:
         replies,
     )
     check("live.cfg is empty", "<Market" not in shared(), shared())
+
+    # Set again, then the whole cluster down and up with the plan emptied meanwhile: no process sets
+    # it again. No station is loaded after a warm start without players, so only the config is checked.
+    everywhere(f"@node-2 !oct config set MarketPrices {PRICES}", 1)
+    check("graceful stop", cluster.stop(grace=240))
+    wa.lc.PLAN.write_text("")
+    for old in wa.lc.OUT.parent.glob(wa.lc.OUT.name + ".*"):
+        old.unlink()
+    probe.step = 0
+    cluster.start(processes)
+    cluster.wait_ready(nodes=processes)
+    run_live("after a cluster restart")
     check("graceful stop at the end", cluster.stop(grace=240))
 
 
