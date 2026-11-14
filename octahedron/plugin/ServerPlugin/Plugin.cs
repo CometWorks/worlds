@@ -44,6 +44,7 @@ public class Plugin : IPlugin
     private bool encountersFailed;
     private bool moneyFailed;
     private bool leaderboardFailed;
+    private bool liveConfigFailed;
 
     public void Init(object gameInstance)
     {
@@ -77,6 +78,20 @@ public class Plugin : IPlugin
 
     public void Update()
     {
+        // First, so that every rule runs on the live values, Enabled too
+        if (!liveConfigFailed)
+        {
+            try
+            {
+                LiveConfig.Update();
+            }
+            catch (Exception e)
+            {
+                Log.Critical("Live config failed and stops", e);
+                liveConfigFailed = true;
+            }
+        }
+
         if (failed || !Config.Enabled)
             return;
 

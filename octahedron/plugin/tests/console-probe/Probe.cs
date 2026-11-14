@@ -23,6 +23,7 @@ namespace ConsoleProbe;
 ///   wait SECONDS     let the game run
 ///   away DAYS        moves the clock players are away by in the contracts, a test's month
 ///   anything else    a chat command line, for example "!oct market show Alpha"
+///   @NODE LINE       the chat command line on the process CLUSTER_NODE_ID NODE only, when the probe runs on several
 ///   pculimit N       sets the player's PCU limit in the contracts, so a test needn't own a million PCU
 /// Grid ids in the file CONSOLEPROBE_PLAN.strip are closed on the process holding them (CONSOLEPROBE_PLAN.stripped).
 /// Grid ids in the file CONSOLEPROBE_PLAN.convert become ships on the process holding them, as the game's
@@ -132,6 +133,14 @@ public class Probe : IPlugin, ICommandResponder
             return;
         }
         replying = step++;
+        if (next.StartsWith("@"))
+        {
+            // "@node line": the line runs on that process only; the step counts everywhere
+            var parts = next.Substring(1).Split(new[] { ' ' }, 2);
+            if (parts[0] != Environment.GetEnvironmentVariable("CLUSTER_NODE_ID"))
+                return;
+            next = parts.Length > 1 ? parts[1].Trim() : "";
+        }
         try
         {
             if (!ServerCommands.Execute(next, Console, this))

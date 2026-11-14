@@ -70,6 +70,33 @@ public sealed class Commands : CommandModule
         return "Octahedron config reloaded.";
     }
 
+    [Command(
+        "config show",
+        "Shows the option values set live, or an option's value on this process",
+        "!oct config show [option]: options are named as in octahedron.cfg."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ConfigShow(string option = null) => LiveConfig.Show(option);
+
+    [Command(
+        "config set",
+        "Sets an option on every process of the server within 15 s, without a restart, and keeps it",
+        "!oct config set <option> <value>: options are named as in octahedron.cfg, single values only "
+            + "(number, text, true or false). The value outlasts restarts and deploys until !oct config reset; "
+            + "copy it into octahedron.cfg to keep it after a wipe."
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ConfigSet(string option, params string[] value) =>
+        LiveConfig.Set(option, string.Join(" ", value));
+
+    [Command(
+        "config reset",
+        "Gives an option set live its deployed value back on every process within 15 s",
+        "!oct config reset <option>|all"
+    )]
+    [Permission(MyPromoteLevel.Admin)]
+    public string ConfigReset(string option) => LiveConfig.Reset(option);
+
     [Command("edge", "Lists the grids and characters in the world edge's braking zone")]
     [Permission(MyPromoteLevel.Admin)]
     public IEnumerable<string> Edge() => WorldEdge.Describe(Plugin.Config);

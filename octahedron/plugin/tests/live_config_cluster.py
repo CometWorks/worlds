@@ -1,0 +1,237 @@
+"""Live config on a cluster (SE-1474): an admin's !oct config set changes a market price on the World
+Authority and every node without a restart, and the value outlasts a node restart on a fresh data root
+(as a recycle) and a World Authority kill. Same bench and world as world_config_cluster.py, with the
+world's octahedron.cfg, but no client: the console probe (tests/console-probe) runs on every process,
+and !oct market stores <item> says what the Store blocks of the stations on each node ask.
+
+The set and the reset go to node-2 only (the probe's "@node-2" lines), so the processes that restart
+never run them again: what they show after their start came from live.cfg in the shared storage.
+
+    OCT_WORLD_SOURCE=<world built by build_world.py> python3 tests/live_config_cluster.py CLUSTER_TEST_DIR     (from plugin/)
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+import time
+from datetime import datetime, timezone
+
+import wa_economy_cluster as wa
+from wa_economy_cluster import CONFIG, PLUGIN, bench_module, link_mods
+
+ITEM = "Component/SteelPlate"
+PRICES = "Ore/Ice=0.01, Component/SteelPlate=1000"
+# The market tick, and the 15 s each process takes to read live.cfg on top
+LIMIT = 75
+HIGH = 500
+STORE = re.compile(rf"STORE (\S+) (\S+) {re.escape(ITEM)} ask (\d+) bid (\d+)")
+NODES = ("node-1", "node-2")
+
+
+def run(bench) -> None:
+    cluster = bench.cluster
+    probe = wa.lc.Probe()
+    processes = ["wa-1", *NODES]
+
+    def check(label, passed, detail="") -> bool:
+        return bench.check(label, bool(passed), str(detail)[:600])
+
+    def log(process: str) -> str:
+        return "".join(
+            p.read_text(errors="replace")
+            for p in (bench.run_root / f"{process}-data").rglob("*.log")
+            if p.is_file()
+        )
+
+    def everywhere(line: str, count: int, timeout: float = 120) -> list[str]:
+        """Runs a line on every process with the probe; the replies once there are count of them"""
+        step = probe.step
+        probe.step += 1
+        with wa.lc.PLAN.open("a") as plan:
+            plan.write(line + "\n")
+        deadline = time.monotonic() + timeout
+        while len(probe.replies(step)) < count and time.monotonic() < deadline:
+            time.sleep(1)
+        time.sleep(2)
+        replies = probe.replies(step)
+        print(f"{line} -> {replies}", flush=True)
+        return replies
+
+    def stores() -> dict[tuple[str, str], int]:
+        """What each node's Store blocks ask for the item, per (node, station), stations with stock only"""
+        replies = everywhere(f"!oct market stores {ITEM}", 3, 60)
+        found = {}
+        for reply in replies:
+            for node, station, ask, _ in STORE.findall(reply):
+                if int(ask) > 0:
+                    found[(node, station)] = int(ask)
+        return found
+
+    def until(predicate, timeout: float) -> tuple[float | None, dict]:
+        """Seconds until the stores satisfy the predicate, or None, and what they last showed"""
+        start = time.time()
+        while True:
+            shown = stores()
+            if predicate(shown):
+                return time.time() - start, shown
+            if time.time() - start > timeout:
+                return None, shown
+            time.sleep(5)
+
+    def on_both(shown) -> bool:
+        return {node for node, _ in shown} == set(NODES)
+
+    def raised(shown) -> bool:
+        return on_both(shown) and all(ask >= HIGH for ask in shown.values())
+
+    def lowered(shown) -> bool:
+        return on_both(shown) and all(ask < HIGH for ask in shown.values())
+
+    def shared() -> str:
+        files = list((cluster.config.root / "shared").rglob("live.cfg"))
+        return files[0].read_text() if files else ""
+
+    cluster.kill()
+    cluster.prepare(wipe=True)
+    for stale in (cluster.config.root / "shared").rglob("live.cfg"):
+        stale.unlink()
+    for process in processes:
+        link_mods(bench.run_root / f"{process}-data" / "Mods")
+    cluster.start(processes)
+    cluster.wait_ready(nodes=processes)
+    served = wa.wait_until(
+        lambda: "Serving the station markets on the World Authority" in log("wa-1"),
+        180,
+        "the market on the WA",
+    )
+    check("the WA serves the market", served)
+
+    # Both nodes simulate stations: the world's partitions are shared out at the start
+    _, before = until(on_both, 300)
+    check(f"both nodes' stores sell {ITEM} before", on_both(before), before)
+    check(f"{ITEM} costs under {HIGH} SC before", lowered(before), before)
+
+    reply = " ".join(everywhere("@node-2 !oct config set MarketPrice 5", 1))
+    check("an unknown option is refused", "No option MarketPrice" in reply, reply)
+    reply = " ".join(everywhere("@node-2 !oct config set MarketTaxPercent -5", 1))
+    check("a value out of range is refused", "out of its range" in reply, reply)
+    reply = " ".join(everywhere("@node-2 !oct config set MarketTaxPercent lots", 1))
+    check("a value of the wrong type is refused", "not a Int32" in reply, reply)
+    check(
+        "nothing written for the refused values",
+        shared().count("<Market") == 0,
+        shared(),
+    )
+
+    reply = " ".join(everywhere(f"@node-2 !oct config set MarketPrices {PRICES}", 1))
+    check(
+        "node-2 sets MarketPrices live", "on every process within 15 s" in reply, reply
+    )
+    took, shown = until(raised, LIMIT)
+    check(
+        f"every node's Store asks {HIGH}+ SC within {LIMIT} s, no restart",
+        took is not None,
+        f"{took and round(took)} s: {shown}",
+    )
+    replies = everywhere("!oct config show MarketPrices", 3)
+    check(
+        "the WA and both nodes run it",
+        len([r for r in replies if f"MarketPrices = {PRICES}, set live" in r]) == 3,
+        replies,
+    )
+    text = shared()
+    check(
+        "live.cfg in the shared storage has it",
+        f"<MarketPrices>{PRICES}</MarketPrices>" in text,
+        text,
+    )
+    bench.record("live-cfg", text)
+
+    # A recycled node comes back on a fresh data root
+    cluster.restart_node("node-1", fresh=True)
+    cluster.wait_ready(nodes=["node-1"])
+    took, shown = until(raised, 240)
+    check(
+        "after node-1 restarted fresh, every node's Store still asks it",
+        took is not None,
+        shown,
+    )
+    check(
+        "node-1 applied it from live.cfg at its start",
+        "Live config: MarketPrices = " + PRICES in log("node-1"),
+    )
+
+    cluster.restart_node("wa-1")
+    cluster.wait_ready(nodes=["wa-1"])
+    took, shown = until(raised, 240)
+    check("after a WA kill, every node's Store still asks it", took is not None, shown)
+    replies = everywhere("!oct config show MarketPrices", 3)
+    check(
+        "the WA and both nodes still run it",
+        len([r for r in replies if f"MarketPrices = {PRICES}, set live" in r]) == 3,
+        replies,
+    )
+
+    reply = " ".join(everywhere("@node-2 !oct config reset MarketPrices", 1))
+    check("node-2 resets it", "goes back to" in reply, reply)
+    took, shown = until(lowered, LIMIT)
+    check(
+        f"every node's Store is back under {HIGH} SC within {LIMIT} s",
+        took is not None,
+        f"{took and round(took)} s: {shown}",
+    )
+    replies = everywhere("!oct config show MarketPrices", 3)
+    check(
+        "the WA and both nodes run the deployed value again",
+        len([r for r in replies if r.strip() == "MarketPrices = Ore/Ice=0.01"]) == 3,
+        replies,
+    )
+    check("live.cfg is empty", "<Market" not in shared(), shared())
+    check("graceful stop", cluster.stop(grace=240))
+
+
+def main() -> int:
+    run.world_template = wa.prepare()
+    CONFIG.write_text(
+        (PLUGIN.parent / "config/octahedron.cfg").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    # The probe on every process, its commands as the console of each
+    wa.os.environ.pop("CONSOLEPROBE_NODE", None)
+    wa.os.environ["CLUSTER_EXTRA_PLUGINS"] = wa.os.environ[
+        "CLUSTER_EXTRA_PLUGINS"
+    ].replace(
+        f"wa:{wa.lc.PLUGINS / 'ConsoleProbe'}", str(wa.lc.PLUGINS / "ConsoleProbe")
+    )
+    results = bench_module.HOST.results / datetime.now(timezone.utc).strftime(
+        "%Y%m%d-%H%M%SZ-live-config"
+    )
+    results.mkdir(parents=True, exist_ok=True)
+    outcome = bench_module.run_scenario(
+        run,
+        "P2-OCT-LIVE-CONFIG",
+        "SE-1474: market settings changed live on every process of a cluster",
+        "3",
+        results,
+    )
+    print(
+        json.dumps(
+            {"passed": outcome.passed, "error": outcome.error, "results": str(results)}
+        )
+    )
+    print(
+        f"{sum(c.passed for c in outcome.checks)}/{len(outcome.checks)} checks passed"
+    )
+    for item in outcome.checks:
+        if not item.passed:
+            print(
+                "FAILED: " + item.label + (f" - {item.detail}" if item.detail else "")
+            )
+    print("PASS" if outcome.passed else "FAIL")
+    return 0 if outcome.passed else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
