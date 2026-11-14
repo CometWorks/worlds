@@ -16,8 +16,9 @@ the range (CROWD_SIDES). The others get 3 each: the test player's (friendly, gre
 After: every LCD runs OctahedronRadar, lists its probe ships and no lane computer ("TL ..."),
 shipyard or shipyard arm, has the contact count in the top right corner, and lists at most 15
 contacts on the left: hostile, friendly, then neutral, each by distance, with "... N" for the
-rest. Each listed ship has a shade of its relation's color, shared by its row and its marker,
-and keeps it while the drifting probe changes the order. The map is on the right. The gates
+rest. Each listed ship has a shape in its relation's color (SE-1518), drawn as its marker and in
+front of its row, different from the other ships of its side while the 15 shapes last, and keeps
+it while the drifting probe changes the order. The map is on the right. The gates
 (the station's lane computers) are in a table of up to 2 rows and 3 columns below it, in cyan
 blue, by where they lead: the station at the other end, or Earth for a pole. Before: only reports what Arthur's radar draws, for comparison.
 
@@ -69,7 +70,6 @@ CROWD_SIZE = len(CROWD_SIDES)
 DISTANCE = re.compile(r"^(\d+) m$|^(\d+\.\d\d) km$")
 RING = re.compile(r"^\d+ k?m$")
 GATE = re.compile(r"^TL \d+ (\w+) Station > (.+)$")
-MARKERS = ("Triangle", "SquareSimple")
 # The identity the test client plays, so that it owns the friendly probes
 TESTER = 144115188075999502
 SIDES = ("friendly", "neutral", "hostile")
@@ -77,7 +77,7 @@ SIDES = ("friendly", "neutral", "hostile")
 FIRST = ("hostile", "friendly", "neutral")
 ROWS = 15
 MORE = re.compile(r"^\.\.\. (\d+)$")
-SHADES = 10
+SHAPES = 15
 COUNT = re.compile(r"^Contacts: (\d+)$")
 HIDDEN = re.compile(r"^TL \d|Shipyard|^Subgrid|Alien Shipyard arm")
 XSI_TYPE = "{http://www.w3.org/2001/XMLSchema-instance}type"
@@ -186,6 +186,40 @@ def pirates() -> int:
     """The founder of the pirate faction"""
     text = (rig.world_source() / "Sandbox.sbc").read_text(encoding="utf-8")
     return int(re.search(r"<Tag>SPRT</Tag>.*?<PlayerId>(\d+)", text, re.S)[1])
+
+
+def glyphs(sprites: list[dict], start: int, stop) -> list[dict]:
+    """The texture sprites from start on that draw one shape: up to the next text, the next
+    stalk (SquareTapered) or a sprite stop says ends it"""
+    out = []
+    for sp in sprites[start:]:
+        if sp.get("type") != "TEXTURE" or sp.get("data") == "SquareTapered" or stop(sp):
+            break
+        out.append(sp)
+    return out
+
+
+def shape_of(glyph: list[dict], background) -> tuple:
+    """What a shape looks like regardless of its size: its sprites, turns and parts in the
+    background color (the inside of an outlined one), with sizes and offsets relative to its
+    first sprite. The color is its first sprite's."""
+    first = glyph[0]
+    unit = max(first["size"])
+    x0, y0 = first["position"]
+    return (
+        tuple(first["color"]),
+        tuple(
+            (
+                sp["data"],
+                round(sp.get("rotation") or 0.0, 2),
+                tuple(sp["color"]) == background,
+                tuple(round(v / unit, 1) for v in sp["size"]),
+                round((sp["position"][0] - x0) / unit, 1),
+                round((sp["position"][1] - y0) / unit, 1),
+            )
+            for sp in glyph
+        ),
+    )
 
 
 def color_side(color) -> str:
@@ -397,10 +431,10 @@ def visit(remote, name: str, s: dict) -> None:
         and rank(first, name) < rank(later, name),
         f"{station}: the drifting probe moved down the list",
     )
-    before = {r[3]: r[4] for r in first}
+    before = {r[3]: r[6] for r in first}
     check(
-        all(before[r[3]] == r[4] for r in later if r[3] in before),
-        f"{station}: every ship listed in both reads kept its color",
+        all(before[r[3]] == r[6] for r in later if r[3] in before),
+        f"{station}: every ship listed in both reads kept its shape and color",
     )
 
 
@@ -430,7 +464,8 @@ def check_list(
     station: str, s: dict, all_sprites: list[dict], quiet: bool = False
 ) -> list[tuple]:
     """The count in the top right corner, the two columns sorted by distance, their colors, and
-    the gates below the map. Returns the ship rows: (x, y, meters, name, color)"""
+    the gates below the map. Returns the ship rows: (x, y, meters, name, color, same color,
+    shape, shape sprites)"""
     if quiet:
         global check
         real, check = check, lambda ok, what: None
@@ -457,6 +492,8 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
     width, height = count_sprite["position"][0] + 16 * unit - ox, 512 * unit
     # A row is a distance and the name right of it, at the same height, in one color: the list
     # rows start at the title's left edge, the gates right of the list
+    background = tuple(all_sprites[0]["color"])
+    index = {id(sp): i for i, sp in enumerate(all_sprites)}
     rows, gates = [], []
     for sp in sprites:
         m = DISTANCE.match(sp.get("data") or "")
@@ -478,7 +515,10 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         if not name or RING.match(name):
             continue
         same = beside.get("color") == sp.get("color")
-        row = (x, y, meters, name, tuple(sp.get("color") or ()), same)
+        # The row's shape is drawn right after its name
+        glyph = glyphs(all_sprites, index[id(beside)] + 1, lambda o: False)
+        shape = shape_of(glyph, background) if glyph else None
+        row = (x, y, meters, name, tuple(sp.get("color") or ()), same, shape, glyph)
         (gates if x > ox + 0.38 * width else rows).append(row)
     listed = sorted(rows, key=lambda r: r[1])
     probes = ships(station, s)
@@ -533,41 +573,62 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
             f"{station}: the expected {len(wanted)} probes are listed in order",
         )
 
-    # Colors: one per ship, its row's and its marker's
-    markers = {
-        tuple(sp.get("color") or ())
-        for sp in all_sprites
-        if sp.get("type") == "TEXTURE" and sp.get("data") in MARKERS
-    }
-    colors = [r[4] for r in listed]
-    print(f"  {station}: {len(set(colors))} row colors, {len(markers)} marker colors")
+    # The map's markers: a stalk, its foot, then the contact's shape
+    markers = []
+    for i, sp in enumerate(all_sprites):
+        if (
+            sp.get("data") == "SquareTapered"
+            and i + 2 < len(all_sprites)
+            and all_sprites[i + 1].get("data") == "Circle"
+        ):
+            glyph = glyphs(all_sprites, i + 2, lambda o: False)
+            if glyph:
+                markers.append(glyph)
+    marker_shapes = [shape_of(g, background) for g in markers]
+    print(
+        f"  {station}: {len(listed)} rows, {len(markers)} markers, "
+        f"{len(set(marker_shapes))} different marker shapes",
+        flush=True,
+    )
     check(
         all(r[5] for r in listed),
         f"{station}: each row's distance and name share a color",
     )
     check(
+        all(r[6] and r[6][0] == r[4] for r in listed),
+        f"{station}: each row starts with a shape in the row's color",
+    )
+    check(
+        all(r[7] and max(sp["position"][0] for sp in r[7]) < r[0] for r in listed),
+        f"{station}: each row's shape is left of its text",
+    )
+    check(
+        all(r[6] in marker_shapes for r in listed),
+        f"{station}: each row's shape and color is a marker's on the map",
+    )
+    check(
         all(color_side(r[4]) == side(r[3]) for r in listed),
         f"{station}: friendly ships green, neutral white, hostile red",
     )
+    # Telling shapes apart by their sprites and turns, not their sizes
     by_side = {}
     for r in listed:
-        by_side.setdefault(side(r[3]), []).append(r[4])
+        if r[6]:
+            by_side.setdefault(side(r[3]), []).append(
+                (r[6][0], tuple(part[:3] for part in r[6][1]))
+            )
     print(
-        f"  {station}: shades "
+        f"  {station}: different shapes "
         + ", ".join(f"{k} {len(set(v))}/{len(v)}" for k, v in by_side.items()),
         flush=True,
     )
     check(
-        all(len(set(v)) == min(len(v), SHADES) for v in by_side.values()),
-        f"{station}: the ships of one side have different shades, up to {SHADES}",
+        all(len(set(v)) == min(len(v), SHAPES) for v in by_side.values()),
+        f"{station}: the ships of one side have different shapes, up to {SHAPES}",
     )
     check(
         all(color_side(r[4]) == "gate" for r in gates),
         f"{station}: the gates are cyan blue",
-    )
-    check(
-        all(c in markers for c in colors),
-        f"{station}: each listed ship's color is on a marker of the map",
     )
 
     # The gates below the map in a table, row by row, by distance
@@ -591,11 +652,7 @@ def _check_list(station: str, s: dict, all_sprites: list[dict]) -> list[tuple]:
         and len({round(r[0]) for r in gates}) <= 3,
         f"{station}: the gates are in at most 2 rows and 3 columns",
     )
-    ships_drawn = [
-        sp["position"]
-        for sp in all_sprites
-        if sp.get("type") == "TEXTURE" and sp.get("data") in MARKERS
-    ]
+    ships_drawn = [g[0]["position"] for g in markers]
     check(
         bool(ships_drawn) and all(x > ox + 0.38 * width for x, _ in ships_drawn),
         f"{station}: the map is on the right side",
