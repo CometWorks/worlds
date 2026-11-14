@@ -65,7 +65,7 @@ REFILL = rig.grid(
     ],
     tag="MyObjectBuilder_CubeGrid",
 )
-RIM = ("13;0;0", "-13;0;0")
+RIM = ("25;0;0", "-25;0;0")
 
 
 def probe(a, args: str) -> str:
@@ -91,8 +91,18 @@ def oct_money(a) -> int:
     return st.money(a).get("OCT", -1)
 
 
-def ice_price(a) -> int:
-    return int(tt.market(a, ICE)[1])
+def ice_price(a) -> float:
+    """What OCT sells a kg of ice for: the lot's price over its size where ice sells in lots"""
+    reply = st.admin(a, f"!oct market show {STATION} {ICE}")
+    lot = re.search(r"lots of ([\d,]+): buys [\d,.]+ SC, sells ([\d,.]+) SC", reply)
+    if lot:
+        return float(lot[2].replace(",", "")) / float(lot[1].replace(",", ""))
+    return tt.market(a, ICE)[1]
+
+
+def bill(ice: float, price: float) -> int:
+    """The whole SC for the kg of ice, as DockGasMath rounds it"""
+    return max(1, math.ceil(ice * price - 1e-6))
 
 
 def dock(a, items: str) -> str:
@@ -145,7 +155,7 @@ def paid(a) -> None:
     """An empty tank fills, the owner pays the ice's price to OCT"""
     set_balance(a, 600_000)
     price = ice_price(a)
-    cost = math.ceil(TANK / LITERS_PER_ICE * price)
+    cost = bill(TANK / LITERS_PER_ICE, price)
     log(f"ice at {price} SC per kg: {cost:,} SC for a full tank")
     you, octs = balance(a), oct_money(a)
     mark = tp.latest(a)
@@ -183,7 +193,7 @@ def oxygen(a) -> None:
     )
     for i, (what, items, ice) in enumerate(cases):
         set_balance(a, 600_000)
-        cost = math.ceil(ice * price)
+        cost = bill(ice, price)
         you, octs = balance(a), oct_money(a)
         mark = tp.latest(a)
         ship = dock(a, f"{items},AT={RIM[i % 2]}")
@@ -215,7 +225,7 @@ def oxygen(a) -> None:
 def partial(a) -> None:
     """A few SC buy what they buy, the balance ends at 0"""
     price = ice_price(a)
-    money = 1_000
+    money = 100
     set_balance(a, money)
     mark = tp.latest(a)
     ship = dock(a, "H2=0,AT=" + RIM[1])
