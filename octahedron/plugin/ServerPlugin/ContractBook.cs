@@ -60,7 +60,7 @@ internal enum ContractGridFlags
     // Big, and a bot player's (ShipyardBotSteamIds)
     Bot = 2048,
 
-    // Movable, with no working cockpit or remote control
+    // Movable, with no working cockpit or remote control, or disarmed: weapons and none working
     Disabled = 4096,
 
     // Nobody's or a wreck faction's, smaller than a wreck: an area cleanup contract's piece

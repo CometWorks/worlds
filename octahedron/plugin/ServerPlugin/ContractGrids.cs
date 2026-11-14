@@ -6,6 +6,7 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.GameSystems;
+using Sandbox.Game.Weapons;
 using Sandbox.Game.World;
 using Sandbox.ModAPI.Ingame;
 using VRage.Game;
@@ -78,6 +79,12 @@ internal static class ContractGrids
             ),
             _ => block is IMyPowerProducer,
         };
+
+    // Had weapons and none works any more: what the police leave of a raider, still powered and
+    // flown by its remote control (SE-1511)
+    private static bool Disarmed(List<MyTerminalBlock> terminals) =>
+        terminals.Any(b => b is MyUserControllableGun)
+        && !terminals.Any(b => b is MyUserControllableGun && b.IsFunctional);
 
     // With everything joined to it by connectors and landing gear too
     private static List<MyCubeGrid> Docked(MyCubeGrid grid) =>
@@ -186,7 +193,12 @@ internal static class ContractGrids
         };
         if (ShipyardZoneWelding.IsShipyard(grid))
             row.Flags |= ContractGridFlags.Shipyard;
-        if (near && BountyTarget(grid, octId))
+        // A disarmed one is a wreck to clear, nothing to hunt (SE-1511)
+        if (
+            near
+            && BountyTarget(grid, octId)
+            && !Disarmed(group.SelectMany(g => g.GetFatBlocks<MyTerminalBlock>()).ToList())
+        )
         {
             row.Flags |= ContractGridFlags.Bounty;
             row.Threat = ThreatScore.Grid(grid);
@@ -218,8 +230,10 @@ internal static class ContractGrids
                     row.Flags |= ContractGridFlags.Npc;
                     if (
                         !grid.IsStatic
-                        && !terminals.Any(b =>
-                            b is MyShipController { EnableShipControl: true } && b.IsFunctional
+                        && (
+                            !terminals.Any(b =>
+                                b is MyShipController { EnableShipControl: true } && b.IsFunctional
+                            ) || Disarmed(terminals)
                         )
                     )
                         row.Flags |= ContractGridFlags.Disabled;
