@@ -14,14 +14,14 @@ namespace OctahedronMod
 {
     // The radar on the stations' big map LCD (SE-1380): the grids within Range of the screen, one
     // marker per logical group (connectors, rotors, pistons), above or below the station's deck
-    // plane on a stalk. The contact count is in the top right corner, and the nearest 30 are
-    // listed by distance in a column on each side, left first (SE-1502). A contact is green when
-    // it is the viewer's or a friend's, red when hostile and white otherwise, in one of several
-    // shades, shared by its marker and its row, that it keeps for as long as it stays listed. The station's
-    // own installations are no contacts: a group with a static grid that the screen's owner or
-    // nobody owns, like the shipyard and the lane computers. The lane computers show as the gates
-    // instead, listed at the bottom by where they lead. Players' and NPC ships, and players'
-    // bases, show.
+    // plane on a stalk, on the right side. The contact count is in the top right corner. Up to 15
+    // contacts are listed on the left (SE-1502): the hostile ones first, then the friendly ones,
+    // then the neutral ones, each group by distance, and "... N" for the rest. A contact is red
+    // when hostile, green when it is the viewer's or a friend's, and white otherwise, in one of
+    // several shades, shared by its marker and its row, that it keeps for as long as it stays
+    // listed. The station's own installations are no contacts: a group with a static grid that
+    // the screen's owner or nobody owns, like the shipyard and the lane computers. The lane
+    // computers show as the gates instead, in a table below the map, by where they lead.
     [MyTextSurfaceScript("OctahedronRadar", "Octahedron Radar")]
     public class StationRadar : MyTSSCommon
     {
@@ -35,15 +35,16 @@ namespace OctahedronMod
         const float Tilt = 0.45f;
         const float Height = 0.8f;
 
-        // The shades of each relation's color: friendly green, neutral white and hostile red.
+        // The shades of each relation's color: hostile red, friendly green and neutral white, in
+        // the order of the list.
         // Each listed contact takes the least used shade of its color, the first ones differing
         // the most.
         const int Shades = 10;
-        const int Friendly = 0;
-        const int Neutral = 1;
-        const int Hostile = 2;
-        static readonly float[] Hues = { 0.33f, 0f, 0f };
-        static readonly float[] Saturations = { 0.75f, 0f, 0.8f };
+        const int Hostile = 0;
+        const int Friendly = 1;
+        const int Neutral = 2;
+        static readonly float[] Hues = { 0f, 0.33f, 0f };
+        static readonly float[] Saturations = { 0.8f, 0.75f, 0f };
         static readonly float[] HueShifts =
         {
             0,
@@ -59,6 +60,10 @@ namespace OctahedronMod
         };
         static readonly float[] Values = { 1, 0.8f, 0.8f, 0.65f, 0.65f, 1, 1, 0.9f, 0.9f, 0.55f };
         static readonly Color[] Palette = new Color[3 * Shades];
+
+        // The gate table below the map
+        const int GateRows = 2;
+        const int GateColumns = 3;
 
         // The gates in the cyan blue of the gate models
         static readonly Color Gate = new Color(60, 190, 255);
@@ -83,7 +88,10 @@ namespace OctahedronMod
 
         readonly List<IMyCubeGrid> group = new List<IMyCubeGrid>();
         readonly HashSet<long> seen = new HashSet<long>();
+
+        // By distance, for the map, and in the list's order
         readonly List<Contact> contacts = new List<Contact>();
+        readonly List<Contact> listed = new List<Contact>();
         readonly List<Contact> gates = new List<Contact>();
 
         // The palette index of each listed contact, by its largest grid's id, and how many listed
@@ -184,6 +192,16 @@ namespace OctahedronMod
 
             contacts.Sort((a, b) => a.Distance.CompareTo(b.Distance));
             gates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            listed.Clear();
+            listed.AddRange(contacts);
+            listed.Sort(
+                (a, b) =>
+                    a.Relation != b.Relation
+                        ? a.Relation.CompareTo(b.Relation)
+                        : a.Distance.CompareTo(b.Distance)
+            );
+            if (listed.Count > Rows)
+                listed.RemoveRange(Rows, listed.Count - Rows);
             KeepColors();
         }
 
@@ -209,14 +227,12 @@ namespace OctahedronMod
         // frees its shade, and one new on the list takes the least used shade of its color
         void KeepColors()
         {
-            var listed = Math.Min(contacts.Count, 2 * Rows);
             unlisted.Clear();
             foreach (var pair in colors)
             {
                 var found = false;
-                for (var i = 0; i < listed && !found; i++)
-                    found =
-                        contacts[i].Id == pair.Key && contacts[i].Relation == pair.Value / Shades;
+                for (var i = 0; i < listed.Count && !found; i++)
+                    found = listed[i].Id == pair.Key && listed[i].Relation == pair.Value / Shades;
                 if (!found)
                     unlisted.Add(pair.Key);
             }
@@ -225,9 +241,8 @@ namespace OctahedronMod
                 used[colors[id]]--;
                 colors.Remove(id);
             }
-            for (var i = 0; i < listed; i++)
+            foreach (var c in listed)
             {
-                var c = contacts[i];
                 if (colors.ContainsKey(c.Id))
                     continue;
                 var best = c.Relation * Shades;
@@ -286,10 +301,18 @@ namespace OctahedronMod
                 )
             );
 
-            // The deck plane's ellipse in the middle, with room for heights; a list column each side
-            // and the gates below
-            var radius = Math.Min(area.X * 0.14f, area.Y * 0.36f);
-            var middle = origin + new Vector2(area.X / 2f, area.Y * 0.42f);
+            // The list on the left, the map on the right below the count, top aligned, with room
+            // for heights above and below the deck plane's ellipse, and the gate table below it
+            var top = 60 * scale;
+            var row = (area.Y - top - 8 * scale) / (Rows + 1);
+            var size = Math.Min(0.7f * scale, row / 37f);
+            var listWidth = area.X * 0.38f;
+            var mapWidth = area.X - listWidth - 32 * scale;
+            var mapHeight = area.Y - top - (GateRows + 0.5f) * row - 8 * scale;
+            var reach = Tilt + Height;
+            var radius = Math.Min(mapWidth / 2f, mapHeight / (2 * reach));
+            var middle =
+                origin + new Vector2(listWidth + 16 * scale + mapWidth / 2f, top + reach * radius);
 
             // Range rings at 500 m, 1 km and 2 km
             foreach (var ring in Rings)
@@ -369,34 +392,42 @@ namespace OctahedronMod
                 );
             }
 
-            // Nearest first: down the left column, then down the right one; the rest is left out
-            var top = 60 * scale;
-            var row = (area.Y - top - 8 * scale) / Rows;
-            var size = Math.Min(0.7f * scale, row / 37f);
-            var width = middle.X - origin.X - radius - 32 * scale;
-            for (var i = 0; i < contacts.Count && i < 2 * Rows; i++)
+            // Hostile, friendly, then neutral, each nearest first; how many more there are below
+            var width = listWidth - 32 * scale;
+            for (var i = 0; i < listed.Count; i++)
             {
-                var c = contacts[i];
-                var x = i < Rows ? 16 * scale : area.X - 16 * scale - width;
+                var c = listed[i];
                 Row(
                     frame,
                     c,
-                    origin + new Vector2(x, top + (i % Rows) * row),
+                    origin + new Vector2(16 * scale, top + i * row),
                     width,
                     size,
                     Paint(c)
                 );
             }
+            if (contacts.Count > listed.Count)
+                Text(
+                    frame,
+                    $"... {contacts.Count - listed.Count}",
+                    origin + new Vector2(16 * scale, top + listed.Count * row),
+                    m_foregroundColor,
+                    size
+                );
 
-            // The gates below the map, as many as fit
-            var gateTop = area.Y * 0.68f;
-            var gateRows = (int)((area.Y - gateTop - 8 * scale) / row);
-            for (var i = 0; i < gates.Count && i < gateRows; i++)
+            // The nearest gates in a table below the map, row by row
+            var cell = mapWidth / GateColumns;
+            var gateTop = area.Y - GateRows * row - 8 * scale;
+            for (var i = 0; i < gates.Count && i < GateRows * GateColumns; i++)
                 Row(
                     frame,
                     gates[i],
-                    origin + new Vector2(area.X / 2f - radius, gateTop + i * row),
-                    2 * radius,
+                    origin
+                        + new Vector2(
+                            listWidth + 16 * scale + i % GateColumns * cell,
+                            gateTop + i / GateColumns * row
+                        ),
+                    cell - 8 * scale,
                     size,
                     Gate
                 );
@@ -457,18 +488,19 @@ namespace OctahedronMod
             return m_surface.MeasureStringInPixels(measured, "White", size).X;
         }
 
-        // The name cut to fit the column; the column's width stays, so each name is cut once
+        // The name cut to fit the width; the widths stay, so each name is cut once per width
         string Clip(string name, float width, float size)
         {
+            var key = (int)width + "|" + name;
             string fit;
-            if (clipped.TryGetValue(name, out fit))
+            if (clipped.TryGetValue(key, out fit))
                 return fit;
             fit = name;
             for (var n = name.Length; n > 0 && Measure(fit, size) > width; n--)
                 fit = name.Substring(0, n - 1) + "…";
             if (clipped.Count > 1000)
                 clipped.Clear();
-            clipped[name] = fit;
+            clipped[key] = fit;
             return fit;
         }
 
