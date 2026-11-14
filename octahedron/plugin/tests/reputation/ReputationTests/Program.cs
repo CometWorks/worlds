@@ -21,7 +21,8 @@ void Check(bool ok, string what)
 }
 
 const long A = 101,
-    B = 102;
+    B = 102,
+    C = 103;
 var settings = new ReputationSettings
 {
     Start = 10_000,
@@ -65,7 +66,7 @@ r.Apply(B, ReputationKind.Ram, -300, "ram3", 1000 + 3600);
 Check(r.Get(B) == 9_700, "an hour later a ram is forgiven again");
 var noGrace = new ReputationBook { Settings = new ReputationSettings { RamGraceSeconds = 0 } };
 noGrace.Apply(B, ReputationKind.Ram, -300, "ram", 0);
-Check(noGrace.Get(B) == 9_700, "no grace: every ram costs");
+Check(noGrace.Get(B) == 200_000 - 300, "no grace: every ram costs");
 
 // The countdown: start, warnings at 30, 10 and 5 minutes left, removal at the end
 var k = new ReputationBook { Settings = settings };
@@ -140,6 +141,8 @@ var quick = new ReputationBook
 {
     Settings = new ReputationSettings
     {
+        Start = 10_000,
+        KickBelow = -10_000,
         KickAfterSeconds = 20,
         WarnSeconds = ReputationSettings.ParseWarnings("1800,15,10,5"),
     },
@@ -171,7 +174,7 @@ Check(
         && wire[1] == (B, ReputationKind.Share, null, 7m),
     "changes round-trip"
 );
-Check(ReputationBook.Deserialize("").Get(A) == 10_000, "an empty save: everyone starts over");
+Check(ReputationBook.Deserialize("").Get(A) == 200_000, "an empty save: everyone starts over");
 Check(
     ReputationBook.Sc(-10_000.6m) == "-10,001"
         && ReputationBook.Duration(3600) == "60 minutes"
@@ -207,6 +210,46 @@ leaders.Add(A);
 tell.Clear();
 lead.Tick(1, _ => true, tell, kick, leaders.Contains);
 Check(lead.Left(A) == null && tell.Count == 0, "a leader again: the countdown stops silently");
+
+// SE-1495: the start is 200,000 and the line -200,000; a new start moves everyone by as much
+var defaults = new ReputationSettings();
+Check(
+    defaults.Start == 200_000 && defaults.KickBelow == -200_000,
+    "defaults: 200,000 and -200,000"
+);
+var old = ReputationBook.Deserialize($"{A} -24401.37 1000 1 1 0\n{B} 10000 -1 0 0 0");
+old.Settings = defaults;
+old.Rebase();
+Check(
+    old.Get(A) == 165_598.63m,
+    "a save from before: -24,401 counted from 10,000 is 165,599: " + old.Get(A)
+);
+Check(old.Get(B) == 200_000, "untouched at the old start is the new start");
+Check(old.Get(C) == 200_000, "a new member starts at 200,000");
+Check(old.Dirty, "the move is saved");
+tell.Clear();
+kick.Clear();
+old.Tick(1, _ => true, tell, kick);
+Check(
+    kick.Count == 0
+        && old.Left(A) == null
+        && tell.Any(t => t.Identity == A && t.Text.Contains("back above")),
+    "a countdown running from before stops: " + string.Join("|", tell.Select(t => t.Text))
+);
+var saved = old.Serialize();
+Check(saved.StartsWith("start 200000\n"), "the save keeps the start: " + saved.Split('\n')[0]);
+var again = ReputationBook.Deserialize(saved);
+again.Settings = defaults;
+again.Rebase();
+Check(again.Get(A) == 165_598.63m && !again.Dirty, "loaded again: no second move");
+again.Settings = new ReputationSettings { Start = 100_000 };
+again.Rebase();
+Check(again.Get(A) == 65_598.63m && again.Get(B) == 100_000, "a lower start moves everyone down");
+again.Apply(A, ReputationKind.Damage, -100_000, null, 0);
+Check(
+    ReputationBook.Deserialize(again.Serialize()).Get(A) == -34_401.37m,
+    "the moved value is saved"
+);
 
 Console.WriteLine($"{checks - failures}/{checks} reputation checks passed");
 return failures == 0 ? 0 : 1;
